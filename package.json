@@ -6,6 +6,8 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {
-    "validate": "node scripts/validate-policy.mjs"
+    "validate": "node scripts/validate-policy.mjs",
+    "test": "node --test factory/runner.test.mjs",
+    "factory": "node factory/cli.mjs"
   }
 }

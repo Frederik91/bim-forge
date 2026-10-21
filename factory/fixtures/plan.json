@@ -1,0 +1,9 @@
+{
+  "outcome": "An operator can inspect factory state and the latest run outcome.",
+  "changeClass": "read-only",
+  "paths": ["factory/cli.mjs", "factory/runner.test.mjs"],
+  "steps": ["Define the human-readable status output.", "Read the pause flag and saved run records.", "Report paused, idle, running, and failed states."],
+  "acceptanceChecks": ["A fresh store reports idle.", "A paused worker reports paused.", "A failed run includes its recorded failure reason."],
+  "reviewers": ["Frederik91"],
+  "questions": []
+}
