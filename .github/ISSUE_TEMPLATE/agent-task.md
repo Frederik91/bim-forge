@@ -2,7 +2,7 @@
 name: Agent task
 about: A bounded issue that may be prepared by the agent factory
 title: ""
-labels: "agent-ready"
+labels: "needs-triage"
 assignees: ""
 ---
 

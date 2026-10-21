@@ -1,6 +1,6 @@
 # Initial GitHub issue queue
 
-Create these as milestone issues after the repository exists. Each issue should be linked to the milestone named in its heading and receive the labels `roadmap`, `agent-ready` only when its scope is sufficiently concrete.
+Create these as milestone issues after the repository exists. Each issue should be linked to the milestone named in its heading and receive the label `roadmap`. A maintainer may apply `agent-ready` only to a concrete, bounded implementation task after reviewing its scope.
 
 ## M0 — Establish repository safety baseline
 
@@ -93,3 +93,19 @@ Acceptance criteria:
 - High-severity findings block the PR.
 - Reviewer routing is derived from the affected systems/disciplines.
 - No coordination change is auto-merged.
+
+## M6 — Add controlled automation
+
+**Title:** Qualify controlled automation with explicit project policy
+
+**Body:**
+
+Introduce project-specific approval policy for narrowly scoped, low-risk actions after verifier performance has been evaluated against independently reviewed fixtures and failure cases.
+
+Acceptance criteria:
+
+- Project policy defaults to human approval and records every policy change.
+- Confidence is calibrated against independent evidence; a model's self-reported confidence cannot authorize a merge.
+- Pause, budget, retry, duplicate-run, and rollback scenarios are exercised.
+- Geometry, coordination, schema, permissions, and security changes require human review.
+- Publishing or enabling unattended operation requires a separate maintainer decision.
