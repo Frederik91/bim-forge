@@ -7,8 +7,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "validate": "node scripts/validate-policy.mjs",
-    "test": "node --test factory/runner.test.mjs factory/live.test.mjs",
-    "factory": "node factory/cli.mjs",
-    "factory:plan": "node factory/live.mjs"
+    "test": "node --test factory/runner.test.mjs",
+    "factory": "node factory/cli.mjs"
   }
 }
