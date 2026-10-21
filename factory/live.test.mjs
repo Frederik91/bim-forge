@@ -19,7 +19,7 @@ const output = (...extra) => [
 ].map(JSON.stringify).join('\n');
 
 test('parses a completed structured Codex turn and retains reported usage', () => {
-  assert.deepEqual(parseCodexOutput(output()), { plan, usage });
+  assert.deepEqual(parseCodexOutput(output()), { plan, usage, warnings: [] });
 });
 
 test('failed, unfinished, or tool-using turns cannot become accepted plans', () => {
@@ -33,6 +33,13 @@ test('invalid usage or non-JSON final output fails closed', () => {
   const events = output().split('\n').map(JSON.parse);
   events.find((event) => event.item).item.text = 'Probably fine';
   assert.throws(() => parseCodexOutput(events.map(JSON.stringify).join('\n')), SyntaxError);
+});
+
+test('only the exact disabled-host startup notice is recorded as a warning', () => {
+  const message = 'Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`.';
+  const parsed = parseCodexOutput(output({ type: 'item.completed', item: { type: 'error', message } }));
+  assert.deepEqual(parsed.warnings, [message]);
+  assert.throws(() => parseCodexOutput(output({ type: 'item.completed', item: { type: 'error', message: 'Some other runtime failure' } })), /unexpected runtime/);
 });
 
 test('intake rejects pull requests, closed issues, and empty scope', () => {
@@ -112,4 +119,29 @@ test('live and fixture results cannot collide, and live artifacts retain provena
   const blocked = await runPlan({ ...options, sourceRevision: 'c'.repeat(40), planner, pauseCheck: async () => true });
   assert.equal(blocked.status, 'blocked');
   assert.equal(blocked.plannerPid, null);
+});
+
+test('Linux timeout terminates the planner process group, including descendants', { skip: process.platform !== 'linux' }, async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-forge-group-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const repoRoot = path.join(dir, 'repo');
+  fs.mkdirSync(path.join(repoRoot, 'policy'), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, 'STATE.md'), 'paused: false\n');
+  fs.writeFileSync(path.join(repoRoot, 'policy', 'gate.json'), JSON.stringify({ version: 1, maxAttemptsPerIssue: 3 }));
+  const childFile = path.join(dir, 'child-pid');
+  const script = 'const child=require("node:child_process").spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{stdio:"ignore"});require("node:fs").writeFileSync(process.env.CHILD_FILE,String(child.pid));setInterval(()=>{},1000);';
+  const planner = { mode: 'live', id: 'process-group-test', build() { return {
+    executable: process.execPath, args: ['-e', script], env: { CHILD_FILE: childFile }, input: '', processGroup: true,
+    parse() { throw new Error('A timed-out process must never be parsed'); },
+  }; } };
+  const run = await runPlan({ repoRoot, dataDir: path.join(dir, 'runs'), issue, sourceRevision: 'd'.repeat(40), planner, timeoutMs: 1500 });
+  assert.equal(run.status, 'timed-out');
+  assert.throws(() => process.kill(run.plannerPid, 0), { code: 'ESRCH' });
+  const childPid = Number(fs.readFileSync(childFile, 'utf8'));
+  try {
+    const stat = fs.readFileSync(`/proc/${childPid}/stat`, 'utf8');
+    assert.match(stat, /\) Z /, 'A remaining descendant must be a terminated zombie awaiting reaping');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
 });

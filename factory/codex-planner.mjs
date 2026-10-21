@@ -4,15 +4,13 @@ import { createHash } from 'node:crypto';
 import { planSchema } from './plan.mjs';
 
 const disabledFeatures = ['shell_tool', 'unified_exec', 'apps', 'plugins', 'computer_use', 'browser_use', 'browser_use_external', 'browser_use_full_cdp_access', 'image_generation', 'view_image', 'code_mode_host', 'multi_agent', 'workspace_dependencies', 'skill_search', 'skill_mcp_dependency_install'];
+const disabledHostNotice = 'Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`.';
 
 export function parseCodexOutput(output) {
   const events = output.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
   if (events.some((event) => ['error', 'turn.failed'].includes(event.type))) throw new Error('Codex reported a failed turn');
   const allItems = events.filter((event) => event.type.startsWith('item.') && event.item).map((event) => event.item);
   const items = events.filter((event) => event.type === 'item.completed').map((event) => event.item);
-  const allowedItems = new Set(['agent_message', 'reasoning']);
-  const unexpected = allItems.filter((item) => !allowedItems.has(item?.type)).map((item) => item?.type ?? 'unknown');
-  if (unexpected.length) throw new Error(`Planning turn unexpectedly used a tool: ${[...new Set(unexpected)].join(', ')}`);
   const completed = events.filter((event) => event.type === 'turn.completed');
   if (completed.length !== 1) throw new Error('Codex must complete exactly one turn');
   const message = items.filter((item) => item.type === 'agent_message').at(-1);
@@ -24,7 +22,17 @@ export function parseCodexOutput(output) {
       || Object.values(usage).some((value) => !Number.isSafeInteger(value) || value < 0)) {
     throw new Error('Codex returned invalid usage evidence');
   }
-  return { plan: JSON.parse(message.text), usage };
+  try {
+    const diagnostics = allItems.filter((item) => item?.type === 'error');
+    if (diagnostics.some((item) => item.message !== disabledHostNotice)) throw new Error('Codex reported an unexpected runtime diagnostic');
+    const allowedItems = new Set(['agent_message', 'reasoning', 'error']);
+    const unexpected = allItems.filter((item) => !allowedItems.has(item?.type)).map((item) => item?.type ?? 'unknown');
+    if (unexpected.length) throw new Error(`Planning turn unexpectedly used a tool: ${[...new Set(unexpected)].join(', ')}`);
+    return { plan: JSON.parse(message.text), usage, warnings: diagnostics.map((item) => item.message) };
+  } catch (error) {
+    error.usage = usage;
+    throw error;
+  }
 }
 
 export function createCodexPlanner(context, { executable = '/var/lib/bim-forge/tools/bin/codex', home = '/var/lib/bim-forge', runtimeBin = '/opt/bim-forge/node/bin' } = {}) {

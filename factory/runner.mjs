@@ -138,7 +138,7 @@ function executePlanner({ planner, runDir, timeoutMs, pollMs, stateFile, pauseCh
         if (signal?.aborted || isPaused(stateFile)) return resolve({ status: 'cancelled', message: 'Paused or cancelled while verifying output' });
         const parsed = command.parse(output);
         const result = validatePlan(parsed.plan);
-        resolve({ status: result.questions.length ? 'needs-input' : 'succeeded', message: 'Planner output validated', plan: result, usage: parsed.usage ?? null });
+        resolve({ status: result.questions.length ? 'needs-input' : 'succeeded', message: 'Planner output validated', plan: result, usage: parsed.usage ?? null, warnings: parsed.warnings ?? [] });
       } catch (error) {
         resolve({ status: 'failed', message: error.message, usage: error.usage ?? null });
       }
@@ -236,6 +236,7 @@ export async function runPlan({ repoRoot, dataDir, issue, sourceRevision, planne
         fs.writeFileSync(path.join(store, run.id, 'plan.md'), renderPlan(result.plan, planner.mode), { mode: 0o600 });
       }
       run.usage = result.usage ?? null;
+      run.warnings = result.warnings ?? [];
       transition(store, run, result.status, result.message);
     } catch (error) {
       transition(store, run, 'failed', error.message);

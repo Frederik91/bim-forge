@@ -62,6 +62,9 @@ async function main() {
     readme: fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8'),
     instructions: fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
     policy: JSON.parse(fs.readFileSync(path.join(repoRoot, 'policy', 'gate.json'), 'utf8')),
+    factorySources: Object.fromEntries(['runner.mjs', 'codex-planner.mjs', 'live.mjs', 'plan.mjs', 'cli.mjs'].map((file) => [
+      `factory/${file}`, fs.readFileSync(path.join(repoRoot, 'factory', file), 'utf8'),
+    ])),
   };
   const controller = new AbortController();
   const cancel = () => controller.abort();
