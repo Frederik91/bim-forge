@@ -4,7 +4,7 @@ This release runs a fixed fixture process. It exercises the runner without conta
 
 ## Try it
 
-Requires Node.js 20 or newer and Git. From the repository root:
+Requires Node.js 24 or newer and Git. From the repository root:
 
 ```bash
 npm test
