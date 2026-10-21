@@ -11,7 +11,8 @@ export function parseCodexOutput(output) {
   const allItems = events.filter((event) => event.type.startsWith('item.') && event.item).map((event) => event.item);
   const items = events.filter((event) => event.type === 'item.completed').map((event) => event.item);
   const allowedItems = new Set(['agent_message', 'reasoning']);
-  if (allItems.some((item) => !allowedItems.has(item?.type))) throw new Error('Planning turn unexpectedly used a tool');
+  const unexpected = allItems.filter((item) => !allowedItems.has(item?.type)).map((item) => item?.type ?? 'unknown');
+  if (unexpected.length) throw new Error(`Planning turn unexpectedly used a tool: ${[...new Set(unexpected)].join(', ')}`);
   const completed = events.filter((event) => event.type === 'turn.completed');
   if (completed.length !== 1) throw new Error('Codex must complete exactly one turn');
   const message = items.filter((item) => item.type === 'agent_message').at(-1);

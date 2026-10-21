@@ -132,6 +132,7 @@ function executePlanner({ planner, runDir, timeoutMs, pollMs, stateFile, pauseCh
       if (stopped) return resolve(stopped);
       if (code !== 0) return resolve({ status: 'failed', message: `Planner process exited ${code}: ${errorOutput}` });
       try {
+        if (planner.mode === 'live') fs.writeFileSync(path.join(runDir, 'planner-output.jsonl'), output, { mode: 0o600 });
         // Recheck immediately before accepting output, even if the polling interval has not elapsed.
         if (signal?.aborted || isPaused(stateFile) || await pauseCheck?.({ fresh: true })) return resolve({ status: 'cancelled', message: 'Paused or cancelled before accepting output' });
         if (signal?.aborted || isPaused(stateFile)) return resolve({ status: 'cancelled', message: 'Paused or cancelled while verifying output' });
@@ -139,7 +140,7 @@ function executePlanner({ planner, runDir, timeoutMs, pollMs, stateFile, pauseCh
         const result = validatePlan(parsed.plan);
         resolve({ status: result.questions.length ? 'needs-input' : 'succeeded', message: 'Planner output validated', plan: result, usage: parsed.usage ?? null });
       } catch (error) {
-        resolve({ status: 'failed', message: error.message });
+        resolve({ status: 'failed', message: error.message, usage: error.usage ?? null });
       }
     });
     timer = setTimeout(() => stop('timed-out', 'Planning wall-clock limit reached'), timeoutMs);
