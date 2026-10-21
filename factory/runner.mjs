@@ -97,6 +97,8 @@ function executeFixture({ plan, delayMs, timeoutMs, pollMs, stateFile, signal, o
     // Do not inherit GitHub credentials, model credentials, or user configuration.
     const env = process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {};
     const child = spawn(process.execPath, [workerPath], { env, shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     let output = '';
     let errorOutput = '';
     let stopped;

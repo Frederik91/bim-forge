@@ -148,6 +148,23 @@ test('a valid clarification request is distinct from a ready plan', async (t) =>
   assert.equal(listRuns(options.dataDir)[0].status, 'needs-input');
 });
 
+test('plan text retains Unicode through process pipes', async (t) => {
+  const options = setup(t);
+  const plan = { ...options.plan, outcome: 'Kontrollér føringen ☀ '.repeat(1800) };
+  const run = await runFixturePlan({ ...options, plan });
+  assert.equal(run.status, 'succeeded');
+  const saved = JSON.parse(fs.readFileSync(path.join(options.dataDir, run.id, 'plan.json'), 'utf8'));
+  assert.equal(saved.outcome, plan.outcome);
+});
+
+test('oversized process output fails and leaves no accepted plan', async (t) => {
+  const options = setup(t);
+  const run = await runFixturePlan({ ...options, plan: { ...options.plan, outcome: 'x'.repeat(70000) } });
+  assert.equal(run.status, 'failed');
+  assert.match(run.message, /exceeded/);
+  assert.equal(fs.existsSync(path.join(options.dataDir, run.id, 'plan.json')), false);
+});
+
 test('failed runs do not retry automatically, and explicit retries stop at the ceiling', async (t) => {
   const options = { ...setup(t), plan: null };
   const first = await runFixturePlan(options);
