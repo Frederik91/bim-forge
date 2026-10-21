@@ -1,0 +1,29 @@
+{
+  "name": "bim-forge-factory",
+  "version": 1,
+  "purpose": "Turn scoped BIM issues into verified, reviewable model or product changes.",
+  "defaultLevel": "L1",
+  "stateFile": "STATE.md",
+  "policyFile": "policy/gate.json",
+  "stages": [
+    { "id": "intake", "agent": "intake", "writes": ["issue-comments", "labels"], "requires": ["issue"] },
+    { "id": "plan", "agent": "planner", "writes": ["plan-artifact"], "requires": ["accepted-scope"] },
+    { "id": "implement", "agent": "implementer", "writes": ["isolated-branch", "draft-pr"], "requires": ["approved-plan", "worktree"] },
+    { "id": "verify", "agent": "verifier", "writes": ["validation-report", "pr-check"], "requires": ["draft-pr"] },
+    { "id": "review", "agent": "reviewer", "writes": ["review-summary", "review-routing"], "requires": ["passing-verifiers"] },
+    { "id": "merge", "agent": "human-maintainer", "writes": ["merge-decision"], "requires": ["human-approval"] }
+  ],
+  "promotion": {
+    "L1": { "allowed": ["read", "comment", "label", "validate"] },
+    "L2": { "allowed": ["read", "comment", "label", "validate", "branch", "draft-pr"] },
+    "L3": { "allowed": ["read", "comment", "label", "validate", "branch", "draft-pr", "auto-merge-allowlist-only"] }
+  },
+  "stopConditions": [
+    "paused-state",
+    "budget-exceeded",
+    "protected-path-touched",
+    "validator-failed",
+    "attempt-limit-reached",
+    "missing-human-review"
+  ]
+}

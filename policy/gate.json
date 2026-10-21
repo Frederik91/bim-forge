@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "maxChangedFiles": 12,
+  "maxAttemptsPerIssue": 3,
+  "denylist": [
+    "**/.env",
+    "**/.env.*",
+    "**/secrets/**",
+    "**/credentials/**",
+    "**/*_key*",
+    "**/*_secret*",
+    "**/migrations/**",
+    "**/permissions/**",
+    "**/auth/**",
+    "**/production/**",
+    "**/model-fixtures/approved/**",
+    "**/schema/**"
+  ],
+  "humanReviewRequired": [
+    "**/*.ifc",
+    "**/*.rvt",
+    "**/*.rfa",
+    "**/geometry/**",
+    "**/coordination/**",
+    "**/schema/**",
+    "**/migrations/**",
+    "**/permissions/**",
+    "**/.github/workflows/**"
+  ],
+  "autoMergeAllowlist": [
+    "docs/**",
+    "**/*.md",
+    "**/*.txt",
+    "**/*.json"
+  ],
+  "autoMerge": {
+    "enabled": false,
+    "minimumVerifierRuns": 20,
+    "minimumConfidence": 0.995,
+    "requiresHumanApprovalForHumanReviewPaths": true
+  }
+}

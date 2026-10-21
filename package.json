@@ -1,0 +1,11 @@
+{
+  "name": "bim-forge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-native open-source BIM authoring and coordination factory",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "validate": "node scripts/validate-policy.mjs"
+  }
+}

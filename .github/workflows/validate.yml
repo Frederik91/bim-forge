@@ -1,0 +1,24 @@
+name: Validate factory policy
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Policy and repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm run validate
+      - name: Check changed paths on pull requests
+        if: github.event_name == 'pull_request'
+        run: node scripts/validate-policy.mjs --changed-files "$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}")"
