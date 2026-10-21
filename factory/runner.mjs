@@ -92,21 +92,26 @@ function validateInput(issue, sourceRevision) {
   if (!/^[0-9a-f]{40}$/.test(sourceRevision)) throw new Error('A full source commit is required');
 }
 
-function executeFixture({ plan, delayMs, timeoutMs, pollMs, stateFile, signal, onSpawn }) {
+function executePlanner({ planner, runDir, timeoutMs, pollMs, stateFile, pauseCheck, signal, onSpawn }) {
   return new Promise((resolve, reject) => {
-    // Do not inherit GitHub credentials, model credentials, or user configuration.
-    const env = process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {};
-    const child = spawn(process.execPath, [workerPath], { env, shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    // Adapters are trusted application code. Issue text never selects the executable or flags.
+    const command = planner.build(runDir);
+    const child = spawn(command.executable, command.args, { env: command.env, shell: false, detached: command.processGroup === true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     let output = '';
     let errorOutput = '';
     let stopped;
+    let ended = false;
     let timer;
     let poll;
     const stop = (status, message) => {
+      if (ended) return;
       if (!stopped) stopped = { status, message };
-      child.kill('SIGKILL');
+      try {
+        if (command.processGroup && child.pid) process.kill(-child.pid, 'SIGKILL');
+        else child.kill('SIGKILL');
+      } catch (error) { if (error.code !== 'ESRCH') reject(error); }
     };
     const cancel = () => stop('cancelled', 'Cancelled by operator');
     const cleanup = () => {
@@ -116,51 +121,69 @@ function executeFixture({ plan, delayMs, timeoutMs, pollMs, stateFile, signal, o
     };
     child.stdout.on('data', (chunk) => {
       output += chunk;
-      if (Buffer.byteLength(output) > 65536) stop('failed', 'Planner output exceeded 64 KiB');
+      if (Buffer.byteLength(output) > (command.maxOutputBytes ?? 65536)) stop('failed', 'Planner output exceeded its byte limit');
     });
     child.stderr.on('data', (chunk) => { errorOutput = (errorOutput + chunk).slice(-4096); });
     child.stdin.on('error', () => {}); // Child termination can close stdin before the write completes.
     child.once('error', (error) => { cleanup(); reject(error); });
-    child.once('close', (code) => {
+    child.once('close', async (code) => {
+      ended = true;
       cleanup();
       if (stopped) return resolve(stopped);
-      if (code !== 0) return resolve({ status: 'failed', message: `Fixture process exited ${code}: ${errorOutput}` });
+      if (code !== 0) return resolve({ status: 'failed', message: `Planner process exited ${code}: ${errorOutput}` });
       try {
         // Recheck immediately before accepting output, even if the polling interval has not elapsed.
-        if (signal?.aborted || isPaused(stateFile)) return resolve({ status: 'cancelled', message: 'Paused or cancelled before accepting output' });
-        const result = validatePlan(JSON.parse(output));
-        resolve({ status: result.questions.length ? 'needs-input' : 'succeeded', message: 'Fixture output validated', plan: result });
+        if (signal?.aborted || isPaused(stateFile) || await pauseCheck?.({ fresh: true })) return resolve({ status: 'cancelled', message: 'Paused or cancelled before accepting output' });
+        if (signal?.aborted || isPaused(stateFile)) return resolve({ status: 'cancelled', message: 'Paused or cancelled while verifying output' });
+        const parsed = command.parse(output);
+        const result = validatePlan(parsed.plan);
+        resolve({ status: result.questions.length ? 'needs-input' : 'succeeded', message: 'Planner output validated', plan: result, usage: parsed.usage ?? null });
       } catch (error) {
         resolve({ status: 'failed', message: error.message });
       }
     });
     timer = setTimeout(() => stop('timed-out', 'Planning wall-clock limit reached'), timeoutMs);
-    poll = setInterval(() => {
+    let checking = false;
+    poll = setInterval(async () => {
+      if (checking || stopped) return;
+      checking = true;
       try {
-        if (isPaused(stateFile)) stop('cancelled', 'Paused during planning');
+        if (isPaused(stateFile) || await pauseCheck?.()) stop('cancelled', 'Paused during planning');
       } catch (error) {
         stop('cancelled', `Cannot verify pause state: ${error.message}`);
-      }
+      } finally { checking = false; }
     }, pollMs);
     signal?.addEventListener('abort', cancel, { once: true });
     try {
       onSpawn(child.pid);
       if (signal?.aborted) cancel();
-      child.stdin.end(JSON.stringify({ plan, delayMs }));
+      child.stdin.end(command.input);
     } catch (error) {
       stop('failed', error.message);
     }
   });
 }
 
-export async function runFixturePlan({ repoRoot, dataDir, issue, sourceRevision, plan, timeoutMs = 600000, delayMs = 0, pollMs = 250, retry = false, signal }) {
+export function runFixturePlan({ plan, delayMs = 0, ...options }) {
+  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 60000) throw new Error('Invalid fixture delay');
+  const input = JSON.stringify({ plan, delayMs });
+  if (Buffer.byteLength(input) > 131072) throw new Error('Fixture input too large');
+  return runPlan({ ...options, planner: {
+    mode: 'fixture', id: 'fixed-fixture-process-v1',
+    build() { return {
+      executable: process.execPath, args: [workerPath], input,
+      env: process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {},
+      parse(output) { return { plan: JSON.parse(output), usage: null }; },
+    }; },
+  } });
+}
+
+export async function runPlan({ repoRoot, dataDir, issue, sourceRevision, planner, timeoutMs = 600000, pollMs = 250, retry = false, signal, pauseCheck }) {
   validateInput(issue, sourceRevision);
   for (const [name, value] of Object.entries({ timeoutMs, pollMs })) {
     if (!Number.isSafeInteger(value) || value < 1 || value > 600000) throw new Error(`Invalid ${name}`);
   }
-  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 60000) throw new Error('Invalid fixture delay');
-  const payload = JSON.stringify({ plan, delayMs });
-  if (Buffer.byteLength(payload) > 131072) throw new Error('Fixture input too large');
+  if (!['fixture', 'live'].includes(planner?.mode) || typeof planner.id !== 'string' || typeof planner.build !== 'function') throw new Error('Invalid trusted planner adapter');
   const store = validateStore(repoRoot, dataDir);
   const unlock = lockStore(store);
   try {
@@ -171,32 +194,37 @@ export async function runFixturePlan({ repoRoot, dataDir, issue, sourceRevision,
     if (policy.version !== 1 || !Number.isSafeInteger(policy.maxAttemptsPerIssue) || policy.maxAttemptsPerIssue < 1) throw new Error('Invalid attempt policy');
     const policyHash = hash(policyText);
     const issueSnapshot = { repository: issue.repository, number: issue.number, title: issue.title, body: issue.body, updatedAt: issue.updatedAt, approved: issue.approved === true };
-    const fingerprint = hash(JSON.stringify({ issue: issueSnapshot, sourceRevision, policyHash }));
+    const fingerprint = hash(JSON.stringify({ issue: issueSnapshot, sourceRevision, policyHash, mode: planner.mode, planner: planner.id, contextHash: planner.contextHash ?? null }));
     const attempts = runs.filter((run) => run.fingerprint === fingerprint && run.status !== 'blocked');
     const previous = attempts.at(-1);
     if (previous && !retry) return { ...previous, reused: true };
     if (previous && ['succeeded', 'needs-input'].includes(previous.status)) throw new Error('This input already has a validated result');
     if (attempts.length >= policy.maxAttemptsPerIssue) throw new Error('Attempt limit reached; escalate to the maintainer');
     const run = {
-      id: randomUUID(), fingerprint, mode: 'fixture', planner: 'fixed-fixture-process-v1',
+      id: randomUUID(), fingerprint, mode: planner.mode, planner: planner.id, contextHash: planner.contextHash ?? null,
       sourceRevision, policyHash, issue: issueSnapshot, attempt: attempts.length + 1,
       host: os.hostname(), workerPid: process.pid, plannerPid: null,
       startedAt: new Date().toISOString(), finishedAt: null, status: 'running',
       timeoutMs, usage: null, cost: null,
     };
-    fs.mkdirSync(path.join(store, run.id), { mode: 0o700 });
+    // Publish a run directory only after its initial record exists. Status readers
+    // must never observe a half-created run while asynchronous preflight runs.
+    const stagingDir = path.join(store, `${run.id}.pending`);
+    fs.mkdirSync(stagingDir, { mode: 0o700 });
+    writeJson(path.join(stagingDir, 'run.json'), run);
+    fs.renameSync(stagingDir, path.join(store, run.id));
     const stateFile = path.join(repoRoot, 'STATE.md');
     try {
       if (!issueSnapshot.approved) {
-        transition(store, run, 'blocked', 'Fixture scope is not explicitly approved; no planner started');
+        transition(store, run, 'blocked', 'Scope is not explicitly approved; no planner started');
         return run;
       }
-      if (isPaused(stateFile) || signal?.aborted) {
+      if (isPaused(stateFile) || signal?.aborted || await pauseCheck?.({ fresh: true })) {
         transition(store, run, 'blocked', 'Paused or cancelled before planning; no planner started');
         return run;
       }
-      transition(store, run, 'running', 'Starting simulated planning process');
-      const result = await executeFixture({ plan, delayMs, timeoutMs, pollMs, stateFile, signal,
+      transition(store, run, 'running', `Starting ${planner.mode} planning process`);
+      const result = await executePlanner({ planner, runDir: path.join(store, run.id), timeoutMs, pollMs, stateFile, pauseCheck, signal,
         onSpawn(pid) {
           run.plannerPid = pid;
           writeJson(path.join(store, run.id, 'run.json'), run);
@@ -204,8 +232,9 @@ export async function runFixturePlan({ repoRoot, dataDir, issue, sourceRevision,
       });
       if (result.plan) {
         writeJson(path.join(store, run.id, 'plan.json'), result.plan);
-        fs.writeFileSync(path.join(store, run.id, 'plan.md'), renderPlan(result.plan), { mode: 0o600 });
+        fs.writeFileSync(path.join(store, run.id, 'plan.md'), renderPlan(result.plan, planner.mode), { mode: 0o600 });
       }
+      run.usage = result.usage ?? null;
       transition(store, run, result.status, result.message);
     } catch (error) {
       transition(store, run, 'failed', error.message);
