@@ -49,7 +49,7 @@ The recommended starting point is a **PostgreSQL source of truth plus object sto
 
 ## Local checks
 
-Requires Node.js 20 or newer.
+Requires Node.js 24 or newer.
 
 ```bash
 npm run validate

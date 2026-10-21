@@ -2,6 +2,8 @@
 
 This directory is the executable design for the issue-to-PR loop. It is intentionally small: the first implementation task is to make the loop auditable before giving it model-writing power.
 
+The first [report-only runner increment](../docs/runner.md) is executable with a fixture planner. Run `npm test` to verify its stop and recovery behaviour. Live GitHub intake and model inference are later integrations.
+
 ## Contracts
 
 - [loop.json](loop.json) defines stages, permissions, promotion levels, and stop conditions.

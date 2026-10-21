@@ -1,0 +1,8 @@
+{
+  "repository": "Frederik91/bim-forge",
+  "number": 999,
+  "title": "Plan a factory health/status command",
+  "body": "Propose a read-only command that reports paused, idle, running, and failed states, with acceptance checks. Produce a plan only.",
+  "updatedAt": "2026-10-21T00:00:00Z",
+  "approved": true
+}
