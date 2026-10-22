@@ -7,9 +7,10 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "validate": "node scripts/validate-policy.mjs",
-    "test": "node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs",
+    "test": "node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs",
     "factory": "node factory/cli.mjs",
     "factory:plan": "node factory/live.mjs",
-    "factory:publish": "node factory/publish.mjs"
+    "factory:publish": "node factory/publish.mjs",
+    "factory:code": "node factory/code-job.mjs"
   }
 }
