@@ -21,44 +21,148 @@ const MAX_AUTH_RESPONSE_BYTES = 256 * 1024;
 
 export class ChatGPTPlanError extends Error {}
 
-const fail = (message) => { throw new ChatGPTPlanError(message); };
-const random = (bytes = 32) => crypto.randomBytes(bytes).toString('base64url');
-const scopes = (value) => typeof value === 'string' ? value.split(/\s+/).filter(Boolean) : [];
+interface ChatGPTModel {
+  slug: string;
+  displayName: string;
+}
 
-function defaultStorageDirectory() {
+interface SavedProfile {
+  clientId: string;
+  issuer: string;
+  subject: string;
+  email: string | null;
+  name: string | null;
+  idToken: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  scopes: string[];
+  expiresAt: number;
+}
+
+interface SavedStore {
+  version: 1;
+  hostId: string;
+  registrationClientId: string | null;
+  profile: SavedProfile | null;
+  models: ChatGPTModel[];
+  selectedModel: string | null;
+}
+
+interface AuthorizationOptions {
+  hostId?: string;
+  redirectUri?: string;
+  clientId?: string;
+  email?: string | null;
+  idToken?: string | null;
+}
+
+export interface AuthorizationTransaction {
+  authorizationUrl: string;
+  state: string;
+  nonce: string;
+  codeVerifier: string;
+  codeChallenge: string;
+  redirectUri: string;
+  clientId: string;
+}
+
+interface AuthorizationCallback {
+  code: string;
+  clientId: string;
+}
+
+interface IdentityOptions {
+  clientId?: string;
+  nonce?: string;
+  fetchImpl?: typeof globalThis.fetch;
+  now?: number;
+  jwks?: unknown;
+}
+
+export interface OpenAIIdentity {
+  issuer: string;
+  subject: string;
+  email: string | null;
+  name: string | null;
+}
+
+type ProtectFile = (file: string) => void | Promise<void>;
+type OpenBrowser = (url: string) => Promise<void>;
+
+export interface ChatGPTPlanConnectionOptions {
+  storageFile?: string;
+  fetchImpl?: typeof globalThis.fetch;
+  openBrowser?: OpenBrowser;
+  protectFile?: ProtectFile;
+  now?: () => number;
+  signInTimeoutMs?: number;
+}
+
+export interface PublicChatGPTSession {
+  connected: boolean;
+  sharing: boolean;
+  account: Readonly<{ email: string | null; name: string | null }> | null;
+  models: readonly Readonly<ChatGPTModel>[];
+  selectedModel: string | null;
+}
+
+function fail(message: string): never {
+  throw new ChatGPTPlanError(message);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+const random = (bytes = 32): string => crypto.randomBytes(bytes).toString('base64url');
+const scopes = (value: unknown): string[] => typeof value === 'string' ? value.split(/\s+/).filter(Boolean) : [];
+
+function defaultStorageDirectory(): string {
   if (process.platform === 'win32') return path.join(process.env.LOCALAPPDATA ?? os.homedir(), 'BIM Forge', 'chatgpt');
   if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'BIM Forge', 'chatgpt');
   return path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), 'bim-forge', 'chatgpt');
 }
 
-async function responseJson(response, label, maxBytes = MAX_AUTH_RESPONSE_BYTES) {
-  if (!response?.ok) fail(`${label} failed with HTTP ${response?.status ?? 'unknown'}.`);
+async function responseJson(response: Response, label: string, maxBytes = MAX_AUTH_RESPONSE_BYTES): Promise<unknown> {
+  if (!response.ok) fail(`${label} failed with HTTP ${response.status}.`);
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > maxBytes) fail(`${label} exceeded the response limit.`);
   try { return JSON.parse(bytes.toString('utf8')); } catch { fail(`${label} returned invalid JSON.`); }
 }
 
-function validateStore(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || value.version !== STORE_VERSION) fail('The saved ChatGPT connection is invalid.');
-  if (typeof value.hostId !== 'string' || !/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.hostId)) fail('The saved ChatGPT host identifier is invalid.');
-  if (value.registrationClientId !== null && typeof value.registrationClientId !== 'string') fail('The saved ChatGPT registration is invalid.');
-  if (value.profile !== null && (typeof value.profile !== 'object' || Array.isArray(value.profile))) fail('The saved ChatGPT profile is invalid.');
-  if (value.profile) {
-    const profile = value.profile;
-    if (typeof profile.clientId !== 'string' || !profile.clientId.startsWith('oaiapp_')
-        || profile.issuer !== ISSUER || typeof profile.subject !== 'string' || !profile.subject
-        || ![profile.email, profile.name].every((item) => item === null || typeof item === 'string')
-        || ![profile.idToken, profile.accessToken, profile.refreshToken].every((item) => item === null || typeof item === 'string')
-        || !Array.isArray(profile.scopes) || profile.scopes.some((item) => typeof item !== 'string')
-        || !Number.isSafeInteger(profile.expiresAt) || profile.expiresAt < 0) fail('The saved ChatGPT profile is invalid.');
-  }
-  if (!Array.isArray(value.models) || value.models.some((model) => !model || typeof model.slug !== 'string' || typeof model.displayName !== 'string')) fail('The saved ChatGPT models are invalid.');
-  if (value.selectedModel !== null && typeof value.selectedModel !== 'string') fail('The saved ChatGPT model selection is invalid.');
-  return value;
+function isSavedProfile(value: unknown): value is SavedProfile {
+  if (!isRecord(value)) return false;
+  return typeof value.clientId === 'string' && value.clientId.startsWith('oaiapp_')
+    && value.issuer === ISSUER && typeof value.subject === 'string' && Boolean(value.subject)
+    && [value.email, value.name].every((item) => item === null || typeof item === 'string')
+    && [value.idToken, value.accessToken, value.refreshToken].every((item) => item === null || typeof item === 'string')
+    && Array.isArray(value.scopes) && value.scopes.every((item) => typeof item === 'string')
+    && Number.isSafeInteger(value.expiresAt) && typeof value.expiresAt === 'number' && value.expiresAt >= 0;
 }
 
-let windowsSid;
-function protectCredentialFile(file) {
+function isChatGPTModel(value: unknown): value is ChatGPTModel {
+  return isRecord(value) && typeof value.slug === 'string' && typeof value.displayName === 'string';
+}
+
+function validateStore(value: unknown): SavedStore {
+  if (!isRecord(value) || value.version !== STORE_VERSION) fail('The saved ChatGPT connection is invalid.');
+  if (typeof value.hostId !== 'string' || !/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.hostId)) fail('The saved ChatGPT host identifier is invalid.');
+  if (value.registrationClientId !== null && typeof value.registrationClientId !== 'string') fail('The saved ChatGPT registration is invalid.');
+  if (value.profile !== null && !isSavedProfile(value.profile)) fail('The saved ChatGPT profile is invalid.');
+  if (!Array.isArray(value.models) || !value.models.every(isChatGPTModel)) fail('The saved ChatGPT models are invalid.');
+  if (value.selectedModel !== null && typeof value.selectedModel !== 'string') fail('The saved ChatGPT model selection is invalid.');
+  return {
+    version: 1,
+    hostId: value.hostId,
+    registrationClientId: value.registrationClientId,
+    profile: value.profile,
+    models: value.models,
+    selectedModel: value.selectedModel,
+  };
+}
+
+let windowsSid: string | null | undefined;
+function protectCredentialFile(file: string): void | Promise<void> {
   if (process.platform !== 'win32') return fs.chmod(file, 0o600);
   if (windowsSid === undefined) {
     const found = spawnSync('whoami.exe', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true });
@@ -70,7 +174,7 @@ function protectCredentialFile(file) {
   if (secured.status !== 0) fail('Could not protect the saved ChatGPT credentials for the current Windows account.');
 }
 
-async function writeAtomic(file, value, protectFile = protectCredentialFile) {
+async function writeAtomic(file: string, value: unknown, protectFile: ProtectFile = protectCredentialFile): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   const temporary = `${file}.${process.pid}.${random(8)}.tmp`;
   try {
@@ -84,18 +188,19 @@ async function writeAtomic(file, value, protectFile = protectCredentialFile) {
   }
 }
 
-function openSystemBrowser(url) {
-  const command = process.platform === 'win32' ? ['rundll32.exe', ['url.dll,FileProtocolHandler', url]]
+function openSystemBrowser(url: string): Promise<void> {
+  const command: [string, string[]] = process.platform === 'win32' ? ['rundll32.exe', ['url.dll,FileProtocolHandler', url]]
     : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn(command[0], command[1], { detached: true, stdio: 'ignore', windowsHide: true });
     child.once('spawn', () => { child.unref(); resolve(); });
     child.once('error', reject);
   });
 }
 
-export function createAuthorization({ hostId, redirectUri, clientId = DYNAMIC_CLIENT, email = null, idToken = null } = {}) {
+export function createAuthorization({ hostId, redirectUri, clientId = DYNAMIC_CLIENT, email = null, idToken = null }: AuthorizationOptions = {}): Readonly<AuthorizationTransaction> {
   if (typeof hostId !== 'string' || !hostId.startsWith('urn:uuid:')) fail('A stable ChatGPT host identifier is required.');
+  if (typeof redirectUri !== 'string') fail('ChatGPT sign-in requires an exact 127.0.0.1 loopback callback.');
   const callback = new URL(redirectUri);
   if (callback.protocol !== 'http:' || callback.hostname !== '127.0.0.1' || callback.pathname !== CALLBACK_PATH) fail('ChatGPT sign-in requires an exact 127.0.0.1 loopback callback.');
   const state = random();
@@ -121,7 +226,7 @@ export function createAuthorization({ hostId, redirectUri, clientId = DYNAMIC_CL
   return Object.freeze({ authorizationUrl: authorization.toString(), state, nonce, codeVerifier, codeChallenge, redirectUri, clientId });
 }
 
-export function consumeAuthorizationCallback(callbackUrl, transaction) {
+export function consumeAuthorizationCallback(callbackUrl: string, transaction: AuthorizationTransaction): Readonly<AuthorizationCallback> {
   const callback = new URL(callbackUrl, transaction.redirectUri);
   if (callback.origin + callback.pathname !== transaction.redirectUri) fail('ChatGPT returned to an unexpected callback.');
   if (callback.searchParams.get('state') !== transaction.state) fail('ChatGPT sign-in could not be verified.');
@@ -134,39 +239,49 @@ export function consumeAuthorizationCallback(callbackUrl, transaction) {
   return Object.freeze({ code, clientId: returnedClientId ?? transaction.clientId });
 }
 
-function decodeJsonPart(value, label) {
-  try { return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')); } catch { fail(`The ChatGPT ID token has an invalid ${label}.`); }
+function decodeJsonPart(value: string, label: string): Record<string, unknown> {
+  let decoded: unknown;
+  try { decoded = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')); } catch { fail(`The ChatGPT ID token has an invalid ${label}.`); }
+  if (!isRecord(decoded)) fail(`The ChatGPT ID token has an invalid ${label}.`);
+  return decoded;
 }
 
-export async function verifyOpenAIIdentity(idToken, { clientId, nonce, fetchImpl = globalThis.fetch, now = Date.now(), jwks = null } = {}) {
+export async function verifyOpenAIIdentity(idToken: unknown, { clientId, nonce, fetchImpl = globalThis.fetch, now = Date.now(), jwks = null }: IdentityOptions = {}): Promise<Readonly<OpenAIIdentity>> {
   if (typeof idToken !== 'string') fail('ChatGPT did not return an ID token.');
+  if (typeof clientId !== 'string' || typeof nonce !== 'string') fail('The ChatGPT ID token issuer or audience is invalid.');
   const parts = idToken.split('.');
   if (parts.length !== 3) fail('The ChatGPT ID token is malformed.');
   const header = decodeJsonPart(parts[0], 'header');
   const payload = decodeJsonPart(parts[1], 'payload');
   if (header.alg !== 'RS256' || typeof header.kid !== 'string') fail('The ChatGPT ID token uses an unsupported signature.');
   const keySet = jwks ?? await responseJson(await fetchImpl(JWKS_ENDPOINT, { headers: { Accept: 'application/json' } }), 'ChatGPT signing-key discovery');
-  const jwk = Array.isArray(keySet?.keys) ? keySet.keys.find((item) => item?.kid === header.kid
-    && item?.kty === 'RSA' && (!item.alg || item.alg === 'RS256') && (!item.use || item.use === 'sig')) : null;
-  if (!jwk) fail('The ChatGPT ID token signing key is unavailable.');
-  let publicKey;
-  try { publicKey = crypto.createPublicKey({ key: jwk, format: 'jwk' }); } catch { fail('The ChatGPT ID token signing key is invalid.'); }
+  const keys = isRecord(keySet) && Array.isArray(keySet.keys) ? keySet.keys : [];
+  const jwk = keys.find((item) => isRecord(item) && item.kid === header.kid
+    && item.kty === 'RSA' && (!item.alg || item.alg === 'RS256') && (!item.use || item.use === 'sig'));
+  if (!isRecord(jwk) || typeof jwk.n !== 'string' || typeof jwk.e !== 'string') fail('The ChatGPT ID token signing key is unavailable.');
+  const publicJwk: JsonWebKey = { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', use: 'sig' };
+  let publicKey: crypto.KeyObject;
+  try { publicKey = crypto.createPublicKey({ key: publicJwk, format: 'jwk' }); } catch { fail('The ChatGPT ID token signing key is invalid.'); }
   const valid = crypto.verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), publicKey, Buffer.from(parts[2], 'base64url'));
   if (!valid) fail('The ChatGPT ID token signature is invalid.');
   const seconds = Math.floor(now / 1000);
-  const audience = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  const audience: unknown[] = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (payload.iss !== ISSUER || !audience.includes(clientId)) fail('The ChatGPT ID token issuer or audience is invalid.');
-  if (!Number.isSafeInteger(payload.exp) || payload.exp < seconds - CLOCK_TOLERANCE_SECONDS) fail('The ChatGPT ID token has expired.');
-  if (!Number.isSafeInteger(payload.iat) || payload.iat > seconds + CLOCK_TOLERANCE_SECONDS) fail('The ChatGPT ID token issue time is invalid.');
-  if (payload.nbf !== undefined && (!Number.isSafeInteger(payload.nbf) || payload.nbf > seconds + CLOCK_TOLERANCE_SECONDS)) fail('The ChatGPT ID token is not active.');
+  if (typeof payload.exp !== 'number' || !Number.isSafeInteger(payload.exp) || payload.exp < seconds - CLOCK_TOLERANCE_SECONDS) fail('The ChatGPT ID token has expired.');
+  if (typeof payload.iat !== 'number' || !Number.isSafeInteger(payload.iat) || payload.iat > seconds + CLOCK_TOLERANCE_SECONDS) fail('The ChatGPT ID token issue time is invalid.');
+  if (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || !Number.isSafeInteger(payload.nbf) || payload.nbf > seconds + CLOCK_TOLERANCE_SECONDS)) fail('The ChatGPT ID token is not active.');
   if (payload.nonce !== nonce) fail('The ChatGPT ID token nonce did not match.');
   if (typeof payload.sub !== 'string' || !payload.sub) fail('The ChatGPT ID token has no subject.');
   return Object.freeze({ issuer: payload.iss, subject: payload.sub, email: typeof payload.email === 'string' ? payload.email : null, name: typeof payload.name === 'string' ? payload.name : null });
 }
 
-async function callbackListener(transactionFactory, timeoutMs) {
-  let settle;
-  const result = new Promise((resolve, reject) => { settle = { resolve, reject }; });
+async function callbackListener(transactionFactory: () => AuthorizationTransaction, timeoutMs: number): Promise<{
+  server: http.Server;
+  result: Promise<Readonly<AuthorizationCallback>>;
+  redirectUri: string;
+}> {
+  const settle = Promise.withResolvers<Readonly<AuthorizationCallback>>();
+  const result = settle.promise;
   let consumed = false;
   const server = http.createServer((request, response) => {
     if (consumed || request.method !== 'GET' || !request.url?.startsWith(CALLBACK_PATH)) { response.writeHead(404); response.end('Not found.'); return; }
@@ -183,26 +298,38 @@ async function callbackListener(transactionFactory, timeoutMs) {
     } finally { server.close(); }
   });
   server.listen(0, '127.0.0.1');
-  await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
+  await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const timer = setTimeout(() => { server.close(); settle.reject(new ChatGPTPlanError('ChatGPT sign-in timed out.')); }, timeoutMs);
   result.finally(() => clearTimeout(timer)).catch(() => {});
-  return { server, result, redirectUri: `http://127.0.0.1:${server.address().port}${CALLBACK_PATH}` };
+  const address = server.address();
+  if (!address || typeof address === 'string') fail('ChatGPT sign-in could not open a loopback callback.');
+  return { server, result, redirectUri: `http://127.0.0.1:${address.port}${CALLBACK_PATH}` };
 }
 
 export class ChatGPTPlanConnection {
-  static async open(options = {}) {
+  private saved: SavedStore;
+  private readonly storageFile: string;
+  private readonly fetchImpl: typeof globalThis.fetch;
+  private readonly openBrowser: OpenBrowser;
+  private readonly protectFile: ProtectFile | undefined;
+  private readonly now: () => number;
+  private readonly signInTimeoutMs: number;
+  private refreshPromise: Promise<string> | null;
+  private signInPromise: Promise<PublicChatGPTSession> | null;
+
+  static async open(options: ChatGPTPlanConnectionOptions = {}): Promise<ChatGPTPlanConnection> {
     const storageFile = options.storageFile ?? path.join(defaultStorageDirectory(), 'connection.json');
-    let saved;
+    let saved: SavedStore;
     try { saved = validateStore(JSON.parse(await fs.readFile(storageFile, 'utf8'))); }
     catch (error) {
-      if (error?.code !== 'ENOENT') throw error;
+      if (!isRecord(error) || error.code !== 'ENOENT') throw error;
       saved = { version: STORE_VERSION, hostId: `urn:uuid:${crypto.randomUUID()}`, registrationClientId: null, profile: null, models: [], selectedModel: null };
       await writeAtomic(storageFile, saved, options.protectFile);
     }
     return new ChatGPTPlanConnection(saved, { ...options, storageFile });
   }
 
-  constructor(saved, options) {
+  constructor(saved: unknown, options: ChatGPTPlanConnectionOptions & { storageFile: string }) {
     this.saved = structuredClone(validateStore(saved));
     this.storageFile = options.storageFile;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
@@ -214,12 +341,12 @@ export class ChatGPTPlanConnection {
     this.signInPromise = null;
   }
 
-  async save() { await writeAtomic(this.storageFile, this.saved, this.protectFile); }
+  async save(): Promise<void> { await writeAtomic(this.storageFile, this.saved, this.protectFile); }
 
-  publicSession() {
+  publicSession(): PublicChatGPTSession {
     const profile = this.saved.profile;
     const connected = Boolean(profile?.accessToken && profile?.refreshToken && profile?.idToken);
-    const sharing = connected && profile.scopes.includes(REQUIRED_SCOPE);
+    const sharing = Boolean(connected && profile?.scopes.includes(REQUIRED_SCOPE));
     return Object.freeze({
       connected,
       sharing,
@@ -229,20 +356,23 @@ export class ChatGPTPlanConnection {
     });
   }
 
-  selectedModel() {
+  selectedModel(): string {
     if (!this.saved.selectedModel || !this.saved.models.some((model) => model.slug === this.saved.selectedModel)) fail('Choose an available ChatGPT model before preparing a proposal.');
     return this.saved.selectedModel;
   }
 
-  async signIn() {
+  async signIn(): Promise<PublicChatGPTSession> {
     if (this.signInPromise) return this.signInPromise;
     this.signInPromise = this.#signIn().finally(() => { this.signInPromise = null; });
     return this.signInPromise;
   }
 
-  async #signIn() {
-    let transaction;
-    const listener = await callbackListener(() => transaction, this.signInTimeoutMs);
+  async #signIn(): Promise<PublicChatGPTSession> {
+    let transaction: AuthorizationTransaction | null = null;
+    const listener = await callbackListener(() => {
+      if (!transaction) fail('ChatGPT sign-in could not initialize authorization.');
+      return transaction;
+    }, this.signInTimeoutMs);
     const existing = this.saved.profile;
     const clientId = existing?.clientId ?? this.saved.registrationClientId ?? DYNAMIC_CLIENT;
     transaction = createAuthorization({
@@ -252,7 +382,7 @@ export class ChatGPTPlanConnection {
       email: existing?.email ?? null,
       idToken: existing?.idToken ?? null,
     });
-    let callback;
+    let callback: Readonly<AuthorizationCallback>;
     try {
       await this.openBrowser(transaction.authorizationUrl);
       callback = await listener.result;
@@ -273,10 +403,13 @@ export class ChatGPTPlanConnection {
       }),
     });
     const tokens = await responseJson(tokenResponse, 'ChatGPT token exchange');
+    if (!isRecord(tokens)) fail('ChatGPT returned incomplete plan credentials.');
     const identity = await verifyOpenAIIdentity(tokens.id_token, { clientId: callback.clientId, nonce: transaction.nonce, fetchImpl: this.fetchImpl, now: this.now() });
     if (existing && (existing.issuer !== identity.issuer || existing.subject !== identity.subject)) fail('ChatGPT returned a different account for this saved connection.');
     const grantedScopes = scopes(tokens.scope);
-    if (typeof tokens.access_token !== 'string' || typeof tokens.refresh_token !== 'string' || !Number.isSafeInteger(tokens.expires_in) || tokens.expires_in < 1) fail('ChatGPT returned incomplete plan credentials.');
+    if (typeof tokens.access_token !== 'string' || typeof tokens.refresh_token !== 'string'
+        || typeof tokens.expires_in !== 'number' || !Number.isSafeInteger(tokens.expires_in) || tokens.expires_in < 1) fail('ChatGPT returned incomplete plan credentials.');
+    if (typeof tokens.id_token !== 'string') fail('ChatGPT did not return an ID token.');
     this.saved.profile = {
       clientId: callback.clientId,
       issuer: identity.issuer,
@@ -295,7 +428,7 @@ export class ChatGPTPlanConnection {
     return this.publicSession();
   }
 
-  async getAccessToken() {
+  async getAccessToken(): Promise<string> {
     const profile = this.saved.profile;
     if (!profile?.accessToken || !profile?.refreshToken || !profile.scopes.includes(REQUIRED_SCOPE)) fail('Connect a ChatGPT plan before preparing a proposal.');
     if (profile.expiresAt > this.now() + 60_000) return profile.accessToken;
@@ -303,15 +436,17 @@ export class ChatGPTPlanConnection {
     return this.refreshPromise;
   }
 
-  async #refresh() {
+  async #refresh(): Promise<string> {
     const profile = this.saved.profile;
+    if (!profile?.refreshToken) fail('Connect a ChatGPT plan before preparing a proposal.');
     const response = await this.fetchImpl(TOKEN_ENDPOINT, {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'refresh_token', client_id: profile.clientId, refresh_token: profile.refreshToken, resource: RESOURCE }),
     });
     const tokens = await responseJson(response, 'ChatGPT token refresh');
-    if (typeof tokens.access_token !== 'string' || typeof tokens.refresh_token !== 'string' || !Number.isSafeInteger(tokens.expires_in) || tokens.expires_in < 1) fail('ChatGPT returned incomplete refreshed credentials.');
+    if (!isRecord(tokens) || typeof tokens.access_token !== 'string' || typeof tokens.refresh_token !== 'string'
+        || typeof tokens.expires_in !== 'number' || !Number.isSafeInteger(tokens.expires_in) || tokens.expires_in < 1) fail('ChatGPT returned incomplete refreshed credentials.');
     const grantedScopes = scopes(tokens.scope || profile.scopes.join(' '));
     this.saved.profile = {
       ...profile,
@@ -325,17 +460,17 @@ export class ChatGPTPlanConnection {
     };
     await this.save();
     if (!grantedScopes.includes(REQUIRED_SCOPE)) fail('ChatGPT plan usage is no longer enabled for this connection.');
-    return this.saved.profile.accessToken;
+    return tokens.access_token;
   }
 
-  async refreshModels() {
+  async refreshModels(): Promise<PublicChatGPTSession> {
     const accessToken = await this.getAccessToken();
     const payload = await responseJson(await this.fetchImpl(`${RESOURCE}/models`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } }), 'ChatGPT model discovery');
-    if (!Array.isArray(payload?.models)) fail('ChatGPT model discovery returned an invalid catalog.');
-    const seen = new Set();
-    const models = [];
+    if (!isRecord(payload) || !Array.isArray(payload.models)) fail('ChatGPT model discovery returned an invalid catalog.');
+    const seen = new Set<string>();
+    const models: ChatGPTModel[] = [];
     for (const model of payload.models) {
-      if (model?.visibility !== 'list' || typeof model.slug !== 'string' || typeof model.display_name !== 'string' || !model.slug || seen.has(model.slug)) continue;
+      if (!isRecord(model) || model.visibility !== 'list' || typeof model.slug !== 'string' || typeof model.display_name !== 'string' || !model.slug || seen.has(model.slug)) continue;
       if (model.slug.length > 100 || model.display_name.length > 120) continue;
       seen.add(model.slug); models.push({ slug: model.slug, displayName: model.display_name });
     }
@@ -346,19 +481,20 @@ export class ChatGPTPlanConnection {
     return this.publicSession();
   }
 
-  async selectModel(model) {
+  async selectModel(model: unknown): Promise<PublicChatGPTSession> {
     if (typeof model !== 'string' || !this.saved.models.some((item) => item.slug === model)) fail('Choose a model available to the connected ChatGPT account.');
     this.saved.selectedModel = model;
     await this.save();
     return this.publicSession();
   }
 
-  async signOut() {
+  async signOut(): Promise<Readonly<PublicChatGPTSession & { revocationConfirmed: boolean }>> {
     const profile = this.saved.profile;
     let revocationConfirmed = true;
     if (profile?.refreshToken) {
       try {
         const discovery = await responseJson(await this.fetchImpl(DISCOVERY_ENDPOINT, { headers: { Accept: 'application/json' } }), 'OpenAI sign-out discovery');
+        if (!isRecord(discovery) || typeof discovery.revocation_endpoint !== 'string') fail('OpenAI returned an unsupported sign-out endpoint.');
         const endpoint = new URL(discovery.revocation_endpoint);
         if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'auth.openai.com') fail('OpenAI returned an unsupported sign-out endpoint.');
         const response = await this.fetchImpl(endpoint, {

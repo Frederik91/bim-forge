@@ -121,7 +121,7 @@ const publish = (api, value = proposal, extra = {}) => {
 
 const roomDemoFiles = [
   'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.mjs',
-  'demo/room-store.mjs', 'demo/server.mjs', 'demo/server.test.mjs',
+  'demo/room-store.mjs', 'demo/server.ts', 'demo/server.test.mjs',
   'src/room-model.ts', 'src/room-model.test.mjs',
 ].map((path) => ({ path, content: `Reviewed room demo: ${path}\r\nRoom: \u00d8st\n` }));
 const roomDemoPackage = (api) => ({ ...proposal, files: [...roomDemoFiles, {
@@ -195,7 +195,7 @@ test('demo manifest permits only matched appended tests and preserves validator 
     await assert.rejects(publish(api, value), /validator|lifecycle/);
     assert.equal(api.writes().length, 0);
   }
-  for (const missing of ['demo/server.mjs', 'demo/server.test.mjs']) {
+  for (const missing of ['demo/server.ts', 'demo/server.test.mjs']) {
     const api = githubFixture();
     const value = roomDemoPackage(api);
     value.files = value.files.filter((file) => file.path !== missing);
@@ -205,7 +205,7 @@ test('demo manifest permits only matched appended tests and preserves validator 
 });
 
 test('demo and glossary additions retain credential scanning, file limits and pinned denylist checks', async () => {
-  for (const path of ['GLOSSARY.md', 'demo/server.mjs']) {
+  for (const path of ['GLOSSARY.md', 'demo/server.ts']) {
     const api = githubFixture();
     await assert.rejects(publish(api, { ...proposal, files: [{ path,
       content: '-----BEGIN RSA ' + 'PRIVATE KEY-----' }] }), /credential/);

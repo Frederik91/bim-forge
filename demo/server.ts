@@ -3,11 +3,11 @@ import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { RoomRepository } from '../src/room-model.ts';
-import { ChatGPTPlanConnection, ChatGPTPlanError } from '../src/chatgpt-plan.mjs';
-import { createChatGPTPlanModelWorker, ModelWorkerError, prepareModelProposal } from '../src/model-proposal.mjs';
+import { ChatGPTPlanConnection, ChatGPTPlanError } from '../src/chatgpt-plan.ts';
+import { createChatGPTPlanModelWorker, ModelWorkerError, prepareModelProposal } from '../src/model-proposal.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const assets = new Map([
+const assets = new Map<string, readonly [string, string]>([
   ['/', ['demo/index.html', 'text/html; charset=utf-8']],
   ['/room-app.mjs', ['dist/demo/room-app.mjs', 'text/javascript; charset=utf-8']],
   ['/room.css', ['demo/room.css', 'text/css; charset=utf-8']],
@@ -15,41 +15,51 @@ const assets = new Map([
 const MAX_REQUEST_BYTES = 384 * 1024;
 const disconnected = Object.freeze({ connected: false, sharing: false, account: null, models: Object.freeze([]), selectedModel: null });
 
-function send(response, status, value) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function send(response: http.ServerResponse, status: number, value: unknown): void {
   const bytes = Buffer.from(JSON.stringify(value));
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': bytes.length });
   response.end(bytes);
 }
 
-async function readJson(request, maxBytes = MAX_REQUEST_BYTES) {
+async function readJson(request: http.IncomingMessage, maxBytes = MAX_REQUEST_BYTES): Promise<unknown> {
   if (request.headers['content-type'] !== 'application/json') throw new Error('Use application/json for proposal requests.');
-  const chunks = []; let size = 0;
+  const chunks: Buffer[] = []; let size = 0;
   for await (const chunk of request) {
-    size += chunk.length;
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.length;
     if (size > maxBytes) throw new Error('Request exceeds the bounded request size.');
-    chunks.push(chunk);
+    chunks.push(bytes);
   }
-  let value;
+  let value: unknown;
   try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new Error('Proposal request is not valid JSON.'); }
   return value;
 }
 
-function localRequest(request) {
+function localRequest(request: http.IncomingMessage): void {
   const origin = request.headers.origin;
   if (origin && origin !== `http://${request.headers.host}`) throw new Error('Cross-origin local requests are not allowed.');
   const site = request.headers['sec-fetch-site'];
   if (site && !['same-origin', 'none'].includes(site)) throw new Error('Cross-site local requests are not allowed.');
 }
 
-function proposalPayload(value) {
-  if (!value || Array.isArray(value) || typeof value !== 'object'
+function proposalPayload(value: unknown): { project: unknown; request: unknown } {
+  if (!isRecord(value)
       || Object.keys(value).length !== 2 || !Object.hasOwn(value, 'project') || !Object.hasOwn(value, 'request')) {
     throw new Error('Proposal request must contain exactly project and request.');
   }
-  return value;
+  return { project: value.project, request: value.request };
 }
 
-export function createDemoServer({ modelWorker = null, chatgpt = null } = {}) {
+interface DemoServerOptions {
+  modelWorker?: unknown | null;
+  chatgpt?: ChatGPTPlanConnection | null;
+}
+
+export function createDemoServer({ modelWorker = null, chatgpt = null }: DemoServerOptions = {}): http.Server {
   return http.createServer(async (request, response) => {
     const allowedHost = /^127\.0\.0\.1(?::[0-9]{1,5})?$|^localhost(?::[0-9]{1,5})?$/;
     if (!allowedHost.test(request.headers.host ?? '')) { response.writeHead(403); response.end('Loopback access only.'); return; }
@@ -68,13 +78,13 @@ export function createDemoServer({ modelWorker = null, chatgpt = null } = {}) {
       if (!chatgpt) { send(response, 503, { error: 'ChatGPT sign-in is unavailable.' }); return; }
       try {
         localRequest(request);
-        let session;
+        let session: unknown;
         if (request.url === '/api/auth/start') session = await chatgpt.signIn();
         else if (request.url === '/api/auth/models') session = await chatgpt.refreshModels();
         else if (request.url === '/api/auth/signout') session = await chatgpt.signOut();
         else {
           const value = await readJson(request, 1024);
-          if (!value || Array.isArray(value) || typeof value !== 'object' || Object.keys(value).length !== 1 || typeof value.model !== 'string') {
+          if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.model !== 'string') {
             throw new Error('Model selection must contain exactly one model identifier.');
           }
           session = await chatgpt.selectModel(value.model);
@@ -89,7 +99,7 @@ export function createDemoServer({ modelWorker = null, chatgpt = null } = {}) {
       if (request.method !== 'POST') { response.writeHead(405, { Allow: 'POST' }); response.end('Proposal endpoint requires POST.'); return; }
       try {
         localRequest(request);
-        let worker = modelWorker;
+        let worker: unknown = modelWorker;
         if (!worker && chatgpt) {
           const session = chatgpt.publicSession();
           if (!session.sharing) { send(response, 401, { error: 'Connect a ChatGPT plan before preparing a proposal.' }); return; }
@@ -106,9 +116,10 @@ export function createDemoServer({ modelWorker = null, chatgpt = null } = {}) {
       }
       return;
     }
-    if (!['GET', 'HEAD'].includes(request.method)) {
+    if (!request.method || !['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(405, { Allow: 'GET, HEAD' }); response.end('Unsupported method.'); return;
     }
+    if (!request.url) { response.writeHead(404); response.end('Not found.'); return; }
     const asset = assets.get(request.url);
     if (!asset) { response.writeHead(404); response.end('Not found.'); return; }
     try {

@@ -4,7 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createDemoServer } from './server.mjs';
+import { createDemoServer } from './server.ts';
 import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
 
 async function listen(t, modelWorker = null, chatgpt = null) {

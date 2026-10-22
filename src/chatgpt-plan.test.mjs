@@ -9,7 +9,7 @@ import {
   consumeAuthorizationCallback,
   createAuthorization,
   verifyOpenAIIdentity,
-} from './chatgpt-plan.mjs';
+} from './chatgpt-plan.ts';
 
 const now = Date.parse('2026-10-22T12:00:00.000Z');
 const keys = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
