@@ -44,14 +44,18 @@
           <span class="trust-note"><i aria-hidden="true">✓</i> Your markup is a request—not a direct model edit.</span>
         </header>
         <div class="request-layout">
-          <section class="drawing-card proposal-card" aria-labelledby="selected-title">
+          <div class="request-tabs" aria-label="Request details">
+            <button id="request-canvas-tab" type="button" aria-pressed="true"><span>1</span> Mark up model</button>
+            <button id="request-details-tab" type="button" aria-pressed="false"><span>2</span> Describe request</button>
+          </div>
+          <section id="request-canvas-pane" class="drawing-card proposal-card request-pane" data-active="true" aria-labelledby="selected-title">
             <header class="card-heading"><div><span class="card-kicker">LIVE REQUEST CANVAS</span><h2 id="selected-title">Room awaiting a request</h2></div><span id="selected-badge" class="pill teal">Not started</span></header>
             <div id="proposal-drawing" class="drawing-surface"><p class="canvas-empty">Create a project or load the sample to begin.</p></div>
-            <footer><span>Select an object, then drag a handle or enter an exact dimension.</span><b>PLAN · METRES</b></footer>
+            <footer><span>Select an object, then drag a handle or enter an exact dimension.</span><b>PLAN · METRES</b><button id="to-request-details" class="button primary mobile-only" type="button">Continue <span aria-hidden="true">→</span></button></footer>
           </section>
 
-          <section id="editor-panel" class="editor-panel" aria-labelledby="proposal-heading">
-            <div class="panel-heading"><div><p class="eyebrow">INTENT DETAILS</p><h2 id="proposal-heading">Describe the outcome</h2></div><button id="discard-preview" class="text-button" type="button" disabled>Reset markup</button></div>
+          <section id="editor-panel" class="editor-panel request-pane" data-active="false" aria-labelledby="proposal-heading">
+            <div class="panel-heading"><div><p class="eyebrow">INTENT DETAILS</p><h2 id="proposal-heading">Describe the outcome</h2></div><div class="panel-links"><button id="back-to-canvas" class="text-button mobile-only" type="button">← Plan</button><button id="discard-preview" class="text-button" type="button" disabled>Reset markup</button></div></div>
             <p id="editor-base" class="editor-help">Load a room to begin.</p>
             <div class="editor-fields">
               <div><label for="selected-object">Object to change</label><select id="selected-object" disabled><option value="door-entry">Entry door</option></select></div>

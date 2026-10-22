@@ -667,6 +667,17 @@ test('model-working AI receives bounded tools and saves only its validated propo
   assert.equal(result.repository.review('ai-room-study').requestId, result.review.requestId);
   assert.equal(result.repository.review('ai-room-study').constraints, result.review.constraints);
   assert.equal((await RoomRepository.restore(result.repository.serialize())).review('ai-room-study').rationale, result.review.rationale);
+  for (const mutateReview of [
+    (review) => { review.baseRevisionId = '0'.repeat(64); },
+    (review) => { review.constraints = ''; },
+    (review) => { review.worker.usage.totalTokens = -1; },
+    (review) => { review.toolCalls[0].name = 'write_arbitrary_model'; },
+    (review) => { review.decision = { status: 'accepted', decisionId: null, actor: null }; },
+  ]) {
+    const damaged = JSON.parse(result.repository.serialize());
+    mutateReview(damaged.reviews[0]);
+    await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)));
+  }
   assert.equal(door(result.repository, 'ai-room-study').width, 1.2);
   assert.equal(result.repository.root(), original.root());
 });
@@ -748,6 +759,7 @@ test('OpenAI model adapter keeps credentials server-side and returns tool output
   ]);
   assert.equal(requests.length, 2); assert.equal(requests[0].url, 'https://api.openai.com/v1/responses');
   assert.equal(requests[0].options.headers.Authorization, 'Bearer server-only-test-key');
+  assert.equal(requests[0].options.signal instanceof AbortSignal, true);
   const first = JSON.parse(requests[0].options.body); const second = JSON.parse(requests[1].options.body);
   assert.equal(first.model, 'configured-model'); assert.equal(first.tool_choice, 'required');
   assert.equal(first.max_output_tokens, 2000);
@@ -755,4 +767,15 @@ test('OpenAI model adapter keeps credentials server-side and returns tool output
   assert.equal(second.previous_response_id, 'response-one');
   assert.deepEqual(second.input, [{ type: 'function_call_output', call_id: 'call-one', output: '{"ok":true}' }]);
   assert.equal(requests[0].options.body.includes('server-only-test-key'), false);
+});
+
+test('OpenAI model adapter rejects provider responses above its byte budget', async () => {
+  const worker = createOpenAIModelWorker({
+    apiKey: 'server-only-test-key', model: 'configured-model', maxResponseBytes: 1024,
+    fetchImpl: async () => ({ ok: true, status: 200, headers: new Headers(), async text() { return 'x'.repeat(1025); } }),
+  });
+  await assert.rejects(worker.run({
+    instructions: 'Use bounded tools.', input: {}, tools: MODEL_PROPOSAL_TOOLS,
+    executeTool: async () => ({ ok: true }), recordProviderEvent() {},
+  }), /byte limit/);
 });

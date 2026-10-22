@@ -79,6 +79,8 @@ input[aria-invalid="true"] { border: 2px solid #a44932; }
 .trust-note i { display: inline-grid; width: 18px; height: 18px; margin-right: 6px; place-items: center; border-radius: 50%; color: white; background: var(--teal); font-style: normal; }
 
 .request-layout, .review-layout, .history-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(330px, .75fr); gap: 20px; align-items: start; }
+.request-tabs, .mobile-only { display: none; }
+.panel-links { display: flex; gap: 12px; align-items: center; }
 .drawing-card, .editor-panel, .review-panel, .history-panel, .conflict-panel { border: 1px solid var(--line); border-radius: 15px; background: var(--paper); box-shadow: 0 12px 35px #183a3210; overflow: hidden; }
 .proposal-card { border-top: 3px solid #69b7a8; }
 .card-heading, .panel-heading, .dialog-heading { min-height: 72px; padding: 17px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid #e8eeeb; }
@@ -179,7 +181,6 @@ thead th, tbody th { font-weight: 600; }
   .project-identity { border: 0; padding: 0; }
   .header-actions { grid-column: 1 / -1; overflow-x: auto; padding-bottom: 2px; }
   .request-layout, .review-layout, .history-layout { grid-template-columns: 1fr; }
-  .editor-panel { order: -1; }
   .drawing-surface { min-height: 280px; }
 }
 @media (max-width: 650px) {
@@ -192,6 +193,13 @@ thead th, tbody th { font-weight: 600; }
   .dimension-grid, .proposal-footer, .review-actions, .conflict-selects { grid-template-columns: 1fr; }
   .proposal-footer .button { width: 100%; }
   .drawing-surface, .review-canvas .drawing-surface { min-height: 220px; }
+  .request-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: #e9efec; }
+  .request-tabs button { min-height: 42px; border: 0; border-radius: 8px; color: #647873; background: transparent; font-size: 11px; font-weight: 680; }
+  .request-tabs button[aria-pressed="true"] { color: #155f58; background: white; box-shadow: 0 2px 9px #173b3315; }
+  .request-tabs button span { display: inline-grid; width: 21px; height: 21px; margin-right: 5px; place-items: center; border-radius: 50%; color: white; background: var(--teal); font-size: 9px; }
+  .request-pane[data-active="false"] { display: none; }
+  .mobile-only { display: inline-flex; align-items: center; justify-content: center; }
+  .drawing-card footer .mobile-only { width: 100%; margin-top: 5px; }
   .card-heading, .panel-heading { padding: 15px; }
   .editor-fields, .proposal-form { padding-left: 15px; padding-right: 15px; }
   .project-identity .workspace-label { display: none; }

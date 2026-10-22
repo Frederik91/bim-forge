@@ -17,7 +17,7 @@ The current restricted static preview cannot run this flow because it has no aut
 ## Request, review and revise
 
 1. Create a project or load the sample in the opening dialog. The main navigation then leads through **Request**, **Review** and **History** instead of exposing every control at once.
-2. On **Request**, select a stable wall or door identity in the plan. The preserved original is available in its own dialog.
+2. On **Request**, select a stable wall or door identity in the plan. On narrow screens, **Mark up model** and **Describe request** are separate substeps rather than one long page. The preserved original is available in its own dialog.
 3. Drag a handle or enter dimensions to sketch the intended move or size. The sketch is visual intent, like markup with an arrow; it is not authoritative model geometry.
 4. Describe the desired outcome and choose a new proposal name.
 5. Choose **Ask AI to prepare proposal**. The request includes the exact base revision, selected object identity, written instruction and visual layout intent.

@@ -16,6 +16,8 @@ const ui = Object.fromEntries([
   'request-page', 'review-page', 'history-page', 'nav-request', 'nav-review', 'nav-history',
   'view-original', 'view-changes', 'new-project', 'start-dialog', 'start-close',
   'original-dialog', 'changes-dialog', 'working-dialog', 'editor-panel',
+  'request-canvas-tab', 'request-details-tab', 'request-canvas-pane',
+  'to-request-details', 'back-to-canvas',
 ].map((id) => [id, byId(id)]));
 
 let store = null;
@@ -75,6 +77,14 @@ function showPage(name) {
     ui[`nav-${page}`].setAttribute('aria-pressed', String(page === name));
   }
   document.getElementById('workbench').focus({ preventScroll: true });
+}
+
+function showRequestPane(name) {
+  const details = name === 'details';
+  ui['request-canvas-pane'].dataset.active = String(!details);
+  ui['editor-panel'].dataset.active = String(details);
+  ui['request-canvas-tab'].setAttribute('aria-pressed', String(!details));
+  ui['request-details-tab'].setAttribute('aria-pressed', String(details));
 }
 
 function openDialog(dialog) {
@@ -254,6 +264,7 @@ async function createProject(name) {
   await persist(next);
   ui['project-name'].value = repo.name;
   closeDialog(ui['start-dialog']);
+  showRequestPane('canvas');
   showPage('request');
   status('Original room saved locally. Select a wall or door and describe a request to begin.');
 }
@@ -275,6 +286,13 @@ ui['view-changes'].addEventListener('click', () => openDialog(ui['changes-dialog
 ui['nav-request'].addEventListener('click', () => showPage('request'));
 ui['nav-review'].addEventListener('click', () => showPage('review'));
 ui['nav-history'].addEventListener('click', () => showPage('history'));
+ui['request-canvas-tab'].addEventListener('click', () => showRequestPane('canvas'));
+ui['request-details-tab'].addEventListener('click', () => showRequestPane('details'));
+ui['to-request-details'].addEventListener('click', () => {
+  showRequestPane('details');
+  ui['selected-object'].focus();
+});
+ui['back-to-canvas'].addEventListener('click', () => showRequestPane('canvas'));
 for (const button of document.querySelectorAll('[data-close]')) {
   button.addEventListener('click', () => closeDialog(byId(button.dataset.close)));
 }
@@ -369,6 +387,7 @@ ui['request-revision'].addEventListener('click', () => {
   ui['proposal-name'].value = '';
   ui['request-text'].value = `Revise the selected AI proposal. ${ui['request-text'].value.trim()}`.slice(0, 1000);
   renderReview(); updateControls();
+  showRequestPane('details');
   showPage('request');
   ui['proposal-name'].focus();
   status('Revision request started from the selected proposal. Choose a new proposal name; the earlier proposal remains unchanged.');
