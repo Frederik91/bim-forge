@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { approvePackage, assertHumanGate } from './publish-request.mjs';
 import { publishApproved } from './publisher.mjs';
 import { BOT, issueFingerprint } from './publish-request.mjs';
-import { renderChangeReview } from './change-review.mjs';
+import { renderChangeReview } from './change-review.ts';
 import { prepareCodingPackage } from './coding.mjs';
 
 const baseSha = 'c84f6dfddb91976deda4366ce1d52a53bcf3e7c5';

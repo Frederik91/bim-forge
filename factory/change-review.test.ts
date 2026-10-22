@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { renderChangeReview } from './change-review.mjs';
+import { renderChangeReview } from './change-review.ts';
 
-const digest = (value) => createHash('sha256').update(value).digest('hex');
+const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const input = () => ({
   outcome: 'Report which rooms need coordination',
   why: 'Engineers need to identify incomplete room assignments',
@@ -21,8 +21,8 @@ const input = () => ({
   },
   verificationSha256: digest('verification log'),
 });
-const main = (body) => body.split('<details>')[0];
-const technical = (body) => body.split('<pre>')[1].split('</pre>')[0];
+const main = (body: string) => body.split('<details>')[0] ?? '';
+const technical = (body: string) => body.split('<pre>')[1]?.split('</pre>')[0] ?? '';
 
 test('review body gives the owner the required five-part behavior decision', () => {
   const value = input(); const body = renderChangeReview(value); const visible = main(body);
@@ -50,13 +50,15 @@ test('review body gives the owner the required five-part behavior decision', () 
 });
 
 test('all run provenance hashes, publication identifiers and changed paths stay in collapsible details', () => {
-  const value = input(); value.run.futureEvidenceSha256 = digest('future provenance');
+  const value = input(); Reflect.set(value.run, 'futureEvidenceSha256', digest('future provenance'));
   const body = renderChangeReview(value); const visible = main(body); const details = JSON.parse(technical(body));
   assert.match(body, /<details>\n<summary>Technical evidence and publication provenance<\/summary>/);
   assert.match(body, /<\/details>\n$/);
   for (const [key, item] of Object.entries(value.run)) {
     assert.deepEqual(details.run[key], item);
-    if (/(?:Sha|Sha256)$/.test(key) || key === 'id') assert.equal(visible.includes(item), false, key);
+    if (/(?:Sha|Sha256)$/.test(key) || key === 'id') {
+      assert.equal(typeof item === 'string' && visible.includes(item), false, key);
+    }
   }
   assert.deepEqual(details.profile, value.profile);
   for (const item of [...value.profile.paths, value.profile.label, value.profile.exportName, value.profile.errorText]) {
@@ -78,15 +80,15 @@ test('rendering is deterministic across repeated calls and run property insertio
 test('missing or malformed acceptance evidence cannot become a success or code-review claim', () => {
   for (const observations of [undefined, null, [], [{}], [{ ...input().observations[0], signal: 9 }],
     [{ ...input().observations[0], stdout: undefined }]]) {
-    const value = input(); value.observations = observations;
-    value.run.status = 'verified'; value.run.independentReviewCompleted = true;
+    const value = input(); Reflect.set(value, 'observations', observations);
+    Reflect.set(value.run, 'status', 'verified'); Reflect.set(value.run, 'independentReviewCompleted', true);
     const visible = main(renderChangeReview(value));
     assert.match(visible, /Acceptance evidence is missing or incomplete/);
     assert.doesNotMatch(visible, /checked \d+ fixed input cases/);
     assert.match(visible, /Independent technical review is pending/);
     assert.doesNotMatch(visible, /review (?:is complete|completed|passed)/i);
   }
-  const value = input(); delete value.run.acceptanceSha256;
+  const value = input(); Reflect.deleteProperty(value.run, 'acceptanceSha256');
   assert.match(renderChangeReview(value), /Acceptance evidence is missing or incomplete/);
 });
 
@@ -94,7 +96,7 @@ test('hashes and verified status alone cannot establish successful policy or tes
   for (const execution of [undefined, { exitCode: 0 }, { ...input().run.verifierExecution, exitCode: 1 },
     { ...input().run.verifierExecution, signal: 9 }, { ...input().run.verifierExecution, result: 'timeout' },
     { ...input().run.verifierExecution, execMainCode: 2 }]) {
-    const value = input(); value.run.verifierExecution = execution; value.run.status = 'verified';
+    const value = input(); Reflect.set(value.run, 'verifierExecution', execution); Reflect.set(value.run, 'status', 'verified');
     const visible = main(renderChangeReview(value));
     assert.match(visible, /Evidence that policy validation and the full candidate test command completed successfully is missing or incomplete/);
     assert.doesNotMatch(visible, /command exited successfully/);

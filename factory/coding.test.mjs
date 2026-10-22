@@ -13,7 +13,7 @@ import './schedule-approval.test.mjs';
 import './scheduled-publication.test.mjs';
 import './schedule-job.test.mjs';
 import './application-profile.test.mjs';
-import './change-review.test.mjs';
+import './change-review.test.ts';
 
 const paths = ['factory/health.ts', 'factory/health.test.ts'];
 const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),

@@ -11,7 +11,7 @@ import { verifyCodingCandidate } from './code-verify.mjs';
 import { codingSchema } from './coding.mjs';
 import { randomUUID } from 'node:crypto';
 import { assertCodingObservation } from './code-acceptance.mjs';
-import { renderChangeReview } from './change-review.mjs';
+import { renderChangeReview } from './change-review.ts';
 
 const root = '/var/lib/bim-forge-coding';
 const source = '/opt/bim-forge/coding-source';
