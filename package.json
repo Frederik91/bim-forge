@@ -4,10 +4,12 @@
   "private": true,
   "description": "AI-native open-source BIM authoring and coordination factory",
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "validate": "node scripts/validate-policy.mjs",
-    "test": "node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs factory/health.test.mjs",
+    "test": "node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs",
     "factory": "node factory/cli.mjs",
     "factory:plan": "node factory/live.mjs",
     "factory:publish": "node factory/publish.mjs",
