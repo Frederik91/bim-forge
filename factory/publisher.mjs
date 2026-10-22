@@ -27,7 +27,10 @@ export async function publishApproved({ bytes, approvedSha256, request, record,
         Object.keys(candidate.scripts ?? {}).some((name) => /^(?:pre|post)/.test(name)) ||
         !candidate.scripts?.test?.startsWith(`${baseline.scripts.test} `) ||
         !candidate.scripts.test.slice(baseline.scripts.test.length).trim().split(/\s+/)
-          .every((file) => /^factory\/[a-z0-9.-]+\.test\.mjs$/.test(file))) {
+          .every((file) => /^factory\/[a-z0-9.-]+\.test\.mjs$/.test(file)
+            || (/^src\/[a-z0-9]+(?:-[a-z0-9]+)*\.test\.mjs$/.test(file)
+              && proposal.files.some((item) => item.path === file)
+              && proposal.files.some((item) => item.path === file.replace(/\.test\.mjs$/, '.mjs'))))) {
       throw new Error('Publication would replace a validator or add unsupported lifecycle commands');
     }
   }
@@ -125,7 +128,7 @@ export async function publishApproved({ bytes, approvedSha256, request, record,
   const commitSha = ref.object.sha;
   await verifyCommit(commitSha);
   await preflight();
-  const body = `${proposal.body}\n\n---\nRelated issue: #${proposal.issue}\nPublication approval: \`${digest}\`\nSource revision: \`${proposal.baseSha}\`\nHuman approval required. No automatic merge.\n`;
+  const body = `${proposal.body}\n\n<details>\n<summary>Publication identity</summary>\n\nRelated issue: #${proposal.issue}\nPublication approval: \`${digest}\`\nSource revision: \`${proposal.baseSha}\`\nHuman approval required. No automatic merge.\n\n</details>\n`;
   const query = `/pulls?state=all&head=${encodeURIComponent(`Frederik91:${branch}`)}&per_page=100`;
   const findPr = async () => {
     const matches = await request('GET', query);

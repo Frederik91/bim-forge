@@ -44,7 +44,7 @@ export function approvePackage(bytes, approvedSha256) {
   const paths = new Set();
   for (const file of proposal.files) {
     if (!exactKeys(file, ['path', 'content']) || typeof file.path !== 'string' || file.path.length > 160 ||
-        !/^(?:docs\/[a-z0-9][a-z0-9\/-]*\.md|factory\/[a-z0-9][a-z0-9.-]*\.mjs|package\.json)$/.test(file.path) ||
+        !/^(?:docs\/[a-z0-9][a-z0-9\/-]*\.md|factory\/[a-z0-9][a-z0-9.-]*\.mjs|src\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.test)?\.mjs|package\.json)$/.test(file.path) ||
         file.path.includes('//') || /(?:^|\/)(?:agents|claude|skill)\.md$/i.test(file.path) ||
         paths.has(file.path) || !cleanText(file.content, 64 * 1024) ||
         Buffer.from(file.content).toString('utf8') !== file.content) {

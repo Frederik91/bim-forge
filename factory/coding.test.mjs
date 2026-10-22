@@ -12,6 +12,8 @@ import { assertCodingObservation, healthAcceptanceCases, scheduleAcceptanceCases
 import './schedule-approval.test.mjs';
 import './scheduled-publication.test.mjs';
 import './schedule-job.test.mjs';
+import './application-profile.test.mjs';
+import './change-review.test.mjs';
 
 const paths = ['factory/health.mjs', 'factory/health.test.mjs'];
 const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),

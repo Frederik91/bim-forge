@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { approvePackage, assertHumanGate } from './publish-request.mjs';
 import { publishApproved } from './publisher.mjs';
 import { BOT, issueFingerprint } from './publish-request.mjs';
+import { renderChangeReview } from './change-review.mjs';
+import { prepareCodingPackage } from './coding.mjs';
 
 const baseSha = 'c84f6dfddb91976deda4366ce1d52a53bcf3e7c5';
 const issueScope = { number: 14, title: 'Publisher qualification', body: 'Publish only approved changes.' };
@@ -51,6 +53,7 @@ function githubFixture(hook = () => {}) {
   const baseTree = '1'.repeat(40);
   const state = { repository: structuredClone(repository), protection: structuredClone(protection), policy: structuredClone(policy),
     codeowners, paused: false, stateText: '```yaml\npaused: false\n```\n', main: baseSha,
+    package: { scripts: { validate: 'node scripts/validate-policy.mjs', test: 'node --test factory/coding.test.mjs' } },
     issue: { ...issueScope, state: 'open', updated_at: proposal.issueUpdatedAt },
     trees: new Map([[baseTree, [{ path: 'README.md', mode: '100644', type: 'blob', sha: blob('# BIM Forge\n') }]]]),
     commits: new Map([[baseSha, { sha: baseSha, tree: { sha: baseTree }, parents: [] }]]), rulesets: [],
@@ -70,7 +73,8 @@ function githubFixture(hook = () => {}) {
       else if (resource.startsWith('/issues?')) result = state.paused ? [{ number: 99 }] : [];
       else if (resource.startsWith('/contents/')) {
         const path = resource.slice('/contents/'.length).split('?')[0];
-        const text = path === '.github/CODEOWNERS' ? state.codeowners : path === 'policy/gate.json' ? JSON.stringify(state.policy) : state.stateText;
+        const text = path === '.github/CODEOWNERS' ? state.codeowners : path === 'policy/gate.json' ? JSON.stringify(state.policy)
+          : path === 'package.json' ? JSON.stringify(state.package) : state.stateText;
         result = { type: 'file', encoding: 'base64', content: Buffer.from(text).toString('base64') };
       } else if (resource.startsWith('/git/commits/')) result = state.commits.get(resource.split('/').at(-1));
       else if (resource.startsWith('/git/trees/')) result = { truncated: false, tree: state.trees.get(resource.split('/').at(-1).split('?')[0]) };
@@ -114,6 +118,57 @@ const publish = (api, value = proposal, extra = {}) => {
     record: (event) => api.state.events.push(event),
     hasPendingDraftIntent: api.state.events.some((event) => event.stage === 'write-intent' && event.resource === '/pulls'), ...extra });
 };
+
+test('the final published change review keeps publication hashes in collapsed evidence', async () => {
+  const api = githubFixture();
+  const value = { ...proposal, body: renderChangeReview({ outcome: 'Report supplied metadata.',
+    why: 'Support a read-only inventory.', run: { issue: proposal.issue } }) };
+  const result = await publish(api, value);
+  const body = api.state.pr.body;
+  let depth = 0;
+  const visible = body.split(/(<details>|<\/details>)/).filter((part) => {
+    if (part === '<details>') { depth += 1; return false; }
+    if (part === '</details>') { depth -= 1; return false; }
+    return depth === 0;
+  }).join('');
+  assert.equal(visible.includes(result.digest), false);
+  assert.equal(visible.includes(proposal.baseSha), false);
+  assert.ok(body.includes(`Publication approval: \`${result.digest}\``));
+  assert.ok(body.includes(`Source revision: \`${proposal.baseSha}\``));
+  assert.match(visible, /Your decision/);
+  const before = api.writes().length;
+  assert.equal((await publish(api, value)).reused, true);
+  assert.equal(api.writes().length, before);
+});
+
+test('a prepared application package publishes its matched new tests without changing validators', async () => {
+  const api = githubFixture();
+  const paths = ['src/model-summary.mjs', 'src/model-summary.test.mjs'];
+  const spec = { issue: { ...issueScope, updated_at: proposal.issueUpdatedAt }, baseSha, paths };
+  const answer = { summary: 'Count supplied metadata without changing a model.', questions: [],
+    files: paths.map((path) => ({ path, content: 'export const example = true;\n' })) };
+  const prepared = prepareCodingPackage(spec, answer, policy, JSON.stringify(api.state.package));
+  const result = await publish(api, prepared.proposal);
+  assert.equal(result.status, 'published');
+  assert.equal(api.state.pr.draft, true);
+  assert.deepEqual(api.writes()[0].body.tree.map((file) => file.path), [...paths, 'package.json']);
+  const manifest = JSON.parse(api.writes()[0].body.tree.at(-1).content);
+  assert.equal(manifest.scripts.validate, api.state.package.scripts.validate);
+  assert.equal(manifest.scripts.test, `${api.state.package.scripts.test} src/model-summary.test.mjs`);
+  const before = api.writes().length;
+  assert.equal((await publish(api, prepared.proposal)).reused, true);
+  assert.equal(api.writes().length, before);
+  for (const extra of ['src/unrelated.test.mjs', 'src/model-summary.test.mjs;echo',
+    '../src/model-summary.test.mjs', '--import=src/model-summary.mjs']) {
+    const other = githubFixture();
+    const changed = structuredClone(prepared.proposal);
+    const pkg = JSON.parse(changed.files.at(-1).content);
+    pkg.scripts.test = `${other.state.package.scripts.test} ${extra}`;
+    changed.files.at(-1).content = JSON.stringify(pkg);
+    await assert.rejects(publish(other, changed), /validator|lifecycle/);
+    assert.equal(other.writes().length, 0);
+  }
+});
 
 test('publishes the exact approved files to a new bot-authored draft and reuses it without writes', async () => {
   const api = githubFixture();
