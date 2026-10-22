@@ -11,6 +11,10 @@ const cleanText = (value, maximum) => typeof value === 'string' && value.length 
   Buffer.byteLength(value) <= maximum && Buffer.from(value).toString('utf8') === value &&
   !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value);
 const containsCredential = (value) => /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-proj-[A-Za-z0-9_-]{20,})/.test(value);
+const roomDemoPaths = new Set([
+  'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.mjs',
+  'demo/room-store.mjs', 'demo/server.mjs', 'demo/server.test.mjs',
+]);
 
 export function approvePackage(bytes, approvedSha256) {
   if (!Buffer.isBuffer(bytes) || bytes.length > 512 * 1024 || !/^[a-f0-9]{64}$/.test(approvedSha256 ?? '')) {
@@ -44,7 +48,8 @@ export function approvePackage(bytes, approvedSha256) {
   const paths = new Set();
   for (const file of proposal.files) {
     if (!exactKeys(file, ['path', 'content']) || typeof file.path !== 'string' || file.path.length > 160 ||
-        !/^(?:docs\/[a-z0-9][a-z0-9\/-]*\.md|factory\/[a-z0-9][a-z0-9.-]*\.mjs|src\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.test)?\.mjs|package\.json)$/.test(file.path) ||
+        (!/^(?:docs\/[a-z0-9][a-z0-9\/-]*\.md|factory\/[a-z0-9][a-z0-9.-]*\.mjs|src\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.test)?\.mjs|package\.json)$/.test(file.path)
+          && !roomDemoPaths.has(file.path)) ||
         file.path.includes('//') || /(?:^|\/)(?:agents|claude|skill)\.md$/i.test(file.path) ||
         paths.has(file.path) || !cleanText(file.content, 64 * 1024) ||
         Buffer.from(file.content).toString('utf8') !== file.content) {

@@ -119,6 +119,112 @@ const publish = (api, value = proposal, extra = {}) => {
     hasPendingDraftIntent: api.state.events.some((event) => event.stage === 'write-intent' && event.resource === '/pulls'), ...extra });
 };
 
+const roomDemoFiles = [
+  'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.mjs',
+  'demo/room-store.mjs', 'demo/server.mjs', 'demo/server.test.mjs',
+  'src/room-model.mjs', 'src/room-model.test.mjs',
+].map((path) => ({ path, content: `Reviewed room demo: ${path}\r\nRoom: \u00d8st\n` }));
+const roomDemoPackage = (api) => ({ ...proposal, files: [...roomDemoFiles, {
+  path: 'package.json', content: JSON.stringify({ ...api.state.package,
+    scripts: { ...api.state.package.scripts,
+      test: `${api.state.package.scripts.test} src/room-model.test.mjs demo/server.test.mjs` } }),
+}] });
+
+test('manual exact-byte approval publishes all six demo assets, glossary, matched source tests and manifest', async () => {
+  const api = githubFixture();
+  const value = roomDemoPackage(api);
+  const bytes = bytesFor(value);
+  await assert.rejects(publishApproved({ bytes: Buffer.concat([bytes, Buffer.from('\n')]),
+    approvedSha256: digest(bytes), request: api.request, record: () => {} }), /approval/i);
+  assert.equal(api.state.calls.length, 0);
+  const result = await publish(api, value);
+  assert.equal(result.status, 'published');
+  assert.equal(result.digest, digest(bytes));
+  assert.equal(api.state.pr.draft, true);
+  assert.equal(api.state.pr.auto_merge, null);
+  assert.deepEqual(api.writes()[0].body.tree, value.files.map((file) => ({
+    ...file, mode: '100644', type: 'blob',
+  })));
+  const writes = api.writes().length;
+  assert.equal((await publish(api, value)).reused, true);
+  assert.equal(api.writes().length, writes);
+});
+
+test('manual demo publishing rejects sibling paths, nested paths, traversal, case variants and agent instructions', async () => {
+  const paths = [
+    'glossary.md', 'Glossary.md', 'GLOSSARY.MD', 'GLOSSARY.md.bak', 'docs/GLOSSARY.md',
+    'demo/other.mjs', 'demo/index.htm', 'demo/room.html', 'demo/room-app.test.mjs',
+    'demo/room-store.test.mjs', 'demo/server.test.mjs.bak', 'demo/server.mjs/child.mjs',
+    'demo/nested/server.mjs', 'demo//server.mjs', 'demo/./server.mjs',
+    'demo/../server.mjs', 'demo/../demo/server.mjs', '../demo/server.mjs', './demo/server.mjs',
+    'demo\\server.mjs', '/demo/server.mjs', 'Demo/server.mjs', 'demo/Server.mjs',
+    'demo/INDEX.HTML', 'demo/ROOM.CSS', 'demo/ROOM-APP.mjs', 'demo/ROOM-STORE.mjs',
+    'demo/SERVER.TEST.mjs', 'demo/server.mjs\n',
+    'AGENTS.md', 'CLAUDE.md', 'SKILL.md', 'demo/AGENTS.md', 'demo/agents.md',
+    'demo/CLAUDE.md', 'demo/SKILL.md', 'demo/.env', 'demo/credentials/key.mjs',
+    'demo/deploy.mjs', 'policy/gate.json', '.github/workflows/demo.yml',
+  ];
+  for (const path of paths) {
+    const api = githubFixture();
+    await assert.rejects(publish(api, { ...proposal, files: [{ path, content: 'no' }] }), /unsupported path/);
+    assert.equal(api.state.calls.length, 0, path);
+  }
+});
+
+test('demo manifest permits only matched appended tests and preserves validator and lifecycle checks', async () => {
+  const baseline = githubFixture().state.package;
+  const invalidScripts = [
+    ...['demo/other.test.mjs', 'demo/room-store.test.mjs', 'demo/Server.test.mjs',
+      './demo/server.test.mjs', 'demo/nested/server.test.mjs', 'demo/../demo/server.test.mjs',
+      'demo\\server.test.mjs', 'demo/server.test.mjs;echo', 'demo/server.test.mjs && echo injected',
+      'demo/server.test.mjs | echo injected', 'demo/server.test.mjs > output',
+      'demo/server.test.mjs $(echo injected)', 'demo/server.test.mjs `echo injected`',
+      '--import=demo/server.mjs', '--test-reporter=demo/server.mjs']
+      .map((suffix) => ({ ...baseline.scripts, test: `${baseline.scripts.test} ${suffix}` })),
+    { ...baseline.scripts, test: 'node --test demo/server.test.mjs' },
+    { ...baseline.scripts, test: `echo bypassed ${baseline.scripts.test} demo/server.test.mjs` },
+    { ...baseline.scripts, test: `${baseline.scripts.test}; demo/server.test.mjs` },
+    { ...baseline.scripts, test: `${baseline.scripts.test} demo/server.test.mjs`, validate: 'echo bypassed' },
+    ...['pretest', 'posttest', 'prevalidate', 'postvalidate', 'preinstall', 'postinstall']
+      .map((name) => ({ ...baseline.scripts, test: `${baseline.scripts.test} demo/server.test.mjs`, [name]: 'echo injected' })),
+  ];
+  for (const scripts of invalidScripts) {
+    const api = githubFixture();
+    const value = roomDemoPackage(api);
+    value.files.at(-1).content = JSON.stringify({ ...api.state.package, scripts });
+    await assert.rejects(publish(api, value), /validator|lifecycle/);
+    assert.equal(api.writes().length, 0);
+  }
+  for (const missing of ['demo/server.mjs', 'demo/server.test.mjs']) {
+    const api = githubFixture();
+    const value = roomDemoPackage(api);
+    value.files = value.files.filter((file) => file.path !== missing);
+    await assert.rejects(publish(api, value), /validator|lifecycle/);
+    assert.equal(api.writes().length, 0);
+  }
+});
+
+test('demo and glossary additions retain credential scanning, file limits and pinned denylist checks', async () => {
+  for (const path of ['GLOSSARY.md', 'demo/server.mjs']) {
+    const api = githubFixture();
+    await assert.rejects(publish(api, { ...proposal, files: [{ path,
+      content: '-----BEGIN RSA ' + 'PRIVATE KEY-----' }] }), /credential/);
+    assert.equal(api.state.calls.length, 0);
+  }
+  const api = githubFixture();
+  const value = roomDemoPackage(api);
+  value.files.push(...['docs/one.md', 'docs/two.md', 'docs/three.md'].map((path) => ({ path, content: 'x' })));
+  assert.equal(value.files.length, 13);
+  await assert.rejects(publish(api, value), /Invalid publication package/);
+  assert.equal(api.state.calls.length, 0);
+  for (const path of ['GLOSSARY.md', 'demo/**']) {
+    const denied = githubFixture();
+    denied.state.policy.denylist.push(path);
+    await assert.rejects(publish(denied, roomDemoPackage(denied)), /protected path/);
+    assert.equal(denied.writes().length, 0);
+  }
+});
+
 test('the final published change review keeps publication hashes in collapsed evidence', async () => {
   const api = githubFixture();
   const value = { ...proposal, body: renderChangeReview({ outcome: 'Report supplied metadata.',
