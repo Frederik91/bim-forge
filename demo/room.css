@@ -189,6 +189,7 @@ thead th, tbody th { font-weight: 600; }
   .journey button { display: flex; align-items: center; justify-content: center; }
   .journey button b, .journey button small { display: none; }
   .page-heading { align-items: start; flex-direction: column; gap: 13px; }
+  #request-page[data-request-pane="details"] .page-heading { display: none; }
   .trust-note { max-width: none; width: 100%; }
   .dimension-grid, .proposal-footer, .review-actions, .conflict-selects { grid-template-columns: 1fr; }
   .proposal-footer .button { width: 100%; }

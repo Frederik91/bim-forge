@@ -81,6 +81,7 @@ function showPage(name) {
 
 function showRequestPane(name) {
   const details = name === 'details';
+  ui['request-page'].dataset.requestPane = details ? 'details' : 'canvas';
   ui['request-canvas-pane'].dataset.active = String(!details);
   ui['editor-panel'].dataset.active = String(details);
   ui['request-canvas-tab'].setAttribute('aria-pressed', String(!details));
