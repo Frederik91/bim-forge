@@ -9,6 +9,7 @@ import { readCodingSpec, prepareCodingPackage, materializeCodingFiles, sha256, c
 import { coderCommand } from './code-generate.mjs';
 import { openCodingRun, readProtectedCodingFile } from './coding-store.mjs';
 import { assertCodingObservation, healthAcceptanceCases, scheduleAcceptanceCases } from './code-acceptance.mjs';
+import './schedule-approval.test.mjs';
 
 const paths = ['factory/health.mjs', 'factory/health.test.mjs'];
 const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),
@@ -184,4 +185,82 @@ test('interrupted runs and unsafe spec files require explicit administrator reco
   assert.throws(() => readProtectedCodingFile(alias, process.getuid()), /ELOOP/);
   fs.chmodSync(input, 0o666);
   assert.throws(() => readProtectedCodingFile(input, process.getuid()), /protected/);
+});
+
+const scheduled = (scopeBytes, overrides = {}) => {
+  const now = Date.now();
+  const approval = { version: 1, repository: 'Frederik91/bim-forge', scopeSha256: sha256(scopeBytes),
+    deploymentSha256: 'b'.repeat(64), notBefore: new Date(now - 3600000).toISOString(),
+    expiresAt: new Date(now + 3600000).toISOString(), dailyLimit: 3, ...overrides };
+  const approvalBytes = Buffer.from(`${JSON.stringify(approval)}\n`);
+  return { approvalBytes, approvedSha256: sha256(approvalBytes), deploymentSha256: 'b'.repeat(64) };
+};
+
+test('scheduled admission consumes one approval with its durable run and reuses failed delivery', linux, (t) => {
+  const root = temporary(t); const scopeBytes = bytes(); const schedule = scheduled(scopeBytes);
+  const options = { root, bytes: scopeBytes, ownerUid: process.getuid(), schedule };
+  const first = openCodingRun(options);
+  const persisted = JSON.parse(fs.readFileSync(path.join(root, 'ledger', `${first.run.id}.json`)));
+  assert.equal(persisted.scheduleApprovalSha256, schedule.approvedSha256);
+  assert.equal(persisted.status, 'running');
+  assert.throws(() => openCodingRun(options), /EEXIST/);
+  first.record({ status: 'failed' }); first.close();
+  const duplicate = openCodingRun(options);
+  assert.equal(duplicate.reused, true); assert.equal(duplicate.run.id, first.run.id);
+  assert.equal(duplicate.run.status, 'failed'); duplicate.close();
+  assert.throws(() => openCodingRun({ ...options, retry: true }), /no retry/);
+  assert.throws(() => openCodingRun({ ...options, schedule: scheduled(scopeBytes, { dailyLimit: 2 }) }), /already attempted/);
+});
+
+test('scheduled daily admission counts manual starts and a fresh approval cannot reset issue attempts', linux, (t) => {
+  const root = temporary(t); const manualBytes = bytes();
+  const manual = openCodingRun({ root, bytes: manualBytes, ownerUid: process.getuid() });
+  manual.record({ status: 'verified' }); manual.close();
+  const next = spec(); next.issue.number = 20; const nextBytes = bytes(next);
+  const options = { root, bytes: nextBytes, ownerUid: process.getuid(), schedule: scheduled(nextBytes, { dailyLimit: 1 }) };
+  assert.throws(() => openCodingRun(options), /UTC-day start limit/);
+  assert.throws(() => openCodingRun({ ...options, bytes: manualBytes, schedule: scheduled(manualBytes) }), /already attempted/);
+  for (let index = 0; index < 2; index += 1) {
+    const changed = spec(); changed.issue.body += index;
+    const run = openCodingRun({ root, bytes: bytes(changed), ownerUid: process.getuid() });
+    run.record({ status: 'failed', startedAt: '2026-01-01T00:00:00.000Z' }); run.close();
+  }
+  const fourth = spec(); fourth.issue.body += 'fourth'; const fourthBytes = bytes(fourth);
+  assert.throws(() => openCodingRun({ root, bytes: fourthBytes, ownerUid: process.getuid(), schedule: scheduled(fourthBytes) }), /issue attempt limit/);
+});
+
+test('scheduled admission rejects changed bindings, unexpected authority and corrupt time without clearing history', linux, (t) => {
+  const root = temporary(t); const scopeBytes = bytes();
+  const options = { root, bytes: scopeBytes, ownerUid: process.getuid(), schedule: scheduled(scopeBytes) };
+  for (const schedule of [null, { ...options.schedule, command: 'run' },
+    { ...options.schedule, deploymentSha256: 'c'.repeat(64) },
+    scheduled(scopeBytes, { scopeSha256: 'a'.repeat(64) })]) {
+    assert.throws(() => openCodingRun({ ...options, schedule }));
+    assert.equal(fs.existsSync(path.join(root, 'ledger', 'coding.lock')), false);
+  }
+  const manual = openCodingRun({ root, bytes: scopeBytes, ownerUid: process.getuid() });
+  manual.record({ status: 'verified', startedAt: '2999-01-01T00:00:00.000Z' }); manual.close();
+  const changed = spec(); changed.issue.number = 22; const changedBytes = bytes(changed);
+  assert.throws(() => openCodingRun({ ...options, bytes: changedBytes, schedule: scheduled(changedBytes) }), /future-dated/);
+  assert.equal(fs.readdirSync(path.join(root, 'ledger')).filter((name) => name.endsWith('.json')).length, 1);
+});
+
+test('scheduled admission refuses malformed approval metadata anywhere in history', linux, (t) => {
+  for (const invalid of [['a'.repeat(64)], null, {}, 123]) {
+    const root = temporary(t); const manual = openCodingRun({ root, bytes: bytes(), ownerUid: process.getuid() });
+    manual.record({ status: 'failed', scheduleApprovalSha256: invalid }); manual.close();
+    const next = spec(); next.issue.number = 20; const nextBytes = bytes(next);
+    assert.throws(() => openCodingRun({ root, bytes: nextBytes, ownerUid: process.getuid(), schedule: scheduled(nextBytes) }), /corrupt/);
+  }
+});
+
+test('scheduled admission refuses duplicate consumption of any older approval', linux, (t) => {
+  const root = temporary(t);
+  for (let index = 0; index < 2; index += 1) {
+    const value = spec(); value.issue.body += index;
+    const manual = openCodingRun({ root, bytes: bytes(value), ownerUid: process.getuid() });
+    manual.record({ status: 'failed', scheduleApprovalSha256: 'a'.repeat(64) }); manual.close();
+  }
+  const next = spec(); next.issue.number = 20; const nextBytes = bytes(next);
+  assert.throws(() => openCodingRun({ root, bytes: nextBytes, ownerUid: process.getuid(), schedule: scheduled(nextBytes) }), /corrupt/);
 });
