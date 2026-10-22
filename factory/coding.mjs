@@ -17,8 +17,14 @@ const profiles = [
 export function codingProfile(paths) {
   const profile = Array.isArray(paths) && profiles.find((item) =>
     JSON.stringify(item.paths.slice().sort()) === JSON.stringify(paths.slice().sort()));
-  if (!profile) throw new Error('Unsupported fixed coding profile');
-  return profile;
+  if (profile) return profile;
+  const ordered = Array.isArray(paths) ? paths.slice().sort() : [];
+  if (ordered.length === 2 && /^src\/[a-z0-9]+(?:-[a-z0-9]+)*\.mjs$/.test(ordered[0])
+      && ordered[1] === ordered[0].replace(/\.mjs$/, '.test.mjs')) {
+    return Object.freeze({ paths: Object.freeze(ordered), exportName: 'evaluate',
+      errorText: 'Invalid application input', label: 'read-only application module' });
+  }
+  throw new Error('Unsupported fixed coding profile');
 }
 export const codingSchema = {
   type: 'object', additionalProperties: false, required: ['summary', 'files', 'questions'], properties: {
@@ -40,16 +46,21 @@ export function readCodingSpec(bytes) {
       || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(spec.issue.updated_at)
       || !Array.isArray(spec.paths) || spec.paths.length < 1 || spec.paths.length > 4
       || new Set(spec.paths).size !== spec.paths.length
-      || spec.paths.some((file) => !/^factory\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file))
+      || spec.paths.some((file) => !/^(?:factory|src)\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file))
       || !Array.isArray(spec.acceptanceCases) || spec.acceptanceCases.length < 1 || spec.acceptanceCases.length > 32
       || spec.acceptanceCases.some((item) => !exact(item, ['mode', 'name', 'input', 'output']) || !['cli', 'api'].includes(item.mode)
         || typeof item.name !== 'string' || typeof item.input !== 'string' || Buffer.byteLength(item.input) > 128 * 1024
         || (item.output !== null && (typeof item.output !== 'object' || Array.isArray(item.output))))) throw new Error('Invalid coding scope');
   validatePlan(spec.plan);
-  codingProfile(spec.paths);
+  const profile = codingProfile(spec.paths);
   if (spec.plan.changeClass !== 'read-only' || spec.plan.questions.length
       || JSON.stringify(spec.plan.paths.slice().sort()) !== JSON.stringify(spec.paths.slice().sort())) {
     throw new Error('Coding requires an approved ready read-only plan matching the exact paths');
+  }
+  if (profile.paths[0].startsWith('src/') && (new Set(spec.acceptanceCases.map((item) => item.name)).size !== spec.acceptanceCases.length
+      || ['cli', 'api'].some((mode) => [true, false].some((valid) => !spec.acceptanceCases.some((item) =>
+        item.mode === mode && (item.output !== null) === valid))))) {
+    throw new Error('Application scope requires distinct valid and invalid CLI and API cases');
   }
   return spec;
 }
@@ -83,16 +94,28 @@ export function prepareCodingPackage(spec, answer, policy, baselinePackage) {
 
 export function materializeCodingFiles(candidate, proposal) {
   const root = fs.realpathSync(candidate);
+  const directories = new Set();
   for (const file of proposal.files) {
     if (file.path === 'package.json') continue;
-    if (!/^factory\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file.path)) throw new Error('Unsupported coding path');
-    const directory = fs.lstatSync(path.join(root, 'factory'));
+    if (!/^(?:factory|src)\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file.path)) throw new Error('Unsupported coding path');
+    const parent = path.join(root, file.path.split('/')[0]);
+    let directory;
+    try { directory = fs.lstatSync(parent); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (!directory) {
+      if (path.basename(parent) !== 'src' || fs.readdirSync(root).some((name) => name.toLowerCase() === 'src')) {
+        throw new Error('Candidate parent is not a regular directory');
+      }
+      directories.add(parent);
+      continue;
+    }
     if (!directory.isDirectory() || directory.isSymbolicLink()) throw new Error('Candidate parent is not a regular directory');
     const target = path.join(root, file.path);
     if (fs.readdirSync(path.dirname(target)).some((name) => name.toLowerCase() === path.basename(target).toLowerCase())) {
       throw new Error('The first coding worker supports additions only');
     }
   }
+  for (const directory of directories) fs.mkdirSync(directory, { mode: 0o755 });
   for (const file of proposal.files) {
     const target = path.join(root, file.path);
     if (file.path === 'package.json') {

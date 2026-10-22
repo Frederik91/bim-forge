@@ -11,6 +11,7 @@ import { verifyCodingCandidate } from './code-verify.mjs';
 import { codingSchema } from './coding.mjs';
 import { randomUUID } from 'node:crypto';
 import { assertCodingObservation } from './code-acceptance.mjs';
+import { renderChangeReview } from './change-review.mjs';
 
 const root = '/var/lib/bim-forge-coding';
 const source = '/opt/bim-forge/coding-source';
@@ -235,7 +236,14 @@ export async function runCodingJob(filename, retry, signal, { schedule, guard, o
       fs.writeFileSync(path.join(job, 'verification.log'), verification, { mode: 0o600, flag: 'wx' });
     });
     const proposal = prepared.proposal;
-    proposal.body = `## Summary\n\n${response.answer.summary}\n\n## Evidence\n\nBefore: the approved utility is absent at the pinned revision. After: ${observations.length} independent CLI/API cases passed. Fixed policy validation and the full candidate test command also exited successfully in the credential-free sandbox. Model claims were not used as test evidence.\n\nManual coding run: ${run.id}\nBase: ${spec.baseSha}\nPlan SHA-256: ${run.planSha256}\nAcceptance SHA-256: ${run.acceptanceSha256}\nObservation SHA-256: ${sha256(JSON.stringify(observations))}\nVerifier log SHA-256: ${sha256(verification)}\n\n## Merge Danger\n\nTwo-way change. Read-only ${profile.label}; no BIM mutation. Administrator publication approval is separate from human merge approval. No automatic merge. Tests cover fixed cases, not general correctness. Independent code review remains required.`;
+    proposal.body = renderChangeReview({
+      outcome: spec.plan.outcome,
+      why: spec.issue.title,
+      profile: { ...profile, paths: proposal.files.map((file) => file.path) },
+      observations,
+      run: { ...run, issueSha256: proposal.issueSha256, verifierExecution },
+      verificationSha256: sha256(verification),
+    });
     const finalBytes = Buffer.from(`${JSON.stringify(proposal, null, 2)}\n`);
     const digest = sha256(finalBytes);
     approvePackage(finalBytes, digest);

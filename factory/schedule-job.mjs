@@ -240,6 +240,9 @@ function createIo(signal) {
       const job = `${root}/jobs/${run.id}`;
       protectedDirectory(`${root}/ledger`, true); protectedDirectory(`${root}/jobs`); protectedDirectory(job);
       protectedDirectory(`${job}/candidate`); protectedDirectory(`${job}/candidate/factory`);
+      for (const directory of new Set(spec.paths.map((file) => path.dirname(file)))) {
+        protectedDirectory(`${job}/candidate/${directory}`);
+      }
       const recorded = protectedJson(`${root}/ledger/${run.id}.json`);
       const scope = readProtectedCodingFile(`${job}/spec.json`);
       if (sha256(scope) !== approval.scopeSha256 || recorded.id !== run.id
