@@ -5,6 +5,7 @@ const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
 const BRANCH = /^[a-z]+(?:-[a-z]+)*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MAX_TOOL_CALLS = 12;
+const TOOL_NAMES = Object.freeze(['inspect_model', 'preview_rectangle', 'submit_proposal', 'decline_request']);
 
 const fail = (message) => { throw new Error(message); };
 
@@ -112,9 +113,10 @@ const reviewParameters = {
   properties: {
     summary: { type: 'string', minLength: 1, maxLength: 240 },
     rationale: { type: 'string', minLength: 1, maxLength: 800 },
+    constraints: { type: 'string', minLength: 1, maxLength: 600 },
     uncertainty: { type: 'string', minLength: 1, maxLength: 400 },
   },
-  required: ['summary', 'rationale', 'uncertainty'],
+  required: ['summary', 'rationale', 'constraints', 'uncertainty'],
   additionalProperties: false,
 };
 
@@ -154,13 +156,44 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([
 ]);
 
 export async function prepareModelProposal(repository, input, worker) {
-  if (!repository || typeof repository.view !== 'function' || typeof repository.proposeLayout !== 'function') fail('A validated room repository is required.');
-  if (!worker || typeof worker.run !== 'function') fail('A model worker is required.');
+  if (!repository || typeof repository.view !== 'function' || typeof repository.proposeReviewedLayout !== 'function') fail('A validated room repository is required.');
+  if (!worker || typeof worker.run !== 'function' || !worker.identity) fail('A model worker with an auditable identity is required.');
+  fields(worker.identity, ['provider', 'model']);
+  const workerIdentity = Object.freeze({
+    provider: text(worker.identity.provider, 'Worker provider', 80),
+    model: text(worker.identity.model, 'Worker model', 100),
+  });
   const bound = request(input, repository);
   let candidate = null;
   let delta = null;
   let result = null;
   let calls = 0;
+  const toolCalls = [];
+  const providerEvents = [];
+
+  const recordProviderEvent = (event) => {
+    fields(event, ['responseId', 'inputTokens', 'outputTokens', 'totalTokens']);
+    const responseId = text(event.responseId, 'Model response identity', 128);
+    if (!REQUEST_ID.test(responseId)) fail('Model response identity contains unsupported characters.');
+    for (const [name, value] of [['input token count', event.inputTokens], ['output token count', event.outputTokens], ['total token count', event.totalTokens]]) {
+      if (!Number.isSafeInteger(value) || value < 0 || value > 1000000000) fail(`Invalid ${name}.`);
+    }
+    if (event.totalTokens < event.inputTokens + event.outputTokens) fail('Invalid total token count.');
+    providerEvents.push(Object.freeze({ responseId, inputTokens: event.inputTokens, outputTokens: event.outputTokens, totalTokens: event.totalTokens }));
+  };
+
+  const workerEvidence = () => Object.freeze({
+    ...workerIdentity,
+    responseIds: Object.freeze(providerEvents.map((event) => event.responseId)),
+    usage: Object.freeze(providerEvents.reduce((usage, event) => ({
+      inputTokens: usage.inputTokens + event.inputTokens,
+      outputTokens: usage.outputTokens + event.outputTokens,
+      totalTokens: usage.totalTokens + event.totalTokens,
+    }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 })),
+  });
+
+  const evidenceName = (name) => TOOL_NAMES.includes(name) ? name : 'unsupported_tool';
+  const recordTool = (name, status, error = null) => toolCalls.push(Object.freeze({ name: evidenceName(name), status, error }));
 
   const executeTool = async (name, argumentsValue) => {
     calls += 1;
@@ -169,28 +202,38 @@ export async function prepareModelProposal(repository, input, worker) {
     try {
       if (name === 'inspect_model') {
         fields(argumentsValue, []);
-        return { ok: true, revisionId: bound.base.id, selectedObjectIds: bound.selectedObjectIds, model: summarizeSnapshot(bound.base.snapshot) };
+        const output = { ok: true, revisionId: bound.base.id, selectedObjectIds: bound.selectedObjectIds, model: summarizeSnapshot(bound.base.snapshot) };
+        recordTool(name, 'accepted');
+        return output;
       }
       if (name === 'preview_rectangle') {
         candidate = previewRectangle(bound.base.snapshot, argumentsValue);
         delta = diffSnapshots(bound.base.snapshot, candidate);
-        return { ok: true, layout: rectangleLayout(candidate), changes: summarizeDelta(delta) };
+        const output = { ok: true, layout: rectangleLayout(candidate), changes: summarizeDelta(delta) };
+        recordTool(name, 'accepted');
+        return output;
       }
       if (name === 'submit_proposal') {
-        fields(argumentsValue, ['summary', 'rationale', 'uncertainty']);
+        fields(argumentsValue, ['summary', 'rationale', 'constraints', 'uncertainty']);
         if (!candidate || !delta) fail('Prepare a validated preview before submitting a proposal.');
         if (!hasChanges(delta)) fail('The proposed model is identical to the bound revision.');
         const summary = text(argumentsValue.summary, 'Summary', 240);
         const rationale = text(argumentsValue.rationale, 'Rationale', 800);
+        const constraints = text(argumentsValue.constraints, 'Constraints', 600);
         const uncertainty = text(argumentsValue.uncertainty, 'Uncertainty', 400);
-        const next = await repository.proposeLayout({ name: bound.proposalName, from: bound.base.id, layout: rectangleLayout(candidate) });
+        const acceptedTools = Object.freeze([...toolCalls, Object.freeze({ name, status: 'accepted', error: null })]);
+        const next = await repository.proposeReviewedLayout({
+          name: bound.proposalName, from: bound.base.id, layout: rectangleLayout(candidate),
+          review: {
+            requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
+            summary, rationale, constraints, uncertainty, worker: workerEvidence(), toolCalls: acceptedTools,
+            validator: 'room-graph-v1',
+          },
+        });
+        recordTool(name, 'accepted');
         result = Object.freeze({
           status: 'ready', repository: next,
-          review: Object.freeze({
-            requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
-            proposalRevisionId: next.head(bound.proposalName), selectedObjectIds: bound.selectedObjectIds,
-            instruction: bound.instruction, summary, rationale, uncertainty, changes: summarizeDelta(delta),
-          }),
+          review: Object.freeze({ ...next.review(bound.proposalName), changes: summarizeDelta(delta) }),
         });
         return { ok: true, done: true, proposalRevisionId: result.review.proposalRevisionId };
       }
@@ -202,14 +245,19 @@ export async function prepareModelProposal(repository, input, worker) {
             requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
             proposalRevisionId: null, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
             summary: 'No model proposal was prepared.', rationale: text(argumentsValue.reason, 'Reason', 800),
+            constraints: 'The bounded rectangular-room tools could not represent this request.',
             uncertainty: text(argumentsValue.uncertainty, 'Uncertainty', 400), changes: null,
           }),
         });
+        recordTool(name, 'accepted');
         return { ok: true, done: true };
       }
+      recordTool(name, 'rejected', 'Unsupported model tool.');
       return { ok: false, error: 'Unsupported model tool.' };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : 'The model tool failed.' };
+      const message = error instanceof Error ? error.message : 'The model tool failed.';
+      recordTool(name, 'rejected', message.slice(0, 240));
+      return { ok: false, error: message };
     }
   };
 
@@ -229,6 +277,7 @@ export async function prepareModelProposal(repository, input, worker) {
       },
       tools: MODEL_PROPOSAL_TOOLS,
       executeTool,
+      recordProviderEvent,
     });
   } catch (error) {
     throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error });
@@ -237,29 +286,60 @@ export async function prepareModelProposal(repository, input, worker) {
   return result;
 }
 
-export function createOpenAIModelWorker({ apiKey, model, fetchImpl = globalThis.fetch, maxTurns = 8 } = {}) {
+export function createOpenAIModelWorker({
+  apiKey, model, fetchImpl = globalThis.fetch, maxTurns = 8,
+  requestTimeoutMs = 30000, maxResponseBytes = 256 * 1024, maxOutputTokens = 2000,
+} = {}) {
   if (typeof apiKey !== 'string' || !apiKey) fail('OPENAI_API_KEY is required for the model worker.');
   if (typeof model !== 'string' || !model.trim() || model.length > 100) fail('OPENAI_MODEL is required for the model worker.');
   if (typeof fetchImpl !== 'function') fail('A fetch implementation is required for the model worker.');
   if (!Number.isSafeInteger(maxTurns) || maxTurns < 1 || maxTurns > 12) fail('Model turn budget must be between one and twelve.');
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1000 || requestTimeoutMs > 120000) fail('Model request timeout must be between one and 120 seconds.');
+  if (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1024 || maxResponseBytes > 1024 * 1024) fail('Model response limit must be between 1 KiB and 1 MiB.');
+  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 10000) fail('Model output token budget must be between one and 10000.');
+  const configuredModel = model.trim();
   return Object.freeze({
+    identity: Object.freeze({ provider: 'openai', model: configuredModel }),
     async run(session) {
       let previousResponseId = null;
       let inputItems = [{ role: 'user', content: JSON.stringify(session.input) }];
       for (let turn = 0; turn < maxTurns; turn += 1) {
         const body = {
-          model: model.trim(), instructions: session.instructions, input: inputItems, tools: session.tools,
+          model: configuredModel, instructions: session.instructions, input: inputItems, tools: session.tools,
           tool_choice: 'required', parallel_tool_calls: false,
+          max_output_tokens: maxOutputTokens,
           ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
         };
-        const response = await fetchImpl('https://api.openai.com/v1/responses', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+        let response;
+        try {
+          response = await fetchImpl('https://api.openai.com/v1/responses', {
+            method: 'POST', signal: controller.signal,
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+        } catch (error) {
+          if (controller.signal.aborted) fail(`The model provider exceeded the ${requestTimeoutMs} ms request timeout.`);
+          throw error;
+        } finally { clearTimeout(timeout); }
         if (!response?.ok) fail(`The model provider rejected the request with HTTP ${response?.status ?? 'unknown'}.`);
-        const payload = await response.json();
+        const contentLength = Number(response.headers?.get?.('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > maxResponseBytes) fail('The model provider response exceeded the configured byte limit.');
+        const responseText = await response.text();
+        if (new TextEncoder().encode(responseText).length > maxResponseBytes) fail('The model provider response exceeded the configured byte limit.');
+        let payload;
+        try { payload = JSON.parse(responseText); } catch { fail('The model provider returned invalid JSON.'); }
         if (typeof payload?.id !== 'string' || !Array.isArray(payload.output)) fail('The model provider returned an invalid response.');
+        const usage = payload.usage ?? {};
+        const inputTokens = Number.isSafeInteger(usage.input_tokens) ? usage.input_tokens : 0;
+        const outputTokens = Number.isSafeInteger(usage.output_tokens) ? usage.output_tokens : 0;
+        session.recordProviderEvent({
+          responseId: payload.id,
+          inputTokens,
+          outputTokens,
+          totalTokens: Number.isSafeInteger(usage.total_tokens) ? usage.total_tokens : inputTokens + outputTokens,
+        });
         const calls = payload.output.filter((item) => item?.type === 'function_call');
         if (calls.length !== 1) fail('The model worker must issue exactly one bounded tool call per turn.');
         const call = calls[0];

@@ -16,13 +16,13 @@ The current restricted static preview cannot run this flow because it has no aut
 
 ## Request, review and revise
 
-1. Create a project or load the sample.
-2. Select a stable wall or door identity in the plan.
+1. Create a project or load the sample in the opening dialog. The main navigation then leads through **Request**, **Review** and **History** instead of exposing every control at once.
+2. On **Request**, select a stable wall or door identity in the plan. The preserved original is available in its own dialog.
 3. Drag a handle or enter dimensions to sketch the intended move or size. The sketch is visual intent, like markup with an arrow; it is not authoritative model geometry.
 4. Describe the desired outcome and choose a new proposal name.
 5. Choose **Ask AI to prepare proposal**. The request includes the exact base revision, selected object identity, written instruction and visual layout intent.
 6. The model-working AI can inspect the bound snapshot, try complete rectangular layouts through the validator, and submit only its latest valid preview. It can also decline when the bounded tools cannot safely represent the request.
-7. Review what changed, why, uncertainty, the request identity, base revision and selected objects.
+7. On **Review**, inspect what changed, why, proposal-specific constraints, uncertainty, the request identity, base revision and selected objects. Open the detailed model-delta dialog when field-level evidence is useful.
 8. Choose **Accept this version** to advance the current model pointer to the proposal revision. The original revision and proposal branch remain available. Choose **Request a revision** to start another request from the selected proposal; use a new proposal name so the earlier proposal stays unchanged.
 
 Escape cancels an active drag and restores the pre-drag request sketch. Invalid dimensions retain the last valid sketch and block submission. Wall height and thickness, door height and hosting remain unchanged by the bounded tool. Shortening a wall never silently shrinks or repositions the door.
@@ -33,16 +33,16 @@ The proposal module presents four strict tools:
 
 - `inspect_model` reads the exact bound revision and selected identities.
 - `preview_rectangle` applies a complete millimetre layout to an immutable copy and runs deterministic model validation.
-- `submit_proposal` records the last valid preview as a separate revision with a plain-language summary, rationale and uncertainty.
+- `submit_proposal` records the last valid preview as a separate revision with a plain-language summary, rationale, constraints and uncertainty.
 - `decline_request` ends without changing model history.
 
-The model cannot send arbitrary snapshots, choose a different base revision, alter stable identifiers, bypass hosting checks or write browser storage. A twelve-call tool budget and an eight-turn provider budget bound each request. The application persists only a validated returned repository, using the existing compare-and-swap browser save.
+The model cannot send arbitrary snapshots, choose a different base revision, alter stable identifiers, bypass hosting checks or write browser storage. A twelve-call tool budget, eight-turn provider budget, 30-second timeout per provider request, 2,000-output-token ceiling and 256 KiB provider-response ceiling bound each request. Provider response identities and reported token usage are recorded with the proposal. The application persists only a validated returned repository, using the existing compare-and-swap browser save.
 
 ## Storage and evidence
 
 The demo saves one project in browser IndexedDB. Saving checks the expected generation and replaces the complete project atomically, so a stale tab cannot overwrite a newer save. Invalid or damaged saved data is not silently overwritten. Import remains limited to 256 KiB of encoded JSON, 32 revisions, 32 branches and 100 entities per snapshot; revision hashes and ancestry are rechecked.
 
-AI review text is transient in this increment and is not included in export or restored after reload. Model revisions, branch ancestry, stable identities and deterministic deltas are persisted. Durable review records, shared storage, authentication and multi-user authorization remain future work.
+Each AI proposal persists its request binding, summary, rationale, constraints, uncertainty, worker identity, provider response identities and token usage, bounded tool evidence, validator identity and human decision. These review records are included in export and restored after reload. Shared storage, authentication and multi-user authorization remain future work.
 
 When configured, request text and the bounded room snapshot are sent to the selected OpenAI model. This demo must not be used with production, confidential or regulated model data.
 
@@ -56,4 +56,4 @@ Comparisons include added, removed and modified entities and relationships. Conf
 
 This is the bounded issue #40 flow built from the useful model, validation, comparison and visual-request parts of the preserved experiment. The experiment's failed touch-drag assertion is not treated as passed; physical touch, pointer cancellation and cross-browser behavior remain unqualified.
 
-The demo does not parse or export IFC, render 3D solids, perform building-code or clash checks, edit production BIM files, authenticate users, persist review explanations, or implement shared durable storage. Schematic fit validation is not construction approval. The source remains an unapproved draft for human change review and is separate from factory readiness.
+The demo does not parse or export IFC, render 3D solids, perform building-code or clash checks, edit production BIM files, authenticate users, or implement shared durable storage. Schematic fit validation is not construction approval. The source remains an unapproved draft for human change review and is separate from factory readiness.

@@ -45,6 +45,7 @@ test('local demo serves only explicit assets and exposes only the bounded propos
 
 test('proposal endpoint binds request to revision and returns a validated separate AI proposal', async (t) => {
   const modelWorker = {
+    identity: { provider: 'test', model: 'http-scripted-worker' },
     async run(session) {
       if (session.input.request.instruction === 'provider failure') throw new Error('provider unavailable');
       const inspected = await session.executeTool('inspect_model', {}); assert.equal(inspected.ok, true);
@@ -52,6 +53,7 @@ test('proposal endpoint binds request to revision and returns a validated separa
       await session.executeTool('submit_proposal', {
         summary: 'Entrance widened to 1200 mm.',
         rationale: 'The visual request fits the hosted wall and preserves stable object identities.',
+        constraints: 'The host relationship, wall properties and stable identifiers remain unchanged.',
         uncertainty: 'Concept-only geometry; no construction checks.',
       });
     },
@@ -77,6 +79,8 @@ test('proposal endpoint binds request to revision and returns a validated separa
   assert.equal(proposed.view(proposed.head('ai-entry-study')).parentId, repo.head('main'));
   assert.equal(result.review.baseRevisionId, repo.head('main'));
   assert.deepEqual(result.review.selectedObjectIds, ['door-entry']);
+  assert.equal(proposed.review('ai-entry-study').constraints, result.review.constraints);
+  assert.equal(proposed.review('ai-entry-study').worker.model, 'http-scripted-worker');
 
   const stale = structuredClone(payload); stale.request.baseRevisionId = '0'.repeat(64);
   assert.equal((await request('/api/proposals', {

@@ -2,6 +2,7 @@ const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
 const idPattern = /^[a-z][a-z0-9-]{0,63}$/;
 const revisionPattern = /^[a-f0-9]{64}$/;
+const requestPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const fail = (message) => { throw new Error(message); };
 const size = (text) => new TextEncoder().encode(text).length;
 
@@ -61,6 +62,65 @@ function identifier(value) {
 
 function branchName(value) {
   if (typeof value !== 'string' || value.length > 64 || !/^[a-z]+(?:-[a-z]+)*$/.test(value)) fail('Proposal names require lowercase words separated by hyphens.');
+}
+
+function readable(value, name, maximum) {
+  if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) {
+    fail(`${name} must contain readable text no longer than ${maximum} characters.`);
+  }
+  return value.trim();
+}
+
+function boundedInteger(value, name) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 1000000000) fail(`Invalid ${name}.`);
+}
+
+function reviewRecord(input, revisions, branches) {
+  const review = copy(input);
+  fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
+    'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision']);
+  if (typeof review.requestId !== 'string' || !requestPattern.test(review.requestId)) fail('Invalid review request identity.');
+  branchName(review.proposalName);
+  if (!revisionPattern.test(review.baseRevisionId) || !revisionPattern.test(review.proposalRevisionId)) fail('Invalid reviewed revision identity.');
+  const base = revisions.get(review.baseRevisionId); const proposal = revisions.get(review.proposalRevisionId);
+  const branch = branches.get(review.proposalName);
+  if (!base || !proposal || proposal.parentId !== base.id || branch?.revisionId !== proposal.id) fail('Review is not bound to its proposal history.');
+  if (!Array.isArray(review.selectedObjectIds) || review.selectedObjectIds.length < 1 || review.selectedObjectIds.length > 16
+      || new Set(review.selectedObjectIds).size !== review.selectedObjectIds.length) fail('Invalid reviewed object identities.');
+  const baseObjects = new Set(base.snapshot.entities.map((entity) => entity.id));
+  for (const id of review.selectedObjectIds) if (typeof id !== 'string' || !idPattern.test(id) || !baseObjects.has(id)) fail('Invalid reviewed object identity.');
+  review.instruction = readable(review.instruction, 'Reviewed instruction', 1000);
+  review.summary = readable(review.summary, 'Review summary', 240);
+  review.rationale = readable(review.rationale, 'Review rationale', 800);
+  review.constraints = readable(review.constraints, 'Review constraints', 600);
+  review.uncertainty = readable(review.uncertainty, 'Review uncertainty', 400);
+  fields(review.worker, ['provider', 'model', 'responseIds', 'usage']);
+  review.worker.provider = readable(review.worker.provider, 'Worker provider', 80);
+  review.worker.model = readable(review.worker.model, 'Worker model', 100);
+  if (!Array.isArray(review.worker.responseIds) || review.worker.responseIds.length > 12
+      || review.worker.responseIds.some((id) => typeof id !== 'string' || !requestPattern.test(id))) fail('Invalid model response identities.');
+  fields(review.worker.usage, ['inputTokens', 'outputTokens', 'totalTokens']);
+  boundedInteger(review.worker.usage.inputTokens, 'input token count');
+  boundedInteger(review.worker.usage.outputTokens, 'output token count');
+  boundedInteger(review.worker.usage.totalTokens, 'total token count');
+  if (review.worker.usage.totalTokens < review.worker.usage.inputTokens + review.worker.usage.outputTokens) fail('Invalid total token count.');
+  if (!Array.isArray(review.toolCalls) || review.toolCalls.length < 1 || review.toolCalls.length > 12) fail('Invalid model tool evidence.');
+  for (const call of review.toolCalls) {
+    fields(call, ['name', 'status', 'error']);
+    if (!['inspect_model', 'preview_rectangle', 'submit_proposal', 'decline_request', 'unsupported_tool'].includes(call.name)
+        || !['accepted', 'rejected'].includes(call.status)
+        || (call.error !== null && (typeof call.error !== 'string' || !call.error || call.error.length > 240))) fail('Invalid model tool evidence.');
+  }
+  if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
+  fields(review.decision, ['status', 'decisionId', 'actor']);
+  if (!['pending', 'accepted', 'superseded'].includes(review.decision.status)) fail('Invalid proposal decision.');
+  if (review.decision.status === 'pending') {
+    if (review.decision.decisionId !== null || review.decision.actor !== null) fail('Pending proposals cannot contain a decision identity.');
+  } else {
+    if (typeof review.decision.decisionId !== 'string' || !requestPattern.test(review.decision.decisionId)) fail('Invalid decision identity.');
+    review.decision.actor = readable(review.decision.actor, 'Decision actor', 80);
+  }
+  return freeze(review);
 }
 
 function metres(value, min = 0.001, max = 100) {
@@ -240,19 +300,23 @@ export class RoomRepository {
   static async create(name = 'Courtyard study') {
     label(name);
     const initial = await revision(null, fixture());
-    return new RoomRepository(token, { version: 1, projectId: globalThis.crypto.randomUUID(), name,
-      revisions: [initial], branches: [{ name: 'main', revisionId: initial.id }] });
+    return new RoomRepository(token, { version: 2, projectId: globalThis.crypto.randomUUID(), name,
+      revisions: [initial], branches: [{ name: 'main', revisionId: initial.id }], reviews: [] });
   }
 
   static async restore(text) {
     if (typeof text !== 'string' || size(text) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
     let state;
     try { state = copy(JSON.parse(text)); } catch { fail('Saved project is not valid bounded JSON.'); }
-    fields(state, ['version', 'projectId', 'name', 'revisions', 'branches']); label(state.name);
-    if (state.version !== 1 || typeof state.projectId !== 'string'
+    if (state?.version === 1) fields(state, ['version', 'projectId', 'name', 'revisions', 'branches']);
+    else if (state?.version === 2) fields(state, ['version', 'projectId', 'name', 'revisions', 'branches', 'reviews']);
+    else fail('Unsupported saved project.');
+    label(state.name);
+    if (typeof state.projectId !== 'string'
         || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(state.projectId)
         || !Array.isArray(state.revisions) || !state.revisions.length || state.revisions.length > 32
-        || !Array.isArray(state.branches) || !state.branches.length || state.branches.length > 32) fail('Unsupported saved project.');
+        || !Array.isArray(state.branches) || !state.branches.length || state.branches.length > 32
+        || (state.version === 2 && (!Array.isArray(state.reviews) || state.reviews.length > 31))) fail('Unsupported saved project.');
     const revisions = new Map();
     for (const item of state.revisions) {
       fields(item, ['id', 'parentId', 'snapshot']);
@@ -272,16 +336,30 @@ export class RoomRepository {
         if (!current) fail('Revision ancestry is incomplete.');
       }
     }
-    const branches = new Set(); const reachable = new Set();
+    const branches = new Map(); const reachable = new Set();
     for (const branch of state.branches) {
       fields(branch, ['name', 'revisionId']); branchName(branch.name);
       if (branches.has(branch.name) || !revisions.has(branch.revisionId)) fail('Invalid branch target or duplicate branch.');
-      branches.add(branch.name);
+      branches.set(branch.name, branch);
+      if (state.version === 1 && branch.name === 'main' && branch.revisionId !== roots[0].id) fail('Version one main must preserve the original revision.');
       let current = revisions.get(branch.revisionId);
       while (current) { reachable.add(current.id); current = revisions.get(current.parentId); }
     }
     if (!branches.has('main') || reachable.size !== revisions.size) fail('Saved project has missing or unreachable history.');
-    return new RoomRepository(token, { ...state, revisions: [...revisions.values()] });
+    let reviews = [];
+    if (state.version === 2) {
+      const requests = new Set(); const proposals = new Set();
+      reviews = state.reviews.map((item) => {
+        const review = reviewRecord(item, revisions, branches);
+        if (requests.has(review.requestId) || proposals.has(review.proposalName)) fail('Duplicate proposal review identity.');
+        requests.add(review.requestId); proposals.add(review.proposalName); return review;
+      });
+      const main = branches.get('main').revisionId;
+      if (main !== roots[0].id && !reviews.some((review) => review.proposalRevisionId === main && review.decision.status === 'accepted')) {
+        fail('The current model must reference an accepted reviewed proposal.');
+      }
+    }
+    return new RoomRepository(token, { ...state, revisions: [...revisions.values()], ...(state.version === 2 ? { reviews } : {}) });
   }
 
   get name() { return this.#state.name; }
@@ -302,15 +380,32 @@ export class RoomRepository {
 
   branches() { return this.#state.branches; }
 
-  accept(name) {
+  reviews() { return this.#state.version === 2 ? this.#state.reviews : []; }
+
+  review(name) {
+    branchName(name);
+    const value = this.reviews().find((item) => item.proposalName === name);
+    if (!value) fail('Unknown reviewed proposal.');
+    return value;
+  }
+
+  accept(name, input) {
     branchName(name);
     if (name === 'main') fail('Choose a proposal to accept.');
     const proposal = this.#state.branches.find((item) => item.name === name);
     if (!proposal) fail('Unknown proposal.');
-    if (this.head('main') === proposal.revisionId) return this;
+    const review = this.review(name);
+    const decision = copy(input);
+    fields(decision, ['decisionId', 'actor']);
+    if (typeof decision.decisionId !== 'string' || !requestPattern.test(decision.decisionId)) fail('Invalid decision identity.');
+    decision.actor = readable(decision.actor, 'Decision actor', 80);
+    if (this.head('main') === proposal.revisionId && review.decision.status === 'accepted') return this;
     const branches = this.#state.branches.map((item) => item.name === 'main'
       ? { name: 'main', revisionId: proposal.revisionId } : item);
-    const state = { ...this.#state, branches };
+    const reviews = this.reviews().map((item) => item.proposalName === name
+      ? { ...item, decision: { status: 'accepted', decisionId: decision.decisionId, actor: decision.actor } }
+      : item.decision.status === 'accepted' ? { ...item, decision: { ...item.decision, status: 'superseded' } } : item);
+    const state = { ...this.#state, version: 2, branches, reviews };
     if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
     return new RoomRepository(token, state);
   }
@@ -334,6 +429,31 @@ export class RoomRepository {
     const { name, from, layout } = proposal;
     const base = this.view(from);
     return this.#commit(name, base, previewRectangle(base.snapshot, layout));
+  }
+
+  async proposeReviewedLayout(input) {
+    const proposal = copy(input);
+    fields(proposal, ['name', 'from', 'layout', 'review']);
+    const details = proposal.review;
+    fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
+      'uncertainty', 'worker', 'toolCalls', 'validator']);
+    const next = await this.#commit(proposal.name, this.view(proposal.from), previewRectangle(this.view(proposal.from).snapshot, proposal.layout));
+    if (next === this) fail('The reviewed proposal must change the bound revision.');
+    const record = reviewRecord({
+      requestId: details.requestId, proposalName: proposal.name, baseRevisionId: proposal.from,
+      proposalRevisionId: next.head(proposal.name), selectedObjectIds: details.selectedObjectIds,
+      instruction: details.instruction, summary: details.summary, rationale: details.rationale,
+      constraints: details.constraints, uncertainty: details.uncertainty, worker: details.worker,
+      toolCalls: details.toolCalls, validator: details.validator,
+      decision: { status: 'pending', decisionId: null, actor: null },
+    }, next.#revisions, new Map(next.#state.branches.map((branch) => [branch.name, branch])));
+    const reviews = [...next.reviews(), record];
+    if (reviews.some((item, index) => reviews.findIndex((other) => other.requestId === item.requestId || other.proposalName === item.proposalName) !== index)) {
+      fail('Duplicate proposal review identity.');
+    }
+    const state = { ...next.#state, version: 2, reviews };
+    if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
+    return new RoomRepository(token, state);
   }
 
   async #commit(name, base, snapshot) {

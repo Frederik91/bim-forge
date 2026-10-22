@@ -126,7 +126,7 @@ test('corrupt saves cannot replace a valid repository', async () => {
   const repo = await proposal(await RoomRepository.create()); const text = repo.serialize();
   const corrupt = [];
   const mutate = (fn) => { const value = JSON.parse(text); fn(value); corrupt.push(JSON.stringify(value)); };
-  mutate((s) => { s.version = 2; });
+  mutate((s) => { s.version = 3; });
   mutate((s) => { s.revisions[1].snapshot.entities.find((e) => e.type === 'Door').width = 1.4; });
   mutate((s) => { s.branches[0].name = 'renamed-main'; });
   mutate((s) => s.branches.push(s.branches[0]));
@@ -194,6 +194,8 @@ const canonicalJSON = (value) => {
 
 function legacyRevisionText(repo, changed) {
   const state = JSON.parse(repo.serialize());
+  state.version = 1;
+  delete state.reviews;
   const parentId = repo.head('main');
   for (const collection of [changed.entities, changed.relationships]) {
     collection.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -483,7 +485,10 @@ test('both proposal APIs share no-op, deterministic identity, idempotence and na
 test('version one legacy files restore with identical hashes and non-rectangles stay read-only for the new API', async () => {
   const original = await RoomRepository.create();
   const legacy = await proposal(await proposal(original), 'second-study', 1300 / 1000);
-  const text = legacy.serialize();
+  const legacyState = JSON.parse(legacy.serialize());
+  legacyState.version = 1;
+  delete legacyState.reviews;
+  const text = canonicalJSON(legacyState);
   assert.equal(JSON.parse(text).version, 1);
   const restored = await RoomRepository.restore(text);
   assert.equal(restored.serialize(), text);
@@ -578,17 +583,35 @@ test('both proposal APIs retain history limits without changing the full reposit
 test('accepting an AI proposal advances main while preserving the original and proposal branch', async () => {
   const original = await RoomRepository.create();
   const root = original.root();
-  const proposed = await proposal(original);
-  const accepted = proposed.accept('wider-entry');
+  const layout = structuredClone(rectangleLayout(original.view(root).snapshot));
+  layout.door.widthMm = 1200;
+  const result = await prepareModelProposal(original, visualRequest(original, layout, { proposalName: 'wider-entry' }), {
+    identity: { provider: 'test', model: 'scripted-room-worker' },
+    async run(session) {
+      await session.executeTool('preview_rectangle', layout);
+      await session.executeTool('submit_proposal', {
+        summary: 'The entry is widened to 1200 mm.',
+        rationale: 'The requested width fits the preserved host wall.',
+        constraints: 'Door height, host relationship and all wall geometry remain unchanged.',
+        uncertainty: 'Concept-only geometry; no code or coordination checks were run.',
+      });
+    },
+  });
+  const proposed = result.repository;
+  const decision = { decisionId: 'decision-accept-1', actor: 'local-human' };
+  const accepted = proposed.accept('wider-entry', decision);
   assert.equal(accepted.root(), root);
   assert.equal(accepted.head('main'), proposed.head('wider-entry'));
   assert.equal(accepted.head('wider-entry'), proposed.head('wider-entry'));
   assert.equal(accepted.view(root).parentId, null);
   assert.equal(door(accepted).width, 1.2);
+  assert.equal(accepted.review('wider-entry').decision.status, 'accepted');
+  assert.equal(accepted.review('wider-entry').decision.actor, 'local-human');
+  assertFrozen(accepted.review('wider-entry'));
   assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
-  assert.equal(accepted.accept('wider-entry'), accepted);
-  assert.throws(() => accepted.accept('main'), /proposal to accept/);
-  assert.throws(() => accepted.accept('missing-proposal'), /Unknown proposal/);
+  assert.equal(accepted.accept('wider-entry', decision), accepted);
+  assert.throws(() => accepted.accept('main', decision), /proposal to accept/);
+  assert.throws(() => accepted.accept('missing-proposal', decision), /Unknown proposal/);
   assert.equal(proposed.head('main'), root);
 });
 
@@ -609,6 +632,7 @@ test('model-working AI receives bounded tools and saves only its validated propo
   const layout = structuredClone(rectangleLayout(original.view(original.head('main')).snapshot));
   layout.boundsMm.maxX = 7000; layout.door.widthMm = 1200;
   const worker = {
+    identity: { provider: 'test', model: 'scripted-room-worker' },
     async run(session) {
       assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'submit_proposal', 'decline_request']);
       assert.equal(session.input.request.baseRevisionId, original.head('main'));
@@ -621,6 +645,7 @@ test('model-working AI receives bounded tools and saves only its validated propo
       const submitted = await session.executeTool('submit_proposal', {
         summary: 'The entrance is 1200 mm wide and the room extends one metre east.',
         rationale: 'This follows the selected door and the visual request while preserving connected walls and hosting.',
+        constraints: 'The rectangular-room tool preserves identifiers, wall properties and the hosted-by relationship.',
         uncertainty: 'Concept geometry only; no accessibility, structural, code or coordination approval was performed.',
       });
       assert.deepEqual(submitted, { ok: true, done: true, proposalRevisionId: submitted.proposalRevisionId });
@@ -633,6 +658,15 @@ test('model-working AI receives bounded tools and saves only its validated propo
   assert.equal(result.review.baseRevisionId, original.head('main'));
   assert.equal(result.review.proposalRevisionId, result.repository.head('ai-room-study'));
   assert.deepEqual(result.review.selectedObjectIds, ['door-entry']);
+  assert.equal(result.review.constraints.includes('preserves identifiers'), true);
+  assert.equal(result.review.decision.status, 'pending');
+  assert.deepEqual(result.review.worker, {
+    provider: 'test', model: 'scripted-room-worker', responseIds: [],
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+  });
+  assert.equal(result.repository.review('ai-room-study').requestId, result.review.requestId);
+  assert.equal(result.repository.review('ai-room-study').constraints, result.review.constraints);
+  assert.equal((await RoomRepository.restore(result.repository.serialize())).review('ai-room-study').rationale, result.review.rationale);
   assert.equal(door(result.repository, 'ai-room-study').width, 1.2);
   assert.equal(result.repository.root(), original.root());
 });
@@ -641,13 +675,14 @@ test('proposal requests reject stale identities before calling AI and let AI rec
   const repo = await RoomRepository.create();
   const layout = structuredClone(rectangleLayout(repo.view(repo.head('main')).snapshot));
   let runs = 0;
-  const unused = { async run() { runs += 1; } };
+  const unused = { identity: { provider: 'test', model: 'unused-worker' }, async run() { runs += 1; } };
   await assert.rejects(prepareModelProposal(repo, visualRequest(repo, layout, { baseRevisionId: '0'.repeat(64) }), unused), /Unknown revision/);
   await assert.rejects(prepareModelProposal(repo, visualRequest(repo, layout, { selectedObjectIds: ['missing-object'] }), unused), /does not exist/);
   await assert.rejects(prepareModelProposal(repo, { ...visualRequest(repo, layout), extra: true }, unused), /Unexpected proposal request fields/);
   assert.equal(runs, 0);
 
   const worker = {
+    identity: { provider: 'test', model: 'retry-worker' },
     async run(session) {
       const invalid = structuredClone(layout); invalid.door.offsetMm = 5900; invalid.door.widthMm = 1200;
       const rejected = await session.executeTool('preview_rectangle', invalid);
@@ -656,6 +691,7 @@ test('proposal requests reject stale identities before calling AI and let AI rec
       assert.equal((await session.executeTool('preview_rectangle', valid)).ok, true);
       assert.equal((await session.executeTool('submit_proposal', {
         summary: 'The entrance is widened to 1200 mm.', rationale: 'The valid retry fits its host wall.',
+        constraints: 'The hosted door and rectangular wall topology are preserved.',
         uncertainty: 'Concept-only validation.',
       })).done, true);
     },
@@ -668,6 +704,7 @@ test('model worker can decline without changing repository history', async () =>
   const repo = await RoomRepository.create(); const saved = repo.serialize();
   const layout = rectangleLayout(repo.view(repo.head('main')).snapshot);
   const result = await prepareModelProposal(repo, visualRequest(repo, layout), {
+    identity: { provider: 'test', model: 'declining-worker' },
     async run(session) {
       const output = await session.executeTool('decline_request', {
         reason: 'The requested operation is outside the rectangular room tool.',
@@ -683,29 +720,37 @@ test('model worker can decline without changing repository history', async () =>
 test('OpenAI model adapter keeps credentials server-side and returns tool outputs through bounded Responses turns', async () => {
   const requests = [];
   const responses = [
-    { id: 'response-one', output: [{ type: 'function_call', name: 'inspect_model', arguments: '{}', call_id: 'call-one' }] },
-    { id: 'response-two', output: [{ type: 'function_call', name: 'submit_proposal', arguments: '{"summary":"done"}', call_id: 'call-two' }] },
+    { id: 'response-one', usage: { input_tokens: 50, output_tokens: 8, total_tokens: 58 }, output: [{ type: 'function_call', name: 'inspect_model', arguments: '{}', call_id: 'call-one' }] },
+    { id: 'response-two', usage: { input_tokens: 70, output_tokens: 12, total_tokens: 82 }, output: [{ type: 'function_call', name: 'submit_proposal', arguments: '{"summary":"done"}', call_id: 'call-two' }] },
   ];
   const worker = createOpenAIModelWorker({
     apiKey: 'server-only-test-key', model: 'configured-model',
     fetchImpl: async (url, options) => {
       requests.push({ url, options });
-      return { ok: true, status: 200, async json() { return responses.shift(); } };
+      return { ok: true, status: 200, headers: new Headers(), async text() { return JSON.stringify(responses.shift()); } };
     },
   });
   const calls = [];
+  const events = [];
   await worker.run({
     instructions: 'Use bounded tools.', input: { request: 'test' }, tools: MODEL_PROPOSAL_TOOLS,
+    recordProviderEvent: (event) => events.push(event),
     executeTool: async (name, argumentsValue) => {
       calls.push([name, argumentsValue]);
       return name === 'submit_proposal' ? { ok: true, done: true } : { ok: true };
     },
   });
   assert.deepEqual(calls, [['inspect_model', {}], ['submit_proposal', { summary: 'done' }]]);
+  assert.deepEqual(worker.identity, { provider: 'openai', model: 'configured-model' });
+  assert.deepEqual(events, [
+    { responseId: 'response-one', inputTokens: 50, outputTokens: 8, totalTokens: 58 },
+    { responseId: 'response-two', inputTokens: 70, outputTokens: 12, totalTokens: 82 },
+  ]);
   assert.equal(requests.length, 2); assert.equal(requests[0].url, 'https://api.openai.com/v1/responses');
   assert.equal(requests[0].options.headers.Authorization, 'Bearer server-only-test-key');
   const first = JSON.parse(requests[0].options.body); const second = JSON.parse(requests[1].options.body);
   assert.equal(first.model, 'configured-model'); assert.equal(first.tool_choice, 'required');
+  assert.equal(first.max_output_tokens, 2000);
   assert.equal(first.parallel_tool_calls, false); assert.equal(Object.hasOwn(first, 'previous_response_id'), false);
   assert.equal(second.previous_response_id, 'response-one');
   assert.deepEqual(second.input, [{ type: 'function_call_output', call_id: 'call-one', output: '{"ok":true}' }]);

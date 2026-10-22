@@ -12,7 +12,10 @@ const ui = Object.fromEntries([
   'selected-object', 'door-offset', 'wall-position', 'wall-length', 'door-fields',
   'wall-fields', 'wall-position-label', 'selection-help', 'edit-feedback',
   'review-panel', 'review-status', 'review-summary', 'review-rationale', 'review-uncertainty',
-  'review-binding', 'accept-proposal', 'request-revision',
+  'review-constraints', 'review-binding', 'accept-proposal', 'request-revision', 'review-drawing',
+  'request-page', 'review-page', 'history-page', 'nav-request', 'nav-review', 'nav-history',
+  'view-original', 'view-changes', 'new-project', 'start-dialog', 'start-close',
+  'original-dialog', 'changes-dialog', 'working-dialog', 'editor-panel',
 ].map((id) => [id, byId(id)]));
 
 let store = null;
@@ -30,6 +33,7 @@ let selectedObject = 'door-entry';
 let invalidInput = false;
 let gesture = null;
 let activeReview = null;
+let currentPage = 'request';
 const planCameras = new WeakMap();
 const encoder = new TextEncoder();
 const number = new Intl.NumberFormat('en', { maximumFractionDigits: 3 });
@@ -57,6 +61,30 @@ function showRecovery(text) {
   ui['recover-save'].hidden = false;
 }
 
+function reviewState(review) {
+  return review?.decision?.status ?? review?.status ?? null;
+}
+
+function showPage(name) {
+  if (!['request', 'review', 'history'].includes(name)) return;
+  if (name === 'review' && !activeReview) return;
+  if (name === 'history' && !repo) return;
+  currentPage = name;
+  for (const page of ['request', 'review', 'history']) {
+    ui[`${page}-page`].hidden = page !== name;
+    ui[`nav-${page}`].setAttribute('aria-pressed', String(page === name));
+  }
+  document.getElementById('workbench').focus({ preventScroll: true });
+}
+
+function openDialog(dialog) {
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+function closeDialog(dialog) {
+  if (dialog?.open) dialog.close();
+}
+
 function updateControls() {
   const writable = Boolean(store) && !busy && !writesBlocked && !gesture;
   for (const id of ['project-name', 'create-project', 'load-sample', 'import-project']) ui[id].disabled = !writable;
@@ -64,15 +92,21 @@ function updateControls() {
   ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture);
   ui['discard-preview'].disabled = busy || !repo || !dirty() || Boolean(gesture);
   ui['export-project'].disabled = busy || !repo || savedText === null;
+  ui['new-project'].disabled = !store || busy || writesBlocked;
+  ui['view-original'].disabled = busy || !repo;
+  ui['nav-request'].disabled = busy || !repo;
+  ui['nav-history'].disabled = busy || !repo;
+  ui['nav-review'].disabled = busy || !activeReview;
+  ui['view-changes'].disabled = busy || !activeReview || activeReview.proposalRevisionId === null;
   const alternatives = repo ? repo.branches().filter((branch) => branch.name !== 'main') : [];
   const canCompare = !busy && alternatives.length >= 2;
   ui['conflict-left'].disabled = !canCompare;
   ui['conflict-right'].disabled = !canCompare;
   ui['check-conflicts'].disabled = !canCompare;
   ui['recover-save'].disabled = busy;
-  const reviewMatches = activeReview?.proposalRevisionId === selectedRevision;
-  ui['accept-proposal'].disabled = !writable || !reviewMatches || selectedBranch === 'main' || activeReview?.status !== 'ready';
-  ui['request-revision'].disabled = !writable || !reviewMatches || activeReview?.status !== 'ready';
+  const reviewMatches = activeReview?.proposalRevisionId === null || activeReview?.proposalRevisionId === selectedRevision;
+  ui['accept-proposal'].disabled = !writable || !reviewMatches || selectedBranch === 'main' || reviewState(activeReview) !== 'pending';
+  ui['request-revision'].disabled = !writable || !reviewMatches || !['pending', 'declined'].includes(reviewState(activeReview));
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
   for (const button of ui['history-list'].querySelectorAll('button')) button.disabled = busy || Boolean(gesture);
@@ -186,7 +220,7 @@ async function perform(action) {
   updateControls();
   try { await action(); }
   catch (error) { status('Action did not complete. The displayed project has not been replaced.'); report(error); }
-  finally { busy = false; updateControls(); }
+  finally { closeDialog(ui['working-dialog']); busy = false; updateControls(); }
 }
 
 function writableStore() {
@@ -216,8 +250,11 @@ async function createProject(name) {
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
   const next = await RoomRepository.create(name);
+  activeReview = null;
   await persist(next);
   ui['project-name'].value = repo.name;
+  closeDialog(ui['start-dialog']);
+  showPage('request');
   status('Original room saved locally. Select a wall or door and describe a request to begin.');
 }
 
@@ -227,6 +264,23 @@ ui['project-form'].addEventListener('submit', (event) => {
 });
 
 ui['load-sample'].addEventListener('click', () => { void perform(() => createProject('Courtyard room study')); });
+
+ui['new-project'].addEventListener('click', () => {
+  ui['start-close'].hidden = !repo;
+  openDialog(ui['start-dialog']);
+});
+ui['start-close'].addEventListener('click', () => closeDialog(ui['start-dialog']));
+ui['view-original'].addEventListener('click', () => openDialog(ui['original-dialog']));
+ui['view-changes'].addEventListener('click', () => openDialog(ui['changes-dialog']));
+ui['nav-request'].addEventListener('click', () => showPage('request'));
+ui['nav-review'].addEventListener('click', () => showPage('review'));
+ui['nav-history'].addEventListener('click', () => showPage('history'));
+for (const button of document.querySelectorAll('[data-close]')) {
+  button.addEventListener('click', () => closeDialog(byId(button.dataset.close)));
+}
+ui['start-dialog'].addEventListener('cancel', (event) => {
+  if (!repo) event.preventDefault();
+});
 
 ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
@@ -239,6 +293,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const instruction = ui['request-text'].value.trim();
     if (!instruction || instruction.length > 1000) throw new Error('Describe the requested outcome in 1 to 1000 characters.');
     status('The model-working AI is inspecting the bound revision and preparing a validated proposal…');
+    openDialog(ui['working-dialog']);
     const response = await fetch('/api/proposals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -261,14 +316,16 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (result.status === 'declined') {
       activeReview = review;
       renderReview();
+      showPage('review');
       status('The AI could not prepare a proposal with the bounded model tools. Review the reason and revise the request.');
       return;
     }
     const next = await RoomRepository.restore(result.project);
     if (next.head(name) !== result.review.proposalRevisionId) throw new Error('The returned proposal is not bound to its claimed revision.');
     await persist(next, name);
-    activeReview = review;
+    activeReview = repo.review(name);
     renderReview();
+    showPage('review');
     status(`AI proposal “${name}” is validated and saved separately. Review it before accepting or requesting a revision.`);
   });
 });
@@ -277,12 +334,17 @@ function renderReview() {
   const review = activeReview;
   ui['review-panel'].hidden = !review;
   if (!review) return;
-  ui['review-status'].textContent = review.status === 'accepted' ? 'Accepted version'
-    : review.status === 'declined' ? 'No proposal prepared' : 'Ready for review';
+  const state = reviewState(review);
+  ui['review-status'].textContent = state === 'accepted' ? 'Accepted version'
+    : state === 'superseded' ? 'Earlier accepted version'
+      : state === 'declined' ? 'No proposal prepared' : 'Ready for review';
   ui['review-summary'].textContent = review.summary;
   ui['review-rationale'].textContent = review.rationale;
+  ui['review-constraints'].textContent = review.constraints;
   ui['review-uncertainty'].textContent = review.uncertainty;
-  ui['review-binding'].textContent = `Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}`;
+  const evidence = review.worker ? ` · ${review.worker.provider}/${review.worker.model} · ${review.validator}` : '';
+  ui['review-binding'].textContent = `Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}${evidence}`;
+  updateControls();
 }
 
 ui['accept-proposal'].addEventListener('click', () => {
@@ -292,20 +354,22 @@ ui['accept-proposal'].addEventListener('click', () => {
       throw new Error('Select the AI-prepared proposal before accepting it.');
     }
     const acceptedName = selectedBranch;
-    const next = repo.accept(acceptedName);
+    const next = repo.accept(acceptedName, { decisionId: globalThis.crypto.randomUUID(), actor: 'local-human' });
     await persist(next, 'main');
-    activeReview = { ...activeReview, status: 'accepted' };
+    activeReview = repo.review(acceptedName);
     renderReview();
+    showPage('review');
     status(`Accepted “${acceptedName}” as the current model version. The original and proposal branch remain in history.`);
   });
 });
 
 ui['request-revision'].addEventListener('click', () => {
-  if (busy || !activeReview || activeReview.proposalRevisionId !== selectedRevision) return;
+  if (busy || !activeReview || (activeReview.proposalRevisionId !== null && activeReview.proposalRevisionId !== selectedRevision)) return;
   activeReview = null;
   ui['proposal-name'].value = '';
   ui['request-text'].value = `Revise the selected AI proposal. ${ui['request-text'].value.trim()}`.slice(0, 1000);
   renderReview(); updateControls();
+  showPage('request');
   ui['proposal-name'].focus();
   status('Revision request started from the selected proposal. Choose a new proposal name; the earlier proposal remains unchanged.');
 });
@@ -326,7 +390,7 @@ ui['export-project'].addEventListener('click', () => {
   try {
     const stem = repo.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'room-study';
     download(savedText, `${stem}.room-demo.json`);
-    status('Saved project JSON prepared for download. Unsaved request sketches and transient AI review text are not included. This is demo data, not IFC.');
+    status('Saved project JSON prepared for download, including review evidence and human decisions. Unsaved request sketches are not included. This is demo data, not IFC.');
   } catch (error) { report(error, 'Export failed: '); }
 });
 
@@ -353,8 +417,13 @@ ui['import-file'].addEventListener('change', () => {
     if (encoder.encode(text).byteLength > MAX_PROJECT_BYTES) throw new Error('Encoded import exceeds the 256 KiB limit.');
     const next = await RoomRepository.restore(text);
     if (!confirmReplacement()) { status('Import cancelled. Your current project is unchanged.'); return; }
+    activeReview = null;
     await persist(next);
     ui['project-name'].value = repo.name;
+    activeReview = repo.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
+    renderReview();
+    closeDialog(ui['start-dialog']);
+    showPage(activeReview ? 'review' : 'request');
     status('Imported project validated and saved locally. Its original room is preserved.');
   });
 });
@@ -628,9 +697,10 @@ function selectRevision(branch, revisionId) {
   if (dirty() && !window.confirm('Discard the unsaved request sketch and view this saved revision?')) return;
   selectedBranch = branch;
   selectedRevision = revisionId;
-  if (activeReview?.proposalRevisionId !== revisionId) activeReview = null;
+  activeReview = repo.reviews().find((review) => review.proposalRevisionId === revisionId) ?? null;
   resetEditor();
   renderComparison();
+  renderReview();
   updateControls();
   // Retain focus on the clicked history button instead of replacing its DOM node.
   for (const button of ui['history-list'].querySelectorAll('button')) {
@@ -638,6 +708,7 @@ function selectRevision(branch, revisionId) {
     if (button.classList.contains('history-button')) button.setAttribute('aria-pressed', String(selected));
     else button.setAttribute('aria-current', String(selected));
   }
+  showPage(activeReview ? 'review' : 'request');
   status(`Viewing ${branch}${revisionId === repo.head(branch) ? '' : ' · earlier revision'}. The original remains in revision history.`);
 }
 
@@ -686,7 +757,7 @@ function renderComparison() {
   const original = repo.view(originalId).snapshot;
   const selected = preview ?? repo.view(selectedRevision).snapshot;
   const isOriginal = selectedRevision === originalId;
-  ui['original-drawing'].replaceChildren(drawPlan(original, null, 'original', 'Original room plan'));
+  ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
   const next = drawPlan(selected, original, 'selected', `${selectedBranch} visual request plan`);
   const root = ui['proposal-drawing'].querySelector('svg');
   if (root) {
@@ -694,6 +765,7 @@ function renderComparison() {
     root.replaceChildren(...next.childNodes); root.setAttribute('role', next.getAttribute('role'));
     planCameras.set(root, planCameras.get(next));
   } else ui['proposal-drawing'].replaceChildren(next);
+  ui['review-drawing'].replaceChildren(drawPlan(selected, original, 'review', `${selectedBranch} proposal review plan`));
   ui['selected-title'].textContent = dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : selectedBranch;
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === repo.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = 'Select a wall or door, then drag its handle or enter a dimension as visual intent. Dashed grey is the preserved original. AI prepares any saved model proposal.';
@@ -747,6 +819,7 @@ for (const id of ['conflict-left', 'conflict-right']) ui[id].addEventListener('c
 function render() {
   ui['project-title'].textContent = repo.name;
   document.title = `${repo.name} · Room studies`;
+  if (!activeReview) activeReview = repo.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
   renderComparison();
   renderHistory();
   renderConflictChoices();
@@ -755,11 +828,12 @@ function render() {
 }
 
 async function initialize() {
+  let needsStart = false;
   try {
     store = await RoomStore.open();
     const record = await store.load();
     generation = record.generation;
-    if (record.text === null) { status('Ready. Create a project or load the sample. Changes are saved only in this browser.'); return; }
+    if (record.text === null) { needsStart = true; status('Ready. Create a project or load the sample. Changes are saved only in this browser.'); return; }
     let restored;
     try { restored = await RoomRepository.restore(record.text); }
     catch (error) {
@@ -771,15 +845,24 @@ async function initialize() {
     savedText = record.text;
     selectedBranch = 'main';
     selectedRevision = repo.head('main');
+    activeReview = repo.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
     resetEditor();
     ui['project-name'].value = repo.name;
     render();
+    showPage(activeReview ? 'review' : 'request');
     status('Saved project restored from this browser. Original preserved on main.');
   } catch (error) {
     writesBlocked = true;
     status('Local storage is not ready. No saved data has been changed.');
     report(error);
-  } finally { busy = false; updateControls(); }
+  } finally {
+    busy = false;
+    updateControls();
+    if (needsStart) {
+      ui['start-close'].hidden = true;
+      openDialog(ui['start-dialog']);
+    }
+  }
 }
 
 void initialize();
