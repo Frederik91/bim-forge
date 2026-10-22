@@ -277,7 +277,6 @@ export class RoomRepository {
       fields(branch, ['name', 'revisionId']); branchName(branch.name);
       if (branches.has(branch.name) || !revisions.has(branch.revisionId)) fail('Invalid branch target or duplicate branch.');
       branches.add(branch.name);
-      if (branch.name === 'main' && branch.revisionId !== roots[0].id) fail('The original branch cannot advance in this demo.');
       let current = revisions.get(branch.revisionId);
       while (current) { reachable.add(current.id); current = revisions.get(current.parentId); }
     }
@@ -286,6 +285,8 @@ export class RoomRepository {
   }
 
   get name() { return this.#state.name; }
+
+  root() { return this.#state.revisions.find((item) => item.parentId === null).id; }
 
   head(name) {
     const branch = this.#state.branches.find((item) => item.name === name);
@@ -300,6 +301,19 @@ export class RoomRepository {
   }
 
   branches() { return this.#state.branches; }
+
+  accept(name) {
+    branchName(name);
+    if (name === 'main') fail('Choose a proposal to accept.');
+    const proposal = this.#state.branches.find((item) => item.name === name);
+    if (!proposal) fail('Unknown proposal.');
+    if (this.head('main') === proposal.revisionId) return this;
+    const branches = this.#state.branches.map((item) => item.name === 'main'
+      ? { name: 'main', revisionId: proposal.revisionId } : item);
+    const state = { ...this.#state, branches };
+    if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
+    return new RoomRepository(token, state);
+  }
 
   async propose(input) {
     const proposal = copy(input);

@@ -4,13 +4,15 @@ import { RoomStore, MAX_PROJECT_BYTES } from './room-store.mjs';
 const byId = (id) => document.getElementById(id);
 const ui = Object.fromEntries([
   'project-form', 'project-name', 'create-project', 'load-sample', 'proposal-form',
-  'door-width', 'proposal-name', 'save-proposal', 'export-project', 'import-project',
+  'door-width', 'proposal-name', 'request-text', 'save-proposal', 'export-project', 'import-project',
   'import-file', 'status', 'error', 'recover-save', 'project-title', 'study-caption',
   'original-drawing', 'proposal-drawing', 'selected-title', 'selected-badge', 'change-count',
   'property-rows', 'comparison-note', 'history-list', 'branch-count', 'conflict-left',
   'conflict-right', 'check-conflicts', 'conflict-result', 'discard-preview', 'editor-base',
   'selected-object', 'door-offset', 'wall-position', 'wall-length', 'door-fields',
   'wall-fields', 'wall-position-label', 'selection-help', 'edit-feedback',
+  'review-panel', 'review-status', 'review-summary', 'review-rationale', 'review-uncertainty',
+  'review-binding', 'accept-proposal', 'request-revision',
 ].map((id) => [id, byId(id)]));
 
 let store = null;
@@ -27,6 +29,7 @@ let preview = null;
 let selectedObject = 'door-entry';
 let invalidInput = false;
 let gesture = null;
+let activeReview = null;
 const planCameras = new WeakMap();
 const encoder = new TextEncoder();
 const number = new Intl.NumberFormat('en', { maximumFractionDigits: 3 });
@@ -57,7 +60,7 @@ function showRecovery(text) {
 function updateControls() {
   const writable = Boolean(store) && !busy && !writesBlocked && !gesture;
   for (const id of ['project-name', 'create-project', 'load-sample', 'import-project']) ui[id].disabled = !writable;
-  for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length', 'proposal-name', 'selected-object']) ui[id].disabled = !writable || !layout || Boolean(gesture);
+  for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length', 'proposal-name', 'request-text', 'selected-object']) ui[id].disabled = !writable || !layout || Boolean(gesture);
   ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture);
   ui['discard-preview'].disabled = busy || !repo || !dirty() || Boolean(gesture);
   ui['export-project'].disabled = busy || !repo || savedText === null;
@@ -67,6 +70,9 @@ function updateControls() {
   ui['conflict-right'].disabled = !canCompare;
   ui['check-conflicts'].disabled = !canCompare;
   ui['recover-save'].disabled = busy;
+  const reviewMatches = activeReview?.proposalRevisionId === selectedRevision;
+  ui['accept-proposal'].disabled = !writable || !reviewMatches || selectedBranch === 'main' || activeReview?.status !== 'ready';
+  ui['request-revision'].disabled = !writable || !reviewMatches || activeReview?.status !== 'ready';
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
   for (const button of ui['history-list'].querySelectorAll('button')) button.disabled = busy || Boolean(gesture);
@@ -85,7 +91,7 @@ function resetEditor() {
   invalidInput = false; layout = null; preview = null;
   if (!repo) return;
   preview = repo.view(selectedRevision).snapshot;
-  try { layout = rectangleLayout(preview); feedback('Select an object. Changes stay unsaved until you save a proposal.'); }
+  try { layout = rectangleLayout(preview); feedback('Select an object and sketch the intent. The sketch is not authoritative model geometry.'); }
   catch (error) { feedback(`This saved layout is view-only: ${error.message}`, true); }
   const objects = preview.entities;
   ui['selected-object'].replaceChildren(...objects.map((object) => {
@@ -108,7 +114,7 @@ function syncInspector() {
   const isDoor = object?.type === 'Door';
   ui['door-fields'].hidden = !isDoor;
   ui['wall-fields'].hidden = isDoor || !object;
-  ui['editor-base'].textContent = `Starting from ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved. Unsaved changes are lost on reload; export includes saved history only.`;
+  ui['editor-base'].textContent = `Request bound to ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved in history. Unsaved request sketches are lost on reload.`;
   if (!layout || !object) {
     for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length']) ui[id].value = '';
     ui['selection-help'].textContent = 'This saved revision is view-only. Its geometry and changed properties remain available below.';
@@ -142,7 +148,7 @@ ui['selected-object'].addEventListener('change', () => {
 function acceptLayout(candidate) {
   const next = previewRectangle(repo.view(selectedRevision).snapshot, candidate);
   layout = rectangleLayout(next); preview = next; invalidInput = false;
-  feedback(dirty() ? 'Unsaved preview. Review the difference below, then save or discard.' : 'No changes to save. The selected revision is unchanged.');
+  feedback(dirty() ? 'Visual request sketch updated. AI must still prepare and validate a separate proposal.' : 'The request sketch matches the selected revision. Describe any additional intent in words.');
   renderComparison(); updateControls();
 }
 
@@ -169,7 +175,7 @@ function editFields(event) {
 for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length']) ui[id].addEventListener('input', editFields);
 ui['discard-preview'].addEventListener('click', () => {
   if (busy || gesture || !repo) return;
-  resetEditor(); renderComparison(); updateControls(); status('Unsaved changes discarded. Saved history is unchanged.');
+  resetEditor(); renderComparison(); updateControls(); status('Visual request sketch discarded. Saved model history is unchanged.');
 });
 window.addEventListener('beforeunload', (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } });
 
@@ -202,7 +208,7 @@ async function persist(next, branch = 'main') {
 }
 
 function confirmReplacement() {
-  return !repo || window.confirm('Replace the locally saved project and discard any unsaved preview? Export saved work first if you want to keep it.');
+  return !repo || window.confirm('Replace the locally saved project and discard any unsaved request sketch? Export saved work first if you want to keep it.');
 }
 
 async function createProject(name) {
@@ -212,7 +218,7 @@ async function createProject(name) {
   const next = await RoomRepository.create(name);
   await persist(next);
   ui['project-name'].value = repo.name;
-  status('Original room saved locally. Select a wall or door in the editable plan to begin.');
+  status('Original room saved locally. Select a wall or door and describe a request to begin.');
 }
 
 ui['project-form'].addEventListener('submit', (event) => {
@@ -227,15 +233,81 @@ ui['proposal-form'].addEventListener('submit', (event) => {
   void perform(async () => {
     writableStore();
     if (!repo) throw new Error('Create a project first.');
-    if (!layout || invalidInput) throw new Error('Fix the preview input before saving.');
+    if (!layout || invalidInput) throw new Error('Fix the visual request input before asking AI to prepare a proposal.');
     const name = ui['proposal-name'].value.trim();
     if (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main') throw new Error('Use lowercase words separated by hyphens, and choose a name other than main.');
-    status('Checking your proposal and saving locally…');
-    const next = await repo.proposeLayout({ name, from: selectedRevision, layout });
-    if (next === repo) { status('No change to save'); return; }
+    const instruction = ui['request-text'].value.trim();
+    if (!instruction || instruction.length > 1000) throw new Error('Describe the requested outcome in 1 to 1000 characters.');
+    status('The model-working AI is inspecting the bound revision and preparing a validated proposal…');
+    const response = await fetch('/api/proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: repo.serialize(),
+        request: {
+          requestId: globalThis.crypto.randomUUID(), proposalName: name, baseRevisionId: selectedRevision,
+          selectedObjectIds: [selectedObject], instruction,
+          visualIntent: { kind: 'rectangle-layout-sketch', layout },
+        },
+      }),
+    });
+    let result;
+    try { result = await response.json(); } catch { throw new Error('The proposal service returned unreadable data.'); }
+    if (!response.ok) throw new Error(result?.error ?? `The proposal service failed with HTTP ${response.status}.`);
+    if (!result || typeof result.project !== 'string' || !result.review || !['ready', 'declined'].includes(result.status)) {
+      throw new Error('The proposal service returned an unsupported result.');
+    }
+    const review = { ...result.review, status: result.status };
+    if (result.status === 'declined') {
+      activeReview = review;
+      renderReview();
+      status('The AI could not prepare a proposal with the bounded model tools. Review the reason and revise the request.');
+      return;
+    }
+    const next = await RoomRepository.restore(result.project);
+    if (next.head(name) !== result.review.proposalRevisionId) throw new Error('The returned proposal is not bound to its claimed revision.');
     await persist(next, name);
-    status(`Proposal “${name}” saved locally. The original room is preserved on main.`);
+    activeReview = review;
+    renderReview();
+    status(`AI proposal “${name}” is validated and saved separately. Review it before accepting or requesting a revision.`);
   });
+});
+
+function renderReview() {
+  const review = activeReview;
+  ui['review-panel'].hidden = !review;
+  if (!review) return;
+  ui['review-status'].textContent = review.status === 'accepted' ? 'Accepted version'
+    : review.status === 'declined' ? 'No proposal prepared' : 'Ready for review';
+  ui['review-summary'].textContent = review.summary;
+  ui['review-rationale'].textContent = review.rationale;
+  ui['review-uncertainty'].textContent = review.uncertainty;
+  ui['review-binding'].textContent = `Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}`;
+}
+
+ui['accept-proposal'].addEventListener('click', () => {
+  void perform(async () => {
+    writableStore();
+    if (!activeReview || activeReview.proposalRevisionId !== selectedRevision || selectedBranch === 'main') {
+      throw new Error('Select the AI-prepared proposal before accepting it.');
+    }
+    const acceptedName = selectedBranch;
+    const next = repo.accept(acceptedName);
+    await persist(next, 'main');
+    activeReview = { ...activeReview, status: 'accepted' };
+    renderReview();
+    status(`Accepted “${acceptedName}” as the current model version. The original and proposal branch remain in history.`);
+  });
+});
+
+ui['request-revision'].addEventListener('click', () => {
+  if (busy || !activeReview || activeReview.proposalRevisionId !== selectedRevision) return;
+  activeReview = null;
+  ui['proposal-name'].value = '';
+  ui['request-text'].value = `Revise the selected AI proposal. ${ui['request-text'].value.trim()}`.slice(0, 1000);
+  renderReview(); updateControls();
+  ui['proposal-name'].focus();
+  status('Revision request started from the selected proposal. Choose a new proposal name; the earlier proposal remains unchanged.');
 });
 
 function download(text, filename) {
@@ -254,7 +326,7 @@ ui['export-project'].addEventListener('click', () => {
   try {
     const stem = repo.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'room-study';
     download(savedText, `${stem}.room-demo.json`);
-    status('Saved project JSON prepared for download. Unsaved preview changes are not included. This is demo data, not IFC.');
+    status('Saved project JSON prepared for download. Unsaved request sketches and transient AI review text are not included. This is demo data, not IFC.');
   } catch (error) { report(error, 'Export failed: '); }
 });
 
@@ -478,13 +550,13 @@ ui['proposal-drawing'].addEventListener('pointermove', (event) => {
     candidate.door[gesture.operation === 'door-move' ? 'offsetMm' : 'widthMm'] += along;
   }
   try { acceptLayout(candidate); gesture.rejected = false; }
-  catch (error) { gesture.rejected = true; feedback(`${error.message} Last valid preview retained.`, true); }
+  catch (error) { gesture.rejected = true; feedback(`${error.message} Last valid request sketch retained.`, true); }
 });
 function endGesture(cancel = false) {
   if (!gesture) return;
   const previous = gesture; gesture = null;
-  if (cancel) { layout = previous.layout; preview = previous.preview; feedback('Drag cancelled. Pre-drag preview restored.'); }
-  else if (previous.rejected) feedback('Move stopped at the last valid preview. Review it before saving.');
+  if (cancel) { layout = previous.layout; preview = previous.preview; feedback('Drag cancelled. Pre-drag request sketch restored.'); }
+  else if (previous.rejected) feedback('Move stopped at the last valid request sketch. Review it before submitting.');
   if (previous.root.hasPointerCapture(previous.id)) previous.root.releasePointerCapture(previous.id);
   syncInspector(); renderComparison(); updateControls();
 }
@@ -548,14 +620,15 @@ function renderProperties(original, selected, delta) {
   const entityChanges = delta.entities.added.length + delta.entities.removed.length + delta.entities.modified.length;
   const linkChanges = delta.relationships.added.length + delta.relationships.removed.length + delta.relationships.modified.length;
   ui['change-count'].textContent = `${entityChanges} ${entityChanges === 1 ? 'entity' : 'entities'} · ${linkChanges} ${linkChanges === 1 ? 'relationship' : 'relationships'} changed`;
-  ui['comparison-note'].textContent = `Original compared with ${dirty() ? 'the unsaved preview' : 'the selected revision'}. ${delta.entities.added.length} added, ${delta.entities.removed.length} removed, ${delta.entities.modified.length} modified entities; ${delta.relationships.added.length} added, ${delta.relationships.removed.length} removed, ${delta.relationships.modified.length} modified relationships. No construction validation.`;
+  ui['comparison-note'].textContent = `Original compared with ${dirty() ? 'the visual request sketch' : 'the selected revision'}. ${delta.entities.added.length} added, ${delta.entities.removed.length} removed, ${delta.entities.modified.length} modified entities; ${delta.relationships.added.length} added, ${delta.relationships.removed.length} removed, ${delta.relationships.modified.length} modified relationships. Only AI-submitted geometry is saved; no construction validation.`;
 }
 
 function selectRevision(branch, revisionId) {
   if (busy || gesture || !repo) return;
-  if (dirty() && !window.confirm('Discard the unsaved preview and view this saved revision?')) return;
+  if (dirty() && !window.confirm('Discard the unsaved request sketch and view this saved revision?')) return;
   selectedBranch = branch;
   selectedRevision = revisionId;
+  if (activeReview?.proposalRevisionId !== revisionId) activeReview = null;
   resetEditor();
   renderComparison();
   updateControls();
@@ -565,7 +638,7 @@ function selectRevision(branch, revisionId) {
     if (button.classList.contains('history-button')) button.setAttribute('aria-pressed', String(selected));
     else button.setAttribute('aria-current', String(selected));
   }
-  status(`Viewing ${branch}${revisionId === repo.head(branch) ? '' : ' · earlier revision'}. Original preserved on main.`);
+  status(`Viewing ${branch}${revisionId === repo.head(branch) ? '' : ' · earlier revision'}. The original remains in revision history.`);
 }
 
 function renderHistory() {
@@ -580,8 +653,9 @@ function renderHistory() {
     const copy = element('span');
     const room = repo.view(branch.revisionId).snapshot;
     const width = entry(room)?.width;
-    const changed = repo.compare(repo.head('main'), branch.revisionId);
-    copy.append(element('span', branch.name, 'history-name'), element('span', `${branch.name === 'main' ? 'Preserved original' : `Saved proposal · ${changed.entities.modified.length} objects and ${changed.relationships.modified.length} placements changed`} · ${width === undefined ? 'entry absent' : `${millimetres(width)} mm entrance`}`, 'history-detail'));
+    const changed = repo.compare(repo.root(), branch.revisionId);
+    const mainDetail = branch.revisionId === repo.root() ? 'Original model' : 'Current accepted model';
+    copy.append(element('span', branch.name, 'history-name'), element('span', `${branch.name === 'main' ? mainDetail : `AI proposal · ${changed.entities.modified.length} objects and ${changed.relationships.modified.length} placements changed`} · ${width === undefined ? 'entry absent' : `${millimetres(width)} mm entrance`}`, 'history-detail'));
     button.append(symbol, copy);
     button.addEventListener('click', () => selectRevision(branch.name, branch.revisionId));
     wrapper.append(button);
@@ -608,21 +682,21 @@ function renderHistory() {
 }
 
 function renderComparison() {
-  const main = repo.head('main');
-  const original = repo.view(main).snapshot;
+  const originalId = repo.root();
+  const original = repo.view(originalId).snapshot;
   const selected = preview ?? repo.view(selectedRevision).snapshot;
-  const isOriginal = selectedRevision === main;
+  const isOriginal = selectedRevision === originalId;
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'original', 'Original room plan'));
-  const next = drawPlan(selected, original, 'selected', `${selectedBranch} editable room plan`);
+  const next = drawPlan(selected, original, 'selected', `${selectedBranch} visual request plan`);
   const root = ui['proposal-drawing'].querySelector('svg');
   if (root) {
     // Keep the capture root stable throughout a drag; only drawing children change.
     root.replaceChildren(...next.childNodes); root.setAttribute('role', next.getAttribute('role'));
     planCameras.set(root, planCameras.get(next));
   } else ui['proposal-drawing'].replaceChildren(next);
-  ui['selected-title'].textContent = dirty() ? 'Your working room' : isOriginal ? 'Original · ready to explore' : selectedBranch;
-  ui['selected-badge'].textContent = dirty() ? 'Unsaved preview' : isOriginal ? 'Original' : selectedRevision === repo.head(selectedBranch) ? 'Saved proposal' : 'Earlier revision';
-  ui['study-caption'].textContent = 'Select a wall or door, then drag its handle or enter a dimension below. Dashed grey is the preserved original. Save creates a separate proposal.';
+  ui['selected-title'].textContent = dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : selectedBranch;
+  ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === repo.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
+  ui['study-caption'].textContent = 'Select a wall or door, then drag its handle or enter a dimension as visual intent. Dashed grey is the preserved original. AI prepares any saved model proposal.';
   renderProperties(original, selected, diffSnapshots(original, selected));
 }
 
@@ -651,7 +725,7 @@ ui['check-conflicts'].addEventListener('click', () => {
   try {
     const left = ui['conflict-left'].value; const right = ui['conflict-right'].value;
     if (!left || !right || left === right) throw new Error('Choose two different proposals to compare.');
-    const conflicts = repo.conflicts(repo.head('main'), repo.head(left), repo.head(right));
+    const conflicts = repo.conflicts(repo.root(), repo.head(left), repo.head(right));
     ui['conflict-result'].replaceChildren();
     if (!conflicts.length) {
       ui['conflict-result'].textContent = 'No divergent whole-object changes found. This is a conservative demo comparison, not an approval or merge.';
@@ -676,6 +750,7 @@ function render() {
   renderComparison();
   renderHistory();
   renderConflictChoices();
+  renderReview();
   updateControls();
 }
 
