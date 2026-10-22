@@ -286,29 +286,66 @@ export async function prepareModelProposal(repository, input, worker) {
   return result;
 }
 
-export function createOpenAIModelWorker({
-  apiKey, model, fetchImpl = globalThis.fetch, maxTurns = 8,
-  requestTimeoutMs = 30000, maxResponseBytes = 256 * 1024, maxOutputTokens = 2000,
+async function readCompletedResponse(response, maxResponseBytes) {
+  if (!response?.ok) fail(`The ChatGPT plan rejected the request with HTTP ${response?.status ?? 'unknown'}.`);
+  const contentLength = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > maxResponseBytes) fail('The ChatGPT plan response exceeded the configured byte limit.');
+  if (!response.body) fail('The ChatGPT plan returned no response stream.');
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    const bytes = Buffer.from(chunk);
+    size += bytes.length;
+    if (size > maxResponseBytes) fail('The ChatGPT plan response exceeded the configured byte limit.');
+    chunks.push(bytes);
+  }
+  const blocks = Buffer.concat(chunks).toString('utf8').split(/\r?\n\r?\n/);
+  let completed = null;
+  for (const block of blocks) {
+    const data = block.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n');
+    if (!data || data === '[DONE]') continue;
+    let event;
+    try { event = JSON.parse(data); } catch { fail('The ChatGPT plan returned an invalid event stream.'); }
+    if (event.type === 'response.failed') fail(`The ChatGPT plan could not complete the request (${event.response?.error?.code ?? 'unknown_error'}).`);
+    if (event.type === 'response.incomplete') fail('The ChatGPT plan returned an incomplete response.');
+    if (event.type === 'response.completed') completed = event.response;
+  }
+  if (!completed) fail('The ChatGPT plan stream ended without a completed response.');
+  if (typeof completed.id !== 'string' || !Array.isArray(completed.output)) fail('The ChatGPT plan returned an invalid completed response.');
+  return completed;
+}
+
+export function createChatGPTPlanModelWorker({
+  getAccessToken, model, fetchImpl = globalThis.fetch, maxTurns = 8,
+  requestTimeoutMs = 30000, maxResponseBytes = 256 * 1024,
 } = {}) {
-  if (typeof apiKey !== 'string' || !apiKey) fail('OPENAI_API_KEY is required for the model worker.');
-  if (typeof model !== 'string' || !model.trim() || model.length > 100) fail('OPENAI_MODEL is required for the model worker.');
+  if (typeof getAccessToken !== 'function') fail('A ChatGPT plan token provider is required.');
+  if (typeof model !== 'string' || !model.trim() || model.length > 100) fail('A selected ChatGPT model is required.');
   if (typeof fetchImpl !== 'function') fail('A fetch implementation is required for the model worker.');
   if (!Number.isSafeInteger(maxTurns) || maxTurns < 1 || maxTurns > 12) fail('Model turn budget must be between one and twelve.');
   if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1000 || requestTimeoutMs > 120000) fail('Model request timeout must be between one and 120 seconds.');
   if (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1024 || maxResponseBytes > 1024 * 1024) fail('Model response limit must be between 1 KiB and 1 MiB.');
-  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 10000) fail('Model output token budget must be between one and 10000.');
   const configuredModel = model.trim();
   return Object.freeze({
-    identity: Object.freeze({ provider: 'openai', model: configuredModel }),
+    identity: Object.freeze({ provider: 'openai-chatgpt-plan', model: configuredModel }),
     async run(session) {
-      let previousResponseId = null;
-      let inputItems = [{ role: 'user', content: JSON.stringify(session.input) }];
+      const history = [{ role: 'user', content: JSON.stringify(session.input) }];
+      const tools = [{
+        type: 'namespace', name: 'bim_model',
+        description: 'Bounded BIM model inspection, deterministic room preview, and human-review proposal tools.',
+        tools: session.tools,
+      }];
       for (let turn = 0; turn < maxTurns; turn += 1) {
+        const accessToken = await getAccessToken();
         const body = {
-          model: configuredModel, instructions: session.instructions, input: inputItems, tools: session.tools,
-          tool_choice: 'required', parallel_tool_calls: false,
-          max_output_tokens: maxOutputTokens,
-          ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
+          model: configuredModel,
+          instructions: session.instructions,
+          input: history,
+          tools,
+          tool_choice: 'required',
+          parallel_tool_calls: false,
+          store: false,
+          stream: true,
         };
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
@@ -316,42 +353,34 @@ export function createOpenAIModelWorker({
         try {
           response = await fetchImpl('https://api.openai.com/v1/responses', {
             method: 'POST', signal: controller.signal,
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
             body: JSON.stringify(body),
           });
+          const payload = await readCompletedResponse(response, maxResponseBytes);
+          const usage = payload.usage ?? {};
+          const inputTokens = Number.isSafeInteger(usage.input_tokens) ? usage.input_tokens : 0;
+          const outputTokens = Number.isSafeInteger(usage.output_tokens) ? usage.output_tokens : 0;
+          session.recordProviderEvent({
+            responseId: payload.id,
+            inputTokens,
+            outputTokens,
+            totalTokens: Number.isSafeInteger(usage.total_tokens) ? usage.total_tokens : inputTokens + outputTokens,
+          });
+          const calls = payload.output.filter((item) => item?.type === 'function_call');
+          if (calls.length !== 1) fail('The model worker must issue exactly one bounded tool call per turn.');
+          const call = calls[0];
+          if (call.namespace !== 'bim_model' || typeof call.name !== 'string' || typeof call.arguments !== 'string' || typeof call.call_id !== 'string') {
+            fail('The ChatGPT plan returned an invalid bounded tool call.');
+          }
+          let argumentsValue;
+          try { argumentsValue = JSON.parse(call.arguments); } catch { fail('The model worker returned invalid tool arguments.'); }
+          const output = await session.executeTool(call.name, argumentsValue);
+          if (output.done === true) return;
+          history.push(...payload.output, { type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(output) });
         } catch (error) {
-          if (controller.signal.aborted) fail(`The model provider exceeded the ${requestTimeoutMs} ms request timeout.`);
+          if (controller.signal.aborted) fail(`The ChatGPT plan exceeded the ${requestTimeoutMs} ms request timeout.`);
           throw error;
         } finally { clearTimeout(timeout); }
-        if (!response?.ok) fail(`The model provider rejected the request with HTTP ${response?.status ?? 'unknown'}.`);
-        const contentLength = Number(response.headers?.get?.('content-length'));
-        if (Number.isFinite(contentLength) && contentLength > maxResponseBytes) fail('The model provider response exceeded the configured byte limit.');
-        const responseText = await response.text();
-        if (new TextEncoder().encode(responseText).length > maxResponseBytes) fail('The model provider response exceeded the configured byte limit.');
-        let payload;
-        try { payload = JSON.parse(responseText); } catch { fail('The model provider returned invalid JSON.'); }
-        if (typeof payload?.id !== 'string' || !Array.isArray(payload.output)) fail('The model provider returned an invalid response.');
-        const usage = payload.usage ?? {};
-        const inputTokens = Number.isSafeInteger(usage.input_tokens) ? usage.input_tokens : 0;
-        const outputTokens = Number.isSafeInteger(usage.output_tokens) ? usage.output_tokens : 0;
-        session.recordProviderEvent({
-          responseId: payload.id,
-          inputTokens,
-          outputTokens,
-          totalTokens: Number.isSafeInteger(usage.total_tokens) ? usage.total_tokens : inputTokens + outputTokens,
-        });
-        const calls = payload.output.filter((item) => item?.type === 'function_call');
-        if (calls.length !== 1) fail('The model worker must issue exactly one bounded tool call per turn.');
-        const call = calls[0];
-        if (typeof call.name !== 'string' || typeof call.arguments !== 'string' || typeof call.call_id !== 'string') {
-          fail('The model provider returned an invalid tool call.');
-        }
-        let argumentsValue;
-        try { argumentsValue = JSON.parse(call.arguments); } catch { fail('The model worker returned invalid tool arguments.'); }
-        const output = await session.executeTool(call.name, argumentsValue);
-        if (output.done === true) return;
-        previousResponseId = payload.id;
-        inputItems = [{ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(output) }];
       }
       fail('The model worker exceeded its turn budget without finishing.');
     },

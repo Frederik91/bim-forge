@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { RoomRepository, diffSnapshots, rectangleLayout, previewRectangle } from './room-model.mjs';
-import { createOpenAIModelWorker, MODEL_PROPOSAL_TOOLS, prepareModelProposal } from './model-proposal.mjs';
+import { createChatGPTPlanModelWorker, MODEL_PROPOSAL_TOOLS, prepareModelProposal } from './model-proposal.mjs';
 
 const door = (repo, branch = 'main') => repo.view(repo.head(branch)).snapshot.entities.find((item) => item.id === 'door-entry');
 const proposal = (repo, name = 'wider-entry', doorWidthM = 1.2, from = repo.head('main')) => repo.propose({ name, from, doorWidthM });
@@ -728,17 +728,23 @@ test('model worker can decline without changing repository history', async () =>
   assert.equal(result.repository.serialize(), saved); assert.equal(result.review.proposalRevisionId, null);
 });
 
-test('OpenAI model adapter keeps credentials server-side and returns tool outputs through bounded Responses turns', async () => {
+test('ChatGPT plan adapter keeps OAuth credentials server-side and replays bounded stateless Responses turns', async () => {
   const requests = [];
   const responses = [
-    { id: 'response-one', usage: { input_tokens: 50, output_tokens: 8, total_tokens: 58 }, output: [{ type: 'function_call', name: 'inspect_model', arguments: '{}', call_id: 'call-one' }] },
-    { id: 'response-two', usage: { input_tokens: 70, output_tokens: 12, total_tokens: 82 }, output: [{ type: 'function_call', name: 'submit_proposal', arguments: '{"summary":"done"}', call_id: 'call-two' }] },
+    { id: 'response-one', usage: { input_tokens: 50, output_tokens: 8, total_tokens: 58 }, output: [
+      { type: 'reasoning', id: 'reasoning-one', encrypted_content: 'opaque' },
+      { type: 'function_call', namespace: 'bim_model', name: 'inspect_model', arguments: '{}', call_id: 'call-one' },
+    ] },
+    { id: 'response-two', usage: { input_tokens: 70, output_tokens: 12, total_tokens: 82 }, output: [
+      { type: 'function_call', namespace: 'bim_model', name: 'submit_proposal', arguments: '{"summary":"done"}', call_id: 'call-two' },
+    ] },
   ];
-  const worker = createOpenAIModelWorker({
-    apiKey: 'server-only-test-key', model: 'configured-model',
+  const worker = createChatGPTPlanModelWorker({
+    getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model',
     fetchImpl: async (url, options) => {
       requests.push({ url, options });
-      return { ok: true, status: 200, headers: new Headers(), async text() { return JSON.stringify(responses.shift()); } };
+      const event = { type: 'response.completed', response: responses.shift() };
+      return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
     },
   });
   const calls = [];
@@ -752,30 +758,50 @@ test('OpenAI model adapter keeps credentials server-side and returns tool output
     },
   });
   assert.deepEqual(calls, [['inspect_model', {}], ['submit_proposal', { summary: 'done' }]]);
-  assert.deepEqual(worker.identity, { provider: 'openai', model: 'configured-model' });
+  assert.deepEqual(worker.identity, { provider: 'openai-chatgpt-plan', model: 'configured-model' });
   assert.deepEqual(events, [
     { responseId: 'response-one', inputTokens: 50, outputTokens: 8, totalTokens: 58 },
     { responseId: 'response-two', inputTokens: 70, outputTokens: 12, totalTokens: 82 },
   ]);
   assert.equal(requests.length, 2); assert.equal(requests[0].url, 'https://api.openai.com/v1/responses');
-  assert.equal(requests[0].options.headers.Authorization, 'Bearer server-only-test-key');
+  assert.equal(requests[0].options.headers.Authorization, 'Bearer server-only-oauth-token');
   assert.equal(requests[0].options.signal instanceof AbortSignal, true);
   const first = JSON.parse(requests[0].options.body); const second = JSON.parse(requests[1].options.body);
   assert.equal(first.model, 'configured-model'); assert.equal(first.tool_choice, 'required');
-  assert.equal(first.max_output_tokens, 2000);
+  assert.equal(first.store, false); assert.equal(first.stream, true);
   assert.equal(first.parallel_tool_calls, false); assert.equal(Object.hasOwn(first, 'previous_response_id'), false);
-  assert.equal(second.previous_response_id, 'response-one');
-  assert.deepEqual(second.input, [{ type: 'function_call_output', call_id: 'call-one', output: '{"ok":true}' }]);
-  assert.equal(requests[0].options.body.includes('server-only-test-key'), false);
+  assert.equal(Object.hasOwn(first, 'max_output_tokens'), false);
+  assert.equal(first.tools[0].type, 'namespace'); assert.equal(first.tools[0].name, 'bim_model');
+  assert.deepEqual(first.tools[0].tools.map((tool) => tool.name), MODEL_PROPOSAL_TOOLS.map((tool) => tool.name));
+  assert.equal(second.input[0].role, 'user');
+  assert.deepEqual(second.input.slice(1), [
+    { type: 'reasoning', id: 'reasoning-one', encrypted_content: 'opaque' },
+    { type: 'function_call', namespace: 'bim_model', name: 'inspect_model', arguments: '{}', call_id: 'call-one' },
+    { type: 'function_call_output', call_id: 'call-one', output: '{"ok":true}' },
+  ]);
+  assert.equal(requests[0].options.body.includes('server-only-oauth-token'), false);
 });
 
-test('OpenAI model adapter rejects provider responses above its byte budget', async () => {
-  const worker = createOpenAIModelWorker({
-    apiKey: 'server-only-test-key', model: 'configured-model', maxResponseBytes: 1024,
-    fetchImpl: async () => ({ ok: true, status: 200, headers: new Headers(), async text() { return 'x'.repeat(1025); } }),
+test('ChatGPT plan adapter rejects provider streams above its byte budget and requires completion', async () => {
+  const worker = createChatGPTPlanModelWorker({
+    getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model', maxResponseBytes: 1024,
+    fetchImpl: async () => new Response(`data: ${'x'.repeat(1025)}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } }),
   });
   await assert.rejects(worker.run({
     instructions: 'Use bounded tools.', input: {}, tools: MODEL_PROPOSAL_TOOLS,
     executeTool: async () => ({ ok: true }), recordProviderEvent() {},
   }), /byte limit/);
+});
+
+test('ChatGPT plan adapter fails closed on explicit failure and interrupted SSE streams', async () => {
+  const run = (event) => createChatGPTPlanModelWorker({
+    getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model',
+    fetchImpl: async () => new Response(event ? `data: ${JSON.stringify(event)}\n\n` : 'data: [DONE]\n\n'),
+  }).run({
+    instructions: 'Use bounded tools.', input: {}, tools: MODEL_PROPOSAL_TOOLS,
+    executeTool: async () => ({ ok: true }), recordProviderEvent() {},
+  });
+  await assert.rejects(run({ type: 'response.failed', response: { error: { code: 'subscription_sharing_usage_limit_exceeded' } } }), /usage_limit_exceeded/);
+  await assert.rejects(run({ type: 'response.incomplete', response: {} }), /incomplete/);
+  await assert.rejects(run(null), /without a completed response/);
 });

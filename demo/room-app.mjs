@@ -18,6 +18,9 @@ const ui = Object.fromEntries([
   'original-dialog', 'changes-dialog', 'working-dialog', 'editor-panel',
   'request-canvas-tab', 'request-details-tab', 'request-canvas-pane',
   'to-request-details', 'back-to-canvas',
+  'auth-menu', 'proposal-auth-copy', 'proposal-auth-action', 'auth-dialog', 'auth-close',
+  'auth-error', 'auth-disconnected', 'auth-connected', 'auth-connect', 'auth-account',
+  'auth-plan-status', 'auth-model', 'auth-refresh-models', 'auth-signout',
 ].map((id) => [id, byId(id)]));
 
 let store = null;
@@ -36,6 +39,8 @@ let invalidInput = false;
 let gesture = null;
 let activeReview = null;
 let currentPage = 'request';
+let authBusy = false;
+let authSession = { connected: false, sharing: false, account: null, models: [], selectedModel: null };
 const planCameras = new WeakMap();
 const encoder = new TextEncoder();
 const number = new Intl.NumberFormat('en', { maximumFractionDigits: 3 });
@@ -96,11 +101,82 @@ function closeDialog(dialog) {
   if (dialog?.open) dialog.close();
 }
 
+function renderAuth() {
+  const usable = authSession.connected && authSession.sharing && Boolean(authSession.selectedModel);
+  ui['auth-menu'].classList.toggle('connected', usable);
+  ui['auth-menu'].querySelector('span:last-child').textContent = usable ? 'ChatGPT connected' : authSession.connected ? 'Finish ChatGPT setup' : 'Connect ChatGPT';
+  ui['proposal-auth-action'].textContent = usable ? 'Settings' : 'Connect';
+  ui['proposal-auth-copy'].textContent = usable
+    ? `Using ChatGPT plan · ${authSession.models.find((model) => model.slug === authSession.selectedModel)?.displayName ?? authSession.selectedModel}`
+    : authSession.connected ? 'ChatGPT is connected, but plan usage needs attention' : 'Connect ChatGPT to prepare this proposal';
+  ui['proposal-auth-action'].closest('.proposal-connection').classList.toggle('connected', usable);
+  ui['auth-disconnected'].hidden = authSession.connected;
+  ui['auth-connected'].hidden = !authSession.connected;
+  ui['auth-connect'].disabled = authBusy;
+  ui['auth-connect'].textContent = authBusy ? 'Waiting for ChatGPT…' : 'Continue with ChatGPT';
+  ui['auth-refresh-models'].disabled = authBusy || !authSession.sharing;
+  ui['auth-signout'].disabled = authBusy;
+  ui['auth-model'].disabled = authBusy || !usable;
+  if (authSession.account) {
+    ui['auth-account'].textContent = authSession.account.email || authSession.account.name || 'Connected ChatGPT account';
+    ui['auth-plan-status'].textContent = authSession.sharing
+      ? 'ChatGPT plan usage is enabled for this local app.'
+      : 'This connection did not grant ChatGPT plan usage. Disconnect and reconnect to review consent.';
+  }
+  const selected = authSession.selectedModel;
+  ui['auth-model'].replaceChildren(...authSession.models.map((model) => {
+    const option = document.createElement('option'); option.value = model.slug; option.textContent = model.displayName;
+    option.selected = model.slug === selected; return option;
+  }));
+  if (!authSession.models.length) {
+    const option = document.createElement('option'); option.value = ''; option.textContent = authSession.sharing ? 'Refresh models to continue' : 'Plan usage is not enabled';
+    ui['auth-model'].append(option);
+  }
+}
+
+async function authRequest(target, options = {}) {
+  const response = await fetch(target, options);
+  let value;
+  try { value = await response.json(); } catch { throw new Error('The ChatGPT connection service returned unreadable data.'); }
+  if (!response.ok) throw new Error(value?.error ?? `The ChatGPT connection failed with HTTP ${response.status}.`);
+  return value;
+}
+
+async function runAuth(action, progress) {
+  authBusy = true;
+  ui['auth-error'].hidden = true;
+  renderAuth(); updateControls(); status(progress);
+  try {
+    authSession = await action();
+    renderAuth(); updateControls();
+    if (authSession.connected && authSession.sharing && authSession.selectedModel) {
+      status('ChatGPT plan connected. AI proposals are ready.');
+    } else if (!authSession.connected) {
+      status('ChatGPT disconnected from this local installation.');
+      if (authSession.revocationConfirmed === false) {
+        ui['auth-error'].textContent = 'Local credentials were cleared, but remote revocation could not be confirmed. Remove BIM Forge from ChatGPT Settings if it still appears there.';
+        ui['auth-error'].hidden = false;
+      }
+    } else {
+      status('ChatGPT connection needs attention before AI proposals can run.');
+    }
+    return true;
+  } catch (error) {
+    ui['auth-error'].textContent = error instanceof Error ? error.message : 'ChatGPT connection failed.';
+    ui['auth-error'].hidden = false;
+    return false;
+  } finally { authBusy = false; renderAuth(); updateControls(); }
+}
+
 function updateControls() {
   const writable = Boolean(store) && !busy && !writesBlocked && !gesture;
+  const modelReady = authSession.connected && authSession.sharing && Boolean(authSession.selectedModel);
   for (const id of ['project-name', 'create-project', 'load-sample', 'import-project']) ui[id].disabled = !writable;
   for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length', 'proposal-name', 'request-text', 'selected-object']) ui[id].disabled = !writable || !layout || Boolean(gesture);
-  ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture);
+  ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture) || !modelReady;
+  ui['save-proposal'].textContent = modelReady ? 'Prepare proposal →' : 'Connect ChatGPT first';
+  ui['auth-menu'].disabled = authBusy;
+  ui['proposal-auth-action'].disabled = authBusy;
   ui['discard-preview'].disabled = busy || !repo || !dirty() || Boolean(gesture);
   ui['export-project'].disabled = busy || !repo || savedText === null;
   ui['new-project'].disabled = !store || busy || writesBlocked;
@@ -301,11 +377,31 @@ ui['start-dialog'].addEventListener('cancel', (event) => {
   if (!repo) event.preventDefault();
 });
 
+for (const id of ['auth-menu', 'proposal-auth-action']) ui[id].addEventListener('click', () => openDialog(ui['auth-dialog']));
+ui['auth-close'].addEventListener('click', () => closeDialog(ui['auth-dialog']));
+ui['auth-connect'].addEventListener('click', () => {
+  void runAuth(() => authRequest('/api/auth/start', { method: 'POST' }), 'Finish connecting ChatGPT in the browser window that just opened.');
+});
+ui['auth-refresh-models'].addEventListener('click', () => {
+  void runAuth(() => authRequest('/api/auth/models', { method: 'POST' }), 'Refreshing models available to this ChatGPT account…');
+});
+ui['auth-model'].addEventListener('change', () => {
+  const model = ui['auth-model'].value;
+  if (!model) return;
+  void runAuth(() => authRequest('/api/auth/model', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }),
+  }), 'Selecting the model for future proposals…');
+});
+ui['auth-signout'].addEventListener('click', () => {
+  void runAuth(() => authRequest('/api/auth/signout', { method: 'POST' }), 'Disconnecting ChatGPT from this local installation…');
+});
+
 ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
   void perform(async () => {
     writableStore();
     if (!repo) throw new Error('Create a project first.');
+    if (!authSession.connected || !authSession.sharing || !authSession.selectedModel) throw new Error('Connect a ChatGPT plan and choose a model first.');
     if (!layout || invalidInput) throw new Error('Fix the visual request input before asking AI to prepare a proposal.');
     const name = ui['proposal-name'].value.trim();
     if (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main') throw new Error('Use lowercase words separated by hyphens, and choose a name other than main.');
@@ -849,6 +945,14 @@ function render() {
 
 async function initialize() {
   let needsStart = false;
+  renderAuth();
+  try {
+    authSession = await authRequest('/api/auth/session');
+    renderAuth();
+  } catch (error) {
+    ui['auth-error'].textContent = error instanceof Error ? error.message : 'ChatGPT connection status is unavailable.';
+    ui['auth-error'].hidden = false;
+  }
   try {
     store = await RoomStore.open();
     const record = await store.load();

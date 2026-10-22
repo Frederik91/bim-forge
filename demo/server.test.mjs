@@ -7,8 +7,8 @@ import path from 'node:path';
 import { createDemoServer } from './server.mjs';
 import { RoomRepository, rectangleLayout } from '../src/room-model.mjs';
 
-async function listen(t, modelWorker = null) {
-  const server = createDemoServer({ modelWorker });
+async function listen(t, modelWorker = null, chatgpt = null) {
+  const server = createDemoServer({ modelWorker, chatgpt });
   const directory = process.platform === 'linux' ? fs.mkdtempSync(path.join(os.tmpdir(), 'bim-room-http-')) : null;
   const socketPath = directory && path.join(directory, 'test.sock');
   await new Promise((resolve) => socketPath ? server.listen(socketPath, resolve) : server.listen(0, '127.0.0.1', resolve));
@@ -30,17 +30,46 @@ async function listen(t, modelWorker = null) {
 test('local demo serves only explicit assets and exposes only the bounded proposal endpoint', async (t) => {
   const request = await listen(t);
   const page = await request('/'); assert.equal(page.status, 200);
-  assert.match(page.body, /BIM Forge/); assert.equal(page.headers['cache-control'], 'no-store');
+  assert.match(page.body, /BIM Forge/); assert.match(page.body, /Continue with ChatGPT/); assert.equal(page.headers['cache-control'], 'no-store');
   assert.match(page.headers['content-security-policy'], /connect-src 'self'/);
   assert.equal((await request('/src/room-model.mjs')).status, 200);
   assert.equal((await request('/', { method: 'HEAD' })).body, '');
   assert.equal((await request('/', { method: 'POST' })).status, 405);
+  const auth = await request('/api/auth/session'); assert.equal(auth.status, 200); assert.equal(JSON.parse(auth.body).connected, false);
+  assert.equal((await request('/api/auth/start', { method: 'POST' })).status, 503);
   assert.equal((await request('/api/proposals')).status, 405);
   assert.equal((await request('/api/proposals', { method: 'POST' })).status, 503);
   for (const target of ['/../../.ssh/id_ed25519', '/package.json', '/.env', '/src/room-model.mjs?download=1', '/%2e%2e/AGENTS.md']) {
     assert.equal((await request(target)).status, 404);
   }
   assert.equal((await request('/', { headers: { Host: 'attacker.example' } })).status, 403);
+});
+
+test('authentication endpoints expose only public connection state and reject cross-origin mutations', async (t) => {
+  let session = {
+    connected: true, sharing: true, account: { email: 'designer@example.com', name: 'Designer' },
+    models: [{ slug: 'gpt-test', displayName: 'GPT Test' }], selectedModel: 'gpt-test',
+  };
+  const calls = [];
+  const chatgpt = {
+    publicSession: () => session,
+    async signIn() { calls.push('sign-in'); return session; },
+    async refreshModels() { calls.push('models'); return session; },
+    async selectModel(model) { calls.push(['model', model]); session = { ...session, selectedModel: model }; return session; },
+    async signOut() { calls.push('sign-out'); session = { connected: false, sharing: false, account: null, models: [], selectedModel: null }; return session; },
+  };
+  const request = await listen(t, null, chatgpt);
+  const publicState = JSON.parse((await request('/api/auth/session')).body);
+  assert.equal(publicState.account.email, 'designer@example.com'); assert.equal(JSON.stringify(publicState).includes('token'), false);
+  assert.equal((await request('/api/auth/start', { method: 'POST', headers: { Origin: 'http://attacker.example' } })).status, 400);
+  assert.equal((await request('/api/auth/start', { method: 'POST' })).status, 200);
+  assert.equal((await request('/api/auth/models', { method: 'POST' })).status, 200);
+  const selected = await request('/api/auth/model', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"model":"gpt-other"}',
+  });
+  assert.equal(selected.status, 200); assert.equal(JSON.parse(selected.body).selectedModel, 'gpt-other');
+  assert.equal((await request('/api/auth/signout', { method: 'POST' })).status, 200);
+  assert.deepEqual(calls, ['sign-in', 'models', ['model', 'gpt-other'], 'sign-out']);
 });
 
 test('proposal endpoint binds request to revision and returns a validated separate AI proposal', async (t) => {

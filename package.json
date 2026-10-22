@@ -9,7 +9,7 @@
   },
   "scripts": {
     "validate": "node scripts/validate-policy.mjs",
-    "test": "node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs src/room-model.test.mjs demo/server.test.mjs",
+    "test": "node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs src/room-model.test.mjs src/chatgpt-plan.test.mjs demo/server.test.mjs",
     "factory": "node factory/cli.mjs",
     "factory:plan": "node factory/live.mjs",
     "factory:publish": "node factory/publish.mjs",
