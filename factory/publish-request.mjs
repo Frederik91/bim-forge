@@ -14,6 +14,7 @@ const containsCredential = (value) => /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:g
 const roomDemoPaths = new Set([
   'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.mjs',
   'demo/room-store.mjs', 'demo/server.mjs', 'demo/server.test.mjs',
+  'src/room-model.ts',
 ]);
 
 export function approvePackage(bytes, approvedSha256) {

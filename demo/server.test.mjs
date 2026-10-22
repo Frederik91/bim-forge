@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createDemoServer } from './server.mjs';
-import { RoomRepository, rectangleLayout } from '../src/room-model.mjs';
+import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
 
 async function listen(t, modelWorker = null, chatgpt = null) {
   const server = createDemoServer({ modelWorker, chatgpt });
@@ -32,14 +32,14 @@ test('local demo serves only explicit assets and exposes only the bounded propos
   const page = await request('/'); assert.equal(page.status, 200);
   assert.match(page.body, /BIM Forge/); assert.match(page.body, /Continue with ChatGPT/); assert.equal(page.headers['cache-control'], 'no-store');
   assert.match(page.headers['content-security-policy'], /connect-src 'self'/);
-  assert.equal((await request('/src/room-model.mjs')).status, 200);
+  assert.equal((await request('/room-app.mjs')).status, 200);
   assert.equal((await request('/', { method: 'HEAD' })).body, '');
   assert.equal((await request('/', { method: 'POST' })).status, 405);
   const auth = await request('/api/auth/session'); assert.equal(auth.status, 200); assert.equal(JSON.parse(auth.body).connected, false);
   assert.equal((await request('/api/auth/start', { method: 'POST' })).status, 503);
   assert.equal((await request('/api/proposals')).status, 405);
   assert.equal((await request('/api/proposals', { method: 'POST' })).status, 503);
-  for (const target of ['/../../.ssh/id_ed25519', '/package.json', '/.env', '/src/room-model.mjs?download=1', '/%2e%2e/AGENTS.md']) {
+  for (const target of ['/../../.ssh/id_ed25519', '/package.json', '/.env', '/src/room-model.ts', '/%2e%2e/AGENTS.md']) {
     assert.equal((await request(target)).status, 404);
   }
   assert.equal((await request('/', { headers: { Host: 'attacker.example' } })).status, 403);

@@ -1,4 +1,4 @@
-import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots } from '../src/room-model.mjs';
+import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots } from '../src/room-model.ts';
 import { RoomStore, MAX_PROJECT_BYTES } from './room-store.mjs';
 
 const byId = (id) => document.getElementById(id);

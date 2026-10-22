@@ -122,7 +122,7 @@ const publish = (api, value = proposal, extra = {}) => {
 const roomDemoFiles = [
   'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.mjs',
   'demo/room-store.mjs', 'demo/server.mjs', 'demo/server.test.mjs',
-  'src/room-model.mjs', 'src/room-model.test.mjs',
+  'src/room-model.ts', 'src/room-model.test.mjs',
 ].map((path) => ({ path, content: `Reviewed room demo: ${path}\r\nRoom: \u00d8st\n` }));
 const roomDemoPackage = (api) => ({ ...proposal, files: [...roomDemoFiles, {
   path: 'package.json', content: JSON.stringify({ ...api.state.package,

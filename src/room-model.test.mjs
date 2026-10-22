@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { RoomRepository, diffSnapshots, rectangleLayout, previewRectangle } from './room-model.mjs';
+import { RoomRepository, diffSnapshots, rectangleLayout, previewRectangle } from './room-model.ts';
 import { createChatGPTPlanModelWorker, MODEL_PROPOSAL_TOOLS, prepareModelProposal } from './model-proposal.mjs';
 
 const door = (repo, branch = 'main') => repo.view(repo.head(branch)).snapshot.entities.find((item) => item.id === 'door-entry');

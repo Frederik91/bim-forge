@@ -30,7 +30,8 @@ export async function publishApproved({ bytes, approvedSha256, request, record,
           .every((file) => /^factory\/[a-z0-9.-]+\.test\.mjs$/.test(file)
             || ((/^src\/[a-z0-9]+(?:-[a-z0-9]+)*\.test\.mjs$/.test(file) || file === 'demo/server.test.mjs')
               && proposal.files.some((item) => item.path === file)
-              && proposal.files.some((item) => item.path === file.replace(/\.test\.mjs$/, '.mjs'))))) {
+              && proposal.files.some((item) => item.path === file.replace(/\.test\.mjs$/, '.mjs')
+                || item.path === file.replace(/\.test\.mjs$/, '.ts'))))) {
       throw new Error('Publication would replace a validator or add unsupported lifecycle commands');
     }
   }

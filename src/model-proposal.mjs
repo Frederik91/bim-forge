@@ -1,4 +1,4 @@
-import { diffSnapshots, previewRectangle, rectangleLayout } from './room-model.mjs';
+import { diffSnapshots, previewRectangle, rectangleLayout } from './room-model.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;

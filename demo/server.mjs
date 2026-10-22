@@ -2,17 +2,15 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { RoomRepository } from '../src/room-model.mjs';
+import { RoomRepository } from '../src/room-model.ts';
 import { ChatGPTPlanConnection, ChatGPTPlanError } from '../src/chatgpt-plan.mjs';
 import { createChatGPTPlanModelWorker, ModelWorkerError, prepareModelProposal } from '../src/model-proposal.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map([
   ['/', ['demo/index.html', 'text/html; charset=utf-8']],
-  ['/room-app.mjs', ['demo/room-app.mjs', 'text/javascript; charset=utf-8']],
-  ['/room-store.mjs', ['demo/room-store.mjs', 'text/javascript; charset=utf-8']],
+  ['/room-app.mjs', ['dist/demo/room-app.mjs', 'text/javascript; charset=utf-8']],
   ['/room.css', ['demo/room.css', 'text/css; charset=utf-8']],
-  ['/src/room-model.mjs', ['src/room-model.mjs', 'text/javascript; charset=utf-8']],
 ]);
 const MAX_REQUEST_BYTES = 384 * 1024;
 const disconnected = Object.freeze({ connected: false, sharing: false, account: null, models: Object.freeze([]), selectedModel: null });
