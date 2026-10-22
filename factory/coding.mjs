@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { validatePlan } from './plan.mjs';
+import { validatePlan } from './plan.ts';
 import { approvePackage, assertChangePolicy, issueFingerprint, REPOSITORY } from './publish-request.mjs';
 
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');

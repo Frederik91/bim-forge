@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import type { TestContext } from 'node:test';
-import { createCodexPlanner, parseCodexOutput } from './codex-planner.mjs';
+import { createCodexPlanner, parseCodexOutput } from './codex-planner.ts';
 import { createPauseCheck, issueSnapshot } from './live.ts';
 import { runPlan, runFixturePlan } from './runner.ts';
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { parseCodexOutput, disabledFeatures } from './codex-planner.mjs';
+import { parseCodexOutput, disabledFeatures } from './codex-planner.ts';
 import { codingSchema, readCodingSpec, codingProfile } from './coding.mjs';
 import { readProtectedCodingFile } from './coding-store.mjs';
 

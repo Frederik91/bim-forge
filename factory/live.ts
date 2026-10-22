@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { runPlan } from './runner.ts';
-import { createCodexPlanner } from './codex-planner.mjs';
+import { createCodexPlanner } from './codex-planner.ts';
 
 const repository = 'Frederik91/bim-forge';
 const apiRoot = `https://api.github.com/repos/${repository}`;
@@ -71,7 +71,7 @@ async function main() {
     readme: fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8'),
     instructions: fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
     policy,
-    factorySources: Object.fromEntries(['runner.ts', 'codex-planner.mjs', 'live.ts', 'plan.mjs', 'cli.ts'].map((file) => [
+    factorySources: Object.fromEntries(['runner.ts', 'codex-planner.ts', 'live.ts', 'plan.ts', 'cli.ts'].map((file) => [
       `factory/${file}`, fs.readFileSync(path.join(repoRoot, 'factory', file), 'utf8'),
     ])),
   };

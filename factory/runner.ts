@@ -4,10 +4,10 @@ import os from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { validatePlan, renderPlan } from './plan.mjs';
+import { validatePlan, renderPlan } from './plan.ts';
+import type { PlannerMode, PlanningPlan } from './plan.ts';
 
 type RunStatus = 'running' | 'blocked' | 'cancelled' | 'failed' | 'timed-out' | 'needs-input' | 'succeeded' | 'interrupted';
-type PlannerMode = 'fixture' | 'live';
 type PauseCheck = (options?: { fresh?: boolean }) => boolean | Promise<boolean>;
 
 export interface PlanningIssue {
@@ -21,16 +21,6 @@ export interface PlanningIssue {
 
 interface PlanningIssueSnapshot extends Omit<PlanningIssue, 'approved'> {
   approved: boolean;
-}
-
-export interface PlanningPlan {
-  outcome: string;
-  changeClass: string;
-  paths: string[];
-  steps: string[];
-  acceptanceChecks: string[];
-  reviewers: string[];
-  questions: string[];
 }
 
 interface PlannerCommand {
