@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { readCodingSpec, prepareCodingPackage, materializeCodingFiles, sha256 } from './coding.mjs';
+import { readCodingSpec, prepareCodingPackage, materializeCodingFiles, sha256, codingProfile } from './coding.mjs';
 import { readProtectedCodingFile, openCodingRun, saveCodingJson } from './coding-store.mjs';
 import { issueFingerprint, approvePackage } from './publish-request.mjs';
 import { generateCodingAnswer } from './code-generate.mjs';
@@ -95,6 +95,7 @@ async function runCodingJob(filename, retry, signal) {
   if (process.platform !== 'linux' || process.getuid() !== 0) throw new Error('Coding dispatch requires the VM administrator');
   const bytes = readProtectedCodingFile(filename);
   const spec = readCodingSpec(bytes);
+  const profile = codingProfile(spec.paths);
   await gates(spec);
   const store = openCodingRun({ root, bytes, retry });
   const run = store.run;
@@ -153,6 +154,7 @@ async function runCodingJob(filename, retry, signal) {
       fs.symlinkSync(path.join(job, 'candidate'), path.join(caseDir, 'candidate'));
       fs.writeFileSync(path.join(caseDir, 'input'), acceptance.input, { mode: 0o644, flag: 'wx' });
       fs.writeFileSync(path.join(caseDir, 'mode'), acceptance.mode, { mode: 0o644, flag: 'wx' });
+      fs.writeFileSync(path.join(caseDir, 'paths.json'), JSON.stringify(profile.paths), { mode: 0o644, flag: 'wx' });
       for (const name of ['stdout', 'stderr']) fs.writeFileSync(path.join(caseDir, name), '', { mode: 0o600, flag: 'wx' });
       const unit = `bim-forge-code-case@${caseId}.service`;
       store.record({ phase: 'acceptance', activeUnit: unit });
@@ -166,7 +168,7 @@ async function runCodingJob(filename, retry, signal) {
         observations.push(observation);
         saveCodingJson(path.join(job, 'observations.json'), observations);
       }
-      assertCodingObservation(acceptance, observation);
+      assertCodingObservation(acceptance, observation, profile.paths);
     }
     store.record({ phase: 'supplemental-checks', activeUnit: `bim-forge-code-verify@${run.id}.service` });
     let verification;
@@ -176,7 +178,7 @@ async function runCodingJob(filename, retry, signal) {
       fs.writeFileSync(path.join(job, 'verification.log'), verification, { mode: 0o600, flag: 'wx' });
     }
     const proposal = prepared.proposal;
-    proposal.body = `## Summary\n\n${response.answer.summary}\n\n## Evidence\n\nBefore: no run-health command. After: ${observations.length} independent CLI cases passed. Fixed policy validation and the full candidate test command also exited successfully in the credential-free sandbox. Model claims were not used as test evidence.\n\nManual coding run: ${run.id}\nBase: ${spec.baseSha}\nPlan SHA-256: ${run.planSha256}\nAcceptance SHA-256: ${run.acceptanceSha256}\nObservation SHA-256: ${sha256(JSON.stringify(observations))}\nVerifier log SHA-256: ${sha256(verification)}\n\n## Merge Danger\n\nTwo-way change. Read-only run-health utility; no BIM mutation. Administrator publication approval is separate from human merge approval. No automatic merge. Tests cover fixed cases, not general correctness. Independent code review remains required.`;
+    proposal.body = `## Summary\n\n${response.answer.summary}\n\n## Evidence\n\nBefore: the approved utility is absent at the pinned revision. After: ${observations.length} independent CLI/API cases passed. Fixed policy validation and the full candidate test command also exited successfully in the credential-free sandbox. Model claims were not used as test evidence.\n\nManual coding run: ${run.id}\nBase: ${spec.baseSha}\nPlan SHA-256: ${run.planSha256}\nAcceptance SHA-256: ${run.acceptanceSha256}\nObservation SHA-256: ${sha256(JSON.stringify(observations))}\nVerifier log SHA-256: ${sha256(verification)}\n\n## Merge Danger\n\nTwo-way change. Read-only ${profile.label}; no BIM mutation. Administrator publication approval is separate from human merge approval. No automatic merge. Tests cover fixed cases, not general correctness. Independent code review remains required.`;
     const finalBytes = Buffer.from(`${JSON.stringify(proposal, null, 2)}\n`);
     const digest = sha256(finalBytes);
     approvePackage(finalBytes, digest);

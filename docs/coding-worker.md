@@ -1,6 +1,6 @@
 # Run the manual coding trial
 
-This first worker supports additions of `factory/health.mjs` and `factory/health.test.mjs` for a read-only stdin-to-JSON utility. It is not a general shell agent. The administrator supplies a ready plan and independent input/output cases before generation. The existing planner and publisher keep their separate responsibilities.
+The worker supports two fixed read-only task profiles. The health profile adds `factory/health.mjs` and `factory/health.test.mjs`. The schedule-check profile adds `factory/schedule-check.mjs` and `factory/schedule-check.test.mjs`. It is not a general shell agent. The administrator supplies a ready plan and independent input/output cases before generation. The existing planner and publisher keep their separate responsibilities.
 
 ```text
 administrator-approved scope
@@ -17,9 +17,13 @@ administrator-approved scope
 
 Install a reviewed, root-owned release at `/opt/bim-forge/coding-current` and the three fixed service templates separately. The administrator creates root-owned `/var/lib/bim-forge-coding`, its `jobs` and `cases` directories, a root-owned clone at `/opt/bim-forge/coding-source`, and `/var/lib/bim-forge/coding` for generator output. The coding account receives no sudo access. No unit is enabled on a timer.
 
-Create a UTF-8 JSON scope with exactly `version`, `repository`, `issue`, `baseSha`, `plan`, `paths`, and `acceptanceCases`. Version is `1`; repository is `Frederik91/bim-forge`. `issue` contains the current `number`, `title`, `body`, and `updated_at`. Use a full main SHA and the existing ready-plan schema, with no questions and change class `read-only`. Paths must be exactly the two health module paths above.
+Create a UTF-8 JSON scope with exactly `version`, `repository`, `issue`, `baseSha`, `plan`, `paths`, and `acceptanceCases`. Version is `1`; repository is `Frederik91/bim-forge`. `issue` contains the current `number`, `title`, `body`, and `updated_at`. Use a full main SHA and the existing ready-plan schema, with no questions and change class `read-only`. Paths must match one complete profile pair above. Mixed pairs and unknown paths are rejected. New files only: a merged task cannot be rerun to overwrite its existing files.
 
-Each independent case has exactly `mode`, `name`, `input`, and `output`. Mode is `cli` or `api`, selecting the installed health-command or exported-function adapter. Input is literal stdin text. A JSON object output requires successful exit, no stderr, and that exact serialized object plus a newline. Null output requires a normal nonzero exit, empty stdout, and exactly `Invalid run records` plus a newline on stderr. Cases never select executables, shell commands, imports, network destinations, or secret paths. `factory/code-acceptance.mjs` supplies 24 operator-authored trial cases.
+Each independent case has exactly `mode`, `name`, `input`, and `output`. Mode is `cli` or `api`, selecting the installed command or exported-function adapter. Input is literal stdin text. A JSON object output requires successful exit, no stderr, and that exact serialized object plus a newline. Null output requires a normal nonzero exit, empty stdout, and the profile's fixed error plus a newline on stderr. Health uses `summarizeRunHealth` and `Invalid run records`. Schedule-check uses `checkSchedule` and `Invalid schedule snapshot`. Cases never select executables, shell commands, imports, network destinations, or secret paths. `factory/code-acceptance.mjs` supplies 24 health cases and 32 schedule-check cases.
+
+The controller writes protected `paths.json` into each new case directory. The case adapter resolves it through the same fixed profile table. Old case artifacts remain evidence, not reusable execution inputs for the new adapter. Deploy controller and adapter bytes together; do not change a running job's release.
+
+The schedule checker reports on supplied data only. Its `eligible` result is not an execution capability or proof of live authorization. The string-only independent case format cannot represent arbitrary invalid UTF-8 bytes. Candidate-authored byte tests remain supplemental, not independent evidence for that property.
 
 Review the complete scope, then install it as a root-owned regular file with no group or world write access. From the VM administrator account:
 
@@ -56,3 +60,5 @@ Two sketches compared an interactive shell broker with one-shot inline source ge
 The design uses root-owned worktrees and systemd dynamic users rather than a new fixed account or full guest image for each job. Inputs and source are immutable to candidate accounts. Real exit codes and root-owned output files are compared outside the execution sandbox, rather than trusting test-generated receipts. Installed runtime and service hashes, scope, plan, cases, policy, available usage, and observed outputs form the provenance record.
 
 Passing fixed cases demonstrates those cases, not general correctness or resistance to every hostile program. Supplemental candidate-authored tests are not independent evidence. The live VM qualification and draft PR are separate from the unit suite. No autonomous scheduling, credential copying, App permission upgrade, model mutation, or automatic merge is included.
+
+See [scheduled coding and draft publication](scheduling.md) for the proposed next stage. That design is not installed or enabled by this change.

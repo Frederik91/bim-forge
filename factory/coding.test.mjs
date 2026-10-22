@@ -5,10 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readCodingSpec, prepareCodingPackage, materializeCodingFiles, sha256 } from './coding.mjs';
+import { readCodingSpec, prepareCodingPackage, materializeCodingFiles, sha256, codingProfile } from './coding.mjs';
 import { coderCommand } from './code-generate.mjs';
 import { openCodingRun, readProtectedCodingFile } from './coding-store.mjs';
-import { assertCodingObservation, healthAcceptanceCases } from './code-acceptance.mjs';
+import { assertCodingObservation, healthAcceptanceCases, scheduleAcceptanceCases } from './code-acceptance.mjs';
 
 const paths = ['factory/health.mjs', 'factory/health.test.mjs'];
 const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),
@@ -34,6 +34,59 @@ test('ready coding scope binds exact issue, source, paths, plan and independent 
     { ...spec(), plan: { ...spec().plan, changeClass: 'security' } }]) {
     assert.throws(() => readCodingSpec(bytes(value)));
   }
+});
+
+test('only two complete fixed profiles are available and their contracts are immutable', () => {
+  const schedulePaths = ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'];
+  const profile = codingProfile(schedulePaths.slice().reverse());
+  assert.equal(profile.exportName, 'checkSchedule');
+  assert.equal(profile.errorText, 'Invalid schedule snapshot');
+  assert.equal(profile.paths[0], 'factory/schedule-check.mjs');
+  assert.equal(codingProfile(paths).exportName, 'summarizeRunHealth');
+  assert.equal(codingProfile(paths).errorText, 'Invalid run records');
+  assert.throws(() => { profile.paths[0] = 'factory/code-job.mjs'; });
+  assert.throws(() => { profile.exportName = 'exec'; });
+  for (const invalid of [null, [], ['factory/health.mjs'],
+    ['factory/health.mjs', 'factory/schedule-check.test.mjs'],
+    ['factory/schedule-check.mjs', 'factory/schedule-check.mjs'],
+    ['factory/unknown.mjs', 'factory/unknown.test.mjs'], [...paths, 'factory/extra.mjs']]) {
+    assert.throws(() => codingProfile(invalid), /fixed coding profile/);
+  }
+});
+
+test('schedule scope fixes paths and cases while packaging preserves all existing tests', () => {
+  const schedulePaths = ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'];
+  const value = { ...spec(), paths: schedulePaths, plan: { ...spec().plan, paths: schedulePaths },
+    acceptanceCases: scheduleAcceptanceCases };
+  const parsed = readCodingSpec(bytes(value));
+  assert.equal(parsed.acceptanceCases.length, 32);
+  assert.equal(healthAcceptanceCases.length, 24);
+  const baseline = JSON.stringify({ scripts: { test: 'node --test factory/coding.test.mjs factory/health.test.mjs',
+    validate: 'node scripts/validate-policy.mjs' } });
+  const response = { summary: 'Read-only scheduling advice.', questions: [],
+    files: schedulePaths.map((file) => ({ path: file, content: 'export const example = true;\n' })) };
+  const prepared = prepareCodingPackage(parsed, response, policy, baseline);
+  assert.equal(JSON.parse(prepared.proposal.files.at(-1).content).scripts.test,
+    'node --test factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs');
+  assert.throws(() => readCodingSpec(bytes({ ...value, exportName: 'exec' })));
+  assert.throws(() => readCodingSpec(bytes({ ...value, errorText: 'Forged' })));
+  assert.throws(() => readCodingSpec(bytes({ ...value, paths: ['factory/health.mjs', schedulePaths[1]],
+    plan: { ...value.plan, paths: ['factory/health.mjs', schedulePaths[1]] } })), /fixed coding profile/);
+});
+
+test('independent profile errors cannot be swapped or supplied by a candidate', () => {
+  const schedulePaths = ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'];
+  const rejected = scheduleAcceptanceCases.find((item) => item.output === null);
+  const observation = { exitCode: 1, stdout: '', stderr: 'Invalid schedule snapshot\n' };
+  assert.doesNotThrow(() => assertCodingObservation(rejected, observation, schedulePaths));
+  assert.throws(() => assertCodingObservation(rejected, { ...observation, stderr: 'Invalid run records\n' }, schedulePaths));
+  assert.throws(() => assertCodingObservation(rejected, observation));
+  assert.throws(() => assertCodingObservation(rejected, observation, ['factory/unknown.mjs']));
+  const accepted = scheduleAcceptanceCases.find((item) => item.output?.eligible);
+  assert.doesNotThrow(() => assertCodingObservation(accepted,
+    { exitCode: 0, stdout: `${JSON.stringify(accepted.output)}\n`, stderr: '' }, schedulePaths));
+  assert.throws(() => assertCodingObservation(accepted,
+    { exitCode: 0, stdout: '{"status":"verified"}\n', stderr: '' }, schedulePaths));
 });
 
 test('model source cannot select operations, existing validators, file modes or extra paths', () => {

@@ -7,6 +7,19 @@ import { approvePackage, assertChangePolicy, issueFingerprint, REPOSITORY } from
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const exact = (value, keys) => value && !Array.isArray(value) && typeof value === 'object'
   && Object.keys(value).sort().join(',') === keys.slice().sort().join(',');
+const profiles = [
+  { paths: ['factory/health.mjs', 'factory/health.test.mjs'], exportName: 'summarizeRunHealth',
+    errorText: 'Invalid run records', label: 'run-health utility' },
+  { paths: ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'], exportName: 'checkSchedule',
+    errorText: 'Invalid schedule snapshot', label: 'schedule snapshot checker' },
+].map((profile) => Object.freeze({ ...profile, paths: Object.freeze(profile.paths) }));
+
+export function codingProfile(paths) {
+  const profile = Array.isArray(paths) && profiles.find((item) =>
+    JSON.stringify(item.paths.slice().sort()) === JSON.stringify(paths.slice().sort()));
+  if (!profile) throw new Error('Unsupported fixed coding profile');
+  return profile;
+}
 export const codingSchema = {
   type: 'object', additionalProperties: false, required: ['summary', 'files', 'questions'], properties: {
     summary: { type: 'string' }, questions: { type: 'array', items: { type: 'string' } },
@@ -33,8 +46,8 @@ export function readCodingSpec(bytes) {
         || typeof item.name !== 'string' || typeof item.input !== 'string' || Buffer.byteLength(item.input) > 128 * 1024
         || (item.output !== null && (typeof item.output !== 'object' || Array.isArray(item.output))))) throw new Error('Invalid coding scope');
   validatePlan(spec.plan);
-  if (spec.paths.slice().sort().join(',') !== 'factory/health.mjs,factory/health.test.mjs'
-      || spec.plan.changeClass !== 'read-only' || spec.plan.questions.length
+  codingProfile(spec.paths);
+  if (spec.plan.changeClass !== 'read-only' || spec.plan.questions.length
       || JSON.stringify(spec.plan.paths.slice().sort()) !== JSON.stringify(spec.paths.slice().sort())) {
     throw new Error('Coding requires an approved ready read-only plan matching the exact paths');
   }
