@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import childProcess, { spawnSync } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+import { EventEmitter } from 'node:events';
 import { dispatchOnce, assertVerifiedEvidence, assertRecordedUnit } from './schedule-job.mjs';
 import { POLICY, assertScheduledPermit, guardScheduledRequest } from './scheduled-publication.mjs';
 import { sha256, prepareCodingPackage } from './coding.mjs';
 import { measureTree, assertEffectiveUnit } from './coding-identity.mjs';
 import { openCodingRun } from './coding-store.mjs';
-import { createCodingInput, exposeCodingCandidate, stageWithEvidence } from './code-job.mjs';
+import { createCodingInput, exposeCodingCandidate, stageWithEvidence, collectVerifierEvidence, runUnit } from './code-job.mjs';
 import { healthAcceptanceCases } from './code-acceptance.mjs';
 
 const encode = (value) => Buffer.from(`${JSON.stringify(value)}\n`);
@@ -230,6 +232,103 @@ function evidenceFixture() {
       execMainCode: 1, result: 'success', invocationId: 'b'.repeat(32) } };
   return { run, spec: value, approval, approvedSha256, bytes: prepared.bytes, observations, verification, files, policy, baselinePackage };
 }
+
+function verifierJournal(f, extraProcessOutput = '') {
+  const verifierUnit = `bim-forge-code-verify@${runId}.service`;
+  const invocation = f.run.verifierExecution.invocationId;
+  const record = (MESSAGE, fields = {}) => ({ MESSAGE, _SYSTEMD_UNIT: verifierUnit,
+    _SYSTEMD_INVOCATION_ID: invocation, _TRANSPORT: 'stdout', ...fields });
+  const records = [record('Starting verifier', { _SYSTEMD_UNIT: 'init.scope', _TRANSPORT: 'journal' }),
+    record('old invocation', { _SYSTEMD_INVOCATION_ID: 'c'.repeat(32) }),
+    record('different unit', { _SYSTEMD_UNIT: 'another.service' }),
+    record('different transport', { _TRANSPORT: 'journal' }),
+    ...f.verification.toString('utf8').trim().split('\n').map((line) => record(line)),
+    ...(extraProcessOutput ? [record(extraProcessOutput)] : []),
+    record('Stopped verifier', { _SYSTEMD_UNIT: 'init.scope', _TRANSPORT: 'journal' })];
+  const journal = (args) => {
+    const filters = args.filter((arg) => arg.startsWith('_')).map((arg) => arg.split('='));
+    const selected = filters.length ? records.filter((item) => filters.every(([key, value]) => item[key] === value)) : records;
+    return Buffer.from(selected.map((item) => item.MESSAGE).join('\n') + '\n');
+  };
+  return { verifierUnit, journal };
+}
+
+test('verifier collection excludes lifecycle messages and unrelated process records before strict validation', () => {
+  const f = evidenceFixture(); const { verifierUnit, journal } = verifierJournal(f);
+  const collected = collectVerifierEvidence(verifierUnit, f.run.verifierExecution, journal);
+  assert.deepEqual(collected.verification, f.verification);
+  assert.match(collected.diagnostic.toString(), /Starting verifier/);
+  assert.match(collected.diagnostic.toString(), /old invocation/);
+  assert.match(collected.diagnostic.toString(), /Stopped verifier/);
+  assert.deepEqual(assertVerifiedEvidence({ ...f, verification: collected.verification }), f.bytes);
+});
+
+test('unexpected verifier process output remains in evidence and fails the unchanged strict validator', () => {
+  const f = evidenceFixture(); const { verifierUnit, journal } = verifierJournal(f, 'unexpected process stderr');
+  const { verification } = collectVerifierEvidence(verifierUnit, f.run.verifierExecution, journal);
+  assert.match(verification.toString(), /unexpected process stderr/);
+  f.verification = verification; f.run.verificationSha256 = sha256(verification);
+  assert.throws(() => assertVerifiedEvidence(f), /Scheduled verifier evidence changed/);
+});
+
+test('verifier collection refuses missing or malformed identity before reading any journal', () => {
+  const verifierUnit = `bim-forge-code-verify@${runId}.service`;
+  for (const [name, execution] of [[verifierUnit, undefined], [verifierUnit, {}],
+    [verifierUnit, { invocationId: 'bad' }], [verifierUnit, { invocationId: 'a'.repeat(32) + '\n' }],
+    ['another.service', { invocationId: 'a'.repeat(32) }],
+    [`${verifierUnit}\n`, { invocationId: 'a'.repeat(32) }]]) {
+    let calls = 0;
+    assert.throws(() => collectVerifierEvidence(name, execution, () => { calls += 1; return Buffer.alloc(0); }));
+    assert.equal(calls, 0);
+  }
+});
+
+test('verifier journal failure propagates and failed execution evidence cannot become successful', () => {
+  const f = evidenceFixture(); const { verifierUnit, journal } = verifierJournal(f);
+  const failure = new Error('journal unavailable');
+  assert.throws(() => collectVerifierEvidence(verifierUnit, f.run.verifierExecution, () => { throw failure; }), (error) => error === failure);
+  let calls = 0;
+  assert.throws(() => collectVerifierEvidence(verifierUnit, f.run.verifierExecution, (args) => {
+    if (++calls === 2) throw failure;
+    return journal(args);
+  }), (error) => error === failure);
+  assert.equal(calls, 2);
+  f.run.verifierExecution.exitCode = 1; f.run.verifierExecution.result = 'exit-code';
+  const { verification } = collectVerifierEvidence(verifierUnit, f.run.verifierExecution, journal);
+  f.verification = verification; f.run.verificationSha256 = sha256(verification);
+  assert.throws(() => assertVerifiedEvidence(f), /Scheduled verified ledger bindings changed/);
+});
+
+test('unit cleanup failure preserves observed invocation even when journal collection also fails', { skip: process.platform !== 'linux' }, async (t) => {
+  const value = spec(); const invocationId = 'd'.repeat(32);
+  const verifierUnit = `bim-forge-code-verify@${runId}.service`;
+  // Emulate the administrator boundary without running a privileged process or command.
+  t.mock.method(process, 'getuid', () => 0);
+  t.mock.method(globalThis, 'fetch', async (url) => ({ ok: true, text: async () => JSON.stringify(
+    url.endsWith('git/ref/heads/main') ? { object: { sha: value.baseSha } }
+      : url.endsWith(`issues/${value.issue.number}`) ? { ...value.issue, state: 'open' } : []) }));
+  t.mock.method(childProcess, 'execFileSync', (command, args) => {
+    if (command === '/usr/bin/git') return 'paused: false\n';
+    assert.equal(command, '/usr/bin/systemctl');
+    if (args[0] === 'stop') throw new Error('cleanup failed');
+    assert.equal(args[0], 'show');
+    return `Result=success\nExecMainStatus=0\nExecMainCode=1\nInvocationID=${invocationId}\n`;
+  });
+  t.mock.method(childProcess, 'spawn', () => {
+    const child = new EventEmitter(); queueMicrotask(() => child.emit('close', 0)); return child;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  let execution; let journalReads = 0;
+  await assert.rejects(stageWithEvidence(async () => {
+    try { await runUnit(verifierUnit, value, new AbortController().signal); }
+    catch (error) { execution = error.execution; throw error; }
+  }, () => {
+    assert.equal(execution?.invocationId, invocationId);
+    collectVerifierEvidence(verifierUnit, execution, () => { journalReads += 1; throw new Error('journal unavailable'); });
+  }), (error) => error.requiresRecovery === true && error.execution?.invocationId === invocationId);
+  assert.equal(journalReads, 1);
+});
 
 test('independent staging checks ledger, outputs, verification and exact manifest; no candidate import', () => {
   const f = evidenceFixture(); assert.deepEqual(assertVerifiedEvidence(f), f.bytes);

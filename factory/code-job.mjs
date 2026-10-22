@@ -71,6 +71,16 @@ export async function stageWithEvidence(execute, collect) {
   return value;
 }
 
+export function collectVerifierEvidence(unit, execution, journal = (args) => execFileSync('/usr/bin/journalctl', args,
+  { timeout: 10000, maxBuffer: 2 * 1024 * 1024 })) {
+  if (!/^bim-forge-code-verify@[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.service$/.test(unit)
+      || !/^[a-f0-9]{32}$/.test(execution?.invocationId ?? '')) throw new Error('Verifier journal identity is unknown');
+  const verification = journal([`_SYSTEMD_INVOCATION_ID=${execution.invocationId}`, `_SYSTEMD_UNIT=${unit}`,
+    '_TRANSPORT=stdout', '--no-pager', '-o', 'cat']);
+  const diagnostic = journal(['-u', unit, '--no-pager', '-o', 'cat']);
+  return { verification, diagnostic };
+}
+
 export async function runUnit(unit, spec, signal, { fresh = true, allowNonzero = false, guard = async () => {} } = {}) {
   if (process.platform !== 'linux' || process.getuid() !== 0) throw new Error('Unit supervision requires the VM administrator');
   if (signal.aborted) throw new Error('Coding cancelled by operator');
@@ -126,7 +136,8 @@ export async function runUnit(unit, spec, signal, { fresh = true, allowNonzero =
     signal.throwIfAborted();
     return observed;
   } catch (error) {
-    try { error.execution = observed ?? observe(); } catch { error.execution = { exitCode: null, signal: null, result: 'unobserved' }; }
+    try { observed ??= observe(); error.execution = observed; }
+    catch { observed = { exitCode: null, signal: null, result: 'unobserved' }; error.execution = observed; }
     throw error;
   } finally {
     clearInterval(poll); clearTimeout(timer);
@@ -135,7 +146,7 @@ export async function runUnit(unit, spec, signal, { fresh = true, allowNonzero =
       stop();
       const group = execFileSync('/usr/bin/systemctl', ['show', unit, '-p', 'ControlGroup', '--value'], { encoding: 'utf8', timeout: 10000 }).trim();
       if (group) throw new Error('Control group remains');
-    } catch { throw recoveryError('Coding service cleanup requires administrator recovery'); }
+    } catch { throw Object.assign(recoveryError('Coding service cleanup requires administrator recovery'), { execution: observed }); }
   }
 }
 
@@ -231,9 +242,14 @@ export async function runCodingJob(filename, retry, signal, { schedule, guard, o
     store.record({ phase: 'supplemental-checks', activeUnit: `bim-forge-code-verify@${run.id}.service` });
     let verification;
     let verifierExecution;
-    await stageWithEvidence(async () => { verifierExecution = await runUnit(`bim-forge-code-verify@${run.id}.service`, spec, signal, { guard }); }, () => {
-      verification = execFileSync('/usr/bin/journalctl', ['-u', `bim-forge-code-verify@${run.id}.service`, '--no-pager', '-o', 'cat'], { timeout: 10000, maxBuffer: 2 * 1024 * 1024 });
+    await stageWithEvidence(async () => {
+      try { verifierExecution = await runUnit(`bim-forge-code-verify@${run.id}.service`, spec, signal, { guard }); }
+      catch (error) { verifierExecution = error.execution; throw error; }
+    }, () => {
+      const evidence = collectVerifierEvidence(`bim-forge-code-verify@${run.id}.service`, verifierExecution);
+      verification = evidence.verification;
       fs.writeFileSync(path.join(job, 'verification.log'), verification, { mode: 0o600, flag: 'wx' });
+      fs.writeFileSync(path.join(job, 'verification-journal.log'), evidence.diagnostic, { mode: 0o600, flag: 'wx' });
     });
     const proposal = prepared.proposal;
     proposal.body = renderChangeReview({
