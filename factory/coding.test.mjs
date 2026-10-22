@@ -233,6 +233,46 @@ test('scheduled daily admission counts manual starts and a fresh approval cannot
   assert.throws(() => openCodingRun({ root, bytes: fourthBytes, ownerUid: process.getuid(), schedule: scheduled(fourthBytes) }), /issue attempt limit/);
 });
 
+test('six-start setup approval counts existing manual and scheduled starts and blocks the seventh', linux, (t) => {
+  const root = temporary(t);
+  for (let index = 0; index < 6; index += 1) {
+    const value = spec(); value.issue.number = 100 + index;
+    const scopeBytes = bytes(value);
+    const options = { root, bytes: scopeBytes, ownerUid: process.getuid() };
+    if (index >= 3) options.schedule = scheduled(scopeBytes, { dailyLimit: 6 });
+    const run = openCodingRun(options);
+    assert.equal(run.reused, false);
+    run.record({ status: index % 2 ? 'failed' : 'verified' }); run.close();
+    if (index === 5) {
+      const duplicate = openCodingRun(options);
+      assert.equal(duplicate.reused, true);
+      assert.equal(duplicate.run.id, run.run.id); duplicate.close();
+    }
+  }
+  const ledger = path.join(root, 'ledger');
+  const before = fs.readdirSync(ledger).sort().map((name) => [name, fs.readFileSync(path.join(ledger, name), 'utf8')]);
+  assert.equal(before.length, 6);
+  const next = spec(); next.issue.number = 106; const nextBytes = bytes(next);
+  for (const dailyLimit of [3, 6]) {
+    assert.throws(() => openCodingRun({ root, bytes: nextBytes, ownerUid: process.getuid(),
+      schedule: scheduled(nextBytes, { dailyLimit }) }), /UTC-day start limit/);
+  }
+  assert.deepEqual(fs.readdirSync(ledger).sort().map((name) => [name, fs.readFileSync(path.join(ledger, name), 'utf8')]), before);
+});
+
+test('six-start setup approval cannot reset the cumulative three-start issue limit', linux, (t) => {
+  const root = temporary(t);
+  for (let index = 0; index < 3; index += 1) {
+    const value = spec(); value.issue.body += index;
+    const run = openCodingRun({ root, bytes: bytes(value), ownerUid: process.getuid() });
+    run.record({ status: 'failed' }); run.close();
+  }
+  const changed = spec(); changed.issue.body += 'clarified'; const scopeBytes = bytes(changed);
+  assert.throws(() => openCodingRun({ root, bytes: scopeBytes, ownerUid: process.getuid(),
+    schedule: scheduled(scopeBytes, { dailyLimit: 6 }) }), /issue attempt limit/);
+  assert.equal(fs.readdirSync(path.join(root, 'ledger')).length, 3);
+});
+
 test('scheduled admission rejects changed bindings, unexpected authority and corrupt time without clearing history', linux, (t) => {
   const root = temporary(t); const scopeBytes = bytes();
   const options = { root, bytes: scopeBytes, ownerUid: process.getuid(), schedule: scheduled(scopeBytes) };

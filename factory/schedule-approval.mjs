@@ -26,7 +26,7 @@ export function parseScheduleApproval(bytes, approvedSha256, now = new Date()) {
       || keys.some((key) => !Object.hasOwn(approval, key))
       || approval.version !== 1 || approval.repository !== 'Frederik91/bim-forge'
       || !isSha256(approval.scopeSha256) || !isSha256(approval.deploymentSha256)
-      || !Number.isSafeInteger(approval.dailyLimit) || approval.dailyLimit < 1 || approval.dailyLimit > 3) {
+      || !Number.isSafeInteger(approval.dailyLimit) || approval.dailyLimit < 1 || approval.dailyLimit > 6) {
     throw new Error('Invalid schedule approval fields');
   }
   const notBefore = timestamp(approval.notBefore);
