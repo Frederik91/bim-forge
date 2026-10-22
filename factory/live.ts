@@ -3,14 +3,22 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { runPlan } from './runner.mjs';
+import { runPlan } from './runner.ts';
 import { createCodexPlanner } from './codex-planner.mjs';
 
 const repository = 'Frederik91/bim-forge';
 const apiRoot = `https://api.github.com/repos/${repository}`;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-async function github(endpoint) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function github(endpoint: string): Promise<unknown> {
   const response = await fetch(`${apiRoot}/${endpoint}`, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'bim-forge-private-planner' },
     redirect: 'error', signal: AbortSignal.timeout(10000),
@@ -21,17 +29,17 @@ async function github(endpoint) {
   return JSON.parse(text);
 }
 
-export function issueSnapshot(value, number) {
-  if (value?.pull_request || value?.number !== number || value?.state !== 'open'
-      || typeof value?.title !== 'string' || typeof value?.body !== 'string'
-      || typeof value?.updated_at !== 'string' || !value.body.trim()) throw new Error('Expected an open issue with a written scope');
+export function issueSnapshot(value: unknown, number: number) {
+  if (!isRecord(value) || value.pull_request || value.number !== number || value.state !== 'open'
+      || typeof value.title !== 'string' || typeof value.body !== 'string'
+      || typeof value.updated_at !== 'string' || !value.body.trim()) throw new Error('Expected an open issue with a written scope');
   return { repository, number, title: value.title, body: value.body, updatedAt: value.updated_at, approved: true };
 }
 
-export function createPauseCheck(fetchIssues = github) {
+export function createPauseCheck(fetchIssues: (endpoint: string) => Promise<unknown> = github) {
   let expiresAt = 0;
   let paused = false;
-  return async ({ fresh = false } = {}) => {
+  return async ({ fresh = false }: { fresh?: boolean } = {}): Promise<boolean> => {
     if (fresh || Date.now() >= expiresAt) {
       const issues = await fetchIssues('issues?state=open&labels=loop-pause-all&per_page=1');
       if (!Array.isArray(issues)) throw new Error('Cannot verify repository pause signal');
@@ -51,18 +59,19 @@ async function main() {
   if (!/^[1-9]\d*$/.test(values.issue ?? '') || !values['data-dir']) throw new Error('Supply --issue <number> and --data-dir <outside-checkout>');
   const issueNumber = Number(values.issue);
   if (!Number.isSafeInteger(issueNumber)) throw new Error('Invalid issue number');
-  const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
   if (git('status', '--porcelain')) throw new Error('Live planning requires a clean, pinned checkout');
   const sourceRevision = git('rev-parse', 'HEAD');
   const pauseCheck = createPauseCheck();
   if (await pauseCheck({ fresh: true })) throw new Error('Repository pause signal is active');
   const issue = issueSnapshot(await github(`issues/${issueNumber}`), issueNumber);
+  const policy: unknown = JSON.parse(fs.readFileSync(path.join(repoRoot, 'policy', 'gate.json'), 'utf8'));
   const context = { issue, sourceRevision,
     repositoryPaths: git('ls-tree', '-r', '--name-only', 'HEAD').split('\n'),
     readme: fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8'),
     instructions: fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
-    policy: JSON.parse(fs.readFileSync(path.join(repoRoot, 'policy', 'gate.json'), 'utf8')),
-    factorySources: Object.fromEntries(['runner.mjs', 'codex-planner.mjs', 'live.mjs', 'plan.mjs', 'cli.mjs'].map((file) => [
+    policy,
+    factorySources: Object.fromEntries(['runner.ts', 'codex-planner.mjs', 'live.ts', 'plan.mjs', 'cli.ts'].map((file) => [
       `factory/${file}`, fs.readFileSync(path.join(repoRoot, 'factory', file), 'utf8'),
     ])),
   };
@@ -84,5 +93,5 @@ async function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+  main().catch((error: unknown) => { console.error(errorMessage(error)); process.exitCode = 1; });
 }

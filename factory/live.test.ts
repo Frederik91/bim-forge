@@ -5,18 +5,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import type { TestContext } from 'node:test';
 import { createCodexPlanner, parseCodexOutput } from './codex-planner.mjs';
-import { createPauseCheck, issueSnapshot } from './live.mjs';
-import { runPlan, runFixturePlan } from './runner.mjs';
+import { createPauseCheck, issueSnapshot } from './live.ts';
+import { runPlan, runFixturePlan } from './runner.ts';
 
 const plan = JSON.parse(fs.readFileSync(new URL('./fixtures/plan.json', import.meta.url), 'utf8'));
 const issue = JSON.parse(fs.readFileSync(new URL('./fixtures/issue.json', import.meta.url), 'utf8'));
 const usage = { input_tokens: 100, cached_input_tokens: 50, output_tokens: 20 };
-const output = (...extra) => [
+const output = (...extra: unknown[]) => [
   { type: 'thread.started', thread_id: 'example' }, { type: 'turn.started' }, ...extra,
   { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(plan) } },
   { type: 'turn.completed', usage },
-].map(JSON.stringify).join('\n');
+].map((event) => JSON.stringify(event)).join('\n');
 
 test('parses a completed structured Codex turn and retains reported usage', () => {
   assert.deepEqual(parseCodexOutput(output()), { plan, usage, warnings: [] });
@@ -30,9 +31,13 @@ test('failed, unfinished, or tool-using turns cannot become accepted plans', () 
 
 test('invalid usage or non-JSON final output fails closed', () => {
   assert.throws(() => parseCodexOutput(output().replace('"input_tokens":100', '"input_tokens":-1')), /invalid usage/);
-  const events = output().split('\n').map(JSON.parse);
-  events.find((event) => event.item).item.text = 'Probably fine';
-  assert.throws(() => parseCodexOutput(events.map(JSON.stringify).join('\n')), SyntaxError);
+  const events: unknown[] = output().split('\n').map((line) => JSON.parse(line));
+  const agentEvent = events.find((event) => typeof event === 'object' && event !== null && Reflect.has(event, 'item'));
+  if (typeof agentEvent !== 'object' || agentEvent === null) throw new Error('Expected an agent event');
+  const item = Reflect.get(agentEvent, 'item');
+  if (typeof item !== 'object' || item === null) throw new Error('Expected an agent item');
+  Reflect.set(item, 'text', 'Probably fine');
+  assert.throws(() => parseCodexOutput(events.map((event) => JSON.stringify(event)).join('\n')), SyntaxError);
 });
 
 test('only the exact disabled-host startup notice is recorded as a warning', () => {
@@ -63,13 +68,13 @@ test('remote pause signals are cached briefly and freshly checked on request', a
 });
 
 test('CLI requires explicit operator scope approval before accessing GitHub', () => {
-  const cli = fileURLToPath(new URL('./live.mjs', import.meta.url));
+  const cli = fileURLToPath(new URL('./live.ts', import.meta.url));
   const result = spawnSync(process.execPath, [cli, '--issue', '10', '--data-dir', os.tmpdir()], { encoding: 'utf8' });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /trusted operator/);
 });
 
-test('live adapter fixes its command and keeps issue text and credentials out of arguments', (t) => {
+test('live adapter fixes its command and keeps issue text and credentials out of arguments', (t: TestContext) => {
   if (process.platform !== 'linux') {
     assert.throws(() => createCodexPlanner({ issue }), /requires the isolated Linux/);
     return;
@@ -83,15 +88,15 @@ test('live adapter fixes its command and keeps issue text and credentials out of
   assert.equal(command.processGroup, true);
   assert.equal(command.args.includes(malicious), false);
   assert.match(command.input, /following JSON is context data/);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'context.json'))).issue.body, malicious);
-  assert.equal(command.env.GH_TOKEN, undefined);
-  assert.equal(command.env.OPENAI_API_KEY, undefined);
+  assert.equal(Reflect.get(JSON.parse(fs.readFileSync(path.join(dir, 'context.json'), 'utf8')), 'issue').body, malicious);
+  assert.equal(Reflect.get(command.env, 'GH_TOKEN'), undefined);
+  assert.equal(Reflect.get(command.env, 'OPENAI_API_KEY'), undefined);
   assert.ok(command.args.includes('shell_tool'));
   assert.ok(command.args.includes('--ignore-user-config'));
   assert.equal(fs.readdirSync(path.join(dir, 'context')).length, 0);
 });
 
-test('live and fixture results cannot collide, and live artifacts retain provenance and usage', async (t) => {
+test('live and fixture results cannot collide, and live artifacts retain provenance and usage', async (t: TestContext) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-forge-live-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const repoRoot = path.join(dir, 'repo');
@@ -121,7 +126,7 @@ test('live and fixture results cannot collide, and live artifacts retain provena
   assert.equal(blocked.plannerPid, null);
 });
 
-test('Linux timeout terminates the planner process group, including descendants', { skip: process.platform !== 'linux' }, async (t) => {
+test('Linux timeout terminates the planner process group, including descendants', { skip: process.platform !== 'linux' }, async (t: TestContext) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-forge-group-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const repoRoot = path.join(dir, 'repo');
@@ -136,12 +141,14 @@ test('Linux timeout terminates the planner process group, including descendants'
   }; } };
   const run = await runPlan({ repoRoot, dataDir: path.join(dir, 'runs'), issue, sourceRevision: 'd'.repeat(40), planner, timeoutMs: 1500 });
   assert.equal(run.status, 'timed-out');
-  assert.throws(() => process.kill(run.plannerPid, 0), { code: 'ESRCH' });
+  const plannerPid = run.plannerPid;
+  if (plannerPid === null) throw new Error('Expected the planner to start');
+  assert.throws(() => process.kill(plannerPid, 0), { code: 'ESRCH' });
   const childPid = Number(fs.readFileSync(childFile, 'utf8'));
   try {
     const stat = fs.readFileSync(`/proc/${childPid}/stat`, 'utf8');
     assert.match(stat, /\) Z /, 'A remaining descendant must be a terminated zombie awaiting reaping');
   } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    if (typeof error !== 'object' || error === null || Reflect.get(error, 'code') !== 'ENOENT') throw error;
   }
 });

@@ -7,13 +7,19 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
-import { listRuns, recoverInterrupted, runFixturePlan } from './runner.mjs';
+import type { TestContext } from 'node:test';
+import { listRuns, recoverInterrupted, runFixturePlan } from './runner.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const issueFixture = JSON.parse(fs.readFileSync(new URL('./fixtures/issue.json', import.meta.url), 'utf8'));
 const planFixture = JSON.parse(fs.readFileSync(new URL('./fixtures/plan.json', import.meta.url), 'utf8'));
 
-function setup(t) {
+function requiredMessage(message: string | undefined): string {
+  if (message === undefined) throw new Error('Expected the run to include a message');
+  return message;
+}
+
+function setup(t: TestContext) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-forge-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const repoRoot = path.join(dir, 'repo');
@@ -26,7 +32,7 @@ function setup(t) {
   };
 }
 
-async function waitForPlanner(dataDir) {
+async function waitForPlanner(dataDir: string) {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (listRuns(dataDir).some((run) => run.plannerPid)) return;
     await delay(10);
@@ -43,10 +49,10 @@ test('saves a validated report, pinned inputs, event history, and explicit unkno
   assert.equal(run.cost, null);
   assert.equal(run.sourceRevision, options.sourceRevision);
   const runDir = path.join(options.dataDir, run.id);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(runDir, 'plan.json'))), planFixture);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(runDir, 'plan.json'), 'utf8')), planFixture);
   assert.match(fs.readFileSync(path.join(runDir, 'plan.md'), 'utf8'), /Simulation: fixture planner/);
-  const events = fs.readFileSync(path.join(runDir, 'events.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
-  assert.deepEqual(events.map((event) => event.status), ['running', 'succeeded']);
+  const events: unknown[] = fs.readFileSync(path.join(runDir, 'events.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => typeof event === 'object' && event !== null ? Reflect.get(event, 'status') : undefined), ['running', 'succeeded']);
   assert.equal(listRuns(options.dataDir)[0].status, 'succeeded');
   assert.equal(fs.existsSync(path.join(options.dataDir, 'worker.lock')), false);
 });
@@ -89,14 +95,16 @@ test('missing or ambiguous pause state fails closed', async (t) => {
   const result = await runFixturePlan(options);
   assert.equal(result.status, 'failed');
   assert.equal(result.plannerPid, null);
-  assert.match(result.message, /exactly one/);
+  assert.match(requiredMessage(result.message), /exactly one/);
 });
 
 test('timeout kills the simulated planner before returning and records its outcome', async (t) => {
   const options = setup(t);
   const result = await runFixturePlan({ ...options, timeoutMs: 100, delayMs: 5000 });
   assert.equal(result.status, 'timed-out');
-  assert.throws(() => process.kill(result.plannerPid, 0), { code: 'ESRCH' });
+  const plannerPid = result.plannerPid;
+  if (plannerPid === null) throw new Error('Expected the planner to start');
+  assert.throws(() => process.kill(plannerPid, 0), { code: 'ESRCH' });
   assert.equal(fs.existsSync(path.join(options.dataDir, result.id, 'plan.json')), false);
 });
 
@@ -107,8 +115,10 @@ test('a pause during planning terminates the planner and persists cancellation',
   fs.writeFileSync(path.join(options.repoRoot, 'STATE.md'), 'paused: true\n');
   const run = await active;
   assert.equal(run.status, 'cancelled');
-  assert.match(run.message, /Paused/);
-  assert.throws(() => process.kill(run.plannerPid, 0), { code: 'ESRCH' });
+  assert.match(requiredMessage(run.message), /Paused/);
+  const plannerPid = run.plannerPid;
+  if (plannerPid === null) throw new Error('Expected the planner to start');
+  assert.throws(() => process.kill(plannerPid, 0), { code: 'ESRCH' });
 });
 
 test('loss of pause state during a run cancels work', async (t) => {
@@ -118,7 +128,7 @@ test('loss of pause state during a run cancels work', async (t) => {
   fs.unlinkSync(path.join(options.repoRoot, 'STATE.md'));
   const run = await active;
   assert.equal(run.status, 'cancelled');
-  assert.match(run.message, /Cannot verify pause state/);
+  assert.match(requiredMessage(run.message), /Cannot verify pause state/);
 });
 
 test('only one job can use a store; operator cancellation releases it', async (t) => {
@@ -161,7 +171,7 @@ test('oversized process output fails and leaves no accepted plan', async (t) => 
   const options = setup(t);
   const run = await runFixturePlan({ ...options, plan: { ...options.plan, outcome: 'x'.repeat(70000) } });
   assert.equal(run.status, 'failed');
-  assert.match(run.message, /exceeded/);
+  assert.match(requiredMessage(run.message), /exceeded/);
   assert.equal(fs.existsSync(path.join(options.dataDir, run.id, 'plan.json')), false);
 });
 
@@ -209,7 +219,7 @@ test('shell-looking issue text remains recorded data and does not execute', asyn
 
 test('CLI fails clearly on missing arguments and reports an empty store', (t) => {
   const options = setup(t);
-  const cli = fileURLToPath(new URL('./cli.mjs', import.meta.url));
+  const cli = fileURLToPath(new URL('./cli.ts', import.meta.url));
   const missing = spawnSync(process.execPath, [cli, 'run'], { encoding: 'utf8' });
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /Usage:/);
