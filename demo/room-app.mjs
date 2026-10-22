@@ -108,7 +108,12 @@ function syncInspector() {
   const isDoor = object?.type === 'Door';
   ui['door-fields'].hidden = !isDoor;
   ui['wall-fields'].hidden = isDoor || !object;
-  if (!layout || !object) return;
+  ui['editor-base'].textContent = `Starting from ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved. Unsaved changes are lost on reload; export includes saved history only.`;
+  if (!layout || !object) {
+    for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length']) ui[id].value = '';
+    ui['selection-help'].textContent = 'This saved revision is view-only. Its geometry and changed properties remain available below.';
+    return;
+  }
   if (isDoor) {
     ui['door-width'].value = layout.door.widthMm;
     ui['door-offset'].value = layout.door.offsetMm;
@@ -121,7 +126,6 @@ function syncInspector() {
     ui['wall-position-label'].textContent = `Wall ${side.endsWith('X') ? 'X' : 'Y'} position (mm)`;
     ui['selection-help'].textContent = 'Drag the round handle to move this wall. Connected corners follow. Length expands towards increasing coordinates, anchored at the minimum coordinate. Door offsets stay relative to their host start.';
   }
-  ui['editor-base'].textContent = `Starting from ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved. Unsaved changes are lost on reload; export includes saved history only.`;
 }
 
 function chooseObject(id) {
@@ -490,7 +494,11 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) ui['pro
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && gesture) { event.preventDefault(); endGesture(true); } });
 ui['proposal-drawing'].addEventListener('keydown', (event) => {
   const target = event.target.closest('[data-object]');
-  if (target && ['Enter', ' '].includes(event.key)) { event.preventDefault(); chooseObject(target.dataset.object); }
+  if (target && ['Enter', ' '].includes(event.key)) {
+    event.preventDefault(); chooseObject(target.dataset.object);
+    const control = ui[selectedObject === 'door-entry' ? 'door-width' : 'wall-position'];
+    if (!control.disabled) control.focus();
+  }
 });
 
 function renderProperties(original, selected, delta) {
@@ -512,6 +520,25 @@ function renderProperties(original, selected, delta) {
     const position = (item) => item ? `${item.start.map(millimetres).join(', ')} → ${item.end.map(millimetres).join(', ')} mm` : 'Absent';
     rows.push([`${wall.name} length`, displayMM(length(before)), displayMM(length(wall)), length(before) === length(wall) ? 'Unchanged' : 'Changed']);
     if (position(before) !== position(wall)) rows.push([`${wall.name} endpoints`, position(before), position(wall), 'Changed']);
+  }
+  const propertyNames = { name: 'name', type: 'type', width: 'width', height: 'height', thickness: 'thickness', start: 'start coordinate', end: 'end coordinate', source: 'door', target: 'host wall', offset: 'offset from host start' };
+  const propertyValue = (key, value) => value === undefined ? 'Absent'
+    : ['width', 'height', 'thickness', 'offset'].includes(key) ? displayMM(value)
+      : Array.isArray(value) ? `${value.map(millimetres).join(', ')} mm` : String(value);
+  for (const [collection, noun] of [['entities', 'Object'], ['relationships', 'Placement']]) {
+    const modifications = [
+      ...delta[collection].added.map((after) => ({ before: null, after, action: 'Added' })),
+      ...delta[collection].removed.map((before) => ({ before, after: null, action: 'Removed' })),
+      ...delta[collection].modified.map((item) => ({ ...item, action: 'Changed' })),
+    ];
+    for (const { before, after, action } of modifications) {
+      const item = after ?? before;
+      const title = item.name ?? `${noun} ${item.id}`;
+      for (const key of new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])) {
+        if (key === 'id' || JSON.stringify(before?.[key]) === JSON.stringify(after?.[key])) continue;
+        rows.push([`${title} · ${propertyNames[key] ?? key}`, propertyValue(key, before?.[key]), propertyValue(key, after?.[key]), action]);
+      }
+    }
   }
   ui['property-rows'].replaceChildren(...rows.map(([label, before, after, change]) => {
     const row = element('tr'); const heading = element('th', label); heading.scope = 'row';

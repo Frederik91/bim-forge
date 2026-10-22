@@ -101,7 +101,7 @@ export class RoomStore {
           try {
             const current = checkedRecord(request.result);
             if (current.generation !== expectedGeneration) {
-              throw new RoomStoreError('Another tab saved a newer project. This tab cannot overwrite it. Export your current view if needed, then reload.', 'stale');
+              throw new RoomStoreError('Another tab saved a newer project. This tab cannot overwrite it. The unsaved preview is still visible but is not included in saved-history exports. Record its dimensions before reloading; unsaved edits will be lost.', 'stale');
             }
             objectStore.put({ generation: nextGeneration, text }, RECORD_KEY);
           } catch (error) { failure = error; transaction.abort(); }
