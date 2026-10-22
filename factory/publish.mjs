@@ -5,10 +5,12 @@ import { approvePackage } from './publish-request.mjs';
 import { withPublisherIdentity } from './publisher-identity.mjs';
 import { publishApproved } from './publisher.mjs';
 import { openPublication } from './publish-store.mjs';
+import { readScheduledPermit, guardScheduledRequest } from './scheduled-publication.mjs';
 
 let store;
 try {
-  const { values } = parseArgs({ options: { inspect: { type: 'string' }, 'approved-sha': { type: 'string' } } });
+  const { values } = parseArgs({ options: { inspect: { type: 'string' }, 'approved-sha': { type: 'string' }, 'scheduled-sha': { type: 'string' } } });
+  if (Object.values(values).filter(Boolean).length !== 1) throw new Error('Select exactly one publication mode');
   if (values.inspect && !values['approved-sha']) {
     const fd = fs.openSync(values.inspect, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
     let bytes;
@@ -22,19 +24,23 @@ try {
       issueSha256: proposal.issueSha256, branch, files: proposal.files.map((file) => ({ path: file.path,
         bytes: Buffer.byteLength(file.content), sha256: createHash('sha256').update(file.content).digest('hex') })) }, null, 2));
   } else {
-    if (values.inspect || !values['approved-sha'] || process.platform !== 'linux' || !process.env.CREDENTIALS_DIRECTORY) {
+    if (values.inspect || process.platform !== 'linux' || !process.env.CREDENTIALS_DIRECTORY) {
       throw new Error('Use --inspect <package> or start the isolated approved-sha service on Linux');
     }
-    const digest = values['approved-sha'];
-    store = openPublication({ digest });
+    const scheduled = Boolean(values['scheduled-sha']);
+    const digest = values['scheduled-sha'] ?? values['approved-sha'];
+    const permit = () => { if (scheduled) readScheduledPermit(digest); };
+    permit();
+    store = openPublication({ digest, ...(scheduled ? { approvalsDir: '/var/lib/bim-forge-approvals/scheduled' } : {}) });
     const locallyPaused = () => {
       try { fs.lstatSync('/var/lib/bim-forge-approvals/PAUSED'); return true; }
       catch (error) { if (error.code === 'ENOENT') return false; throw error; }
     };
     if (locallyPaused()) throw new Error('Publisher is locally paused');
     const key = fs.readFileSync(`${process.env.CREDENTIALS_DIRECTORY}/github-app-key`);
+    permit();
     const result = await withPublisherIdentity(key, (request) => publishApproved({ bytes: store.bytes,
-      approvedSha256: digest, request, record: store.record, hasPendingDraftIntent: store.hasPendingDraftIntent,
+      approvedSha256: digest, request: guardScheduledRequest(request, permit), record: store.record, hasPendingDraftIntent: store.hasPendingDraftIntent,
       isLocallyPaused: locallyPaused }));
     store.finish({ ...result, tokenRevoked: true });
     console.log(JSON.stringify({ ...result, tokenRevoked: true }));

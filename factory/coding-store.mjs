@@ -44,6 +44,8 @@ export function openCodingRun({ root, bytes, retry = false, ownerUid = 0, schedu
   const digest = sha256(bytes);
   try {
     fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, digest })); fs.fsyncSync(lock);
+    const syncLedger = () => { const fd = fs.openSync(ledger, 'r'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } };
+    syncLedger();
     const records = fs.readdirSync(ledger).filter((name) => /^[a-f0-9-]{36}\.json$/.test(name))
       .map((name) => JSON.parse(readProtectedCodingFile(path.join(ledger, name), ownerUid)));
     if (records.some((record) => !/^[a-f0-9-]{36}$/.test(record.id ?? '') || !/^[a-f0-9]{64}$/.test(record.specSha256 ?? '')
@@ -60,7 +62,10 @@ export function openCodingRun({ root, bytes, retry = false, ownerUid = 0, schedu
     }
     if (records.some((record) => record.status === 'running')) throw new Error('Interrupted coding run requires administrator recovery');
     const prior = records.filter((record) => record.specSha256 === digest).sort((a, b) => a.attempt - b.attempt).at(-1);
-    const close = () => { fs.closeSync(lock); fs.unlinkSync(lockPath); };
+    const close = ({ preserveLock = false } = {}) => {
+      fs.closeSync(lock);
+      if (!preserveLock) { fs.unlinkSync(lockPath); syncLedger(); }
+    };
     let approvalDigest;
     if (schedule !== undefined) {
       const now = new Date();
