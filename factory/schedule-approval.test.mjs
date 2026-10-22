@@ -41,7 +41,7 @@ test('returns exactly the validated approval and freezes it without changing inp
 });
 
 test('accepts every allowed daily limit and lowercase hexadecimal digest characters', () => {
-  for (const dailyLimit of [1, 2, 3]) {
+  for (const dailyLimit of [1, 2, 3, 4, 5, 6]) {
     const value = fixture({ dailyLimit, scopeSha256: '0123456789abcdef'.repeat(4), deploymentSha256: '0'.repeat(64) });
     assert.deepEqual(parse(value), value);
   }
@@ -165,8 +165,8 @@ test('scope and deployment bindings must be primitive lowercase 64-hex strings',
   }
 });
 
-test('daily limit must be a safe integer from 1 through 3', () => {
-  for (const dailyLimit of [0, -1, 4, 1.5, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1,
+test('daily limit must be a safe integer from 1 through 6', () => {
+  for (const dailyLimit of [0, -1, 7, 1.5, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1,
     '1', true, null, {}, [1]]) {
     assert.throws(() => parse(fixture({ dailyLimit })), /fields/);
   }

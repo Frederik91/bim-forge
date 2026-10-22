@@ -21,7 +21,9 @@ hourly wake
           human reviews and merges
 ```
 
-The seven-field approval binds the repository, exact scope digest, measured deployment digest, start time, expiry, and UTC-day start limit. The scope includes the issue snapshot, base SHA, plan, paths, and acceptance cases. Approval validity is at most 24 hours. The daily limit is one through three starts, including manual starts. The existing cumulative issue limit remains three.
+The seven-field approval binds the repository, exact scope digest, measured deployment digest, start time, expiry, and UTC-day start limit. The scope includes the issue snapshot, base SHA, plan, paths, and acceptance cases. Approval validity is at most 24 hours. The daily limit is one through six starts, including manual starts. The existing cumulative issue limit remains three.
+
+The owner authorized six starts per UTC day during supervised factory setup. Use six only in an exact setup approval that expires within 24 hours. Return subsequent operational approvals to three after qualification. Raising this allowance does not reset recorded starts, retry a consumed scope, or select another task. Existing approvals retain their exact limits. The fixed `schedule-check` demonstration utility retains its original one-through-three contract. It does not control real admission.
 
 The dispatcher uses the coding ledger as the sole admission record. It holds the same coding lease through publication and confirmed child-service cleanup. A separate dispatch record lists the exact services that cleanup owns. Dispatch receipts cache terminal outcomes, not start counters. Duplicate wakes return the receipt without another model call or repository write. An uncertain publication requires manual reconciliation through the existing exact-byte publisher workflow.
 

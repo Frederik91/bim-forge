@@ -12,7 +12,9 @@ An approval has exactly seven fields:
 {"version":1,"repository":"Frederik91/bim-forge","scopeSha256":"<64 lowercase hex>","deploymentSha256":"<64 lowercase hex>","notBefore":"2026-10-22T00:00:00.000Z","expiresAt":"2026-10-23T00:00:00.000Z","dailyLimit":1}
 ```
 
-The example is not a valid approval. Both digests must be real reviewed values. Dates use UTC with milliseconds. Admission requires `notBefore <= now < expiresAt`, a window no longer than 24 hours, and a daily limit from 1 to 3. Unknown fields, including commands and publishing controls, fail validation. The returned object is frozen.
+The example is not a valid approval. Both digests must be real reviewed values. Dates use UTC with milliseconds. Admission requires `notBefore <= now < expiresAt`, a window no longer than 24 hours, and a daily limit from 1 to 6. Unknown fields, including commands and publishing controls, fail validation. The returned object is frozen.
+
+Normal operational approvals use three starts. The owner authorized up to six during supervised factory setup, limited to the exact approval window. The parser ceiling is not a default allowance or standing authorization. Existing approvals and all recorded starts remain unchanged. After qualification, subsequent approvals return to three. The cumulative issue ceiling remains three even under a six-start daily approval.
 
 `deploymentSha256` is a binding, not a measurement. A future trusted dispatcher must capture the real installed controller, runtime, generator, service, adapter, verifier, and case identity. Supplying a string to this library does not attest that identity or grant authority.
 
