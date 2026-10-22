@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { sha256 } from './coding.mjs';
 
 const command = (file, args) => execFileSync(file, args, { encoding: 'utf8', timeout: 10000,
@@ -42,6 +43,29 @@ export function assertImmutableAncestors(filename, ownerUid = 0) {
   }
 }
 
+const sameFile = (left, right) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeMs', 'ctimeMs']
+  .every((key) => left[key] === right[key]);
+
+function hashFile(filename, expected) {
+  const fd = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  try {
+    if (!sameFile(expected, fs.fstatSync(fd))) throw new Error('Trusted file changed before measurement');
+    const hash = createHash('sha256');
+    const chunk = Buffer.allocUnsafe(64 * 1024);
+    let remaining = expected.size;
+    while (remaining > 0) {
+      const count = fs.readSync(fd, chunk, 0, Math.min(chunk.length, remaining), null);
+      if (count === 0) throw new Error('Trusted file ended during measurement');
+      hash.update(chunk.subarray(0, count));
+      remaining -= count;
+    }
+    if (!sameFile(expected, fs.fstatSync(fd)) || !sameFile(expected, fs.lstatSync(filename))) {
+      throw new Error('Trusted file changed during measurement');
+    }
+    return hash.digest('hex');
+  } finally { fs.closeSync(fd); }
+}
+
 // Hash a complete installed tree, including internal link names and their targets.
 // External links, special files, writable ancestors and oversized trees fail closed.
 export function measureTree(directory, { ownerUid = 0, checkAncestors = true } = {}) {
@@ -61,8 +85,8 @@ export function measureTree(directory, { ownerUid = 0, checkAncestors = true } =
       for (const name of fs.readdirSync(filename).sort()) visit(path.join(relative, name));
     } else if (stat.isFile() && stat.nlink === 1) {
       total += stat.size;
-      if (total > 768 * 1024 * 1024 || stat.size > 256 * 1024 * 1024) throw new Error('Trusted tree exceeds its byte limit');
-      entries.push([relative, stat.mode & 0o777, sha256(fs.readFileSync(filename))]);
+      if (total > 768 * 1024 * 1024) throw new Error('Trusted tree exceeds its byte limit');
+      entries.push([relative, stat.mode & 0o777, hashFile(filename, stat)]);
     } else throw new Error('Unsupported trusted tree entry');
   };
   visit('');
@@ -120,7 +144,7 @@ export function measureDeployment() {
   }
   const runtime = [...files].sort().map((file) => {
     assertImmutableAncestors(file);
-    return [file, sha256(fs.readFileSync(file))];
+    return [file, hashFile(file, fs.lstatSync(file))];
   });
   const evidence = { version: 1, release, node, trees, units, runtime, systemd: command('/usr/bin/systemctl', ['--version']).split('\n')[0] };
   return { sha256: sha256(JSON.stringify(evidence)), evidence };
