@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { planSchema } from './plan.mjs';
 
-const disabledFeatures = ['shell_tool', 'unified_exec', 'apps', 'plugins', 'computer_use', 'browser_use', 'browser_use_external', 'browser_use_full_cdp_access', 'image_generation', 'view_image', 'code_mode_host', 'multi_agent', 'workspace_dependencies', 'skill_search', 'skill_mcp_dependency_install'];
+export const disabledFeatures = ['shell_tool', 'unified_exec', 'apps', 'plugins', 'computer_use', 'browser_use', 'browser_use_external', 'browser_use_full_cdp_access', 'image_generation', 'view_image', 'code_mode_host', 'multi_agent', 'workspace_dependencies', 'skill_search', 'skill_mcp_dependency_install'];
 const disabledHostNotice = 'Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`.';
 
 export function parseCodexOutput(output) {
