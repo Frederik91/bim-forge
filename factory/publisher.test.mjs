@@ -120,8 +120,8 @@ const publish = (api, value = proposal, extra = {}) => {
 };
 
 const roomDemoFiles = [
-  'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.mjs',
-  'demo/room-store.mjs', 'demo/server.ts', 'demo/server.test.mjs',
+  'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.ts',
+  'demo/room-store.ts', 'demo/server.ts', 'demo/server.test.mjs',
   'src/room-model.ts', 'src/room-model.test.mjs',
 ].map((path) => ({ path, content: `Reviewed room demo: ${path}\r\nRoom: \u00d8st\n` }));
 const roomDemoPackage = (api) => ({ ...proposal, files: [...roomDemoFiles, {

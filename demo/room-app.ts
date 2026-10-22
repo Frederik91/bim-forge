@@ -1,90 +1,221 @@
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots } from '../src/room-model.ts';
-import { RoomStore, MAX_PROJECT_BYTES } from './room-store.mjs';
+import type {
+  Door, Entity, HostingRelationship, ModelDelta, ModelSnapshot, Point, ProposalReview, RoomLayout, Wall,
+} from '../src/room-model.ts';
+import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
 
-const byId = (id) => document.getElementById(id);
-const ui = Object.fromEntries([
-  'project-form', 'project-name', 'create-project', 'load-sample', 'proposal-form',
-  'door-width', 'proposal-name', 'request-text', 'save-proposal', 'export-project', 'import-project',
-  'import-file', 'status', 'error', 'recover-save', 'project-title', 'study-caption',
-  'original-drawing', 'proposal-drawing', 'selected-title', 'selected-badge', 'change-count',
-  'property-rows', 'comparison-note', 'history-list', 'branch-count', 'conflict-left',
-  'conflict-right', 'check-conflicts', 'conflict-result', 'discard-preview', 'editor-base',
-  'selected-object', 'door-offset', 'wall-position', 'wall-length', 'door-fields',
-  'wall-fields', 'wall-position-label', 'selection-help', 'edit-feedback',
-  'review-panel', 'review-status', 'review-summary', 'review-rationale', 'review-uncertainty',
-  'review-constraints', 'review-binding', 'accept-proposal', 'request-revision', 'review-drawing',
-  'request-page', 'review-page', 'history-page', 'nav-request', 'nav-review', 'nav-history',
-  'view-original', 'view-changes', 'new-project', 'start-dialog', 'start-close',
-  'original-dialog', 'changes-dialog', 'working-dialog', 'editor-panel',
-  'request-canvas-tab', 'request-details-tab', 'request-canvas-pane',
-  'to-request-details', 'back-to-canvas',
-  'auth-menu', 'proposal-auth-copy', 'proposal-auth-action', 'auth-dialog', 'auth-close',
-  'auth-error', 'auth-disconnected', 'auth-connected', 'auth-connect', 'auth-account',
-  'auth-plan-status', 'auth-model', 'auth-refresh-models', 'auth-signout',
-].map((id) => [id, byId(id)]));
+type PageName = 'request' | 'review' | 'history';
+type RequestPane = 'canvas' | 'details';
+type ReviewState = 'pending' | 'accepted' | 'superseded' | 'declined';
+type BoundSide = 'minX' | 'maxX' | 'minY' | 'maxY';
+type GestureOperation = 'wall' | 'door-move' | 'door-width';
 
-let store = null;
-let repo = null;
+interface AuthModel { slug: string; displayName: string }
+interface AuthAccount { email: string | null; name: string | null }
+interface AuthSession {
+  connected: boolean;
+  sharing: boolean;
+  account: AuthAccount | null;
+  models: AuthModel[];
+  selectedModel: string | null;
+  revocationConfirmed: boolean | undefined;
+}
+interface ActiveReview {
+  requestId: string;
+  proposalName: string;
+  baseRevisionId: string;
+  proposalRevisionId: string | null;
+  selectedObjectIds: readonly string[];
+  instruction: string;
+  summary: string;
+  rationale: string;
+  constraints: string;
+  uncertainty: string;
+  status?: 'ready' | 'declined';
+  worker: { provider: string; model: string } | undefined;
+  validator: string | undefined;
+  decision?: { status: 'pending' | 'accepted' | 'superseded' };
+}
+interface PlanCamera { minX: number; maxX: number; minY: number; maxY: number; scale: number }
+interface GestureState {
+  id: number;
+  root: SVGSVGElement;
+  camera: PlanCamera;
+  operation: GestureOperation;
+  layout: RoomLayout;
+  preview: ModelSnapshot;
+  origin: Point;
+  client: Point;
+  moved: boolean;
+  rejected: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function nullableText(value: unknown, field: string): string | null {
+  if (value === null) return null;
+  if (typeof value !== 'string') throw new Error(`The ChatGPT connection returned an invalid ${field}.`);
+  return value;
+}
+
+function parseAuthSession(value: unknown): AuthSession {
+  if (!isRecord(value) || typeof value.connected !== 'boolean' || typeof value.sharing !== 'boolean'
+    || !Array.isArray(value.models)) throw new Error('The ChatGPT connection returned an invalid session.');
+  const models = value.models.map((model) => {
+    if (!isRecord(model) || typeof model.slug !== 'string' || typeof model.displayName !== 'string') {
+      throw new Error('The ChatGPT connection returned an invalid model list.');
+    }
+    return { slug: model.slug, displayName: model.displayName };
+  });
+  let account: AuthAccount | null = null;
+  if (value.account !== null) {
+    if (!isRecord(value.account)) throw new Error('The ChatGPT connection returned an invalid account.');
+    account = { email: nullableText(value.account.email, 'account email'), name: nullableText(value.account.name, 'account name') };
+  }
+  if (value.revocationConfirmed !== undefined && typeof value.revocationConfirmed !== 'boolean') {
+    throw new Error('The ChatGPT connection returned an invalid revocation status.');
+  }
+  return {
+    connected: value.connected, sharing: value.sharing, account, models,
+    selectedModel: nullableText(value.selectedModel, 'selected model'),
+    revocationConfirmed: value.revocationConfirmed,
+  };
+}
+
+interface HtmlConstructor<T extends HTMLElement> { new(): T }
+function requiredElement<T extends HTMLElement>(id: string, constructor: HtmlConstructor<T>): T {
+  const node = document.getElementById(id);
+  if (!(node instanceof constructor)) throw new Error(`Missing required interface element: ${id}`);
+  return node;
+}
+
+const generic = (id: string): HTMLElement => requiredElement(id, HTMLElement);
+const button = (id: string): HTMLButtonElement => requiredElement(id, HTMLButtonElement);
+const input = (id: string): HTMLInputElement => requiredElement(id, HTMLInputElement);
+const select = (id: string): HTMLSelectElement => requiredElement(id, HTMLSelectElement);
+const dialog = (id: string): HTMLDialogElement => requiredElement(id, HTMLDialogElement);
+
+const ui = {
+  'project-form': requiredElement('project-form', HTMLFormElement),
+  'project-name': input('project-name'),
+  'create-project': button('create-project'),
+  'load-sample': button('load-sample'),
+  'proposal-form': requiredElement('proposal-form', HTMLFormElement),
+  'door-width': input('door-width'),
+  'proposal-name': input('proposal-name'),
+  'request-text': requiredElement('request-text', HTMLTextAreaElement),
+  'save-proposal': button('save-proposal'),
+  'export-project': button('export-project'),
+  'import-project': button('import-project'),
+  'import-file': input('import-file'),
+  status: generic('status'), error: generic('error'),
+  'recover-save': button('recover-save'),
+  'project-title': generic('project-title'), 'study-caption': generic('study-caption'),
+  'original-drawing': generic('original-drawing'), 'proposal-drawing': generic('proposal-drawing'),
+  'selected-title': generic('selected-title'), 'selected-badge': generic('selected-badge'),
+  'change-count': generic('change-count'),
+  'property-rows': requiredElement('property-rows', HTMLTableSectionElement),
+  'comparison-note': generic('comparison-note'), 'history-list': generic('history-list'),
+  'branch-count': generic('branch-count'),
+  'conflict-left': select('conflict-left'), 'conflict-right': select('conflict-right'),
+  'check-conflicts': button('check-conflicts'), 'conflict-result': generic('conflict-result'),
+  'discard-preview': button('discard-preview'), 'editor-base': generic('editor-base'),
+  'selected-object': select('selected-object'), 'door-offset': input('door-offset'),
+  'wall-position': input('wall-position'), 'wall-length': input('wall-length'),
+  'door-fields': generic('door-fields'), 'wall-fields': generic('wall-fields'),
+  'wall-position-label': requiredElement('wall-position-label', HTMLLabelElement),
+  'selection-help': generic('selection-help'), 'edit-feedback': generic('edit-feedback'),
+  'review-panel': generic('review-panel'), 'review-status': generic('review-status'),
+  'review-summary': generic('review-summary'), 'review-rationale': generic('review-rationale'),
+  'review-uncertainty': generic('review-uncertainty'), 'review-constraints': generic('review-constraints'),
+  'review-binding': generic('review-binding'), 'accept-proposal': button('accept-proposal'),
+  'request-revision': button('request-revision'), 'review-drawing': generic('review-drawing'),
+  'request-page': generic('request-page'), 'review-page': generic('review-page'), 'history-page': generic('history-page'),
+  'nav-request': button('nav-request'), 'nav-review': button('nav-review'), 'nav-history': button('nav-history'),
+  'view-original': button('view-original'), 'view-changes': button('view-changes'), 'new-project': button('new-project'),
+  'start-dialog': dialog('start-dialog'), 'start-close': button('start-close'),
+  'original-dialog': dialog('original-dialog'), 'changes-dialog': dialog('changes-dialog'),
+  'working-dialog': dialog('working-dialog'), 'editor-panel': generic('editor-panel'),
+  'request-canvas-tab': button('request-canvas-tab'), 'request-details-tab': button('request-details-tab'),
+  'request-canvas-pane': generic('request-canvas-pane'), 'to-request-details': button('to-request-details'),
+  'back-to-canvas': button('back-to-canvas'), 'auth-menu': button('auth-menu'),
+  'proposal-auth-copy': generic('proposal-auth-copy'), 'proposal-auth-action': button('proposal-auth-action'),
+  'auth-dialog': dialog('auth-dialog'), 'auth-close': button('auth-close'), 'auth-error': generic('auth-error'),
+  'auth-disconnected': generic('auth-disconnected'), 'auth-connected': generic('auth-connected'),
+  'auth-connect': button('auth-connect'), 'auth-account': generic('auth-account'),
+  'auth-plan-status': generic('auth-plan-status'), 'auth-model': select('auth-model'),
+  'auth-refresh-models': button('auth-refresh-models'), 'auth-signout': button('auth-signout'),
+};
+
+let store: RoomStore | null = null;
+let repo: RoomRepository | null = null;
 let generation = 0;
-let savedText = null;
-let recoveryText = null;
-let selectedRevision = null;
+let savedText: string | null = null;
+let recoveryText: string | null = null;
+let selectedRevision = '';
 let selectedBranch = 'main';
 let busy = true;
 let writesBlocked = false;
-let layout = null;
-let preview = null;
+let layout: RoomLayout | null = null;
+let preview: ModelSnapshot | null = null;
 let selectedObject = 'door-entry';
 let invalidInput = false;
-let gesture = null;
-let activeReview = null;
-let currentPage = 'request';
+let gesture: GestureState | null = null;
+let activeReview: ActiveReview | null = null;
+let currentPage: PageName = 'request';
 let authBusy = false;
-let authSession = { connected: false, sharing: false, account: null, models: [], selectedModel: null };
-const planCameras = new WeakMap();
+let authSession: AuthSession = { connected: false, sharing: false, account: null, models: [], selectedModel: null, revocationConfirmed: undefined };
+const planCameras = new WeakMap<SVGSVGElement, PlanCamera>();
 const encoder = new TextEncoder();
 const number = new Intl.NumberFormat('en', { maximumFractionDigits: 3 });
-const millimetres = (metres) => number.format(Math.round(metres * 1000));
+const millimetres = (metres: number): string => number.format(Math.round(metres * 1000));
 
-function element(tag, text, className) {
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
   if (className) node.className = className;
   return node;
 }
 
-function status(message) { ui.status.textContent = message; }
+function status(message: string): void { ui.status.textContent = message; }
 function clearError() { ui.error.replaceChildren(); ui.error.hidden = true; }
-function report(error, prefix = '') {
+function report(error: unknown, prefix = ''): void {
   ui.error.textContent = `${prefix}${error instanceof Error ? error.message : 'An unexpected error occurred.'}`;
   ui.error.hidden = false;
-  if (error?.code === 'stale' || error?.code === 'corrupt') writesBlocked = true;
-  if (typeof error?.savedText === 'string') showRecovery(error.savedText);
+  if (error instanceof RoomStoreError && (error.code === 'stale' || error.code === 'corrupt')) writesBlocked = true;
+  if (error instanceof RoomStoreError && typeof error.savedText === 'string') showRecovery(error.savedText);
   updateControls();
 }
 
-function showRecovery(text) {
+function showRecovery(text: string): void {
   recoveryText = text;
   ui['recover-save'].hidden = false;
 }
 
-function reviewState(review) {
-  return review?.decision?.status ?? review?.status ?? null;
+function reviewState(review: ActiveReview | null): ReviewState | null {
+  if (!review) return null;
+  return review.decision?.status ?? (review.status === 'ready' ? 'pending' : review.status ?? null);
 }
 
-function showPage(name) {
-  if (!['request', 'review', 'history'].includes(name)) return;
+function showPage(name: PageName): void {
   if (name === 'review' && !activeReview) return;
   if (name === 'history' && !repo) return;
   currentPage = name;
-  for (const page of ['request', 'review', 'history']) {
-    ui[`${page}-page`].hidden = page !== name;
-    ui[`nav-${page}`].setAttribute('aria-pressed', String(page === name));
+  const pages = [
+    { name: 'request', page: ui['request-page'], navigation: ui['nav-request'] },
+    { name: 'review', page: ui['review-page'], navigation: ui['nav-review'] },
+    { name: 'history', page: ui['history-page'], navigation: ui['nav-history'] },
+  ];
+  for (const item of pages) {
+    item.page.hidden = item.name !== name;
+    item.navigation.setAttribute('aria-pressed', String(item.name === name));
   }
-  document.getElementById('workbench').focus({ preventScroll: true });
+  requiredElement('workbench', HTMLElement).focus({ preventScroll: true });
 }
 
-function showRequestPane(name) {
+function showRequestPane(name: RequestPane): void {
   const details = name === 'details';
   ui['request-page'].dataset.requestPane = details ? 'details' : 'canvas';
   ui['request-canvas-pane'].dataset.active = String(!details);
@@ -93,23 +224,27 @@ function showRequestPane(name) {
   ui['request-details-tab'].setAttribute('aria-pressed', String(details));
 }
 
-function openDialog(dialog) {
-  if (dialog && !dialog.open) dialog.showModal();
+function openDialog(target: HTMLDialogElement): void {
+  if (!target.open) target.showModal();
 }
 
-function closeDialog(dialog) {
-  if (dialog?.open) dialog.close();
+function closeDialog(target: HTMLDialogElement): void {
+  if (target.open) target.close();
 }
 
 function renderAuth() {
   const usable = authSession.connected && authSession.sharing && Boolean(authSession.selectedModel);
   ui['auth-menu'].classList.toggle('connected', usable);
-  ui['auth-menu'].querySelector('span:last-child').textContent = usable ? 'ChatGPT connected' : authSession.connected ? 'Finish ChatGPT setup' : 'Connect ChatGPT';
+  const authMenuLabel = ui['auth-menu'].querySelector('span:last-child');
+  if (!(authMenuLabel instanceof HTMLSpanElement)) throw new Error('Missing ChatGPT menu label.');
+  authMenuLabel.textContent = usable ? 'ChatGPT connected' : authSession.connected ? 'Finish ChatGPT setup' : 'Connect ChatGPT';
   ui['proposal-auth-action'].textContent = usable ? 'Settings' : 'Connect';
   ui['proposal-auth-copy'].textContent = usable
     ? `Using ChatGPT plan · ${authSession.models.find((model) => model.slug === authSession.selectedModel)?.displayName ?? authSession.selectedModel}`
     : authSession.connected ? 'ChatGPT is connected, but plan usage needs attention' : 'Connect ChatGPT to prepare this proposal';
-  ui['proposal-auth-action'].closest('.proposal-connection').classList.toggle('connected', usable);
+  const proposalConnection = ui['proposal-auth-action'].closest('.proposal-connection');
+  if (!(proposalConnection instanceof HTMLElement)) throw new Error('Missing proposal connection panel.');
+  proposalConnection.classList.toggle('connected', usable);
   ui['auth-disconnected'].hidden = authSession.connected;
   ui['auth-connected'].hidden = !authSession.connected;
   ui['auth-connect'].disabled = authBusy;
@@ -134,15 +269,18 @@ function renderAuth() {
   }
 }
 
-async function authRequest(target, options = {}) {
+async function authRequest(target: string, options: RequestInit = {}): Promise<AuthSession> {
   const response = await fetch(target, options);
-  let value;
+  let value: unknown;
   try { value = await response.json(); } catch { throw new Error('The ChatGPT connection service returned unreadable data.'); }
-  if (!response.ok) throw new Error(value?.error ?? `The ChatGPT connection failed with HTTP ${response.status}.`);
-  return value;
+  if (!response.ok) {
+    const message = isRecord(value) && typeof value.error === 'string' ? value.error : `The ChatGPT connection failed with HTTP ${response.status}.`;
+    throw new Error(message);
+  }
+  return parseAuthSession(value);
 }
 
-async function runAuth(action, progress) {
+async function runAuth(action: () => Promise<AuthSession>, progress: string): Promise<boolean> {
   authBusy = true;
   ui['auth-error'].hidden = true;
   renderAuth(); updateControls(); status(progress);
@@ -171,8 +309,10 @@ async function runAuth(action, progress) {
 function updateControls() {
   const writable = Boolean(store) && !busy && !writesBlocked && !gesture;
   const modelReady = authSession.connected && authSession.sharing && Boolean(authSession.selectedModel);
-  for (const id of ['project-name', 'create-project', 'load-sample', 'import-project']) ui[id].disabled = !writable;
-  for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length', 'proposal-name', 'request-text', 'selected-object']) ui[id].disabled = !writable || !layout || Boolean(gesture);
+  const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project']];
+  for (const control of projectControls) control.disabled = !writable;
+  const editorControls: Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length'], ui['proposal-name'], ui['request-text'], ui['selected-object']];
+  for (const control of editorControls) control.disabled = !writable || !layout || Boolean(gesture);
   ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture) || !modelReady;
   ui['save-proposal'].textContent = modelReady ? 'Prepare proposal →' : 'Connect ChatGPT first';
   ui['auth-menu'].disabled = authBusy;
@@ -193,17 +333,18 @@ function updateControls() {
   ui['recover-save'].disabled = busy;
   const reviewMatches = activeReview?.proposalRevisionId === null || activeReview?.proposalRevisionId === selectedRevision;
   ui['accept-proposal'].disabled = !writable || !reviewMatches || selectedBranch === 'main' || reviewState(activeReview) !== 'pending';
-  ui['request-revision'].disabled = !writable || !reviewMatches || !['pending', 'declined'].includes(reviewState(activeReview));
+  const state = reviewState(activeReview);
+  ui['request-revision'].disabled = !writable || !reviewMatches || (state !== 'pending' && state !== 'declined');
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
-  for (const button of ui['history-list'].querySelectorAll('button')) button.disabled = busy || Boolean(gesture);
+  for (const historyButton of ui['history-list'].querySelectorAll('button')) historyButton.disabled = busy || Boolean(gesture);
 }
 
-function dirty() {
+function dirty(): boolean {
   return invalidInput || Boolean(repo && preview && JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot));
 }
 
-function feedback(message, invalid = false) {
+function feedback(message: string, invalid = false): void {
   ui['edit-feedback'].textContent = message;
   ui['edit-feedback'].dataset.invalid = String(invalid);
 }
@@ -213,16 +354,17 @@ function resetEditor() {
   if (!repo) return;
   preview = repo.view(selectedRevision).snapshot;
   try { layout = rectangleLayout(preview); feedback('Select an object and sketch the intent. The sketch is not authoritative model geometry.'); }
-  catch (error) { feedback(`This saved layout is view-only: ${error.message}`, true); }
+  catch (error) { feedback(`This saved layout is view-only: ${error instanceof Error ? error.message : 'unsupported geometry'}`, true); }
   const objects = preview.entities;
   ui['selected-object'].replaceChildren(...objects.map((object) => {
     const option = element('option', object.name); option.value = object.id; return option;
   }));
-  if (!objects.some((object) => object.id === selectedObject)) selectedObject = objects[0]?.id;
+  if (!objects.some((object) => object.id === selectedObject)) selectedObject = objects[0]?.id ?? '';
   syncInspector();
 }
 
-function wallSide(wall, current = layout) {
+function wallSide(wall: Wall, current: RoomLayout | null = layout): BoundSide {
+  if (!current) throw new Error('The selected room has no editable rectangular layout.');
   const b = current.boundsMm;
   if (wall.start[0] === wall.end[0]) return Math.round(wall.start[0] * 1000) === b.minX ? 'minX' : 'maxX';
   return Math.round(wall.start[1] * 1000) === b.minY ? 'minY' : 'maxY';
@@ -230,32 +372,34 @@ function wallSide(wall, current = layout) {
 
 function syncInspector() {
   ui['selected-object'].value = selectedObject;
-  for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length']) ui[id].removeAttribute('aria-invalid');
+  const dimensionInputs = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
+  for (const dimensionInput of dimensionInputs) dimensionInput.removeAttribute('aria-invalid');
   const object = preview?.entities.find((item) => item.id === selectedObject);
   const isDoor = object?.type === 'Door';
   ui['door-fields'].hidden = !isDoor;
   ui['wall-fields'].hidden = isDoor || !object;
   ui['editor-base'].textContent = `Request bound to ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved in history. Unsaved request sketches are lost on reload.`;
-  if (!layout || !object) {
-    for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length']) ui[id].value = '';
+  if (!layout || !preview || !object) {
+    for (const dimensionInput of dimensionInputs) dimensionInput.value = '';
     ui['selection-help'].textContent = 'This saved revision is view-only. Its geometry and changed properties remain available below.';
     return;
   }
   if (isDoor) {
-    ui['door-width'].value = layout.door.widthMm;
-    ui['door-offset'].value = layout.door.offsetMm;
+    ui['door-width'].value = String(layout.door.widthMm);
+    ui['door-offset'].value = String(layout.door.offsetMm);
     const host = hostFor(preview, object);
+    if (!host) throw new Error('The selected door is missing its host wall.');
     ui['selection-help'].textContent = `Drag the round handle to slide along ${host.wall.name}; drag the square handle to resize. Offset is measured from the arrow at the wall start. Height and host stay unchanged.`;
   } else {
     const side = wallSide(object);
-    ui['wall-position'].value = layout.boundsMm[side];
-    ui['wall-length'].value = side.endsWith('X') ? layout.boundsMm.maxY - layout.boundsMm.minY : layout.boundsMm.maxX - layout.boundsMm.minX;
+    ui['wall-position'].value = String(layout.boundsMm[side]);
+    ui['wall-length'].value = String(side.endsWith('X') ? layout.boundsMm.maxY - layout.boundsMm.minY : layout.boundsMm.maxX - layout.boundsMm.minX);
     ui['wall-position-label'].textContent = `Wall ${side.endsWith('X') ? 'X' : 'Y'} position (mm)`;
     ui['selection-help'].textContent = 'Drag the round handle to move this wall. Connected corners follow. Length expands towards increasing coordinates, anchored at the minimum coordinate. Door offsets stay relative to their host start.';
   }
 }
 
-function chooseObject(id) {
+function chooseObject(id: string): void {
   if (!repo || busy || !layout || gesture) return;
   if (invalidInput && !window.confirm('Discard the incomplete or invalid input and select another object?')) return;
   invalidInput = false; clearError(); selectedObject = id; syncInspector(); renderComparison(); updateControls();
@@ -266,41 +410,45 @@ ui['selected-object'].addEventListener('change', () => {
   chooseObject(id); ui['selected-object'].value = selectedObject;
 });
 
-function acceptLayout(candidate) {
+function acceptLayout(candidate: RoomLayout): void {
+  if (!repo) throw new Error('Create a project before editing a request sketch.');
   const next = previewRectangle(repo.view(selectedRevision).snapshot, candidate);
   layout = rectangleLayout(next); preview = next; invalidInput = false;
   feedback(dirty() ? 'Visual request sketch updated. AI must still prepare and validate a separate proposal.' : 'The request sketch matches the selected revision. Describe any additional intent in words.');
   renderComparison(); updateControls();
 }
 
-function editFields(event) {
-  if (!repo || busy || writesBlocked || !layout || gesture) return;
+function editFields(event: Event): void {
+  if (!repo || busy || writesBlocked || !layout || !preview || gesture) return;
   const object = preview.entities.find((item) => item.id === selectedObject);
-  const ids = object.type === 'Door' ? ['door-width', 'door-offset'] : ['wall-position', 'wall-length'];
+  if (!object) return;
+  const fields = object.type === 'Door' ? [ui['door-width'], ui['door-offset']] : [ui['wall-position'], ui['wall-length']];
   try {
-    const values = ids.map((id) => ui[id].valueAsNumber);
+    const values = fields.map((field) => field.valueAsNumber);
     if (values.some((value) => !Number.isSafeInteger(value))) throw new Error('Enter complete, whole millimetres in both fields.');
     const next = structuredClone(layout);
     if (object.type === 'Door') [next.door.widthMm, next.door.offsetMm] = values;
     else {
       const side = wallSide(object); next.boundsMm[side] = values[0];
-      const axis = side.endsWith('X') ? 'Y' : 'X'; next.boundsMm[`max${axis}`] = next.boundsMm[`min${axis}`] + values[1];
+      if (side.endsWith('X')) next.boundsMm.maxY = next.boundsMm.minY + values[1];
+      else next.boundsMm.maxX = next.boundsMm.minX + values[1];
     }
     acceptLayout(next);
-    for (const id of ids) ui[id].removeAttribute('aria-invalid');
+    for (const field of fields) field.removeAttribute('aria-invalid');
   } catch (error) {
-    invalidInput = true; event.target.setAttribute('aria-invalid', 'true');
-    feedback(`${error.message} Last valid geometry is still shown; fix the input or discard.`, true); updateControls();
+    invalidInput = true;
+    if (event.target instanceof HTMLInputElement) event.target.setAttribute('aria-invalid', 'true');
+    feedback(`${error instanceof Error ? error.message : 'The edit is invalid.'} Last valid geometry is still shown; fix the input or discard.`, true); updateControls();
   }
 }
-for (const id of ['door-width', 'door-offset', 'wall-position', 'wall-length']) ui[id].addEventListener('input', editFields);
+for (const field of [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']]) field.addEventListener('input', editFields);
 ui['discard-preview'].addEventListener('click', () => {
   if (busy || gesture || !repo) return;
   resetEditor(); renderComparison(); updateControls(); status('Visual request sketch discarded. Saved model history is unchanged.');
 });
 window.addEventListener('beforeunload', (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } });
 
-async function perform(action) {
+async function perform(action: () => void | Promise<void>): Promise<void> {
   if (busy || gesture) return;
   busy = true;
   clearError();
@@ -310,15 +458,16 @@ async function perform(action) {
   finally { closeDialog(ui['working-dialog']); busy = false; updateControls(); }
 }
 
-function writableStore() {
+function writableStore(): RoomStore {
   if (!store || writesBlocked) throw new Error('Saving is blocked. Download any recovery data or export your current project, then reload.');
+  return store;
 }
 
 // This is the only publication path for a new repository. Never assign repo before saveCAS resolves.
-async function persist(next, branch = 'main') {
-  writableStore();
+async function persist(next: RoomRepository, branch = 'main'): Promise<void> {
+  const database = writableStore();
   const text = next.serialize();
-  const nextGeneration = await store.saveCAS(text, generation);
+  const nextGeneration = await database.saveCAS(text, generation);
   generation = nextGeneration;
   savedText = text;
   repo = next;
@@ -328,18 +477,18 @@ async function persist(next, branch = 'main') {
   render();
 }
 
-function confirmReplacement() {
+function confirmReplacement(): boolean {
   return !repo || window.confirm('Replace the locally saved project and discard any unsaved request sketch? Export saved work first if you want to keep it.');
 }
 
-async function createProject(name) {
+async function createProject(name: string): Promise<void> {
   writableStore();
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
   const next = await RoomRepository.create(name);
   activeReview = null;
   await persist(next);
-  ui['project-name'].value = repo.name;
+  ui['project-name'].value = next.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
   showPage('request');
@@ -371,13 +520,16 @@ ui['to-request-details'].addEventListener('click', () => {
 });
 ui['back-to-canvas'].addEventListener('click', () => showRequestPane('canvas'));
 for (const button of document.querySelectorAll('[data-close]')) {
-  button.addEventListener('click', () => closeDialog(byId(button.dataset.close)));
+  button.addEventListener('click', () => {
+    if (!(button instanceof HTMLElement) || !button.dataset.close) return;
+    closeDialog(requiredElement(button.dataset.close, HTMLDialogElement));
+  });
 }
 ui['start-dialog'].addEventListener('cancel', (event) => {
   if (!repo) event.preventDefault();
 });
 
-for (const id of ['auth-menu', 'proposal-auth-action']) ui[id].addEventListener('click', () => openDialog(ui['auth-dialog']));
+for (const authButton of [ui['auth-menu'], ui['proposal-auth-action']]) authButton.addEventListener('click', () => openDialog(ui['auth-dialog']));
 ui['auth-close'].addEventListener('click', () => closeDialog(ui['auth-dialog']));
 ui['auth-connect'].addEventListener('click', () => {
   void runAuth(() => authRequest('/api/auth/start', { method: 'POST' }), 'Finish connecting ChatGPT in the browser window that just opened.');
@@ -395,6 +547,60 @@ ui['auth-model'].addEventListener('change', () => {
 ui['auth-signout'].addEventListener('click', () => {
   void runAuth(() => authRequest('/api/auth/signout', { method: 'POST' }), 'Disconnecting ChatGPT from this local installation…');
 });
+
+interface ProposalResponse {
+  status: 'ready' | 'declined';
+  project: string;
+  review: ActiveReview;
+}
+
+function requiredText(record: Record<string, unknown>, field: string): string {
+  const value = record[field];
+  if (typeof value !== 'string') throw new Error(`The proposal service returned an invalid ${field}.`);
+  return value;
+}
+
+function parseProposalResponse(value: unknown): ProposalResponse {
+  if (!isRecord(value) || (value.status !== 'ready' && value.status !== 'declined')
+    || typeof value.project !== 'string' || !isRecord(value.review)) {
+    throw new Error('The proposal service returned an unsupported result.');
+  }
+  const reviewValue = value.review;
+  const proposalRevisionId = reviewValue.proposalRevisionId;
+  if (proposalRevisionId !== null && typeof proposalRevisionId !== 'string') {
+    throw new Error('The proposal service returned an invalid proposal revision.');
+  }
+  if (!Array.isArray(reviewValue.selectedObjectIds)
+    || !reviewValue.selectedObjectIds.every((id) => typeof id === 'string')) {
+    throw new Error('The proposal service returned invalid selected objects.');
+  }
+  let worker: ActiveReview['worker'];
+  if (reviewValue.worker !== undefined) {
+    if (!isRecord(reviewValue.worker) || typeof reviewValue.worker.provider !== 'string' || typeof reviewValue.worker.model !== 'string') {
+      throw new Error('The proposal service returned invalid worker evidence.');
+    }
+    worker = { provider: reviewValue.worker.provider, model: reviewValue.worker.model };
+  }
+  return {
+    status: value.status,
+    project: value.project,
+    review: {
+      requestId: requiredText(reviewValue, 'requestId'),
+      proposalName: requiredText(reviewValue, 'proposalName'),
+      baseRevisionId: requiredText(reviewValue, 'baseRevisionId'),
+      proposalRevisionId,
+      selectedObjectIds: reviewValue.selectedObjectIds,
+      instruction: requiredText(reviewValue, 'instruction'),
+      summary: requiredText(reviewValue, 'summary'),
+      rationale: requiredText(reviewValue, 'rationale'),
+      constraints: requiredText(reviewValue, 'constraints'),
+      uncertainty: requiredText(reviewValue, 'uncertainty'),
+      status: value.status,
+      worker,
+      validator: typeof reviewValue.validator === 'string' ? reviewValue.validator : undefined,
+    },
+  };
+}
 
 ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
@@ -421,13 +627,14 @@ ui['proposal-form'].addEventListener('submit', (event) => {
         },
       }),
     });
-    let result;
-    try { result = await response.json(); } catch { throw new Error('The proposal service returned unreadable data.'); }
-    if (!response.ok) throw new Error(result?.error ?? `The proposal service failed with HTTP ${response.status}.`);
-    if (!result || typeof result.project !== 'string' || !result.review || !['ready', 'declined'].includes(result.status)) {
-      throw new Error('The proposal service returned an unsupported result.');
+    let value: unknown;
+    try { value = await response.json(); } catch { throw new Error('The proposal service returned unreadable data.'); }
+    if (!response.ok) {
+      const message = isRecord(value) && typeof value.error === 'string' ? value.error : `The proposal service failed with HTTP ${response.status}.`;
+      throw new Error(message);
     }
-    const review = { ...result.review, status: result.status };
+    const result = parseProposalResponse(value);
+    const review = result.review;
     if (result.status === 'declined') {
       activeReview = review;
       renderReview();
@@ -465,7 +672,7 @@ function renderReview() {
 ui['accept-proposal'].addEventListener('click', () => {
   void perform(async () => {
     writableStore();
-    if (!activeReview || activeReview.proposalRevisionId !== selectedRevision || selectedBranch === 'main') {
+    if (!repo || !activeReview || activeReview.proposalRevisionId !== selectedRevision || selectedBranch === 'main') {
       throw new Error('Select the AI-prepared proposal before accepting it.');
     }
     const acceptedName = selectedBranch;
@@ -490,7 +697,7 @@ ui['request-revision'].addEventListener('click', () => {
   status('Revision request started from the selected proposal. Choose a new proposal name; the earlier proposal remains unchanged.');
 });
 
-function download(text, filename) {
+function download(text: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json;charset=utf-8' }));
   const anchor = element('a');
   anchor.href = url;
@@ -535,8 +742,8 @@ ui['import-file'].addEventListener('change', () => {
     if (!confirmReplacement()) { status('Import cancelled. Your current project is unchanged.'); return; }
     activeReview = null;
     await persist(next);
-    ui['project-name'].value = repo.name;
-    activeReview = repo.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
+    ui['project-name'].value = next.name;
+    activeReview = next.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
     renderReview();
     closeDialog(ui['start-dialog']);
     showPage(activeReview ? 'review' : 'request');
@@ -544,23 +751,28 @@ ui['import-file'].addEventListener('change', () => {
   });
 });
 
-function entry(snapshot) { return snapshot.entities.find((entity) => entity.type === 'Door' && entity.id === 'door-entry'); }
-function hostFor(snapshot, door) {
+function isWall(entity: Entity): entity is Wall { return entity.type === 'Wall'; }
+function isDoor(entity: Entity): entity is Door { return entity.type === 'Door'; }
+function entry(snapshot: ModelSnapshot): Door | undefined {
+  return snapshot.entities.find((entity): entity is Door => entity.type === 'Door' && entity.id === 'door-entry');
+}
+function hostFor(snapshot: ModelSnapshot, door: Door | undefined): { link: HostingRelationship; wall: Wall } | null {
   if (!door) return null;
-  const link = snapshot.relationships.find((relation) => relation.type === 'hosted-by' && relation.source === door.id);
-  const wall = link && snapshot.entities.find((entity) => entity.id === link.target && entity.type === 'Wall');
+  const link = snapshot.relationships.find((relation): relation is HostingRelationship => relation.type === 'hosted-by' && relation.source === door.id);
+  const wall = link && snapshot.entities.find((entity): entity is Wall => entity.id === link.target && entity.type === 'Wall');
   return wall ? { link, wall } : null;
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-function svgNode(tag, attributes = {}, text) {
+type SvgAttributes = Record<string, string | number>;
+function svgNode<K extends keyof SVGElementTagNameMap>(tag: K, attributes: SvgAttributes = {}, text?: string): SVGElementTagNameMap[K] {
   const node = document.createElementNS(SVG_NS, tag);
   for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
   if (text !== undefined) node.textContent = text;
   return node;
 }
 
-function drawPlan(snapshot, reference, identifier, label) {
+function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, identifier: string, label: string): SVGSVGElement {
   const editable = identifier === 'selected' && Boolean(layout);
   const svg = svgNode('svg', { viewBox: '0 0 600 400', role: editable ? 'group' : 'img', 'aria-labelledby': `${identifier}-title ${identifier}-desc` });
   const door = entry(snapshot);
@@ -575,8 +787,8 @@ function drawPlan(snapshot, reference, identifier, label) {
   definitions.append(minorGrid, majorGrid);
   svg.append(definitions, svgNode('rect', { width: 600, height: 400, fill: `url(#${identifier}-major)` }));
 
-  const walls = snapshot.entities.filter((entity) => entity.type === 'Wall');
-  const allWalls = [...walls, ...(reference ? reference.entities.filter((entity) => entity.type === 'Wall') : [])];
+  const walls = snapshot.entities.filter(isWall);
+  const allWalls = [...walls, ...(reference ? reference.entities.filter(isWall) : [])];
   const coordinates = allWalls.flatMap((wall) => [wall.start, wall.end]);
   if (!coordinates.length) return svg;
   const camera = editable && gesture ? gesture.camera : {
@@ -586,9 +798,9 @@ function drawPlan(snapshot, reference, identifier, label) {
   const { minX, maxX, minY, maxY } = camera;
   const scale = Math.min((editable ? 350 : 430) / Math.max(maxX - minX, 1), (editable ? 190 : 245) / Math.max(maxY - minY, 1));
   planCameras.set(svg, { ...camera, scale });
-  const transform = ([x, y]) => [300 + (x - (minX + maxX) / 2) * scale, 193 - (y - (minY + maxY) / 2) * scale];
-  const points = (items) => items.map((point) => transform(point).join(',')).join(' ');
-  const line = (start, end, attributes = {}) => {
+  const transform = ([x, y]: Point): Point => [300 + (x - (minX + maxX) / 2) * scale, 193 - (y - (minY + maxY) / 2) * scale];
+  const points = (items: Point[]): string => items.map((point) => transform(point).join(',')).join(' ');
+  const line = (start: Point, end: Point, attributes: SvgAttributes = {}): SVGLineElement => {
     const [x1, y1] = transform(start); const [x2, y2] = transform(end);
     return svgNode('line', { x1, y1, x2, y2, ...attributes });
   };
@@ -597,33 +809,35 @@ function drawPlan(snapshot, reference, identifier, label) {
     const dx = wall.end[0] - wall.start[0]; const dy = wall.end[1] - wall.start[1];
     const length = Math.hypot(dx, dy);
     const px = -dy / length * wall.thickness / 2; const py = dx / length * wall.thickness / 2;
-    const outline = [[wall.start[0] + px, wall.start[1] + py], [wall.end[0] + px, wall.end[1] + py],
+    const outline: Point[] = [[wall.start[0] + px, wall.start[1] + py], [wall.end[0] + px, wall.end[1] + py],
       [wall.end[0] - px, wall.end[1] - py], [wall.start[0] - px, wall.start[1] - py]];
     svg.append(svgNode('polygon', { points: points(outline), fill: reference ? '#e2ede8' : '#e5eae8', stroke: reference ? '#4f7e72' : '#516873', 'stroke-width': 1.2 }));
   }
-  if (reference) for (const wall of reference.entities.filter((item) => item.type === 'Wall')) {
+  if (reference) for (const wall of reference.entities.filter(isWall)) {
     svg.append(line(wall.start, wall.end, { stroke: '#87979b', 'stroke-width': 1.3, 'stroke-dasharray': '5 4', class: 'selection-outline' }));
   }
 
-  function drawDoors(room, ghost = false) {
-    for (const item of room.entities.filter((entity) => entity.type === 'Door')) {
+  function drawDoors(room: ModelSnapshot, ghost = false): void {
+    for (const item of room.entities.filter(isDoor)) {
       const host = hostFor(room, item);
       if (!host) continue;
       const { wall, link } = host;
       const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
       const ux = (wall.end[0] - wall.start[0]) / length; const uy = (wall.end[1] - wall.start[1]) / length;
-      const hinge = [wall.start[0] + ux * link.offset, wall.start[1] + uy * link.offset];
-      const jamb = [hinge[0] + ux * item.width, hinge[1] + uy * item.width];
-      const leaf = [hinge[0] - uy * item.width, hinge[1] + ux * item.width];
+      const hinge: Point = [wall.start[0] + ux * link.offset, wall.start[1] + uy * link.offset];
+      const jamb: Point = [hinge[0] + ux * item.width, hinge[1] + uy * item.width];
+      const leaf: Point = [hinge[0] - uy * item.width, hinge[1] + ux * item.width];
       const color = ghost ? '#87979b' : reference ? '#167d78' : '#516873';
       const style = { stroke: color, 'stroke-width': ghost ? 1.3 : 1.8, ...(ghost ? { 'stroke-dasharray': '5 4' } : {}) };
       if (!ghost) {
         svg.append(line(hinge, jamb, { stroke: '#fff', 'stroke-width': wall.thickness * scale + 2 }));
-        svg.append(line(hinge, [hinge[0] - uy * wall.thickness / 2, hinge[1] + ux * wall.thickness / 2], style));
-        svg.append(line(jamb, [jamb[0] - uy * wall.thickness / 2, jamb[1] + ux * wall.thickness / 2], style));
+        const hingeEdge: Point = [hinge[0] - uy * wall.thickness / 2, hinge[1] + ux * wall.thickness / 2];
+        const jambEdge: Point = [jamb[0] - uy * wall.thickness / 2, jamb[1] + ux * wall.thickness / 2];
+        svg.append(line(hinge, hingeEdge, style));
+        svg.append(line(jamb, jambEdge, style));
       }
       svg.append(line(hinge, leaf, style));
-      const arc = Array.from({ length: 25 }, (_, index) => {
+      const arc: Point[] = Array.from({ length: 25 }, (_, index): Point => {
         const angle = index * Math.PI / 48;
         return [hinge[0] + item.width * (ux * Math.cos(angle) - uy * Math.sin(angle)),
           hinge[1] + item.width * (uy * Math.cos(angle) + ux * Math.sin(angle))];
@@ -631,10 +845,14 @@ function drawPlan(snapshot, reference, identifier, label) {
       svg.append(svgNode('polyline', { points: points(arc), fill: 'none', ...style }));
       if (!ghost && item.id === 'door-entry') {
         const offset = .58;
-        const a = [hinge[0] + uy * offset, hinge[1] - ux * offset];
-        const b = [jamb[0] + uy * offset, jamb[1] - ux * offset];
+        const a: Point = [hinge[0] + uy * offset, hinge[1] - ux * offset];
+        const b: Point = [jamb[0] + uy * offset, jamb[1] - ux * offset];
         svg.append(line(a, b, { stroke: color, 'stroke-width': .9 }));
-        for (const point of [a, b]) svg.append(line([point[0] - uy * .07, point[1] + ux * .07], [point[0] + uy * .07, point[1] - ux * .07], { stroke: color, 'stroke-width': 1 }));
+        for (const point of [a, b]) {
+          const tickStart: Point = [point[0] - uy * .07, point[1] + ux * .07];
+          const tickEnd: Point = [point[0] + uy * .07, point[1] - ux * .07];
+          svg.append(line(tickStart, tickEnd, { stroke: color, 'stroke-width': 1 }));
+        }
         const [tx, ty] = transform([(a[0] + b[0]) / 2 + uy * .18, (a[1] + b[1]) / 2 - ux * .18]);
         svg.append(svgNode('text', { x: tx, y: ty, fill: color, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-size': 11, 'font-weight': 600, 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 4 }, `${millimetres(item.width)} mm`));
       }
@@ -665,16 +883,17 @@ function drawPlan(snapshot, reference, identifier, label) {
         'data-object': wall.id, role: 'button', tabindex: 0, 'aria-label': `Select ${wall.name}`, 'aria-pressed': String(wall.id === selectedObject) }));
     }
     const doorHost = hostFor(snapshot, door);
+    if (!door || !doorHost) return svg;
     const { wall, link } = doorHost;
     const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
-    const unit = [(wall.end[0] - wall.start[0]) / length, (wall.end[1] - wall.start[1]) / length];
-    const hinge = wall.start.map((v, i) => v + unit[i] * link.offset);
-    const jamb = hinge.map((v, i) => v + unit[i] * door.width);
-    const centre = hinge.map((v, i) => v + unit[i] * door.width / 2);
+    const unit: Point = [(wall.end[0] - wall.start[0]) / length, (wall.end[1] - wall.start[1]) / length];
+    const hinge: Point = [wall.start[0] + unit[0] * link.offset, wall.start[1] + unit[1] * link.offset];
+    const jamb: Point = [hinge[0] + unit[0] * door.width, hinge[1] + unit[1] * door.width];
+    const centre: Point = [hinge[0] + unit[0] * door.width / 2, hinge[1] + unit[1] * door.width / 2];
     svg.append(line(hinge, jamb, { stroke: selectedObject === door.id ? '#e1a12e' : 'transparent', 'stroke-opacity': .25, 'stroke-width': targetWidth,
       class: 'edit-target', 'data-object': door.id, role: 'button', tabindex: 0, 'aria-label': 'Select Entry door', 'aria-pressed': String(selectedObject === door.id) }));
     const selected = snapshot.entities.find((item) => item.id === selectedObject);
-    const handle = (location, operation, caption, square = false) => {
+    const handle = (location: Point, operation: GestureOperation, caption: string, square = false): void => {
       const [x, y] = transform(location);
       const group = svgNode('g', { class: 'edit-handle', 'data-handle': operation, 'data-object': selectedObject, 'aria-label': caption, role: 'button', tabindex: 0 });
       group.append(svgNode('circle', { cx: x, cy: y, r: targetWidth / 2, fill: '#167d78', 'fill-opacity': .06 }));
@@ -682,62 +901,84 @@ function drawPlan(snapshot, reference, identifier, label) {
         : svgNode('circle', { cx: x, cy: y, r: 7, fill: '#167d78', stroke: 'white', 'stroke-width': 2 }));
       svg.append(group);
     };
-    if (selected.type === 'Wall') handle(selected.start.map((v, i) => (v + selected.end[i]) / 2), 'wall', `Move ${selected.name}`);
+    if (!selected) return svg;
+    if (selected.type === 'Wall') {
+      const midpoint: Point = [(selected.start[0] + selected.end[0]) / 2, (selected.start[1] + selected.end[1]) / 2];
+      handle(midpoint, 'wall', `Move ${selected.name}`);
+    }
     else {
-      const origin = transform(wall.start); const arrow = transform(wall.start.map((v, i) => v + unit[i] * .5));
+      const arrowPoint: Point = [wall.start[0] + unit[0] * .5, wall.start[1] + unit[1] * .5];
+      const origin = transform(wall.start); const arrow = transform(arrowPoint);
       svg.append(svgNode('line', { x1: origin[0], y1: origin[1], x2: arrow[0], y2: arrow[1], stroke: '#c27d1a', 'stroke-width': 3 }));
-      const tangent = [unit[0], -unit[1]];
-      const head = [[arrow[0], arrow[1]], [arrow[0] - tangent[0] * 8 - tangent[1] * 4, arrow[1] - tangent[1] * 8 + tangent[0] * 4],
+      const tangent: Point = [unit[0], -unit[1]];
+      const head: Point[] = [[arrow[0], arrow[1]], [arrow[0] - tangent[0] * 8 - tangent[1] * 4, arrow[1] - tangent[1] * 8 + tangent[0] * 4],
         [arrow[0] - tangent[0] * 8 + tangent[1] * 4, arrow[1] - tangent[1] * 8 - tangent[0] * 4]];
       svg.append(svgNode('polygon', { points: head.map((p) => p.join(',')).join(' '), fill: '#c27d1a' }));
       svg.append(svgNode('text', { x: origin[0], y: origin[1] + 25, fill: '#986312', 'font-size': 10 }, 'HOST START'));
       // Separate move and resize targets from the opening so small doors remain usable on phones.
-      const normal = [-unit[1], unit[0]];
-      handle(centre.map((v, i) => v + normal[i] * 36 * cssScale / scale), 'door-move', 'Move Entry door');
-      handle(jamb.map((v, i) => v - normal[i] * 36 * cssScale / scale), 'door-width', 'Resize Entry door', true);
+      const normal: Point = [-unit[1], unit[0]];
+      const moveHandle: Point = [centre[0] + normal[0] * 36 * cssScale / scale, centre[1] + normal[1] * 36 * cssScale / scale];
+      const widthHandle: Point = [jamb[0] - normal[0] * 36 * cssScale / scale, jamb[1] - normal[1] * 36 * cssScale / scale];
+      handle(moveHandle, 'door-move', 'Move Entry door');
+      handle(widthHandle, 'door-width', 'Resize Entry door', true);
     }
   }
   return svg;
 }
 
-function pointerPlan(event, root, camera) {
-  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(root.getScreenCTM().inverse());
+function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamera): Point {
+  const matrix = root.getScreenCTM();
+  if (!matrix) throw new Error('The room plan is not currently visible.');
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
   return [(point.x - 300) / camera.scale + (camera.minX + camera.maxX) / 2,
     (193 - point.y) / camera.scale + (camera.minY + camera.maxY) / 2];
 }
 
 ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
-  if (!repo || busy || writesBlocked || !layout || gesture || event.button !== 0 || !event.isPrimary) return;
-  const target = event.target.closest('[data-object]'); if (!target) return;
+  if (!repo || busy || writesBlocked || !layout || !preview || gesture || event.button !== 0 || !event.isPrimary) return;
+  if (!(event.target instanceof Element)) return;
+  const target = event.target.closest<SVGElement>('[data-object]'); if (!target) return;
   const operation = target.dataset.handle;
-  if (!operation) { chooseObject(target.dataset.object); return; }
+  if (!operation) {
+    const objectId = target.dataset.object;
+    if (objectId) chooseObject(objectId);
+    return;
+  }
+  if (operation !== 'wall' && operation !== 'door-move' && operation !== 'door-width') return;
   if (invalidInput) { feedback('Fix or discard the invalid input before dragging.', true); return; }
   event.preventDefault();
-  const root = ui['proposal-drawing'].querySelector('svg'); const camera = planCameras.get(root);
+  const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
+  if (!root) throw new Error('The editable room plan is unavailable.');
+  const camera = planCameras.get(root);
+  if (!camera) throw new Error('The editable room camera is unavailable.');
   gesture = { id: event.pointerId, root, camera, operation, layout, preview, origin: pointerPlan(event, root, camera),
     client: [event.clientX, event.clientY], moved: false, rejected: false };
   root.setPointerCapture(event.pointerId); updateControls();
 });
 ui['proposal-drawing'].addEventListener('pointermove', (event) => {
   if (!gesture || gesture.id !== event.pointerId) return;
-  if (!gesture.moved && Math.hypot(event.clientX - gesture.client[0], event.clientY - gesture.client[1]) < 6) return;
-  gesture.moved = true; event.preventDefault();
-  const current = pointerPlan(event, gesture.root, gesture.camera);
-  const delta = current.map((v, i) => v - gesture.origin[i]); const candidate = structuredClone(gesture.layout);
-  if (gesture.operation === 'wall') {
-    const wall = gesture.preview.entities.find((item) => item.id === selectedObject);
-    const side = wallSide(wall, gesture.layout);
+  const activeGesture = gesture;
+  if (!activeGesture.moved && Math.hypot(event.clientX - activeGesture.client[0], event.clientY - activeGesture.client[1]) < 6) return;
+  activeGesture.moved = true; event.preventDefault();
+  const current = pointerPlan(event, activeGesture.root, activeGesture.camera);
+  const delta: Point = [current[0] - activeGesture.origin[0], current[1] - activeGesture.origin[1]];
+  const candidate = structuredClone(activeGesture.layout);
+  if (activeGesture.operation === 'wall') {
+    const wall = activeGesture.preview.entities.find((item): item is Wall => item.type === 'Wall' && item.id === selectedObject);
+    if (!wall) return;
+    const side = wallSide(wall, activeGesture.layout);
     candidate.boundsMm[side] += Math.round(delta[side.endsWith('X') ? 0 : 1] * 1000);
   } else {
-    const host = hostFor(gesture.preview, entry(gesture.preview));
+    const host = hostFor(activeGesture.preview, entry(activeGesture.preview));
+    if (!host) return;
     const dx = host.wall.end[0] - host.wall.start[0]; const dy = host.wall.end[1] - host.wall.start[1];
     const along = Math.round((delta[0] * dx + delta[1] * dy) / Math.hypot(dx, dy) * 1000);
-    candidate.door[gesture.operation === 'door-move' ? 'offsetMm' : 'widthMm'] += along;
+    candidate.door[activeGesture.operation === 'door-move' ? 'offsetMm' : 'widthMm'] += along;
   }
-  try { acceptLayout(candidate); gesture.rejected = false; }
-  catch (error) { gesture.rejected = true; feedback(`${error.message} Last valid request sketch retained.`, true); }
+  try { acceptLayout(candidate); activeGesture.rejected = false; }
+  catch (error) { activeGesture.rejected = true; feedback(`${error instanceof Error ? error.message : 'The drag is invalid.'} Last valid request sketch retained.`, true); }
 });
-function endGesture(cancel = false) {
+function endGesture(cancel = false): void {
   if (!gesture) return;
   const previous = gesture; gesture = null;
   if (cancel) { layout = previous.layout; preview = previous.preview; feedback('Drag cancelled. Pre-drag request sketch restored.'); }
@@ -746,54 +987,86 @@ function endGesture(cancel = false) {
   syncInspector(); renderComparison(); updateControls();
 }
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) ui['proposal-drawing'].addEventListener(type, (event) => {
-  if (gesture?.id === event.pointerId) endGesture(type !== 'pointerup');
+  if (event instanceof PointerEvent && gesture?.id === event.pointerId) endGesture(type !== 'pointerup');
 });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && gesture) { event.preventDefault(); endGesture(true); } });
 ui['proposal-drawing'].addEventListener('keydown', (event) => {
-  const target = event.target.closest('[data-object]');
+  if (!(event.target instanceof Element)) return;
+  const target = event.target.closest<SVGElement>('[data-object]');
   if (target && ['Enter', ' '].includes(event.key)) {
-    event.preventDefault(); chooseObject(target.dataset.object);
+    const objectId = target.dataset.object;
+    if (!objectId) return;
+    event.preventDefault(); chooseObject(objectId);
     const control = ui[selectedObject === 'door-entry' ? 'door-width' : 'wall-position'];
     if (!control.disabled) control.focus();
   }
 });
 
-function renderProperties(original, selected, delta) {
+type ModelItem = Entity | HostingRelationship;
+type PropertyRow = [string, string, string, string];
+
+function modelProperties(item: ModelItem): Record<string, unknown> {
+  if (item.type === 'Wall') {
+    return { id: item.id, type: item.type, name: item.name, start: item.start, end: item.end, height: item.height, thickness: item.thickness };
+  }
+  if (item.type === 'Door') {
+    return { id: item.id, type: item.type, name: item.name, width: item.width, height: item.height };
+  }
+  return { id: item.id, type: item.type, source: item.source, target: item.target, offset: item.offset };
+}
+
+function renderProperties(original: ModelSnapshot, selected: ModelSnapshot, delta: ModelDelta): void {
   const a = entry(original); const b = entry(selected);
   const ah = hostFor(original, a); const bh = hostFor(selected, b);
-  const displayMM = (value) => value === undefined ? 'Absent' : `${millimetres(value)} mm`;
+  const displayMM = (value: number | undefined): string => value === undefined ? 'Absent' : `${millimetres(value)} mm`;
   const difference = a && b ? Math.round((b.width - a.width) * 1000) : null;
   const widthDifference = difference === null ? 'Changed' : difference === 0 ? 'Unchanged' : `${difference > 0 ? '+' : '−'}${number.format(Math.abs(difference))} mm`;
-  const rows = [
+  const rows: PropertyRow[] = [
     ['Entrance width', displayMM(a?.width), displayMM(b?.width), widthDifference],
     ['Door height', displayMM(a?.height), displayMM(b?.height), a?.height === b?.height ? 'Unchanged' : 'Changed'],
     ['Host wall', ah?.wall.name ?? 'Absent', bh?.wall.name ?? 'Absent', ah?.wall.id === bh?.wall.id ? 'Unchanged' : 'Changed'],
     ['Offset along host wall', displayMM(ah?.link.offset), displayMM(bh?.link.offset), ah?.link.offset === bh?.link.offset ? 'Unchanged' : 'Changed'],
     ['Host wall height', displayMM(ah?.wall.height), displayMM(bh?.wall.height), ah?.wall.height === bh?.wall.height ? 'Unchanged' : 'Changed'],
   ];
-  for (const wall of selected.entities.filter((item) => item.type === 'Wall')) {
-    const before = original.entities.find((item) => item.id === wall.id);
-    const length = (item) => item ? Math.hypot(item.end[0] - item.start[0], item.end[1] - item.start[1]) : undefined;
-    const position = (item) => item ? `${item.start.map(millimetres).join(', ')} → ${item.end.map(millimetres).join(', ')} mm` : 'Absent';
+  for (const wall of selected.entities.filter(isWall)) {
+    const before = original.entities.find((item): item is Wall => item.id === wall.id && item.type === 'Wall');
+    const length = (item: Wall | undefined): number | undefined => item ? Math.hypot(item.end[0] - item.start[0], item.end[1] - item.start[1]) : undefined;
+    const position = (item: Wall | undefined): string => item ? `${item.start.map(millimetres).join(', ')} → ${item.end.map(millimetres).join(', ')} mm` : 'Absent';
     rows.push([`${wall.name} length`, displayMM(length(before)), displayMM(length(wall)), length(before) === length(wall) ? 'Unchanged' : 'Changed']);
     if (position(before) !== position(wall)) rows.push([`${wall.name} endpoints`, position(before), position(wall), 'Changed']);
   }
-  const propertyNames = { name: 'name', type: 'type', width: 'width', height: 'height', thickness: 'thickness', start: 'start coordinate', end: 'end coordinate', source: 'door', target: 'host wall', offset: 'offset from host start' };
-  const propertyValue = (key, value) => value === undefined ? 'Absent'
-    : ['width', 'height', 'thickness', 'offset'].includes(key) ? displayMM(value)
-      : Array.isArray(value) ? `${value.map(millimetres).join(', ')} mm` : String(value);
-  for (const [collection, noun] of [['entities', 'Object'], ['relationships', 'Placement']]) {
-    const modifications = [
-      ...delta[collection].added.map((after) => ({ before: null, after, action: 'Added' })),
-      ...delta[collection].removed.map((before) => ({ before, after: null, action: 'Removed' })),
-      ...delta[collection].modified.map((item) => ({ ...item, action: 'Changed' })),
-    ];
+  const propertyNames: Record<string, string> = { name: 'name', type: 'type', width: 'width', height: 'height', thickness: 'thickness', start: 'start coordinate', end: 'end coordinate', source: 'door', target: 'host wall', offset: 'offset from host start' };
+  const propertyValue = (key: string, value: unknown): string => {
+    if (value === undefined) return 'Absent';
+    if (['width', 'height', 'thickness', 'offset'].includes(key) && typeof value === 'number') return displayMM(value);
+    if (Array.isArray(value) && value.every((coordinate) => typeof coordinate === 'number')) {
+      return `${value.map((coordinate) => millimetres(coordinate)).join(', ')} mm`;
+    }
+    return String(value);
+  };
+  const entityModifications: Array<{ before: ModelItem | null; after: ModelItem | null; action: string }> = [
+    ...delta.entities.added.map((after) => ({ before: null, after, action: 'Added' })),
+    ...delta.entities.removed.map((before) => ({ before, after: null, action: 'Removed' })),
+    ...delta.entities.modified.map((item) => ({ ...item, action: 'Changed' })),
+  ];
+  const relationshipModifications: Array<{ before: ModelItem | null; after: ModelItem | null; action: string }> = [
+    ...delta.relationships.added.map((after) => ({ before: null, after, action: 'Added' })),
+    ...delta.relationships.removed.map((before) => ({ before, after: null, action: 'Removed' })),
+    ...delta.relationships.modified.map((item) => ({ ...item, action: 'Changed' })),
+  ];
+  const modificationGroups: Array<[Array<{ before: ModelItem | null; after: ModelItem | null; action: string }>, string]> = [
+    [entityModifications, 'Object'], [relationshipModifications, 'Placement'],
+  ];
+  for (const [modifications, noun] of modificationGroups) {
     for (const { before, after, action } of modifications) {
       const item = after ?? before;
-      const title = item.name ?? `${noun} ${item.id}`;
-      for (const key of new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])) {
-        if (key === 'id' || JSON.stringify(before?.[key]) === JSON.stringify(after?.[key])) continue;
-        rows.push([`${title} · ${propertyNames[key] ?? key}`, propertyValue(key, before?.[key]), propertyValue(key, after?.[key]), action]);
+      if (!item) continue;
+      const title = 'name' in item ? item.name : `${noun} ${item.id}`;
+      const beforeProperties = before ? modelProperties(before) : {};
+      const afterProperties = after ? modelProperties(after) : {};
+      for (const key of new Set([...Object.keys(beforeProperties), ...Object.keys(afterProperties)])) {
+        if (key === 'id' || JSON.stringify(beforeProperties[key]) === JSON.stringify(afterProperties[key])) continue;
+        rows.push([`${title} · ${propertyNames[key] ?? key}`, propertyValue(key, beforeProperties[key]), propertyValue(key, afterProperties[key]), action]);
       }
     }
   }
@@ -808,12 +1081,13 @@ function renderProperties(original, selected, delta) {
   ui['comparison-note'].textContent = `Original compared with ${dirty() ? 'the visual request sketch' : 'the selected revision'}. ${delta.entities.added.length} added, ${delta.entities.removed.length} removed, ${delta.entities.modified.length} modified entities; ${delta.relationships.added.length} added, ${delta.relationships.removed.length} removed, ${delta.relationships.modified.length} modified relationships. Only AI-submitted geometry is saved; no construction validation.`;
 }
 
-function selectRevision(branch, revisionId) {
+function selectRevision(branch: string, revisionId: string): void {
   if (busy || gesture || !repo) return;
+  const project = repo;
   if (dirty() && !window.confirm('Discard the unsaved request sketch and view this saved revision?')) return;
   selectedBranch = branch;
   selectedRevision = revisionId;
-  activeReview = repo.reviews().find((review) => review.proposalRevisionId === revisionId) ?? null;
+  activeReview = project.reviews().find((review) => review.proposalRevisionId === revisionId) ?? null;
   resetEditor();
   renderComparison();
   renderReview();
@@ -825,11 +1099,17 @@ function selectRevision(branch, revisionId) {
     else button.setAttribute('aria-current', String(selected));
   }
   showPage(activeReview ? 'review' : 'request');
-  status(`Viewing ${branch}${revisionId === repo.head(branch) ? '' : ' · earlier revision'}. The original remains in revision history.`);
+  status(`Viewing ${branch}${revisionId === project.head(branch) ? '' : ' · earlier revision'}. The original remains in revision history.`);
 }
 
-function renderHistory() {
-  const branches = repo.branches();
+function requireRepository(): RoomRepository {
+  if (!repo) throw new Error('Create or open a project first.');
+  return repo;
+}
+
+function renderHistory(): void {
+  const project = requireRepository();
+  const branches = project.branches();
   ui['branch-count'].textContent = `${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}`;
   ui['history-list'].replaceChildren(...branches.map((branch) => {
     const wrapper = element('div', undefined, 'history-item');
@@ -838,10 +1118,10 @@ function renderHistory() {
     button.setAttribute('aria-pressed', String(selectedBranch === branch.name && selectedRevision === branch.revisionId));
     const symbol = element('span', branch.name === 'main' ? '◇' : '↳', 'history-symbol'); symbol.setAttribute('aria-hidden', 'true');
     const copy = element('span');
-    const room = repo.view(branch.revisionId).snapshot;
+    const room = project.view(branch.revisionId).snapshot;
     const width = entry(room)?.width;
-    const changed = repo.compare(repo.root(), branch.revisionId);
-    const mainDetail = branch.revisionId === repo.root() ? 'Original model' : 'Current accepted model';
+    const changed = project.compare(project.root(), branch.revisionId);
+    const mainDetail = branch.revisionId === project.root() ? 'Original model' : 'Current accepted model';
     copy.append(element('span', branch.name, 'history-name'), element('span', `${branch.name === 'main' ? mainDetail : `AI proposal · ${changed.entities.modified.length} objects and ${changed.relationships.modified.length} placements changed`} · ${width === undefined ? 'entry absent' : `${millimetres(width)} mm entrance`}`, 'history-detail'));
     button.append(symbol, copy);
     button.addEventListener('click', () => selectRevision(branch.name, branch.revisionId));
@@ -849,8 +1129,9 @@ function renderHistory() {
     const detail = element('details', undefined, 'revision-detail');
     detail.append(element('summary', 'Revision ancestry'));
     const list = element('ol', undefined, 'revision-list');
-    let revision = repo.view(branch.revisionId); let index = 0;
-    while (revision) {
+    let revisionId: string | null = branch.revisionId; let index = 0;
+    while (revisionId !== null) {
+      const revision = project.view(revisionId);
       const id = revision.id;
       const item = element('li');
       const control = element('button', `${index === 0 ? 'Head' : 'Ancestor'} · ${id.slice(0, 10)}${revision.parentId === null ? ' · original' : ''}`, 'revision-button');
@@ -860,7 +1141,7 @@ function renderHistory() {
       control.setAttribute('aria-label', `View ${branch.name} ${index === 0 ? 'head' : 'ancestor'} revision ${id.slice(0, 10)}`);
       control.addEventListener('click', () => selectRevision(branch.name, id));
       item.append(control); list.append(item);
-      revision = revision.parentId === null ? null : repo.view(revision.parentId);
+      revisionId = revision.parentId;
       index += 1;
     }
     detail.append(list); wrapper.append(detail);
@@ -868,40 +1149,49 @@ function renderHistory() {
   }));
 }
 
-function renderComparison() {
-  const originalId = repo.root();
-  const original = repo.view(originalId).snapshot;
-  const selected = preview ?? repo.view(selectedRevision).snapshot;
+function renderComparison(): void {
+  const project = requireRepository();
+  const originalId = project.root();
+  const original = project.view(originalId).snapshot;
+  const selected = preview ?? project.view(selectedRevision).snapshot;
   const isOriginal = selectedRevision === originalId;
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
   const next = drawPlan(selected, original, 'selected', `${selectedBranch} visual request plan`);
-  const root = ui['proposal-drawing'].querySelector('svg');
+  const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
   if (root) {
     // Keep the capture root stable throughout a drag; only drawing children change.
-    root.replaceChildren(...next.childNodes); root.setAttribute('role', next.getAttribute('role'));
-    planCameras.set(root, planCameras.get(next));
+    root.replaceChildren(...next.childNodes);
+    const role = next.getAttribute('role');
+    if (role) root.setAttribute('role', role); else root.removeAttribute('role');
+    const camera = planCameras.get(next);
+    if (!camera) throw new Error('The room plan camera was not created.');
+    planCameras.set(root, camera);
   } else ui['proposal-drawing'].replaceChildren(next);
   ui['review-drawing'].replaceChildren(drawPlan(selected, original, 'review', `${selectedBranch} proposal review plan`));
   ui['selected-title'].textContent = dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : selectedBranch;
-  ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === repo.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
+  ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = 'Select a wall or door, then drag its handle or enter a dimension as visual intent. Dashed grey is the preserved original. AI prepares any saved model proposal.';
   renderProperties(original, selected, diffSnapshots(original, selected));
 }
 
-function renderConflictChoices() {
-  const alternatives = repo.branches().filter((branch) => branch.name !== 'main');
-  for (const [id, defaultIndex] of [['conflict-left', 0], ['conflict-right', 1]]) {
-    const select = ui[id]; const previous = select.value;
-    select.replaceChildren();
+function renderConflictChoices(): void {
+  const project = requireRepository();
+  const alternatives = project.branches().filter((branch) => branch.name !== 'main');
+  const choices: Array<[HTMLSelectElement, number]> = [[ui['conflict-left'], 0], [ui['conflict-right'], 1]];
+  for (const [choice, defaultIndex] of choices) {
+    const previous = choice.value;
+    choice.replaceChildren();
     if (alternatives.length < 2) {
-      const option = element('option', 'Save two proposals first'); option.value = ''; select.append(option);
+      const option = element('option', 'Save two proposals first'); option.value = ''; choice.append(option);
     } else {
       for (const branch of alternatives) {
-        const width = entry(repo.view(branch.revisionId).snapshot)?.width;
+        const width = entry(project.view(branch.revisionId).snapshot)?.width;
         const option = element('option', `${branch.name}${width === undefined ? '' : ` · ${millimetres(width)} mm`}`);
-        option.value = branch.name; select.append(option);
+        option.value = branch.name; choice.append(option);
       }
-      select.value = alternatives.some((branch) => branch.name === previous) ? previous : alternatives[defaultIndex].name;
+      const fallback = alternatives[defaultIndex] ?? alternatives[0];
+      if (!fallback) throw new Error('Two proposal alternatives were expected.');
+      choice.value = alternatives.some((branch) => branch.name === previous) ? previous : fallback.name;
     }
   }
   ui['conflict-result'].textContent = 'Comparison only. Nothing is merged or applied.';
@@ -920,7 +1210,12 @@ ui['check-conflicts'].addEventListener('click', () => {
     } else {
       ui['conflict-result'].append(document.createTextNode(`${conflicts.length} ${conflicts.length === 1 ? 'conflict needs' : 'conflicts need'} a human decision. `));
       for (const conflict of conflicts) {
-        const describe = (value) => value === null ? 'removed' : value.type === 'Door' ? `${millimetres(value.width)} mm door` : value.name ?? value.id;
+        const describe = (value: ModelItem | null): string => {
+          if (value === null) return 'removed';
+          if (value.type === 'Door') return `${millimetres(value.width)} mm door`;
+          if (value.type === 'Wall') return value.name;
+          return `placement on ${value.target}`;
+        };
         ui['conflict-result'].append(document.createTextNode(`${conflict.id}: original ${describe(conflict.base)}; ${left}: ${describe(conflict.left)}; ${right}: ${describe(conflict.right)}. `));
       }
       ui['conflict-result'].append(document.createTextNode('Both alternatives remain separate. Nothing is merged.'));
@@ -928,14 +1223,15 @@ ui['check-conflicts'].addEventListener('click', () => {
   } catch (error) { report(error); }
 });
 
-for (const id of ['conflict-left', 'conflict-right']) ui[id].addEventListener('change', () => {
+for (const conflictChoice of [ui['conflict-left'], ui['conflict-right']]) conflictChoice.addEventListener('change', () => {
   ui['conflict-result'].textContent = 'Alternatives changed. Compare again to see their conflicts. Nothing is merged.';
 });
 
-function render() {
-  ui['project-title'].textContent = repo.name;
-  document.title = `${repo.name} · Room studies`;
-  if (!activeReview) activeReview = repo.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
+function render(): void {
+  const project = requireRepository();
+  ui['project-title'].textContent = project.name;
+  document.title = `${project.name} · Room studies`;
+  if (!activeReview) activeReview = project.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
   renderComparison();
   renderHistory();
   renderConflictChoices();
@@ -963,7 +1259,8 @@ async function initialize() {
     catch (error) {
       writesBlocked = true;
       showRecovery(record.text);
-      throw new Error(`The saved project could not be validated: ${error.message} It has been left intact. Download it below; local writes are blocked to protect it.`);
+      const message = error instanceof Error ? error.message : 'The saved data is invalid.';
+      throw new Error(`The saved project could not be validated: ${message} It has been left intact. Download it below; local writes are blocked to protect it.`);
     }
     repo = restored;
     savedText = record.text;

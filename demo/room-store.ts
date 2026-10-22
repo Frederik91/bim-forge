@@ -4,8 +4,16 @@ const OBJECT_STORE = 'project';
 const RECORD_KEY = 'active';
 export const MAX_PROJECT_BYTES = 256 * 1024;
 
+export interface RoomRecord {
+  generation: number;
+  text: string | null;
+}
+
 export class RoomStoreError extends Error {
-  constructor(message, code = 'storage', savedText = null) {
+  readonly code: string;
+  readonly savedText: string | null;
+
+  constructor(message: string, code = 'storage', savedText: string | null = null) {
     super(message);
     this.name = 'RoomStoreError';
     this.code = code;
@@ -13,28 +21,34 @@ export class RoomStoreError extends Error {
   }
 }
 
-function checkedRecord(record) {
+function checkedRecord(record: unknown): RoomRecord {
   if (record === undefined) return { generation: 0, text: null };
-  if (!record || !Number.isSafeInteger(record.generation) || record.generation < 1 ||
-      record.generation >= Number.MAX_SAFE_INTEGER || typeof record.text !== 'string') {
-    throw new RoomStoreError('The saved record is unreadable. It has been left intact. Local writes are blocked.',
-      'corrupt', typeof record?.text === 'string' ? record.text : null);
+  if (!record || typeof record !== 'object' || Array.isArray(record)
+      || !Object.hasOwn(record, 'generation') || !Object.hasOwn(record, 'text')) {
+    throw new RoomStoreError('The saved record is unreadable. It has been left intact. Local writes are blocked.', 'corrupt');
   }
-  return { generation: record.generation, text: record.text };
+  const generation = Reflect.get(record, 'generation');
+  const text = Reflect.get(record, 'text');
+  if (typeof generation !== 'number' || !Number.isSafeInteger(generation) || generation < 1 ||
+      generation >= Number.MAX_SAFE_INTEGER || typeof text !== 'string') {
+    throw new RoomStoreError('The saved record is unreadable. It has been left intact. Local writes are blocked.',
+      'corrupt', typeof text === 'string' ? text : null);
+  }
+  return { generation, text };
 }
 
 export class RoomStore {
-  #database;
+  #database: IDBDatabase;
 
-  constructor(database) { this.#database = database; }
+  constructor(database: IDBDatabase) { this.#database = database; }
 
-  static open() {
-    return new Promise((resolve, reject) => {
+  static open(): Promise<RoomStore> {
+    return new Promise<RoomStore>((resolve, reject) => {
       if (!globalThis.indexedDB) {
         reject(new RoomStoreError('Local storage is unavailable. This demo needs IndexedDB to save safely.'));
         return;
       }
-      let request;
+      let request: IDBOpenDBRequest;
       let settled = false;
       try { request = indexedDB.open(DATABASE, 1); }
       catch { reject(new RoomStoreError('Local storage could not be opened. Check browser storage permissions.')); return; }
@@ -59,11 +73,11 @@ export class RoomStore {
     });
   }
 
-  load() {
-    return new Promise((resolve, reject) => {
-      let transaction;
-      let result;
-      let failure;
+  load(): Promise<RoomRecord> {
+    return new Promise<RoomRecord>((resolve, reject) => {
+      let transaction: IDBTransaction;
+      let result: RoomRecord | undefined;
+      let failure: unknown;
       try {
         transaction = this.#database.transaction(OBJECT_STORE, 'readonly');
         const request = transaction.objectStore(OBJECT_STORE).get(RECORD_KEY);
@@ -75,7 +89,10 @@ export class RoomStore {
         reject(new RoomStoreError('The saved project could not be read. Reload to retry; no data has been changed.'));
         return;
       }
-      transaction.oncomplete = () => resolve(result);
+      transaction.oncomplete = () => {
+        if (!result) { reject(new RoomStoreError('Reading local storage failed. Your saved project has been left intact.')); return; }
+        resolve(result);
+      };
       transaction.onabort = () => reject(failure ?? new RoomStoreError('Reading local storage failed. Your saved project has been left intact.'));
       transaction.onerror = () => { /* The abort handler reports the final transaction failure. */ };
     });
@@ -83,15 +100,15 @@ export class RoomStore {
 
   // Read and conditional write share one readwrite transaction. Other tabs serialize here.
   // Resolves to the new generation only after the durable transaction has completed.
-  saveCAS(text, expectedGeneration) {
-    return new Promise((resolve, reject) => {
+  saveCAS(text: string, expectedGeneration: number): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
       if (typeof text !== 'string' || !text || new TextEncoder().encode(text).byteLength > MAX_PROJECT_BYTES ||
           !Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0 || expectedGeneration >= Number.MAX_SAFE_INTEGER - 1) {
         reject(new RoomStoreError('The project cannot be saved: invalid generation or JSON larger than 256 KiB.', 'invalid'));
         return;
       }
-      let transaction;
-      let failure;
+      let transaction: IDBTransaction;
+      let failure: unknown;
       const nextGeneration = expectedGeneration + 1;
       try {
         transaction = this.#database.transaction(OBJECT_STORE, 'readwrite', { durability: 'strict' });
@@ -116,5 +133,5 @@ export class RoomStore {
     });
   }
 
-  close() { this.#database.close(); }
+  close(): void { this.#database.close(); }
 }

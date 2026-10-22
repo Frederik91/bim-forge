@@ -12,8 +12,8 @@ const cleanText = (value, maximum) => typeof value === 'string' && value.length 
   !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value);
 const containsCredential = (value) => /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-proj-[A-Za-z0-9_-]{20,})/.test(value);
 const roomDemoPaths = new Set([
-  'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.mjs',
-  'demo/room-store.mjs', 'demo/server.ts', 'demo/server.test.mjs',
+  'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.ts',
+  'demo/room-store.ts', 'demo/server.ts', 'demo/server.test.mjs',
   'src/room-model.ts',
 ]);
 
