@@ -121,7 +121,7 @@ test('profile-specific technical names never change the review or deployment dec
   for (const profile of [
     { label: 'run-health utility', paths: ['factory/health.ts', 'factory/health.test.ts'],
       exportName: 'summarizeRunHealth', errorText: 'Invalid run records' },
-    { label: 'schedule snapshot checker', paths: ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'],
+    { label: 'schedule snapshot checker', paths: ['factory/schedule-check.ts', 'factory/schedule-check.test.ts'],
       exportName: 'checkSchedule', errorText: 'Invalid schedule snapshot' },
     input().profile,
   ]) {

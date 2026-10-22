@@ -42,25 +42,25 @@ test('ready coding scope binds exact issue, source, paths, plan and independent 
 });
 
 test('only two complete fixed profiles are available and their contracts are immutable', () => {
-  const schedulePaths = ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'];
+  const schedulePaths = ['factory/schedule-check.ts', 'factory/schedule-check.test.ts'];
   const profile = codingProfile(schedulePaths.slice().reverse());
   assert.equal(profile.exportName, 'checkSchedule');
   assert.equal(profile.errorText, 'Invalid schedule snapshot');
-  assert.equal(profile.paths[0], 'factory/schedule-check.mjs');
+  assert.equal(profile.paths[0], 'factory/schedule-check.ts');
   assert.equal(codingProfile(paths).exportName, 'summarizeRunHealth');
   assert.equal(codingProfile(paths).errorText, 'Invalid run records');
   assert.throws(() => { profile.paths[0] = 'factory/code-job.mjs'; });
   assert.throws(() => { profile.exportName = 'exec'; });
   for (const invalid of [null, [], ['factory/health.ts'],
-    ['factory/health.ts', 'factory/schedule-check.test.mjs'],
-    ['factory/schedule-check.mjs', 'factory/schedule-check.mjs'],
+    ['factory/health.ts', 'factory/schedule-check.test.ts'],
+    ['factory/schedule-check.ts', 'factory/schedule-check.ts'],
     ['factory/unknown.mjs', 'factory/unknown.test.mjs'], [...paths, 'factory/extra.mjs']]) {
     assert.throws(() => codingProfile(invalid), /fixed coding profile/);
   }
 });
 
 test('schedule scope fixes paths and cases while packaging preserves all existing tests', () => {
-  const schedulePaths = ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'];
+  const schedulePaths = ['factory/schedule-check.ts', 'factory/schedule-check.test.ts'];
   const value = { ...spec(), paths: schedulePaths, plan: { ...spec().plan, paths: schedulePaths },
     acceptanceCases: scheduleAcceptanceCases };
   const parsed = readCodingSpec(bytes(value));
@@ -72,7 +72,7 @@ test('schedule scope fixes paths and cases while packaging preserves all existin
     files: schedulePaths.map((file) => ({ path: file, content: 'export const example = true;\n' })) };
   const prepared = prepareCodingPackage(parsed, response, policy, baseline);
   assert.equal(JSON.parse(prepared.proposal.files.at(-1).content).scripts.test,
-    'node --test factory/coding.test.mjs factory/health.test.ts factory/schedule-check.test.mjs');
+    'node --test factory/coding.test.mjs factory/health.test.ts factory/schedule-check.test.ts');
   assert.throws(() => readCodingSpec(bytes({ ...value, exportName: 'exec' })));
   assert.throws(() => readCodingSpec(bytes({ ...value, errorText: 'Forged' })));
   assert.throws(() => readCodingSpec(bytes({ ...value, paths: ['factory/health.ts', schedulePaths[1]],
@@ -80,7 +80,7 @@ test('schedule scope fixes paths and cases while packaging preserves all existin
 });
 
 test('independent profile errors cannot be swapped or supplied by a candidate', () => {
-  const schedulePaths = ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'];
+  const schedulePaths = ['factory/schedule-check.ts', 'factory/schedule-check.test.ts'];
   const rejected = scheduleAcceptanceCases.find((item) => item.output === null);
   const observation = { exitCode: 1, stdout: '', stderr: 'Invalid schedule snapshot\n' };
   assert.doesNotThrow(() => assertCodingObservation(rejected, observation, schedulePaths));

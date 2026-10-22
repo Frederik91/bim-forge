@@ -16,7 +16,10 @@ const roomDemoPaths = new Set([
   'demo/room-store.ts', 'demo/server.ts', 'demo/server.test.ts',
   'src/room-model.ts', 'src/room-model.test.ts',
 ]);
-const migratedFactoryPaths = new Set(['factory/health.ts', 'factory/health.test.ts']);
+const migratedFactoryPaths = new Set([
+  'factory/health.ts', 'factory/health.test.ts',
+  'factory/schedule-check.ts', 'factory/schedule-check.test.ts',
+]);
 
 export function approvePackage(bytes, approvedSha256) {
   if (!Buffer.isBuffer(bytes) || bytes.length > 512 * 1024 || !/^[a-f0-9]{64}$/.test(approvedSha256 ?? '')) {

@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { checkSchedule } from './schedule-check.mjs';
+import { checkSchedule } from './schedule-check.ts';
 
-const cliPath = fileURLToPath(new URL('./schedule-check.mjs', import.meta.url));
+const cliPath = fileURLToPath(new URL('./schedule-check.ts', import.meta.url));
 const ERROR = 'Invalid schedule snapshot';
 const ready = {
   enabled: true,
@@ -15,7 +15,7 @@ const ready = {
   dailyLimit: 1,
 };
 
-function cli(input) {
+function cli(input: string | Buffer) {
   const result = spawnSync(process.execPath, [cliPath], {
     input,
     encoding: 'utf8',
@@ -28,16 +28,16 @@ function cli(input) {
   return result;
 }
 
-function rejectCli(input) {
+function rejectCli(input: string | Buffer) {
   const result = cli(input);
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, '');
   assert.equal(result.stderr, `${ERROR}\n`);
 }
 
-function rejectApi(snapshot) {
+function rejectApi(snapshot: unknown) {
   assert.throws(() => checkSchedule(snapshot), (error) => {
-    assert.equal(error.message, ERROR);
+    assert.equal(error instanceof Error ? error.message : undefined, ERROR);
     return true;
   });
 }
@@ -97,7 +97,7 @@ test('reject invalid top-level values', () => {
 
 test('reject missing fields and extra metadata before reporting readiness', () => {
   for (const key of Object.keys(ready)) {
-    const snapshot = { ...ready };
+    const snapshot: Record<string, unknown> = { ...ready };
     delete snapshot[key];
     rejectApi(snapshot);
     rejectCli(JSON.stringify(snapshot));
@@ -157,7 +157,7 @@ test('API requires own data fields and does not invoke accessors', () => {
 test('API preserves frozen input and returns independent reports', () => {
   const snapshot = Object.freeze({ ...ready });
   const first = checkSchedule(snapshot);
-  first.reason = 'changed';
+  Reflect.set(first, 'reason', 'changed');
   assert.deepEqual(checkSchedule(snapshot), { eligible: true, reason: 'ready' });
   assert.deepEqual(snapshot, ready);
 });

@@ -10,7 +10,7 @@ const exact = (value, keys) => value && !Array.isArray(value) && typeof value ==
 const profiles = [
   { paths: ['factory/health.ts', 'factory/health.test.ts'], exportName: 'summarizeRunHealth',
     errorText: 'Invalid run records', label: 'run-health utility' },
-  { paths: ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'], exportName: 'checkSchedule',
+  { paths: ['factory/schedule-check.ts', 'factory/schedule-check.test.ts'], exportName: 'checkSchedule',
     errorText: 'Invalid schedule snapshot', label: 'schedule snapshot checker' },
 ].map((profile) => Object.freeze({ ...profile, paths: Object.freeze(profile.paths) }));
 const fixedProfilePaths = new Set(profiles.flatMap((profile) => profile.paths));
