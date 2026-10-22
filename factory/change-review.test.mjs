@@ -119,7 +119,7 @@ test('absent evidence leaves the recommendation on hold and no missing context i
 
 test('profile-specific technical names never change the review or deployment decision', () => {
   for (const profile of [
-    { label: 'run-health utility', paths: ['factory/health.mjs', 'factory/health.test.mjs'],
+    { label: 'run-health utility', paths: ['factory/health.ts', 'factory/health.test.ts'],
       exportName: 'summarizeRunHealth', errorText: 'Invalid run records' },
     { label: 'schedule snapshot checker', paths: ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'],
       exportName: 'checkSchedule', errorText: 'Invalid schedule snapshot' },

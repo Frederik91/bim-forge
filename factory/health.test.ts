@@ -2,15 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { summarizeRunHealth } from './health.mjs';
+import { summarizeRunHealth } from './health.ts';
+import type { RunHealthStatus } from './health.ts';
 
-const statuses = [
+const statuses: RunHealthStatus[] = [
   'running', 'succeeded', 'needs-input', 'failed',
   'timed-out', 'cancelled', 'interrupted', 'blocked',
 ];
-const command = fileURLToPath(new URL('./health.mjs', import.meta.url));
+const command = fileURLToPath(new URL('./health.ts', import.meta.url));
 
-function cli(input) {
+function cli(input: string | Buffer) {
   const result = spawnSync(process.execPath, [command], {
     input,
     encoding: 'utf8',
@@ -22,7 +23,7 @@ function cli(input) {
   return result;
 }
 
-function assertRejected(input) {
+function assertRejected(input: string | Buffer) {
   const result = cli(input);
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, '');

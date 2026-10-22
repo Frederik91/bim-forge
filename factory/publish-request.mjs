@@ -16,6 +16,7 @@ const roomDemoPaths = new Set([
   'demo/room-store.ts', 'demo/server.ts', 'demo/server.test.ts',
   'src/room-model.ts', 'src/room-model.test.ts',
 ]);
+const migratedFactoryPaths = new Set(['factory/health.ts', 'factory/health.test.ts']);
 
 export function approvePackage(bytes, approvedSha256) {
   if (!Buffer.isBuffer(bytes) || bytes.length > 512 * 1024 || !/^[a-f0-9]{64}$/.test(approvedSha256 ?? '')) {
@@ -50,7 +51,7 @@ export function approvePackage(bytes, approvedSha256) {
   for (const file of proposal.files) {
     if (!exactKeys(file, ['path', 'content']) || typeof file.path !== 'string' || file.path.length > 160 ||
         (!/^(?:docs\/[a-z0-9][a-z0-9\/-]*\.md|factory\/[a-z0-9][a-z0-9.-]*\.mjs|src\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.test)?\.mjs|package\.json)$/.test(file.path)
-          && !roomDemoPaths.has(file.path)) ||
+          && !roomDemoPaths.has(file.path) && !migratedFactoryPaths.has(file.path)) ||
         file.path.includes('//') || /(?:^|\/)(?:agents|claude|skill)\.md$/i.test(file.path) ||
         paths.has(file.path) || !cleanText(file.content, 64 * 1024) ||
         Buffer.from(file.content).toString('utf8') !== file.content) {

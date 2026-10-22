@@ -8,11 +8,12 @@ export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex'
 const exact = (value, keys) => value && !Array.isArray(value) && typeof value === 'object'
   && Object.keys(value).sort().join(',') === keys.slice().sort().join(',');
 const profiles = [
-  { paths: ['factory/health.mjs', 'factory/health.test.mjs'], exportName: 'summarizeRunHealth',
+  { paths: ['factory/health.ts', 'factory/health.test.ts'], exportName: 'summarizeRunHealth',
     errorText: 'Invalid run records', label: 'run-health utility' },
   { paths: ['factory/schedule-check.mjs', 'factory/schedule-check.test.mjs'], exportName: 'checkSchedule',
     errorText: 'Invalid schedule snapshot', label: 'schedule snapshot checker' },
 ].map((profile) => Object.freeze({ ...profile, paths: Object.freeze(profile.paths) }));
+const fixedProfilePaths = new Set(profiles.flatMap((profile) => profile.paths));
 
 export function codingProfile(paths) {
   const profile = Array.isArray(paths) && profiles.find((item) =>
@@ -46,7 +47,7 @@ export function readCodingSpec(bytes) {
       || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(spec.issue.updated_at)
       || !Array.isArray(spec.paths) || spec.paths.length < 1 || spec.paths.length > 4
       || new Set(spec.paths).size !== spec.paths.length
-      || spec.paths.some((file) => !/^(?:factory|src)\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file))
+      || spec.paths.some((file) => !/^(?:factory|src)\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file) && !fixedProfilePaths.has(file))
       || !Array.isArray(spec.acceptanceCases) || spec.acceptanceCases.length < 1 || spec.acceptanceCases.length > 32
       || spec.acceptanceCases.some((item) => !exact(item, ['mode', 'name', 'input', 'output']) || !['cli', 'api'].includes(item.mode)
         || typeof item.name !== 'string' || typeof item.input !== 'string' || Buffer.byteLength(item.input) > 128 * 1024
@@ -77,7 +78,7 @@ export function prepareCodingPackage(spec, answer, policy, baselinePackage) {
     title: spec.issue.title.slice(0, 110), body: answer.summary, files: answer.files };
   const first = Buffer.from(JSON.stringify(proposal));
   approvePackage(first, sha256(first));
-  const tests = spec.paths.filter((file) => file.endsWith('.test.mjs'));
+  const tests = spec.paths.filter((file) => file.endsWith('.test.mjs') || file.endsWith('.test.ts'));
   if (tests.length) {
     const manifest = JSON.parse(baselinePackage);
     if (typeof manifest.scripts?.test !== 'string' || !manifest.scripts.test.startsWith('node --test ')) {
@@ -97,7 +98,9 @@ export function materializeCodingFiles(candidate, proposal) {
   const directories = new Set();
   for (const file of proposal.files) {
     if (file.path === 'package.json') continue;
-    if (!/^(?:factory|src)\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file.path)) throw new Error('Unsupported coding path');
+    if (!/^(?:factory|src)\/[a-z0-9][a-z0-9.-]*\.mjs$/.test(file.path) && !fixedProfilePaths.has(file.path)) {
+      throw new Error('Unsupported coding path');
+    }
     const parent = path.join(root, file.path.split('/')[0]);
     let directory;
     try { directory = fs.lstatSync(parent); }

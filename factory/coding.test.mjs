@@ -15,7 +15,7 @@ import './schedule-job.test.mjs';
 import './application-profile.test.mjs';
 import './change-review.test.mjs';
 
-const paths = ['factory/health.mjs', 'factory/health.test.mjs'];
+const paths = ['factory/health.ts', 'factory/health.test.ts'];
 const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),
   issue: { number: 17, title: 'Run health', body: 'Summarize disposable runs only.', updated_at: '2026-10-21T00:00:00Z' },
   plan: { outcome: 'Summarize runs', changeClass: 'read-only', paths, steps: ['Implement the command'],
@@ -51,8 +51,8 @@ test('only two complete fixed profiles are available and their contracts are imm
   assert.equal(codingProfile(paths).errorText, 'Invalid run records');
   assert.throws(() => { profile.paths[0] = 'factory/code-job.mjs'; });
   assert.throws(() => { profile.exportName = 'exec'; });
-  for (const invalid of [null, [], ['factory/health.mjs'],
-    ['factory/health.mjs', 'factory/schedule-check.test.mjs'],
+  for (const invalid of [null, [], ['factory/health.ts'],
+    ['factory/health.ts', 'factory/schedule-check.test.mjs'],
     ['factory/schedule-check.mjs', 'factory/schedule-check.mjs'],
     ['factory/unknown.mjs', 'factory/unknown.test.mjs'], [...paths, 'factory/extra.mjs']]) {
     assert.throws(() => codingProfile(invalid), /fixed coding profile/);
@@ -66,17 +66,17 @@ test('schedule scope fixes paths and cases while packaging preserves all existin
   const parsed = readCodingSpec(bytes(value));
   assert.equal(parsed.acceptanceCases.length, 32);
   assert.equal(healthAcceptanceCases.length, 24);
-  const baseline = JSON.stringify({ scripts: { test: 'node --test factory/coding.test.mjs factory/health.test.mjs',
+  const baseline = JSON.stringify({ scripts: { test: 'node --test factory/coding.test.mjs factory/health.test.ts',
     validate: 'node scripts/validate-policy.mjs' } });
   const response = { summary: 'Read-only scheduling advice.', questions: [],
     files: schedulePaths.map((file) => ({ path: file, content: 'export const example = true;\n' })) };
   const prepared = prepareCodingPackage(parsed, response, policy, baseline);
   assert.equal(JSON.parse(prepared.proposal.files.at(-1).content).scripts.test,
-    'node --test factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs');
+    'node --test factory/coding.test.mjs factory/health.test.ts factory/schedule-check.test.mjs');
   assert.throws(() => readCodingSpec(bytes({ ...value, exportName: 'exec' })));
   assert.throws(() => readCodingSpec(bytes({ ...value, errorText: 'Forged' })));
-  assert.throws(() => readCodingSpec(bytes({ ...value, paths: ['factory/health.mjs', schedulePaths[1]],
-    plan: { ...value.plan, paths: ['factory/health.mjs', schedulePaths[1]] } })), /fixed coding profile/);
+  assert.throws(() => readCodingSpec(bytes({ ...value, paths: ['factory/health.ts', schedulePaths[1]],
+    plan: { ...value.plan, paths: ['factory/health.ts', schedulePaths[1]] } })), /fixed coding profile/);
 });
 
 test('independent profile errors cannot be swapped or supplied by a candidate', () => {
@@ -100,7 +100,7 @@ test('model source cannot select operations, existing validators, file modes or 
     { ...answer(), files: answer().files.map((file) => ({ ...file, mode: '100755' })) }]) {
     assert.throws(() => prepareCodingPackage(spec(), bad, policy, manifest));
   }
-  const protectedPolicy = { ...policy, denylist: ['factory/health.mjs'] };
+  const protectedPolicy = { ...policy, denylist: ['factory/health.ts'] };
   assert.throws(() => prepareCodingPackage(spec(), answer(), protectedPolicy, manifest), /protected/);
 });
 
@@ -108,7 +108,7 @@ test('only the controller appends approved new tests to the pinned manifest', ()
   const prepared = prepareCodingPackage(spec(), answer(), policy, manifest);
   assert.equal(prepared.proposal.files.length, 3);
   const candidate = JSON.parse(prepared.proposal.files.at(-1).content);
-  assert.equal(candidate.scripts.test, 'node --test factory/baseline.test.mjs factory/health.test.mjs');
+  assert.equal(candidate.scripts.test, 'node --test factory/baseline.test.mjs factory/health.test.ts');
   assert.equal(candidate.scripts.validate, JSON.parse(manifest).scripts.validate);
   assert.equal(prepared.digest, sha256(prepared.bytes));
 });

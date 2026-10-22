@@ -39,7 +39,7 @@ export const scheduleAcceptanceCases = [
   { mode: 'cli', name: 'schedule-byte-limit', input: `${JSON.stringify(ready)}${' '.repeat(4096)}`, output: null },
 ];
 
-export function assertCodingObservation(acceptance, observation, paths = ['factory/health.mjs', 'factory/health.test.mjs']) {
+export function assertCodingObservation(acceptance, observation, paths = ['factory/health.ts', 'factory/health.test.ts']) {
   const profile = codingProfile(paths);
   assert.ok(Number.isInteger(observation.exitCode) && observation.exitCode >= 0 && !observation.signal, 'candidate did not exit normally');
   if (acceptance.output === null) {

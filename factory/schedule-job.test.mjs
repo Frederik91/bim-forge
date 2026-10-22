@@ -17,7 +17,7 @@ import { healthAcceptanceCases } from './code-acceptance.mjs';
 const encode = (value) => Buffer.from(`${JSON.stringify(value)}\n`);
 const runId = '01234567-89ab-cdef-0123-456789abcdef';
 const bootId = 'abcdef01-2345-6789-abcd-ef0123456789';
-const paths = ['factory/health.mjs', 'factory/health.test.mjs'];
+const paths = ['factory/health.ts', 'factory/health.test.ts'];
 const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),
   issue: { number: 17, title: 'Run health', body: 'Summarize disposable runs only.', updated_at: '2026-10-21T00:00:00Z' },
   plan: { outcome: 'Summarize runs', changeClass: 'read-only', paths, steps: ['Implement the command'],
