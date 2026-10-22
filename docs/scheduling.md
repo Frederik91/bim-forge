@@ -41,6 +41,8 @@ Measurement covers the installed source tree, Node and npm installation, generat
 
 Ubuntu's root-managed operating system remains trusted. This digest is not a measured-boot or complete OS attestation. Root compromise, malicious OS packages, and changes inside an already running process are outside this check.
 
+File hashing reads every byte in 64 KiB chunks and rejects files that change during measurement. Each installed tree remains limited to 768 MiB and 20,000 entries. A legitimate executable larger than 256 MiB fits that aggregate budget without a whole-file memory allocation.
+
 The current generator installation and its parent directory are worker-owned. Scheduled deployment must first protect those executable files and ancestors while preserving the worker's private authentication directory. The dispatcher refuses this mutable installation; the manual trial does not establish scheduled readiness.
 
 ## Stops and crash recovery

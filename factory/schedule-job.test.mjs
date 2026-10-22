@@ -268,6 +268,65 @@ test('immutable closure measurement includes dependency bytes and refuses writab
   assert.throws(() => measureTree(directory, options), /escapes/);
 });
 
+test('deployment measurement hashes every byte using bounded reads rather than whole-file allocation', { skip: process.platform !== 'linux' }, (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-stream-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const filename = path.join(directory, 'binary');
+  const content = Buffer.alloc(192 * 1024 + 7, 17); content[content.length - 1] = 99;
+  fs.writeFileSync(filename, content, { mode: 0o600 });
+  const original = fs.readFileSync;
+  t.mock.method(fs, 'readFileSync', (file, ...args) => {
+    if (file === filename) throw new Error('Whole-file allocation is forbidden for trusted runtime measurement');
+    return original(file, ...args);
+  });
+  const originalRead = fs.readSync; let reads = 0;
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+    assert.ok(length > 0 && length <= 65536, 'Each requested read must stay within 64 KiB');
+    reads += 1;
+    return originalRead(fd, buffer, offset, Math.min(length, 511), position);
+  });
+  const value = measureTree(directory, { ownerUid: process.getuid(), checkAncestors: false });
+  const expected = [['', 'directory', fs.statSync(directory).mode & 0o777], ['binary', 0o600, sha256(content)]];
+  assert.deepEqual(value, { sha256: sha256(JSON.stringify(expected)), entries: 2, bytes: content.length });
+  assert.ok(reads >= Math.ceil(content.length / 511), 'Short positive reads must not truncate the digest');
+});
+
+test('deployment measurement still rejects the aggregate byte budget before reading contents', { skip: process.platform !== 'linux' }, (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-budget-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const filename = path.join(directory, 'oversized'); fs.writeFileSync(filename, 'x');
+  const original = fs.lstatSync;
+  t.mock.method(fs, 'lstatSync', (file, ...args) => {
+    const stat = original(file, ...args);
+    if (file === filename) stat.size = 768 * 1024 * 1024 + 1;
+    return stat;
+  });
+  assert.throws(() => measureTree(directory, { ownerUid: process.getuid(), checkAncestors: false }), /byte limit/);
+});
+
+test('deployment measurement refuses changes to file contents, size, metadata or path during reads', { skip: process.platform !== 'linux' }, (t) => {
+  for (const action of ['truncate', 'replace', 'grow', 'rewrite', 'metadata']) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-change-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const filename = path.join(directory, 'binary'); fs.writeFileSync(filename, Buffer.alloc(128 * 1024, 7));
+    const original = fs.readSync; let changed = false;
+    const mock = t.mock.method(fs, 'readSync', (...args) => {
+      const count = original(...args);
+      if (!changed) {
+        changed = true;
+        if (action === 'truncate') fs.truncateSync(filename, 1);
+        else if (action === 'replace') { fs.renameSync(filename, `${filename}-old`); fs.writeFileSync(filename, Buffer.alloc(128 * 1024, 7)); }
+        else if (action === 'grow') fs.appendFileSync(filename, 'x');
+        else if (action === 'metadata') fs.chmodSync(filename, 0o444);
+        else { fs.writeFileSync(filename, Buffer.alloc(128 * 1024, 8)); fs.utimesSync(filename, new Date(0), new Date(1)); }
+      }
+      return count;
+    });
+    assert.throws(() => measureTree(directory, { ownerUid: process.getuid(), checkAncestors: false }), /Trusted file (?:ended|changed)/);
+    mock.mock.restore();
+  }
+});
+
 test('a cleanup failure can retain the shared coding lease without deleting durable history', { skip: process.platform !== 'linux' }, (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-retain-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
