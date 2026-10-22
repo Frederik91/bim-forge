@@ -10,6 +10,8 @@ import { coderCommand } from './code-generate.mjs';
 import { openCodingRun, readProtectedCodingFile } from './coding-store.mjs';
 import { assertCodingObservation, healthAcceptanceCases, scheduleAcceptanceCases } from './code-acceptance.mjs';
 import './schedule-approval.test.mjs';
+import './scheduled-publication.test.mjs';
+import './schedule-job.test.mjs';
 
 const paths = ['factory/health.mjs', 'factory/health.test.mjs'];
 const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),

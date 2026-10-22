@@ -1,57 +1,58 @@
 # Scheduled coding and draft publication
 
-## Current boundary
+## Source is not activation
 
-This document is preparation, not an installed scheduler. The owner selected hourly checks, then expanded the requested target to coding and draft-PR publishing. Human approval and merging remain required. The current controller and publisher are still manually invoked.
+The owner selected hourly coding and draft publication. Human review and merging remain required. The two manual trial utilities and schedule admission library are merged. Both fixed profiles now exist on main, so neither is eligible for another additions-only run.
 
-The second manual qualification is issue #20, a pure schedule snapshot checker. Issue #21 adds its fixed trusted profile. Human review precedes deployment of that extension and execution of the second profile. Merging source does not deploy a release or enable recurring work.
+`factory/schedule-job.mjs` connects the existing controller and publisher. New trusted code still requires human review before installation. A merged PR does not install a release, approve a task, or enable a timer. The [deployment guide](scheduled-dispatch.md) contains the default-disabled units and qualification steps.
 
-## Proposed hourly flow
+## One approved scope per activation
+
+The root-owned `/var/lib/bim-forge-approvals/SCHEDULED` file selects one approval and the fixed `profile-additions-draft-v1` publication policy. Missing activation means disabled. A null approval means idle. The timer cannot select public issues, change a scope, refresh an approval, or retry a failed job.
 
 ```text
-hourly wake -> one protected, explicitly approved task
-            -> fresh scope, pause, budget, release, and health checks
-            -> existing coding controller -> independent acceptance and repository checks
-            -> verified immutable package -> bounded publication policy
-            -> existing isolated publisher -> draft PR -> human review and merge
+hourly wake
+  exact administrator-approved scope
+    shared coding admission and lease
+      tools-disabled generator
+      independent credential-free cases and repository tests
+      exact verified package and required scheduled permit
+        isolated App publisher creates a draft
+          human reviews and merges
 ```
 
-The timer cannot choose public issues or execute issue text. The generator retains disabled tools. Candidate code runs only in credential-free accounts. The publisher alone receives short-lived App credentials. Neither a passing candidate test nor `checkSchedule(snapshot).eligible` grants publication authority.
+The seven-field approval binds the repository, exact scope digest, measured deployment digest, start time, expiry, and UTC-day start limit. The scope includes the issue snapshot, base SHA, plan, paths, and acceptance cases. Approval validity is at most 24 hours. The daily limit is one through three starts, including manual starts. The existing cumulative issue limit remains three.
 
-## Approval and limits
+The dispatcher uses the coding ledger as the sole admission record. It holds the same coding lease through publication and confirmed child-service cleanup. A separate dispatch record lists the exact services that cleanup owns. Dispatch receipts cache terminal outcomes, not start counters. Duplicate wakes return the receipt without another model call or repository write. An uncertain publication requires manual reconciliation through the existing exact-byte publisher workflow.
 
-The proposed dispatcher accepts one administrator-installed task slot. Approval binds the repository, exact issue snapshot, current main SHA, complete scope and independent cases, fixed profile, reviewed installed release hashes, expiry, and publication policy. No arbitrary command or file path enters through the slot identifier.
+## Publication authority stays separate
 
-The slot permits at most one model start and one new draft. Keep one active coding job globally. Propose at most one coding start per UTC day initially, with the existing cumulative three-start limit per issue. The owner must approve the activation limits before enabling recurrence. An hourly wake is not permission for an hourly model call.
+The dispatcher reopens the protected verified ledger, exact candidate bytes, independent observations, and verifier log. It derives the manifest append from the pinned baseline. It permits only the selected profile's new files and that exact append. It never imports candidate code or reads the App key.
 
-No automatic retries, backlog catch-up, rebasing, approval refresh, issue closure, or merge. Changed main, issue, release, policy, or cases blocks the slot rather than silently updating it. Failure or interruption spends a started slot. A successful run waits while its draft is reviewed; duplicate wakes report the recorded result without another model call or PR.
+Scheduled packages and permits live only in `approvals/scheduled`. `publish.mjs --scheduled-sha` requires the permit. Missing or invalid scheduled authorization never falls back to `--approved-sha`. The existing manual spool remains separate.
 
-Manual and scheduled starts must share the same lease and durable admission records. Daily counts and single-use consumption come from those records, not a second counter in a timer or caller-supplied snapshot. Persist consumption before starting generation. Missing or ambiguous state stops work and requires administrator recovery.
+The App publisher checks current activation, both local pause files, approval expiry, boot identity, and the original monotonic deadline before each repository request. Existing remote issue, main, pause, protection, intent, issue-budget, and reconciliation checks remain active. Only the isolated App service receives a credential. Token revocation remains allowed after work authorization expires.
 
-The existing exact-byte publishing spool stays mandatory. Automated staging would require a new reviewed dispatcher that checks an explicit, narrow preauthorization policy against the trusted controller's verified ledger and frozen source bytes before installing that exact package. This is a change from per-package human publishing approval. It is not implemented or implicitly granted by a timer. Keep the publisher's live gates and human merge requirements unchanged.
+## Time and deployment checks
 
-## Trigger choice
+The whole job has one same-boot 20-minute monotonic deadline, starting before intake. Each candidate service retains its own shorter limit. Local guards run while remote checks are pending. Remote gates refresh approximately every 30 seconds during active stages. Cleanup may continue after expiry but cannot start more work.
 
-Prefer a VM-native timer because the factory runs on the always-on VM and already uses fixed systemd services. An app heartbeat would add desktop availability and an app-to-VM authorization transport. Do not run both.
+Measurement covers the installed source tree, Node and npm installation, generator installation and dependencies, unit files and effective protection settings, controller binaries, and their linked libraries. Each actual child service also requires the expected template file with no instance override, drop-in, or pending reload before start. Both release aliases must resolve to one protected release. Writable ancestors and external dependency links are unsupported. A supplied Git SHA is not deployment evidence.
 
-For the initial phase, prepare an hourly read-only report with no model calls or App credential. The later coding dispatcher remains a separate reviewed component. A readiness-only service needs no sudo, secret access, or network if it consumes a protected administrator-prepared snapshot. It must report stale or missing snapshots rather than calling them ready.
+Ubuntu's root-managed operating system remains trusted. This digest is not a measured-boot or complete OS attestation. Root compromise, malicious OS packages, and changes inside an already running process are outside this check.
 
-A future timer uses hourly UTC boundaries, no boot catch-up, no failure restart, and one fixed service. Its installation defaults to disabled. Report and dispatch have distinct service identities and permissions. This PR provides no activation command or deployable timer, because those executables and their admission checks are not implemented yet.
+The current generator installation and its parent directory are worker-owned. Scheduled deployment must first protect those executable files and ancestors while preserving the worker's private authentication directory. The dispatcher refuses this mutable installation; the manual trial does not establish scheduled readiness.
 
-## Activation checklist
+## Stops and crash recovery
 
-1. Review and merge the fixed-profile extension. Install an immutable reviewed release only after all coding units are stopped and their control groups are empty. Preserve the old release and ledgers for rollback and evidence.
-2. Freeze issue #20 against the then-current main and live issue snapshot. Run its 32 independent cases and full Linux suite in credential-free sandboxes. Review generated source, actual exits and outputs, case hashes, and publication bytes. Supplemental tests do not prove arbitrary hostile behavior.
-3. Publish its draft through the existing exact-byte approval flow. Keep human approval, trusted CI, and administrator protection enforcement in place.
-4. Implement and review a separate trusted dispatcher and publication preauthorization policy. Require fixed profile additions only, no existing controller, test, validator, policy, deployment, credential, schema, or model edits. Prove manual/scheduled races, duplicate wakes, expired or changed bindings, daily and issue budgets, publication reconciliation, and crash recovery.
-5. Enforce a whole-job monotonic deadline and approval expiry during execution, not only at admission. Retain local and remote pause checks, stage limits, bounded output, read-only host files, private network, capped scratch, and whole-control-group cleanup. A killed controller alone is not cleanup.
-6. Demonstrate disabled, idle, missing-snapshot, stale, busy, paused, unknown, exhausted-budget, and lost-response behavior with no unapproved model or GitHub write. Failed cleanup must require recovery, never clear its own lease.
-7. Approve the exact installed release, queue slot, expiry, daily cap, hourly cadence, and automated publication policy. Then explicitly enable the selected timer. Verify one real wake and its audit record before leaving it unattended.
+The hourly UTC timer has no catch-up, automatic restart, or parallel job execution. The service defaults to disabled. The dispatcher checks memory and disk headroom before consuming a start.
 
-Stop future wakes with the timer's disabled state. Stop active coding with administrator-owned `/var/lib/bim-forge-coding/PAUSED`; stop publisher writes with `/var/lib/bim-forge-approvals/PAUSED`. Preserve active-unit and failed-run evidence. Do not erase attempts or steal stale leases by age. Exact service names and activation commands belong to the future reviewed dispatcher deployment, not to this design.
+Either local pause file stops useful work: `/var/lib/bim-forge-coding/PAUSED` or `/var/lib/bim-forge-approvals/PAUSED`. Public `loop-pause-all` issues and repository `STATE.md` remain remote stops. Disabling the timer stops future wakes, not an active job.
+
+Before each child starts, the dispatcher durably records its exact service ID. `ExecStopPost` stops only those validated services and confirms empty control groups. A failed cleanup preserves the coding lease. Hard interruption preserves the active dispatch record and any stale leases. No age-based lease deletion or automatic resume exists.
 
 ## Remaining limits
 
-The VM has 2 vCPUs and 6 GiB RAM. Keep generation, cases, and supplemental checks sequential, with the current stage limits. Measure the shared VM's memory and disk headroom before admitting work. A timer must not add parallelism.
+The VM has 2 vCPUs and 6 GiB RAM. Stages stay sequential. Reported token usage is checked after generation; it is not a hard monetary cap. Unknown costs remain unknown.
 
-Reported token usage is checked after completion; it is not a hard monetary spending ceiling. Unknown costs remain unknown. Same-kernel isolation does not eliminate guest-kernel or hypervisor risks. A small or empty repository does not remove credential risk.
+An in-flight network request cannot be atomically recalled when a permit expires. The existing transport timeout bounds requests. A hard kill may prevent immediate token revocation; the token's lifetime remains the fallback. Same-kernel sandboxes do not eliminate guest-kernel or hypervisor vulnerabilities. Fixture tests do not prove the installed scheduler works. Installed disabled, idle, stop, and cleanup checks follow human review.
