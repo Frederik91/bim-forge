@@ -3,10 +3,45 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { RoomRepository, diffSnapshots, rectangleLayout, previewRectangle } from './room-model.ts';
 import { createChatGPTPlanModelWorker, MODEL_PROPOSAL_TOOLS, prepareModelProposal } from './model-proposal.ts';
+import type { Door, Entity, HostingRelationship, ModelSnapshot, Point, RoomLayout, Wall } from './room-model.ts';
+import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
 
-const door = (repo, branch = 'main') => repo.view(repo.head(branch)).snapshot.entities.find((item) => item.id === 'door-entry');
-const proposal = (repo, name = 'wider-entry', doorWidthM = 1.2, from = repo.head('main')) => repo.propose({ name, from, doorWidthM });
-const snapshot = (repo) => structuredClone(repo.view(repo.head('main')).snapshot);
+interface DoorShape { id: string; type: 'Door'; name: string; width: number; height: number }
+interface WallShape { id: string; type: 'Wall'; name: string; start: Point; end: Point; thickness: number; height: number }
+type EntityShape = DoorShape | WallShape;
+interface RelationshipShape { id: string; type: 'hosted-by'; source: string; target: string; offset: number }
+interface SnapshotShape { units: string; entities: EntityShape[]; relationships: RelationshipShape[] }
+type ModelItem = Entity | HostingRelationship;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+function parseRecord(text: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value)) throw new Error('Expected a JSON object.');
+  return value;
+}
+function recordArray(record: Record<string, unknown>, key: string): Array<Record<string, unknown>> {
+  const value = record[key];
+  if (!Array.isArray(value) || !value.every(isRecord)) throw new Error(`Expected ${key} records.`);
+  return value;
+}
+function first<T>(values: readonly T[], label: string): T {
+  const value = values[0];
+  if (value === undefined) throw new Error(`Missing ${label}.`);
+  return value;
+}
+function doorEntity(value: ModelItem | EntityShape | undefined | null): Door | DoorShape {
+  if (!value || value.type !== 'Door') throw new Error('Expected a door.');
+  return value;
+}
+function wallEntity(value: Entity | EntityShape | undefined): Wall | WallShape {
+  if (!value || value.type !== 'Wall') throw new Error('Expected a wall.');
+  return value;
+}
+const door = (repo: RoomRepository, branch = 'main'): Door | DoorShape => doorEntity(repo.view(repo.head(branch)).snapshot.entities.find((item) => item.id === 'door-entry'));
+const proposal = (repo: RoomRepository, name = 'wider-entry', doorWidthM: unknown = 1.2, from: unknown = repo.head('main')) => repo.propose({ name, from, doorWidthM });
+const snapshot = (repo: RoomRepository): SnapshotShape => structuredClone(repo.view(repo.head('main')).snapshot);
 
 test('sample project contains four walls, one hosted door and metre units', async () => {
   const repo = await RoomRepository.create('My first room');
@@ -28,20 +63,21 @@ test('a separate proposal preserves original bytes, stable ids and parent revisi
   assert.equal(door(repo).width, 0.9); assert.equal(door(repo, 'wider-entry').width, 1.2);
   const delta = repo.compare(repo.head('main'), repo.head('wider-entry'));
   assert.equal(delta.entities.modified.length, 1);
-  assert.equal(delta.entities.modified[0].id, 'door-entry');
-  assert.equal(delta.entities.modified[0].before.width, 0.9);
-  assert.equal(delta.entities.modified[0].after.width, 1.2);
+  const modifiedDoor = first(delta.entities.modified, 'modified door');
+  assert.equal(modifiedDoor.id, 'door-entry');
+  assert.equal(doorEntity(modifiedDoor.before).width, 0.9);
+  assert.equal(doorEntity(modifiedDoor.after).width, 1.2);
   assert.deepEqual(delta.relationships, { added: [], removed: [], modified: [] });
   assert.deepEqual(repo.view(repo.head('main')).snapshot.entities.map((item) => item.id), repo.view(repo.head('wider-entry')).snapshot.entities.map((item) => item.id));
 });
 
 test('all returned history and deltas are deeply immutable', async () => {
   const repo = await proposal(await RoomRepository.create());
-  assert.throws(() => { door(repo).width = 3; }, TypeError);
-  assert.throws(() => { repo.branches()[0].revisionId = 'changed'; }, TypeError);
+  assert.throws(() => Object.defineProperty(door(repo), 'width', { value: 3 }), TypeError);
+  assert.throws(() => Object.defineProperty(first(repo.branches(), 'branch'), 'revisionId', { value: 'changed' }), TypeError);
   const delta = repo.compare(repo.head('main'), repo.head('wider-entry'));
-  assert.throws(() => { delta.entities.modified[0].after.width = 5; }, TypeError);
-  assert.equal(repo.head('main'), repo.branches()[0].revisionId);
+  assert.throws(() => Object.defineProperty(doorEntity(first(delta.entities.modified, 'modified door').after), 'width', { value: 5 }), TypeError);
+  assert.equal(repo.head('main'), first(repo.branches(), 'branch').revisionId);
 });
 
 test('same content has deterministic revision hashes across projects and restores', async () => {
@@ -67,8 +103,10 @@ test('conflicting proposals are visible without applying either one', async () =
   repo = await proposal(repo, 'alternate-study', 1.0);
   const before = repo.serialize();
   const conflicts = repo.conflicts(repo.head('main'), repo.head('accessibility-study'), repo.head('alternate-study'));
-  assert.equal(conflicts.length, 1); assert.equal(conflicts[0].id, 'door-entry');
-  assert.equal(conflicts[0].base.width, 0.9); assert.equal(conflicts[0].left.width, 1.2); assert.equal(conflicts[0].right.width, 1);
+  assert.equal(conflicts.length, 1);
+  const conflict = first(conflicts, 'door conflict');
+  assert.equal(conflict.id, 'door-entry');
+  assert.equal(doorEntity(conflict.base).width, 0.9); assert.equal(doorEntity(conflict.left).width, 1.2); assert.equal(doorEntity(conflict.right).width, 1);
   assert.equal(repo.serialize(), before); assert.equal(door(repo).width, 0.9);
   assert.deepEqual(repo.conflicts(repo.head('main'), repo.head('accessibility-study'), repo.head('accessibility-study')), []);
   assert.deepEqual(repo.conflicts(repo.head('main'), repo.head('main'), repo.head('alternate-study')), []);
@@ -109,29 +147,39 @@ test('semantic comparison includes added, removed, changed entities and relation
 
 test('graph validator refuses duplicates, missing hosts, bad geometry and unknown fields', async () => {
   const repo = await RoomRepository.create(); const original = snapshot(repo);
-  const invalid = [];
-  const mutate = (fn) => { const value = structuredClone(original); fn(value); invalid.push(value); };
-  mutate((s) => { s.units = 'mm'; });
-  mutate((s) => s.entities.push(s.entities[0]));
-  mutate((s) => { s.relationships[0].target = 'missing'; });
-  mutate((s) => { s.relationships = []; });
-  mutate((s) => { s.entities.find((e) => e.type === 'Wall').end = s.entities.find((e) => e.type === 'Wall').start; });
-  mutate((s) => { s.entities.find((e) => e.type === 'Door').height = 4; });
-  mutate((s) => { s.relationships[0].offset = 6; });
-  mutate((s) => { s.metadata = 'not permitted'; });
+  const wall = wallEntity(original.entities.find((entity) => entity.type === 'Wall'));
+  const relationship = first(original.relationships, 'host relationship');
+  const invalid: unknown[] = [
+    { ...original, units: 'mm' },
+    { ...original, entities: [...original.entities, first(original.entities, 'entity')] },
+    { ...original, relationships: original.relationships.map((item) => item.id === relationship.id ? { ...item, target: 'missing' } : item) },
+    { ...original, relationships: [] },
+    { ...original, entities: original.entities.map((item) => item.id === wall.id ? { ...wall, end: wall.start } : item) },
+    { ...original, entities: original.entities.map((item) => item.type === 'Door' ? { ...item, height: 4 } : item) },
+    { ...original, relationships: original.relationships.map((item) => ({ ...item, offset: 6 })) },
+    { ...original, metadata: 'not permitted' },
+  ];
   for (const value of invalid) assert.throws(() => diffSnapshots(original, value));
 });
 
 test('corrupt saves cannot replace a valid repository', async () => {
   const repo = await proposal(await RoomRepository.create()); const text = repo.serialize();
-  const corrupt = [];
-  const mutate = (fn) => { const value = JSON.parse(text); fn(value); corrupt.push(JSON.stringify(value)); };
+  const corrupt: string[] = [];
+  const mutate = (fn: (state: Record<string, unknown>) => void): void => {
+    const value = parseRecord(text); fn(value); corrupt.push(JSON.stringify(value));
+  };
   mutate((s) => { s.version = 3; });
-  mutate((s) => { s.revisions[1].snapshot.entities.find((e) => e.type === 'Door').width = 1.4; });
-  mutate((s) => { s.branches[0].name = 'renamed-main'; });
-  mutate((s) => s.branches.push(s.branches[0]));
-  mutate((s) => { s.branches[1].revisionId = '0'.repeat(64); });
-  mutate((s) => { s.revisions.splice(0, 1); });
+  mutate((s) => {
+    const revision = recordArray(s, 'revisions')[1];
+    if (!revision || !isRecord(revision.snapshot)) throw new Error('Missing proposal revision.');
+    const entity = recordArray(revision.snapshot, 'entities').find((item) => item.type === 'Door');
+    if (!entity) throw new Error('Missing proposal door.');
+    entity.width = 1.4;
+  });
+  mutate((s) => { first(recordArray(s, 'branches'), 'branch').name = 'renamed-main'; });
+  mutate((s) => { const branches = recordArray(s, 'branches'); branches.push(first(branches, 'branch')); });
+  mutate((s) => { const branch = recordArray(s, 'branches')[1]; if (!branch) throw new Error('Missing proposal branch.'); branch.revisionId = '0'.repeat(64); });
+  mutate((s) => { const revisions = recordArray(s, 'revisions'); revisions.splice(0, 1); });
   mutate((s) => { s.unknown = true; });
   for (const value of [...corrupt, '', '{', 'null', '[]', ' '.repeat(262145)]) await assert.rejects(RoomRepository.restore(value));
   assert.equal(repo.serialize(), text);
@@ -139,7 +187,7 @@ test('corrupt saves cannot replace a valid repository', async () => {
 
 test('JSON input limits use encoded bytes and constructor cannot forge valid history', async () => {
   await assert.rejects(RoomRepository.restore('é'.repeat(131073)), /256 KiB/);
-  assert.throws(() => new RoomRepository(null, {}), /create or restore/);
+  assert.throws(() => Reflect.construct(RoomRepository, [null, {}]), /create or restore/);
   await assert.rejects(RoomRepository.create(''));
   await assert.rejects(RoomRepository.create('x'.repeat(81)));
 });
@@ -156,8 +204,8 @@ test('restoration normalizes main-first branch order and rejects invalid proposa
 });
 
 test('a caller-supplied iterator cannot bypass graph validation and accessors never run', async () => {
-  const repo = await RoomRepository.create(); const value = snapshot(repo);
-  value.entities = [null]; value.entities[Symbol.iterator] = function* () {};
+  const repo = await RoomRepository.create(); const value = { ...snapshot(repo), entities: [null] };
+  Object.defineProperty(value.entities, Symbol.iterator, { value: function* () {} });
   assert.throws(() => diffSnapshots(snapshot(repo), value));
   let calls = 0;
   const input = { name: 'proposal', from: repo.head('main') };
@@ -165,16 +213,16 @@ test('a caller-supplied iterator cannot bypass graph validation and accessors ne
   await assert.rejects(repo.propose(input)); assert.equal(calls, 0);
 });
 
-function assertFrozen(value) {
+function assertFrozen(value: unknown): void {
   if (!value || typeof value !== 'object') return;
   assert.equal(Object.isFrozen(value), true);
   Object.values(value).forEach(assertFrozen);
 }
 
-function assertRectangleJoins(value) {
-  const walls = value.entities.filter((entity) => entity.type === 'Wall');
-  const corners = new Map();
-  for (const wall of walls) {
+function assertRectangleJoins(value: SnapshotShape | ModelSnapshot): void {
+  const corners = new Map<string, number>();
+  for (const wall of value.entities) {
+    if (wall.type !== 'Wall') continue;
     assert.notDeepEqual(wall.start, wall.end);
     assert.equal(wall.start[0] === wall.end[0] || wall.start[1] === wall.end[1], true);
     for (const point of [wall.start, wall.end]) {
@@ -186,23 +234,22 @@ function assertRectangleJoins(value) {
   assert.deepEqual([...corners.values()], [2, 2, 2, 2]);
 }
 
-const canonicalJSON = (value) => {
+const canonicalJSON = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(canonicalJSON).join(',')}]`;
-  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJSON(value[key])}`).join(',')}}`;
+  if (isRecord(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJSON(value[key])}`).join(',')}}`;
   return JSON.stringify(value);
 };
 
-function legacyRevisionText(repo, changed) {
-  const state = JSON.parse(repo.serialize());
+function legacyRevisionText(repo: RoomRepository, changed: SnapshotShape): string {
+  const state = parseRecord(repo.serialize());
   state.version = 1;
   delete state.reviews;
   const parentId = repo.head('main');
-  for (const collection of [changed.entities, changed.relationships]) {
-    collection.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  }
+  changed.entities.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  changed.relationships.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   const id = createHash('sha256').update(canonicalJSON({ version: 1, parentId, snapshot: changed })).digest('hex');
-  state.revisions.push({ id, parentId, snapshot: changed });
-  state.branches.push({ name: 'legacy-shape', revisionId: id });
+  recordArray(state, 'revisions').push({ id, parentId, snapshot: changed });
+  recordArray(state, 'branches').push({ name: 'legacy-shape', revisionId: id });
   return canonicalJSON(state);
 }
 
@@ -221,13 +268,14 @@ test('rectangle layout is an exact deeply frozen millimetre projection and previ
   assert.deepEqual(preview, base);
   assert.deepEqual(Object.keys(preview).sort(), ['entities', 'relationships', 'units']);
   assertFrozen(preview);
-  assert.throws(() => { preview.entities[0].start[0] = 1; }, TypeError);
+  const previewWall = wallEntity(preview.entities.find((entity) => entity.type === 'Wall'));
+  assert.throws(() => Object.defineProperty(previewWall.start, '0', { value: 1 }), TypeError);
   assert.equal(repo.serialize(), before);
 });
 
 test('moving each side updates both adjoining corners without moving the opposite wall', async () => {
   const base = snapshot(await RoomRepository.create());
-  const cases = [
+  const cases: Array<[string, keyof RoomLayout['boundsMm'], number, Record<string, [Point, Point]>]> = [
     ['east', 'maxX', 7000, { south: [[0, 0], [7, 0]], east: [[7, 0], [7, 4]], north: [[7, 4], [0, 4]], west: [[0, 4], [0, 0]] }],
     ['west', 'minX', -1000, { south: [[-1, 0], [6, 0]], east: [[6, 0], [6, 4]], north: [[6, 4], [-1, 4]], west: [[-1, 4], [-1, 0]] }],
     ['north', 'maxY', 5000, { south: [[0, 0], [6, 0]], east: [[6, 0], [6, 5]], north: [[6, 5], [0, 5]], west: [[0, 5], [0, 0]] }],
@@ -238,12 +286,12 @@ test('moving each side updates both adjoining corners without moving the opposit
     layout.boundsMm[coordinate] = position;
     const preview = previewRectangle(base, layout);
     for (const [name, endpoints] of Object.entries(expected)) {
-      const wall = preview.entities.find((entity) => entity.id === `wall-${name}`);
+      const wall = wallEntity(preview.entities.find((entity) => entity.id === `wall-${name}`));
       assert.deepEqual([wall.start, wall.end], endpoints, `${side} move: ${name}`);
     }
     assertRectangleJoins(preview);
-    assert.equal(preview.relationships[0].offset, 2.4);
-    assert.equal(preview.entities.find((entity) => entity.id === 'door-entry').width, 0.9);
+    assert.equal(first(preview.relationships, 'host relationship').offset, 2.4);
+    assert.equal(doorEntity(preview.entities.find((entity) => entity.id === 'door-entry')).width, 0.9);
   }
   assert.deepEqual(rectangleLayout(base).boundsMm, { minX: 0, minY: 0, maxX: 6000, maxY: 4000 });
 });
@@ -251,7 +299,7 @@ test('moving each side updates both adjoining corners without moving the opposit
 test('translated rectangles preserve arbitrary wall identities, properties, every direction and every host side', async () => {
   const original = snapshot(await RoomRepository.create());
   const sides = ['south', 'east', 'north', 'west'];
-  const expected = [
+  const expected: Array<[Point, Point]> = [
     [[-2, -3], [6, -3]], [[6, -3], [6, 2]],
     [[6, 2], [-2, 2]], [[-2, 2], [-2, -3]],
   ];
@@ -259,8 +307,9 @@ test('translated rectangles preserve arbitrary wall identities, properties, ever
     for (let hostIndex = 0; hostIndex < 4; hostIndex += 1) {
       const base = structuredClone(original);
       for (const [index, side] of sides.entries()) {
-        const wall = base.entities.find((entity) => entity.id === `wall-${side}`);
-        wall.id = `segment-${['a', 'b', 'c', 'd'][index]}`;
+        const wall = wallEntity(base.entities.find((entity) => entity.id === `wall-${side}`));
+        const segment = first(['a', 'b', 'c', 'd'].slice(index, index + 1), 'segment name');
+        wall.id = `segment-${segment}`;
         wall.name = `Custom ${side}`;
         wall.thickness = (150 + index * 10) / 1000;
         wall.height = (3000 + index * 100) / 1000;
@@ -269,7 +318,8 @@ test('translated rectangles preserve arbitrary wall identities, properties, ever
         if (mask & (1 << index)) [wall.start, wall.end] = [wall.end, wall.start];
       }
       base.entities.reverse();
-      base.relationships[0] = { ...base.relationships[0], id: 'custom-host', target: `segment-${['a', 'b', 'c', 'd'][hostIndex]}`, offset: 0.5 };
+      const hostSegment = first(['a', 'b', 'c', 'd'].slice(hostIndex, hostIndex + 1), 'host segment');
+      base.relationships[0] = { ...first(base.relationships, 'host relationship'), id: 'custom-host', target: `segment-${hostSegment}`, offset: 0.5 };
       const layout = rectangleLayout(base);
       assert.deepEqual(layout.boundsMm, { minX: 1125, minY: -2250, maxX: 7125, maxY: 1750 });
       const normalized = structuredClone(base);
@@ -280,12 +330,13 @@ test('translated rectangles preserve arbitrary wall identities, properties, ever
         door: { widthMm: 1200, offsetMm: 600 },
       });
       for (const [index, side] of sides.entries()) {
-        const before = base.entities.find((entity) => entity.name === `Custom ${side}`);
-        const after = preview.entities.find((entity) => entity.id === before.id);
-        const endpoints = mask & (1 << index) ? [...expected[index]].reverse() : expected[index];
+        const before = wallEntity(base.entities.find((entity) => entity.name === `Custom ${side}`));
+        const after = wallEntity(preview.entities.find((entity) => entity.id === before.id));
+        const expectedEndpoints = first(expected.slice(index, index + 1), 'expected endpoints');
+        const endpoints: [Point, Point] = mask & (1 << index) ? [expectedEndpoints[1], expectedEndpoints[0]] : expectedEndpoints;
         assert.deepEqual(after, { ...before, start: endpoints[0], end: endpoints[1] });
       }
-      assert.deepEqual(preview.relationships[0], { ...base.relationships[0], offset: 0.6 });
+      assert.deepEqual(first(preview.relationships, 'preview host'), { ...first(base.relationships, 'base host'), offset: 0.6 });
       assert.deepEqual(preview.entities.find((entity) => entity.id === 'door-entry'), {
         ...base.entities.find((entity) => entity.id === 'door-entry'), width: 1.2,
       });
@@ -296,19 +347,20 @@ test('translated rectangles preserve arbitrary wall identities, properties, ever
 
 test('door width and offset edits leave walls fixed and enforce exact fit on every host', async () => {
   const original = snapshot(await RoomRepository.create());
-  for (const [side, length] of [['south', 6000], ['north', 6000], ['east', 4000], ['west', 4000]]) {
+  const hostCases: Array<[string, number]> = [['south', 6000], ['north', 6000], ['east', 4000], ['west', 4000]];
+  for (const [side, length] of hostCases) {
     const base = structuredClone(original);
-    base.relationships[0].target = `wall-${side}`;
+    first(base.relationships, 'host relationship').target = `wall-${side}`;
     const layout = structuredClone(rectangleLayout(base));
     layout.door = { widthMm: 1200, offsetMm: length - 1200 };
     const preview = previewRectangle(base, layout);
     assert.deepEqual(preview.entities.filter((entity) => entity.type === 'Wall'),
       base.entities.filter((entity) => entity.type === 'Wall'));
-    assert.equal(preview.relationships[0].offset, (length - 1200) / 1000);
+    assert.equal(first(preview.relationships, 'host relationship').offset, (length - 1200) / 1000);
     assert.deepEqual(rectangleLayout(preview), layout);
     assert.throws(() => previewRectangle(base, { ...layout, door: { ...layout.door, offsetMm: length - 1199 } }), /fit/);
     assert.throws(() => previewRectangle(base, { ...layout, door: { ...layout.door, widthMm: 1201 } }), /fit/);
-    assert.equal(previewRectangle(base, { ...layout, door: { widthMm: length, offsetMm: 0 } }).relationships[0].offset, 0);
+    assert.equal(first(previewRectangle(base, { ...layout, door: { widthMm: length, offsetMm: 0 } }).relationships, 'host relationship').offset, 0);
     const delta = diffSnapshots(base, preview);
     assert.deepEqual(delta.entities.modified.map((item) => item.id), ['door-entry']);
     assert.deepEqual(delta.relationships.modified.map((item) => item.id), ['host-entry']);
@@ -317,18 +369,19 @@ test('door width and offset edits leave walls fixed and enforce exact fit on eve
 
 test('shrinking any host rejects a displaced opening without repairing it', async () => {
   const original = snapshot(await RoomRepository.create());
-  for (const [side, coordinate] of [['south', 'maxX'], ['north', 'maxX'], ['east', 'maxY'], ['west', 'maxY']]) {
+  const shrinkCases: Array<[string, keyof RoomLayout['boundsMm']]> = [['south', 'maxX'], ['north', 'maxX'], ['east', 'maxY'], ['west', 'maxY']];
+  for (const [side, coordinate] of shrinkCases) {
     const base = structuredClone(original);
-    base.relationships[0].target = `wall-${side}`;
+    first(base.relationships, 'host relationship').target = `wall-${side}`;
     const layout = structuredClone(rectangleLayout(base));
     const before = JSON.stringify(base);
     layout.boundsMm[coordinate] = 3300;
-    assert.equal(previewRectangle(base, layout).relationships[0].offset, 2.4);
+    assert.equal(first(previewRectangle(base, layout).relationships, 'host relationship').offset, 2.4);
     layout.boundsMm[coordinate] = 3299;
     assert.throws(() => previewRectangle(base, layout), /fit/);
     assert.equal(JSON.stringify(base), before);
     layout.door.offsetMm = 0;
-    assert.equal(previewRectangle(base, layout).relationships[0].offset, 0);
+    assert.equal(first(previewRectangle(base, layout).relationships, 'host relationship').offset, 0);
   }
 });
 
@@ -360,8 +413,11 @@ test('layout validation rejects every invalid numeric boundary atomically', asyn
   const repo = await RoomRepository.create();
   const base = snapshot(repo); const before = JSON.stringify(base); const saved = repo.serialize();
   const layout = rectangleLayout(base);
-  const cases = [];
-  const change = (section, key, value) => cases.push({ ...layout, [section]: { ...layout[section], [key]: value } });
+  const cases: unknown[] = [];
+  const change = (section: 'boundsMm' | 'door', key: string, value: unknown): void => {
+    if (section === 'boundsMm') cases.push({ ...layout, boundsMm: { ...layout.boundsMm, [key]: value } });
+    else cases.push({ ...layout, door: { ...layout.door, [key]: value } });
+  };
   for (const key of ['minX', 'minY', 'maxX', 'maxY']) {
     for (const value of [-1000001, 1000001, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity, '1000', true, null, undefined, 1n]) change('boundsMm', key, value);
   }
@@ -385,20 +441,20 @@ test('layout validation rejects every invalid numeric boundary atomically', asyn
 
 test('unsupported topology is rejected geometrically without tightening the graph validator', async () => {
   const original = snapshot(await RoomRepository.create());
-  const invalid = [];
-  const mutate = (fn) => { const value = structuredClone(original); fn(value); invalid.push(value); };
+  const invalid: SnapshotShape[] = [];
+  const mutate = (fn: (value: SnapshotShape) => void): void => { const value = structuredClone(original); fn(value); invalid.push(value); };
   mutate((s) => { s.entities = s.entities.filter((entity) => entity.id !== 'wall-north'); });
-  mutate((s) => { s.entities.push({ ...s.entities.find((entity) => entity.id === 'wall-north'), id: 'extra-wall' }); });
-  mutate((s) => { const wall = s.entities.find((entity) => entity.id === 'wall-north'); wall.start = [6, 0]; wall.end = [0, 0]; });
-  mutate((s) => { s.entities.find((entity) => entity.id === 'wall-north').start = [5.9, 4]; });
-  mutate((s) => { s.entities.find((entity) => entity.id === 'wall-north').start = [6, 3]; });
+  mutate((s) => { s.entities.push({ ...wallEntity(s.entities.find((entity) => entity.id === 'wall-north')), id: 'extra-wall' }); });
+  mutate((s) => { const wall = wallEntity(s.entities.find((entity) => entity.id === 'wall-north')); wall.start = [6, 0]; wall.end = [0, 0]; });
+  mutate((s) => { wallEntity(s.entities.find((entity) => entity.id === 'wall-north')).start = [5.9, 4]; });
+  mutate((s) => { wallEntity(s.entities.find((entity) => entity.id === 'wall-north')).start = [6, 3]; });
   mutate((s) => {
-    for (const wall of s.entities.filter((entity) => entity.type === 'Wall')) {
+    for (const wall of s.entities.filter((entity): entity is Wall => entity.type === 'Wall')) {
       wall.start = [wall.start[0] - wall.start[1], wall.start[0] + wall.start[1]];
       wall.end = [wall.end[0] - wall.end[1], wall.end[0] + wall.end[1]];
     }
   });
-  mutate((s) => { s.entities.find((entity) => entity.type === 'Door').id = 'other-door'; s.relationships[0].source = 'other-door'; });
+  mutate((s) => { doorEntity(s.entities.find((entity) => entity.type === 'Door')).id = 'other-door'; first(s.relationships, 'host relationship').source = 'other-door'; });
   mutate((s) => {
     s.entities.push({ id: 'other-door', type: 'Door', name: 'Other door', width: 0.8, height: 2 });
     s.relationships.push({ id: 'other-host', type: 'hosted-by', source: 'other-door', target: 'wall-east', offset: 0 });
@@ -421,13 +477,13 @@ test('preview copies caller data and never shares mutable layout or snapshot obj
   assertFrozen(preview); assertFrozen(projection);
   layout.boundsMm.maxX = 8000;
   layout.door.widthMm = 1500;
-  base.entities.find((entity) => entity.id === 'wall-east').start[0] = 9;
-  base.relationships[0].offset = 0;
+  wallEntity(base.entities.find((entity) => entity.id === 'wall-east')).start[0] = 9;
+  first(base.relationships, 'host relationship').offset = 0;
   assert.equal(rectangleLayout(preview).boundsMm.maxX, 7000);
   assert.equal(rectangleLayout(preview).door.widthMm, 900);
   assert.equal(projection.boundsMm.maxX, 6000);
   assert.equal(projection.door.offsetMm, 2400);
-  assert.throws(() => { preview.relationships[0].offset = 0; }, TypeError);
+  assert.throws(() => Object.defineProperty(first(preview.relationships, 'host relationship'), 'offset', { value: 0 }), TypeError);
 });
 
 test('layout proposals commit one revision, retain ancestor bases and preserve all earlier bytes', async () => {
@@ -448,7 +504,10 @@ test('layout proposals commit one revision, retain ancestor bases and preserve a
   assert.equal(fromAncestor.head('main'), main);
   assert.equal(original.serialize(), originalText);
   assert.equal(first.serialize(), firstText);
-  for (const revision of JSON.parse(firstText).revisions) assert.deepEqual(fromAncestor.view(revision.id), revision);
+  for (const revision of recordArray(parseRecord(firstText), 'revisions')) {
+    if (typeof revision.id !== 'string') throw new Error('Missing revision id.');
+    assert.deepEqual(fromAncestor.view(revision.id), revision);
+  }
   assertFrozen(fromAncestor.view(fromAncestor.head('another-room')));
   const restored = await RoomRepository.restore(fromAncestor.serialize());
   assert.equal(restored.serialize(), fromAncestor.serialize());
@@ -485,7 +544,7 @@ test('both proposal APIs share no-op, deterministic identity, idempotence and na
 test('version one legacy files restore with identical hashes and non-rectangles stay read-only for the new API', async () => {
   const original = await RoomRepository.create();
   const legacy = await proposal(await proposal(original), 'second-study', 1300 / 1000);
-  const legacyState = JSON.parse(legacy.serialize());
+  const legacyState = parseRecord(legacy.serialize());
   legacyState.version = 1;
   delete legacyState.reviews;
   const text = canonicalJSON(legacyState);
@@ -495,7 +554,7 @@ test('version one legacy files restore with identical hashes and non-rectangles 
   const layout = rectangleLayout(restored.view(restored.head('wider-entry')).snapshot);
   assert.equal(layout.door.widthMm, 1200);
   const modified = snapshot(original);
-  modified.entities.find((entity) => entity.id === 'wall-north').start[0] = 5;
+  wallEntity(modified.entities.find((entity) => entity.id === 'wall-north')).start[0] = 5;
   const nonRectangleText = legacyRevisionText(original, modified);
   const nonRectangle = await RoomRepository.restore(nonRectangleText);
   assert.equal(nonRectangle.serialize(), nonRectangleText);
@@ -511,7 +570,7 @@ test('version one legacy files restore with identical hashes and non-rectangles 
 test('exact field sets and finite plain JSON are enforced at every new API boundary', async () => {
   const repo = await RoomRepository.create(); const base = snapshot(repo);
   const saved = repo.serialize(); const layout = rectangleLayout(base);
-  const invalidLayouts = [
+  const invalidLayouts: unknown[] = [
     null, undefined, [], 1, 'layout',
     { ...layout, unknown: true }, { boundsMm: layout.boundsMm },
     { ...layout, boundsMm: { ...layout.boundsMm, extra: 0 } },
@@ -523,14 +582,17 @@ test('exact field sets and finite plain JSON are enforced at every new API bound
     { ...layout, door: new Date(0) }, { ...layout, door: Object.create({ widthMm: 900, offsetMm: 2400 }) },
     JSON.parse('{"boundsMm":{"minX":0,"minY":0,"maxX":6000,"maxY":4000},"door":{"widthMm":900,"offsetMm":2400,"__proto__":{}}}'),
   ];
-  const cycle = structuredClone(layout); cycle.door.loop = cycle;
+  const cycleDoor: Record<string, unknown> = { ...layout.door };
+  const cycle = { ...layout, door: cycleDoor }; cycleDoor.loop = cycle;
   invalidLayouts.push(cycle);
-  const symbol = structuredClone(layout); symbol.door[Symbol('extra')] = 1;
+  const symbolDoor: Record<PropertyKey, unknown> = { ...layout.door };
+  const symbol = { ...layout, door: symbolDoor }; symbolDoor[Symbol('extra')] = 1;
   invalidLayouts.push(symbol);
   const hidden = structuredClone(layout); Object.defineProperty(hidden.boundsMm, 'hidden', { value: 0 });
   invalidLayouts.push(hidden);
   for (const key of ['constructor', 'prototype', 'toJSON']) {
-    const value = structuredClone(layout); value.door[key] = key === 'toJSON' ? () => ({}) : {};
+    const valueDoor: Record<string, unknown> = { ...layout.door };
+    const value = { ...layout, door: valueDoor }; valueDoor[key] = key === 'toJSON' ? () => ({}) : {};
     invalidLayouts.push(value);
   }
   for (const invalid of invalidLayouts) {
@@ -553,7 +615,8 @@ test('exact field sets and finite plain JSON are enforced at every new API bound
   const inputAccessor = { ...input };
   Object.defineProperty(inputAccessor, 'layout', { enumerable: true, get() { calls += 1; return layout; } });
   await assert.rejects(repo.proposeLayout(inputAccessor), /accessors/);
-  const iterator = structuredClone(base); iterator.entities[Symbol.iterator] = function* () { calls += 1; };
+  const iterator = { ...structuredClone(base), entities: [...base.entities] };
+  Object.defineProperty(iterator.entities, Symbol.iterator, { value: function* () { calls += 1; } });
   assert.throws(() => rectangleLayout(iterator));
   assert.throws(() => previewRectangle(iterator, layout));
   assert.equal(calls, 0);
@@ -587,7 +650,7 @@ test('accepting an AI proposal advances main while preserving the original and p
   layout.door.widthMm = 1200;
   const result = await prepareModelProposal(original, visualRequest(original, layout, { proposalName: 'wider-entry' }), {
     identity: { provider: 'test', model: 'scripted-room-worker' },
-    async run(session) {
+    async run(session: ModelWorkerSession) {
       await session.executeTool('preview_rectangle', layout);
       await session.executeTool('submit_proposal', {
         summary: 'The entry is widened to 1200 mm.',
@@ -615,7 +678,7 @@ test('accepting an AI proposal advances main while preserving the original and p
   assert.equal(proposed.head('main'), root);
 });
 
-function visualRequest(repo, layout, overrides = {}) {
+function visualRequest(repo: RoomRepository, layout: RoomLayout, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     requestId: 'request-40',
     proposalName: 'ai-room-study',
@@ -631,17 +694,23 @@ test('model-working AI receives bounded tools and saves only its validated propo
   const original = await RoomRepository.create(); const before = original.serialize();
   const layout = structuredClone(rectangleLayout(original.view(original.head('main')).snapshot));
   layout.boundsMm.maxX = 7000; layout.door.widthMm = 1200;
-  const worker = {
+  const worker: ModelWorker = {
     identity: { provider: 'test', model: 'scripted-room-worker' },
-    async run(session) {
+    async run(session: ModelWorkerSession) {
+      const input = isRecord(session.input) ? session.input : {};
+      const request = isRecord(input.request) ? input.request : {};
       assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'submit_proposal', 'decline_request']);
-      assert.equal(session.input.request.baseRevisionId, original.head('main'));
-      assert.deepEqual(session.input.request.selectedObjectIds, ['door-entry']);
+      assert.equal(request.baseRevisionId, original.head('main'));
+      assert.deepEqual(request.selectedObjectIds, ['door-entry']);
       const inspected = await session.executeTool('inspect_model', {});
-      assert.equal(inspected.ok, true); assert.equal(inspected.model.entities.length, 5);
-      const previewed = await session.executeTool('preview_rectangle', session.input.request.visualIntent.layout);
+      const model = isRecord(inspected.model) ? inspected.model : {};
+      assert.equal(inspected.ok, true); assert.equal(Array.isArray(model.entities) ? model.entities.length : -1, 5);
+      const visualIntent = isRecord(request.visualIntent) ? request.visualIntent : {};
+      const previewed = await session.executeTool('preview_rectangle', visualIntent.layout);
       assert.equal(previewed.ok, true);
-      assert.deepEqual(previewed.changes.entities.modified.sort(), ['door-entry', 'wall-east', 'wall-north', 'wall-south'].sort());
+      const changes = isRecord(previewed.changes) ? previewed.changes : {};
+      const entities = isRecord(changes.entities) ? changes.entities : {};
+      assert.deepEqual(Array.isArray(entities.modified) ? [...entities.modified].sort() : [], ['door-entry', 'wall-east', 'wall-north', 'wall-south'].sort());
       const submitted = await session.executeTool('submit_proposal', {
         summary: 'The entrance is 1200 mm wide and the room extends one metre east.',
         rationale: 'This follows the selected door and the visual request while preserving connected walls and hosting.',
@@ -667,15 +736,16 @@ test('model-working AI receives bounded tools and saves only its validated propo
   assert.equal(result.repository.review('ai-room-study').requestId, result.review.requestId);
   assert.equal(result.repository.review('ai-room-study').constraints, result.review.constraints);
   assert.equal((await RoomRepository.restore(result.repository.serialize())).review('ai-room-study').rationale, result.review.rationale);
-  for (const mutateReview of [
+  const reviewMutations: Array<(review: Record<string, unknown>) => void> = [
     (review) => { review.baseRevisionId = '0'.repeat(64); },
     (review) => { review.constraints = ''; },
-    (review) => { review.worker.usage.totalTokens = -1; },
-    (review) => { review.toolCalls[0].name = 'write_arbitrary_model'; },
+    (review) => { const workerValue = review.worker; if (!isRecord(workerValue) || !isRecord(workerValue.usage)) throw new Error('Missing worker usage.'); workerValue.usage.totalTokens = -1; },
+    (review) => { first(recordArray(review, 'toolCalls'), 'tool call').name = 'write_arbitrary_model'; },
     (review) => { review.decision = { status: 'accepted', decisionId: null, actor: null }; },
-  ]) {
-    const damaged = JSON.parse(result.repository.serialize());
-    mutateReview(damaged.reviews[0]);
+  ];
+  for (const mutateReview of reviewMutations) {
+    const damaged = parseRecord(result.repository.serialize());
+    mutateReview(first(recordArray(damaged, 'reviews'), 'review'));
     await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)));
   }
   assert.equal(door(result.repository, 'ai-room-study').width, 1.2);
@@ -692,12 +762,12 @@ test('proposal requests reject stale identities before calling AI and let AI rec
   await assert.rejects(prepareModelProposal(repo, { ...visualRequest(repo, layout), extra: true }, unused), /Unexpected proposal request fields/);
   assert.equal(runs, 0);
 
-  const worker = {
+  const worker: ModelWorker = {
     identity: { provider: 'test', model: 'retry-worker' },
-    async run(session) {
+    async run(session: ModelWorkerSession) {
       const invalid = structuredClone(layout); invalid.door.offsetMm = 5900; invalid.door.widthMm = 1200;
       const rejected = await session.executeTool('preview_rectangle', invalid);
-      assert.equal(rejected.ok, false); assert.match(rejected.error, /fit inside/);
+      assert.equal(rejected.ok, false); assert.match(String(rejected.error), /fit inside/);
       const valid = structuredClone(layout); valid.door.widthMm = 1200;
       assert.equal((await session.executeTool('preview_rectangle', valid)).ok, true);
       assert.equal((await session.executeTool('submit_proposal', {
@@ -716,7 +786,7 @@ test('model worker can decline without changing repository history', async () =>
   const layout = rectangleLayout(repo.view(repo.head('main')).snapshot);
   const result = await prepareModelProposal(repo, visualRequest(repo, layout), {
     identity: { provider: 'test', model: 'declining-worker' },
-    async run(session) {
+    async run(session: ModelWorkerSession) {
       const output = await session.executeTool('decline_request', {
         reason: 'The requested operation is outside the rectangular room tool.',
         uncertainty: 'No geometry was prepared.',
@@ -729,8 +799,9 @@ test('model worker can decline without changing repository history', async () =>
 });
 
 test('ChatGPT plan adapter keeps OAuth credentials server-side and replays bounded stateless Responses turns', async () => {
-  const requests = [];
-  const responses = [
+  interface CapturedRequest { url: string; options: RequestInit }
+  const requests: CapturedRequest[] = [];
+  const responses: unknown[] = [
     { id: 'response-one', usage: { input_tokens: 50, output_tokens: 8, total_tokens: 58 }, output: [
       { type: 'reasoning', id: 'reasoning-one', encrypted_content: 'opaque' },
       { type: 'function_call', namespace: 'bim_model', name: 'inspect_model', arguments: '{}', call_id: 'call-one' },
@@ -741,18 +812,18 @@ test('ChatGPT plan adapter keeps OAuth credentials server-side and replays bound
   ];
   const worker = createChatGPTPlanModelWorker({
     getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model',
-    fetchImpl: async (url, options) => {
-      requests.push({ url, options });
+    fetchImpl: async (url: string | URL | Request, options: RequestInit = {}) => {
+      requests.push({ url: String(url), options });
       const event = { type: 'response.completed', response: responses.shift() };
       return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
     },
   });
-  const calls = [];
-  const events = [];
+  const calls: Array<[string, unknown]> = [];
+  const events: unknown[] = [];
   await worker.run({
     instructions: 'Use bounded tools.', input: { request: 'test' }, tools: MODEL_PROPOSAL_TOOLS,
-    recordProviderEvent: (event) => events.push(event),
-    executeTool: async (name, argumentsValue) => {
+    recordProviderEvent: (event: unknown) => { events.push(event); },
+    executeTool: async (name: string, argumentsValue: unknown) => {
       calls.push([name, argumentsValue]);
       return name === 'submit_proposal' ? { ok: true, done: true } : { ok: true };
     },
@@ -763,23 +834,30 @@ test('ChatGPT plan adapter keeps OAuth credentials server-side and replays bound
     { responseId: 'response-one', inputTokens: 50, outputTokens: 8, totalTokens: 58 },
     { responseId: 'response-two', inputTokens: 70, outputTokens: 12, totalTokens: 82 },
   ]);
-  assert.equal(requests.length, 2); assert.equal(requests[0].url, 'https://api.openai.com/v1/responses');
-  assert.equal(requests[0].options.headers.Authorization, 'Bearer server-only-oauth-token');
-  assert.equal(requests[0].options.signal instanceof AbortSignal, true);
-  const first = JSON.parse(requests[0].options.body); const second = JSON.parse(requests[1].options.body);
-  assert.equal(first.model, 'configured-model'); assert.equal(first.tool_choice, 'required');
-  assert.equal(first.store, false); assert.equal(first.stream, true);
-  assert.equal(first.parallel_tool_calls, false); assert.equal(Object.hasOwn(first, 'previous_response_id'), false);
-  assert.equal(Object.hasOwn(first, 'max_output_tokens'), false);
-  assert.equal(first.tools[0].type, 'namespace'); assert.equal(first.tools[0].name, 'bim_model');
-  assert.deepEqual(first.tools[0].tools.map((tool) => tool.name), MODEL_PROPOSAL_TOOLS.map((tool) => tool.name));
-  assert.equal(second.input[0].role, 'user');
-  assert.deepEqual(second.input.slice(1), [
+  assert.equal(requests.length, 2);
+  const firstRequest = first(requests, 'first provider request');
+  const secondRequest = requests[1];
+  if (!secondRequest) throw new Error('Missing second provider request.');
+  assert.equal(firstRequest.url, 'https://api.openai.com/v1/responses');
+  assert.equal(new Headers(firstRequest.options.headers).get('Authorization'), 'Bearer server-only-oauth-token');
+  assert.equal(firstRequest.options.signal instanceof AbortSignal, true);
+  if (typeof firstRequest.options.body !== 'string' || typeof secondRequest.options.body !== 'string') throw new Error('Expected JSON request bodies.');
+  const firstBody = parseRecord(firstRequest.options.body); const secondBody = parseRecord(secondRequest.options.body);
+  assert.equal(firstBody.model, 'configured-model'); assert.equal(firstBody.tool_choice, 'required');
+  assert.equal(firstBody.store, false); assert.equal(firstBody.stream, true);
+  assert.equal(firstBody.parallel_tool_calls, false); assert.equal(Object.hasOwn(firstBody, 'previous_response_id'), false);
+  assert.equal(Object.hasOwn(firstBody, 'max_output_tokens'), false);
+  const namespaceTool = first(recordArray(firstBody, 'tools'), 'namespace tool');
+  assert.equal(namespaceTool.type, 'namespace'); assert.equal(namespaceTool.name, 'bim_model');
+  assert.deepEqual(recordArray(namespaceTool, 'tools').map((tool) => tool.name), MODEL_PROPOSAL_TOOLS.map((tool) => tool.name));
+  const secondInput = recordArray(secondBody, 'input');
+  assert.equal(first(secondInput, 'initial input').role, 'user');
+  assert.deepEqual(secondInput.slice(1), [
     { type: 'reasoning', id: 'reasoning-one', encrypted_content: 'opaque' },
     { type: 'function_call', namespace: 'bim_model', name: 'inspect_model', arguments: '{}', call_id: 'call-one' },
     { type: 'function_call_output', call_id: 'call-one', output: '{"ok":true}' },
   ]);
-  assert.equal(requests[0].options.body.includes('server-only-oauth-token'), false);
+  assert.equal(firstRequest.options.body.includes('server-only-oauth-token'), false);
 });
 
 test('ChatGPT plan adapter rejects provider streams above its byte budget and requires completion', async () => {
@@ -794,7 +872,7 @@ test('ChatGPT plan adapter rejects provider streams above its byte budget and re
 });
 
 test('ChatGPT plan adapter fails closed on explicit failure and interrupted SSE streams', async () => {
-  const run = (event) => createChatGPTPlanModelWorker({
+  const run = (event: unknown) => createChatGPTPlanModelWorker({
     getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model',
     fetchImpl: async () => new Response(event ? `data: ${JSON.stringify(event)}\n\n` : 'data: [DONE]\n\n'),
   }).run({

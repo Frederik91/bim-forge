@@ -1,6 +1,8 @@
 import test from 'node:test';
+import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import type { KeyObject } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,7 +17,9 @@ const now = Date.parse('2026-10-22T12:00:00.000Z');
 const keys = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = { ...keys.publicKey.export({ format: 'jwk' }), kid: 'test-key', alg: 'RS256', use: 'sig' };
 
-function idToken({ clientId = 'oaiapp_bim_forge', nonce = 'nonce', subject = 'account-1', privateKey = keys.privateKey } = {}) {
+interface TokenOptions { clientId?: string; nonce?: string; subject?: string; privateKey?: KeyObject }
+
+function idToken({ clientId = 'oaiapp_bim_forge', nonce = 'nonce', subject = 'account-1', privateKey = keys.privateKey }: TokenOptions = {}): string {
   const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({
     iss: 'https://auth.openai.com', aud: clientId, sub: subject, nonce,
@@ -53,19 +57,37 @@ test('ID token verification checks signature, issuer, audience, expiry and nonce
   await assert.rejects(verifyOpenAIIdentity(idToken({ privateKey: other.privateKey }), options), /signature/);
 });
 
-test('local connection completes sign-in, discovers models, serializes refresh and revokes on sign-out', async (t) => {
+function requiredParameter(value: string | null, name: string): string {
+  if (value === null) throw new Error(`Missing ${name}.`);
+  return value;
+}
+
+function jsonRecord(text: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value)) throw new Error('Expected a JSON object.');
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+test('local connection completes sign-in, discovers models, serializes refresh and revokes on sign-out', async (t: TestContext) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'bim-chatgpt-plan-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const storageFile = path.join(directory, 'connection.json');
-  const protectedPaths = [];
-  let authorization;
+  const protectedPaths: string[] = [];
+  let authorization: string | null = null;
+  let clock = now;
   let refreshes = 0;
   let revocations = 0;
-  const fetchImpl = async (input, options = {}) => {
+  const fetchImpl = async (input: string | URL | Request, options: RequestInit = {}): Promise<Response> => {
     const url = String(input);
     if (url.endsWith('/.well-known/jwks.json')) return Response.json({ keys: [jwk] });
     if (url.endsWith('/api/accounts/oauth/token')) {
-      const body = new URLSearchParams(options.body);
+      const body = options.body instanceof URLSearchParams ? options.body
+        : typeof options.body === 'string' ? new URLSearchParams(options.body) : null;
+      if (!body) throw new Error('Expected an encoded OAuth request body.');
       if (body.get('grant_type') === 'refresh_token') {
         refreshes += 1;
         await new Promise((resolve) => setTimeout(resolve, 15));
@@ -75,9 +97,11 @@ test('local connection completes sign-in, discovers models, serializes refresh a
         });
       }
       assert.equal(body.get('client_id'), 'oaiapp_bim_forge');
+      if (authorization === null) throw new Error('Authorization URL was not captured.');
       assert.equal(body.get('redirect_uri'), new URL(authorization).searchParams.get('redirect_uri'));
+      const nonce = requiredParameter(new URL(authorization).searchParams.get('nonce'), 'nonce');
       return Response.json({
-        id_token: idToken({ nonce: new URL(authorization).searchParams.get('nonce') }),
+        id_token: idToken({ nonce }),
         access_token: 'access-initial', refresh_token: 'refresh-initial', expires_in: 3600,
         scope: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct',
       });
@@ -94,13 +118,13 @@ test('local connection completes sign-in, discovers models, serializes refresh a
   const connection = await ChatGPTPlanConnection.open({
     storageFile,
     fetchImpl,
-    now: () => now,
-    protectFile: async (file) => { protectedPaths.push(file); },
-    openBrowser: async (url) => {
+    now: () => clock,
+    protectFile: async (file: string) => { protectedPaths.push(file); },
+    openBrowser: async (url: string) => {
       authorization = url;
       const request = new URL(url);
-      const callback = new URL(request.searchParams.get('redirect_uri'));
-      callback.search = new URLSearchParams({ code: 'authorization-code', state: request.searchParams.get('state'), client_id: 'oaiapp_bim_forge' });
+      const callback = new URL(requiredParameter(request.searchParams.get('redirect_uri'), 'redirect URI'));
+      callback.search = new URLSearchParams({ code: 'authorization-code', state: requiredParameter(request.searchParams.get('state'), 'state'), client_id: 'oaiapp_bim_forge' }).toString();
       const response = await fetch(callback);
       assert.equal(response.status, 200);
       assert.doesNotMatch(await response.text(), /access-initial|authorization-code/);
@@ -109,22 +133,23 @@ test('local connection completes sign-in, discovers models, serializes refresh a
   assert.equal(connection.publicSession().connected, false);
   const session = await connection.signIn();
   assert.equal(session.connected, true); assert.equal(session.sharing, true);
-  assert.equal(session.account.email, 'designer@example.com');
+  assert.equal(session.account?.email, 'designer@example.com');
   assert.deepEqual(session.models.map((model) => model.slug), ['gpt-6.1-sol', 'gpt-6-luna']);
   assert.equal(session.selectedModel, 'gpt-6.1-sol');
   await connection.selectModel('gpt-6-luna');
   await assert.rejects(connection.selectModel('hidden-model'), /available/);
   assert.equal(connection.selectedModel(), 'gpt-6-luna');
 
-  connection.saved.profile.expiresAt = now;
+  clock += 3_700_000;
   assert.deepEqual(await Promise.all([connection.getAccessToken(), connection.getAccessToken()]), ['access-rotated', 'access-rotated']);
   assert.equal(refreshes, 1);
-  const saved = JSON.parse(await fs.readFile(storageFile, 'utf8'));
-  assert.equal(saved.profile.refreshToken, 'refresh-rotated');
-  assert.equal(saved.profile.accessToken, 'access-rotated');
-  assert.notEqual(saved.profile.idToken, 'unverified-refresh-id-token');
+  const saved = jsonRecord(await fs.readFile(storageFile, 'utf8'));
+  const profile = jsonRecord(JSON.stringify(saved.profile));
+  assert.equal(profile.refreshToken, 'refresh-rotated');
+  assert.equal(profile.accessToken, 'access-rotated');
+  assert.notEqual(profile.idToken, 'unverified-refresh-id-token');
   assert.ok(protectedPaths.some((file) => file === storageFile));
-  const reopened = await ChatGPTPlanConnection.open({ storageFile, fetchImpl, now: () => now, protectFile: async () => {} });
+  const reopened = await ChatGPTPlanConnection.open({ storageFile, fetchImpl, now: () => clock, protectFile: async () => {} });
   assert.equal(reopened.publicSession().connected, true);
   assert.equal(reopened.selectedModel(), 'gpt-6-luna');
 

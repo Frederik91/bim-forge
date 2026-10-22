@@ -13,8 +13,8 @@ const cleanText = (value, maximum) => typeof value === 'string' && value.length 
 const containsCredential = (value) => /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-proj-[A-Za-z0-9_-]{20,})/.test(value);
 const roomDemoPaths = new Set([
   'GLOSSARY.md', 'demo/index.html', 'demo/room.css', 'demo/room-app.ts',
-  'demo/room-store.ts', 'demo/server.ts', 'demo/server.test.mjs',
-  'src/room-model.ts',
+  'demo/room-store.ts', 'demo/server.ts', 'demo/server.test.ts',
+  'src/room-model.ts', 'src/room-model.test.ts',
 ]);
 
 export function approvePackage(bytes, approvedSha256) {

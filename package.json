@@ -11,7 +11,7 @@
     "validate": "node scripts/validate-policy.mjs",
     "typecheck": "tsc --noEmit",
     "build:demo": "esbuild demo/room-app.ts --bundle --platform=browser --format=esm --target=es2023 --outfile=dist/demo/room-app.mjs",
-    "test": "npm run build:demo && node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs src/room-model.test.mjs src/chatgpt-plan.test.mjs demo/server.test.mjs",
+    "test": "npm run build:demo && node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs src/room-model.test.ts src/chatgpt-plan.test.ts demo/server.test.ts",
     "factory": "node factory/cli.mjs",
     "factory:plan": "node factory/live.mjs",
     "factory:publish": "node factory/publish.mjs",

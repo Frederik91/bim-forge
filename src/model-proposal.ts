@@ -38,7 +38,7 @@ interface ToolEvidence {
   error: string | null;
 }
 
-interface ModelWorkerSession {
+export interface ModelWorkerSession {
   instructions: string;
   input: unknown;
   tools: typeof MODEL_PROPOSAL_TOOLS;
@@ -46,7 +46,7 @@ interface ModelWorkerSession {
   recordProviderEvent: (event: unknown) => void;
 }
 
-interface ModelWorker {
+export interface ModelWorker {
   identity: { provider: unknown; model: unknown };
   run: (session: ModelWorkerSession) => Promise<void>;
 }
