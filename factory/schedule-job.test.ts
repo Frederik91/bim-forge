@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -6,39 +6,88 @@ import path from 'node:path';
 import childProcess, { spawnSync } from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { EventEmitter } from 'node:events';
-import { dispatchOnce, assertVerifiedEvidence, assertRecordedUnit } from './schedule-job.mjs';
-import { POLICY, assertScheduledPermit, guardScheduledRequest } from './scheduled-publication.mjs';
-import { sha256, prepareCodingPackage } from './coding.mjs';
-import { measureTree, assertEffectiveUnit } from './coding-identity.mjs';
-import { openCodingRun } from './coding-store.mjs';
-import { createCodingInput, exposeCodingCandidate, stageWithEvidence, collectVerifierEvidence, runUnit } from './code-job.mjs';
-import { healthAcceptanceCases } from './code-acceptance.mjs';
+import {
+  dispatchOnce, assertVerifiedEvidence, assertRecordedUnit,
+  type ActiveDispatch, type DispatchResult, type ScheduleIo, type VerifiedEvidenceInput,
+} from './schedule-job.ts';
+import { POLICY, assertScheduledPermit, guardScheduledRequest } from './scheduled-publication.ts';
+import { parseScheduleApproval, type ScheduleApproval } from './schedule-approval.ts';
+import { sha256, prepareCodingPackage, type CodingSpec } from './coding.ts';
+import { measureTree, assertEffectiveUnit } from './coding-identity.ts';
+import { openCodingRun, type CodingRun } from './coding-store.ts';
+import { createCodingInput, exposeCodingCandidate, stageWithEvidence, collectVerifierEvidence, runUnit } from './code-job.ts';
+import { healthAcceptanceCases } from './code-acceptance.ts';
+import { approvePackage, type PublicationProposal } from './publish-request.ts';
 
-const encode = (value) => Buffer.from(`${JSON.stringify(value)}\n`);
+const encode = (value: unknown): Buffer => Buffer.from(`${JSON.stringify(value)}\n`);
 const runId = '01234567-89ab-cdef-0123-456789abcdef';
 const bootId = 'abcdef01-2345-6789-abcd-ef0123456789';
 const paths = ['factory/health.ts', 'factory/health.test.ts'];
-const spec = () => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),
+const spec = (): CodingSpec => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),
   issue: { number: 17, title: 'Run health', body: 'Summarize disposable runs only.', updated_at: '2026-10-21T00:00:00Z' },
   plan: { outcome: 'Summarize runs', changeClass: 'read-only', paths, steps: ['Implement the command'],
     acceptanceChecks: ['Fixed independent stdin cases'], reviewers: ['Frederik91'], questions: [] },
   paths, acceptanceCases: [healthAcceptanceCases[0]] });
-const policy = JSON.parse(fs.readFileSync(new URL('../policy/gate.json', import.meta.url)));
-const baselinePackage = JSON.stringify({ scripts: { test: 'node --test factory/baseline.test.mjs' } });
+const policy: unknown = JSON.parse(fs.readFileSync(new URL('../policy/gate.json', import.meta.url), 'utf8'));
+const baselinePackage = JSON.stringify({ scripts: { test: 'node --test factory/baseline.test.ts' } });
 const unit = `bim-forge-code-generate@${runId}.service`;
 
-function fixture() {
-  const events = [];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requiredProposal(bytes: Buffer): PublicationProposal {
+  return approvePackage(bytes, sha256(bytes)).proposal;
+}
+
+function uid(): number {
+  const getuid = process.getuid;
+  assert.ok(getuid);
+  return getuid();
+}
+
+type MutableScheduleIo = { -readonly [Key in keyof ScheduleIo]: ScheduleIo[Key] };
+
+interface ScheduleFixtureState {
+  now: Date;
+  monotonicNs: bigint;
+  bootId: string;
+  activation: Buffer | null;
+  paused: boolean;
+  deployment: string;
+  absent: boolean;
+  resources: boolean;
+  active: boolean;
+  validUnit: boolean;
+}
+
+interface ScheduleFixture {
+  io: MutableScheduleIo;
+  state: ScheduleFixtureState;
+  events: string[];
+  approval: Readonly<ScheduleApproval>;
+  approvalBytes: Buffer;
+  approvedSha256: string;
+  getActive: () => ActiveDispatch | undefined;
+}
+
+function fixture(): ScheduleFixture {
+  const events: string[] = [];
   const scopeBytes = encode(spec());
   const approval = { version: 1, repository: 'Frederik91/bim-forge', scopeSha256: sha256(scopeBytes),
     deploymentSha256: 'b'.repeat(64), notBefore: '2026-10-22T00:00:00.000Z',
     expiresAt: '2026-10-23T00:00:00.000Z', dailyLimit: 1 };
   const approvalBytes = encode(approval); const approvedSha256 = sha256(approvalBytes);
-  let active; let receipt;
-  const state = { now: new Date('2026-10-22T12:00:00.000Z'), monotonicNs: 5n, bootId,
+  const parsedApproval = parseScheduleApproval(approvalBytes, approvedSha256, new Date('2026-10-22T12:00:00.000Z'));
+  let active: ActiveDispatch | undefined;
+  let receipt: DispatchResult | null = null;
+  const state: ScheduleFixtureState = { now: new Date('2026-10-22T12:00:00.000Z'), monotonicNs: 5n, bootId,
     activation: encode({ version: 1, approvalSha256: approvedSha256, publicationPolicy: POLICY }), paused: false,
     deployment: approval.deploymentSha256, absent: true, resources: true, active: false, validUnit: true };
-  const io = {
+  const codingRun: CodingRun = { id: runId, specSha256: approval.scopeSha256, issue: 17,
+    baseSha: 'a'.repeat(40), planSha256: 'c'.repeat(64), acceptanceSha256: 'd'.repeat(64),
+    attempt: 1, startedAt: '2026-10-22T12:00:00.000Z', status: 'verified', usage: null, cost: null };
+  const io: MutableScheduleIo = {
     clock: () => ({ now: new Date(state.now), monotonicNs: state.monotonicNs, bootId: state.bootId }),
     activation: () => state.activation,
     assertNoActive() { if (state.active) throw new Error('busy or interrupted'); },
@@ -51,7 +100,7 @@ function fixture() {
     assertResources() { if (!state.resources) throw new Error('resources'); },
     pathsAbsent: () => state.absent,
     invocationId: () => 'a'.repeat(32),
-    claim(value) { events.push('claim'); active = value; state.active = true; return active; },
+    claim(value) { events.push('claim'); active = value; state.active = true; return value; },
     saveActive(value) { active = value; },
     recordUnit(value, name) { assertRecordedUnit(value, name); value.units.push(name); events.push('unit'); },
     async code(value, bytes, options) {
@@ -59,10 +108,10 @@ function fixture() {
       assert.deepEqual(value, spec()); assert.equal(sha256(bytes), approval.scopeSha256);
       assert.equal(options.schedule.approvedSha256, approvedSha256);
       try {
-        await options.onAdmitted({ id: runId });
+        await options.onAdmitted(codingRun);
         await options.guard({ unit });
         events.push('model');
-        const publication = await options.onVerified({ id: runId });
+        const publication = await options.onVerified(codingRun);
         return { id: runId, scheduledPublication: publication };
       } finally { await options.onCleanup?.(); events.push('lease-release'); }
     },
@@ -71,7 +120,7 @@ function fixture() {
       events.push('stage'); assert.equal(sha256(bytes), digest);
       assert.equal(assertScheduledPermit(permit, digest, state.activation, io.clock()).permit.runId, runId);
     },
-    async publish(digest, value, guard) {
+    async publish(digest, _value, guard) {
       await guard({ unit: `bim-forge-scheduled-publish@${digest}.service` });
       events.push('publish'); return { status: 'published', digest, tokenRevoked: true };
     },
@@ -79,7 +128,7 @@ function fixture() {
     saveInterrupted(value) { events.push('interrupted'); active = value; },
     finish(value, result) { events.push('finish'); receipt = result; state.active = false; },
   };
-  return { io, state, events, approval, approvalBytes, approvedSha256, getActive: () => active };
+  return { io, state, events, approval: parsedApproval, approvalBytes, approvedSha256, getActive: () => active };
 }
 
 test('disabled, empty and existing profiles never claim, generate, stage or publish', async () => {
@@ -104,7 +153,7 @@ test('one guarded wake publishes exact bytes while the same coding lease is held
 });
 
 test('intake refuses invalid bindings, unavailable resources, pause, expiry and interrupted ownership without effects', async () => {
-  const changes = [
+  const changes: ((fixtureValue: ScheduleFixture) => void)[] = [
     (f) => { f.state.active = true; }, (f) => { f.state.paused = true; },
     (f) => { f.state.resources = false; }, (f) => { f.state.deployment = 'c'.repeat(64); },
     (f) => { f.state.now = new Date('2026-10-23T00:00:00.000Z'); },
@@ -119,7 +168,7 @@ test('intake refuses invalid bindings, unavailable resources, pause, expiry and 
 });
 
 test('activation, deployment, pauses, expiry, reboot, clock rollback and original deadline stop mid-job and never retry', async () => {
-  const changes = [
+  const changes: ((fixtureValue: ScheduleFixture) => void)[] = [
     (f) => { f.state.activation = null; }, (f) => { f.state.paused = true; },
     (f) => { f.state.deployment = 'd'.repeat(64); },
     (f) => { f.state.now = new Date('2026-10-23T00:00:00.000Z'); },
@@ -190,7 +239,7 @@ test('actual instance overrides stop before model start even when template measu
 test('evidence parse or write failure cannot mask the original cleanup recovery signal', async () => {
   const cleanup = Object.assign(new Error('unclean child group'), { requiresRecovery: true });
   await assert.rejects(stageWithEvidence(async () => { throw cleanup; }, () => { JSON.parse('{'); }),
-    (error) => error === cleanup && error.requiresRecovery === true);
+    (error) => error === cleanup && isRecord(error) && error.requiresRecovery === true);
   await assert.rejects(stageWithEvidence(async () => 'ok', () => { throw new Error('evidence unavailable'); }), /evidence unavailable/);
 });
 
@@ -211,20 +260,66 @@ test('isolated job inputs remain readable under the scheduler restrictive umask'
   } finally { process.umask(previous); }
 });
 
-function evidenceFixture() {
+interface VerifierExecution {
+  exitCode: number;
+  signal: number | null;
+  execMainCode: number;
+  result: string;
+  invocationId: string;
+}
+
+interface EvidenceRun extends Record<string, unknown> {
+  id: string;
+  status: string;
+  scheduleApprovalSha256: string;
+  specSha256: string;
+  issue: number;
+  baseSha: string;
+  planSha256: string;
+  acceptanceSha256: string;
+  publicationSha256: string;
+  verificationSha256: string;
+  observationsSha256: string;
+  verifierExecution: VerifierExecution;
+}
+
+interface AcceptanceObservation extends Record<string, unknown> {
+  name: string;
+  mode: string;
+  exitCode: number;
+  signal: number | null;
+  execMainCode: number;
+  result: string;
+  invocationId: string;
+  stdout: string;
+  stderr: string;
+}
+
+interface EvidenceFixture extends VerifiedEvidenceInput {
+  run: EvidenceRun;
+  spec: CodingSpec;
+  bytes: Buffer;
+  observations: AcceptanceObservation[];
+  verification: Buffer;
+  files: Record<string, string>;
+}
+
+function evidenceFixture(): EvidenceFixture {
   const value = spec(); const approval = fixture().approval; const approvedSha256 = fixture().approvedSha256;
   const prepared = prepareCodingPackage(value, { summary: 'Read-only profile.', questions: [],
     files: paths.map((file) => ({ path: file, content: 'export const example = true;\n' })) }, policy, baselinePackage);
   const files = Object.fromEntries(prepared.proposal.files.map((file) => [file.path, file.content]));
-  const observations = [{ name: value.acceptanceCases[0].name, mode: 'cli', exitCode: 0, signal: null,
-    execMainCode: 1, result: 'success', invocationId: 'a'.repeat(32), stdout: `${JSON.stringify(value.acceptanceCases[0].output)}\n`, stderr: '' }];
+  const acceptance = value.acceptanceCases[0];
+  assert.ok(acceptance);
+  const observations: AcceptanceObservation[] = [{ name: acceptance.name, mode: 'cli', exitCode: 0, signal: null,
+    execMainCode: 1, result: 'success', invocationId: 'a'.repeat(32), stdout: `${JSON.stringify(acceptance.output)}\n`, stderr: '' }];
   const acceptanceSha256 = sha256(JSON.stringify(value.acceptanceCases));
   const verification = Buffer.from([
-    { command: 'node', args: ['scripts/validate-policy.mjs', '--changed-files', ...prepared.proposal.files.map((file) => file.path)], exitCode: 0 },
+    { command: 'node', args: ['scripts/validate-policy.ts', '--changed-files', ...prepared.proposal.files.map((file) => file.path)], exitCode: 0 },
     { command: 'npm', args: ['test'], exitCode: 0 },
     { status: 'supplemental-checks-passed', acceptanceSha256, paths: prepared.proposal.files.map((file) => file.path) },
-  ].map(JSON.stringify).join('\n') + '\n');
-  const run = { id: runId, status: 'verified', scheduleApprovalSha256: approvedSha256,
+  ].map((entry) => JSON.stringify(entry)).join('\n') + '\n');
+  const run: EvidenceRun = { id: runId, status: 'verified', scheduleApprovalSha256: approvedSha256,
     specSha256: approval.scopeSha256, issue: value.issue.number, baseSha: value.baseSha,
     planSha256: sha256(JSON.stringify(value.plan)), acceptanceSha256,
     publicationSha256: sha256(prepared.bytes), verificationSha256: sha256(verification),
@@ -233,10 +328,17 @@ function evidenceFixture() {
   return { run, spec: value, approval, approvedSha256, bytes: prepared.bytes, observations, verification, files, policy, baselinePackage };
 }
 
-function verifierJournal(f, extraProcessOutput = '') {
+interface JournalRecord extends Record<string, string> {
+  MESSAGE: string;
+  _SYSTEMD_UNIT: string;
+  _SYSTEMD_INVOCATION_ID: string;
+  _TRANSPORT: string;
+}
+
+function verifierJournal(f: EvidenceFixture, extraProcessOutput = '') {
   const verifierUnit = `bim-forge-code-verify@${runId}.service`;
   const invocation = f.run.verifierExecution.invocationId;
-  const record = (MESSAGE, fields = {}) => ({ MESSAGE, _SYSTEMD_UNIT: verifierUnit,
+  const record = (MESSAGE: string, fields: Partial<JournalRecord> = {}): JournalRecord => ({ MESSAGE, _SYSTEMD_UNIT: verifierUnit,
     _SYSTEMD_INVOCATION_ID: invocation, _TRANSPORT: 'stdout', ...fields });
   const records = [record('Starting verifier', { _SYSTEMD_UNIT: 'init.scope', _TRANSPORT: 'journal' }),
     record('old invocation', { _SYSTEMD_INVOCATION_ID: 'c'.repeat(32) }),
@@ -245,8 +347,11 @@ function verifierJournal(f, extraProcessOutput = '') {
     ...f.verification.toString('utf8').trim().split('\n').map((line) => record(line)),
     ...(extraProcessOutput ? [record(extraProcessOutput)] : []),
     record('Stopped verifier', { _SYSTEMD_UNIT: 'init.scope', _TRANSPORT: 'journal' })];
-  const journal = (args) => {
-    const filters = args.filter((arg) => arg.startsWith('_')).map((arg) => arg.split('='));
+  const journal = (args: string[]): Buffer => {
+    const filters = args.filter((arg) => arg.startsWith('_')).map((arg): [string, string] => {
+      const separator = arg.indexOf('=');
+      return [arg.slice(0, separator), arg.slice(separator + 1)];
+    });
     const selected = filters.length ? records.filter((item) => filters.every(([key, value]) => item[key] === value)) : records;
     return Buffer.from(selected.map((item) => item.MESSAGE).join('\n') + '\n');
   };
@@ -267,16 +372,18 @@ test('unexpected verifier process output remains in evidence and fails the uncha
   const f = evidenceFixture(); const { verifierUnit, journal } = verifierJournal(f, 'unexpected process stderr');
   const { verification } = collectVerifierEvidence(verifierUnit, f.run.verifierExecution, journal);
   assert.match(verification.toString(), /unexpected process stderr/);
-  f.verification = verification; f.run.verificationSha256 = sha256(verification);
+  f.verification = Buffer.isBuffer(verification) ? verification : Buffer.from(verification);
+  f.run.verificationSha256 = sha256(verification);
   assert.throws(() => assertVerifiedEvidence(f), /Scheduled verifier evidence changed/);
 });
 
 test('verifier collection refuses missing or malformed identity before reading any journal', () => {
   const verifierUnit = `bim-forge-code-verify@${runId}.service`;
-  for (const [name, execution] of [[verifierUnit, undefined], [verifierUnit, {}],
+  const malformed: [string, unknown][] = [[verifierUnit, undefined], [verifierUnit, {}],
     [verifierUnit, { invocationId: 'bad' }], [verifierUnit, { invocationId: 'a'.repeat(32) + '\n' }],
     ['another.service', { invocationId: 'a'.repeat(32) }],
-    [`${verifierUnit}\n`, { invocationId: 'a'.repeat(32) }]]) {
+    [`${verifierUnit}\n`, { invocationId: 'a'.repeat(32) }]];
+  for (const [name, execution] of malformed) {
     let calls = 0;
     assert.throws(() => collectVerifierEvidence(name, execution, () => { calls += 1; return Buffer.alloc(0); }));
     assert.equal(calls, 0);
@@ -295,7 +402,8 @@ test('verifier journal failure propagates and failed execution evidence cannot b
   assert.equal(calls, 2);
   f.run.verifierExecution.exitCode = 1; f.run.verifierExecution.result = 'exit-code';
   const { verification } = collectVerifierEvidence(verifierUnit, f.run.verifierExecution, journal);
-  f.verification = verification; f.run.verificationSha256 = sha256(verification);
+  f.verification = Buffer.isBuffer(verification) ? verification : Buffer.from(verification);
+  f.run.verificationSha256 = sha256(verification);
   assert.throws(() => assertVerifiedEvidence(f), /Scheduled verified ledger bindings changed/);
 });
 
@@ -303,54 +411,72 @@ test('unit cleanup failure preserves observed invocation even when journal colle
   const value = spec(); const invocationId = 'd'.repeat(32);
   const verifierUnit = `bim-forge-code-verify@${runId}.service`;
   // Emulate the administrator boundary without running a privileged process or command.
-  t.mock.method(process, 'getuid', () => 0);
-  t.mock.method(globalThis, 'fetch', async (url) => ({ ok: true, text: async () => JSON.stringify(
-    url.endsWith('git/ref/heads/main') ? { object: { sha: value.baseSha } }
-      : url.endsWith(`issues/${value.issue.number}`) ? { ...value.issue, state: 'open' } : []) }));
-  t.mock.method(childProcess, 'execFileSync', (command, args) => {
+  const originalGetuid = process.getuid;
+  const originalFetch = globalThis.fetch;
+  const originalExecFileSync = childProcess.execFileSync;
+  const originalSpawn = childProcess.spawn;
+  Object.defineProperty(process, 'getuid', { configurable: true, value: () => 0 });
+  Object.defineProperty(globalThis, 'fetch', { configurable: true, value: async (url: unknown) => {
+    const endpoint = String(url);
+    return { ok: true, text: async () => JSON.stringify(
+      endpoint.endsWith('git/ref/heads/main') ? { object: { sha: value.baseSha } }
+        : endpoint.endsWith(`issues/${value.issue.number}`) ? { ...value.issue, state: 'open' } : []) };
+  } });
+  Object.defineProperty(childProcess, 'execFileSync', { configurable: true, value: (command: unknown, args: unknown) => {
+    assert.ok(Array.isArray(args));
     if (command === '/usr/bin/git') return 'paused: false\n';
     assert.equal(command, '/usr/bin/systemctl');
     if (args[0] === 'stop') throw new Error('cleanup failed');
     assert.equal(args[0], 'show');
     return `Result=success\nExecMainStatus=0\nExecMainCode=1\nInvocationID=${invocationId}\n`;
-  });
-  t.mock.method(childProcess, 'spawn', () => {
+  } });
+  Object.defineProperty(childProcess, 'spawn', { configurable: true, value: () => {
     const child = new EventEmitter(); queueMicrotask(() => child.emit('close', 0)); return child;
-  });
+  } });
   syncBuiltinESMExports();
-  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-  let execution; let journalReads = 0;
+  t.after(() => {
+    Object.defineProperty(process, 'getuid', { configurable: true, value: originalGetuid });
+    Object.defineProperty(globalThis, 'fetch', { configurable: true, value: originalFetch });
+    Object.defineProperty(childProcess, 'execFileSync', { configurable: true, value: originalExecFileSync });
+    Object.defineProperty(childProcess, 'spawn', { configurable: true, value: originalSpawn });
+    syncBuiltinESMExports();
+  });
+  let execution: unknown; let journalReads = 0;
   await assert.rejects(stageWithEvidence(async () => {
     try { await runUnit(verifierUnit, value, new AbortController().signal); }
-    catch (error) { execution = error.execution; throw error; }
+    catch (error) { if (isRecord(error)) execution = error.execution; throw error; }
   }, () => {
-    assert.equal(execution?.invocationId, invocationId);
+    assert.equal(isRecord(execution) ? execution.invocationId : undefined, invocationId);
     collectVerifierEvidence(verifierUnit, execution, () => { journalReads += 1; throw new Error('journal unavailable'); });
-  }), (error) => error.requiresRecovery === true && error.execution?.invocationId === invocationId);
+  }), (error) => isRecord(error) && error.requiresRecovery === true
+    && isRecord(error.execution) && error.execution.invocationId === invocationId);
   assert.equal(journalReads, 1);
 });
 
 test('independent staging checks ledger, outputs, verification and exact manifest; no candidate import', () => {
   const f = evidenceFixture(); assert.deepEqual(assertVerifiedEvidence(f), f.bytes);
-  for (const mutate of [
+  const mutations: ((fixtureValue: EvidenceFixture) => void)[] = [
     (g) => { g.run.status = 'running'; }, (g) => { g.run.scheduleApprovalSha256 = 'e'.repeat(64); },
-    (g) => { g.observations[0].stdout = 'forged'; }, (g) => { g.run.verifierExecution.signal = 9; },
-    (g) => { g.files[paths[0]] += 'changed'; }, (g) => { g.verification = Buffer.from('not checked'); },
-    (g) => { const p = JSON.parse(g.bytes); p.files.at(-1).content = '{}\n'; g.bytes = encode(p); g.run.publicationSha256 = sha256(g.bytes); },
-    (g) => { const p = JSON.parse(g.bytes); p.files.push({ path: 'factory/code-job.mjs', content: 'unapproved' }); g.bytes = encode(p); g.run.publicationSha256 = sha256(g.bytes); },
-  ]) { const g = evidenceFixture(); mutate(g); assert.throws(() => assertVerifiedEvidence(g)); }
+    (g) => { const observation = g.observations[0]; assert.ok(observation); observation.stdout = 'forged'; },
+    (g) => { g.run.verifierExecution.signal = 9; },
+    (g) => { const file = paths[0]; assert.ok(file); g.files[file] = `${g.files[file] ?? ''}changed`; },
+    (g) => { g.verification = Buffer.from('not checked'); },
+    (g) => { const p = requiredProposal(g.bytes); const file = p.files.at(-1); assert.ok(file); file.content = '{}\n'; g.bytes = encode(p); g.run.publicationSha256 = sha256(g.bytes); },
+    (g) => { const p = requiredProposal(g.bytes); p.files.push({ path: 'factory/code-job.ts', content: 'unapproved' }); g.bytes = encode(p); g.run.publicationSha256 = sha256(g.bytes); },
+  ];
+  for (const mutate of mutations) { const g = evidenceFixture(); mutate(g); assert.throws(() => assertVerifiedEvidence(g)); }
 });
 
 test('permit is checked immediately before every repository request', async () => {
-  let permitted = true; const effects = [];
-  const request = guardScheduledRequest(async (method) => { effects.push(method); }, () => { if (!permitted) throw new Error('expired'); });
+  let permitted = true; const effects: string[] = [];
+  const request = guardScheduledRequest(async (method: string, _resource: string) => { effects.push(method); }, () => { if (!permitted) throw new Error('expired'); });
   await request('GET', '/'); permitted = false;
   await assert.rejects(request('POST', '/pulls'), /expired/); assert.deepEqual(effects, ['GET']);
 });
 
 test('scheduled publication is an exclusive mode, never a manual fallback', () => {
   for (const args of [['--scheduled-sha', 'a'.repeat(64)], ['--scheduled-sha', 'a'.repeat(64), '--approved-sha', 'a'.repeat(64)], ['--scheduled-sha', 'bad']]) {
-    const result = spawnSync(process.execPath, ['factory/publish.mjs', ...args], { encoding: 'utf8', env: { PATH: process.env.PATH } });
+    const result = spawnSync(process.execPath, ['factory/publish.ts', ...args], { encoding: 'utf8', env: { PATH: process.env.PATH } });
     assert.equal(result.status, 1); assert.equal(result.stdout, '');
   }
 });
@@ -359,7 +485,7 @@ test('immutable closure measurement includes dependency bytes and refuses writab
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-measure-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.writeFileSync(path.join(directory, 'module'), 'first', { mode: 0o644 });
-  const options = { ownerUid: process.getuid(), checkAncestors: false };
+  const options = { ownerUid: uid(), checkAncestors: false };
   const first = measureTree(directory, options).sha256;
   fs.writeFileSync(path.join(directory, 'module'), 'second'); assert.notEqual(measureTree(directory, options).sha256, first);
   fs.chmodSync(path.join(directory, 'module'), 0o666); assert.throws(() => measureTree(directory, options), /Mutable/);
@@ -374,17 +500,17 @@ test('deployment measurement hashes every byte using bounded reads rather than w
   const content = Buffer.alloc(192 * 1024 + 7, 17); content[content.length - 1] = 99;
   fs.writeFileSync(filename, content, { mode: 0o600 });
   const original = fs.readFileSync;
-  t.mock.method(fs, 'readFileSync', (file, ...args) => {
+  t.mock.method(fs, 'readFileSync', (file: fs.PathOrFileDescriptor) => {
     if (file === filename) throw new Error('Whole-file allocation is forbidden for trusted runtime measurement');
-    return original(file, ...args);
+    return original(file);
   });
   const originalRead = fs.readSync; let reads = 0;
-  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+  t.mock.method(fs, 'readSync', (fd: number, buffer: Buffer, offset: number, length: number, position: number | null) => {
     assert.ok(length > 0 && length <= 65536, 'Each requested read must stay within 64 KiB');
     reads += 1;
     return originalRead(fd, buffer, offset, Math.min(length, 511), position);
   });
-  const value = measureTree(directory, { ownerUid: process.getuid(), checkAncestors: false });
+  const value = measureTree(directory, { ownerUid: uid(), checkAncestors: false });
   const expected = [['', 'directory', fs.statSync(directory).mode & 0o777], ['binary', 0o600, sha256(content)]];
   assert.deepEqual(value, { sha256: sha256(JSON.stringify(expected)), entries: 2, bytes: content.length });
   assert.ok(reads >= Math.ceil(content.length / 511), 'Short positive reads must not truncate the digest');
@@ -395,12 +521,12 @@ test('deployment measurement still rejects the aggregate byte budget before read
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const filename = path.join(directory, 'oversized'); fs.writeFileSync(filename, 'x');
   const original = fs.lstatSync;
-  t.mock.method(fs, 'lstatSync', (file, ...args) => {
-    const stat = original(file, ...args);
+  t.mock.method(fs, 'lstatSync', (file: fs.PathLike) => {
+    const stat = original(file);
     if (file === filename) stat.size = 768 * 1024 * 1024 + 1;
     return stat;
   });
-  assert.throws(() => measureTree(directory, { ownerUid: process.getuid(), checkAncestors: false }), /byte limit/);
+  assert.throws(() => measureTree(directory, { ownerUid: uid(), checkAncestors: false }), /byte limit/);
 });
 
 test('deployment measurement refuses changes to file contents, size, metadata or path during reads', { skip: process.platform !== 'linux' }, (t) => {
@@ -409,8 +535,8 @@ test('deployment measurement refuses changes to file contents, size, metadata or
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const filename = path.join(directory, 'binary'); fs.writeFileSync(filename, Buffer.alloc(128 * 1024, 7));
     const original = fs.readSync; let changed = false;
-    const mock = t.mock.method(fs, 'readSync', (...args) => {
-      const count = original(...args);
+    const mock = t.mock.method(fs, 'readSync', (fd: number, buffer: Buffer, offset: number, length: number, position: number | null) => {
+      const count = original(fd, buffer, offset, length, position);
       if (!changed) {
         changed = true;
         if (action === 'truncate') fs.truncateSync(filename, 1);
@@ -421,7 +547,7 @@ test('deployment measurement refuses changes to file contents, size, metadata or
       }
       return count;
     });
-    assert.throws(() => measureTree(directory, { ownerUid: process.getuid(), checkAncestors: false }), /Trusted file (?:ended|changed)/);
+    assert.throws(() => measureTree(directory, { ownerUid: uid(), checkAncestors: false }), /Trusted file (?:ended|changed)/);
     mock.mock.restore();
   }
 });
@@ -429,9 +555,9 @@ test('deployment measurement refuses changes to file contents, size, metadata or
 test('a cleanup failure can retain the shared coding lease without deleting durable history', { skip: process.platform !== 'linux' }, (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-retain-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const run = openCodingRun({ root: directory, bytes: encode(spec()), ownerUid: process.getuid() });
+  const run = openCodingRun({ root: directory, bytes: encode(spec()), ownerUid: uid() });
   run.record({ status: 'interrupted' }); run.close({ preserveLock: true });
   assert.equal(fs.existsSync(path.join(directory, 'ledger', 'coding.lock')), true);
   assert.equal(fs.existsSync(path.join(directory, 'ledger', `${run.run.id}.json`)), true);
-  assert.throws(() => openCodingRun({ root: directory, bytes: encode(spec()), ownerUid: process.getuid() }), /EEXIST/);
+  assert.throws(() => openCodingRun({ root: directory, bytes: encode(spec()), ownerUid: uid() }), /EEXIST/);
 });

@@ -1,33 +1,61 @@
 import { createHash } from 'node:crypto';
 
-const hash = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-const html = (value) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-const prose = (value, fallback) => typeof value === 'string' && value.trim()
+interface ChangeReviewInput {
+  outcome?: unknown;
+  why?: unknown;
+  profile?: unknown;
+  observations?: unknown;
+  run?: unknown;
+  verificationSha256?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const hash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const html = (value: string): string => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const prose = (value: unknown, fallback: string): string => typeof value === 'string' && value.trim()
   ? html(value.trim().replace(/\s+/g, ' ')).replace(/[\\`*_{}\[\]()#+.!|~-]/g, '\\$&') : fallback;
 
-// Observations come from the controller after its comparisons, not from the model's answer.
-export function renderChangeReview({ outcome, why, profile = {}, observations, run = {}, verificationSha256 } = {}) {
-  const recorded = Array.isArray(observations) && observations.length > 0 && hash(run.acceptanceSha256)
-    && observations.every((item) => item && typeof item.name === 'string' && ['cli', 'api'].includes(item.mode)
-      && Number.isInteger(item.exitCode) && item.exitCode >= 0 && !item.signal
-      && typeof item.stdout === 'string' && typeof item.stderr === 'string');
-  const verified = hash(verificationSha256) && run.verifierExecution?.exitCode === 0
-    && run.verifierExecution.execMainCode === 1 && run.verifierExecution.result === 'success'
-    && !run.verifierExecution.signal;
+function isObservation(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return typeof value.name === 'string'
+    && (value.mode === 'cli' || value.mode === 'api')
+    && typeof value.exitCode === 'number' && Number.isInteger(value.exitCode) && value.exitCode >= 0
+    && !value.signal && typeof value.stdout === 'string' && typeof value.stderr === 'string';
+}
+
+export function renderChangeReview({
+  outcome, why, profile, observations, run, verificationSha256,
+}: ChangeReviewInput = {}): string {
+  const profileRecord = isRecord(profile) ? profile : {};
+  const runRecord = isRecord(run) ? run : {};
+  const recorded = Array.isArray(observations) && observations.length > 0 && hash(runRecord.acceptanceSha256)
+    && observations.every(isObservation);
+  const verifierExecution = isRecord(runRecord.verifierExecution) ? runRecord.verifierExecution : {};
+  const verified = hash(verificationSha256) && verifierExecution.exitCode === 0
+    && verifierExecution.execMainCode === 1 && verifierExecution.result === 'success'
+    && !verifierExecution.signal;
   const checks = recorded
     ? `The controller checked ${observations.length} fixed input cases against the approved expected results.`
     : 'Acceptance evidence is missing or incomplete. No acceptance-test success is claimed.';
   const verification = verified
     ? 'Policy validation and the full candidate test command exited successfully in the credential-free test environment.'
     : 'Evidence that policy validation and the full candidate test command completed successfully is missing or incomplete.';
-  const issue = Number.isSafeInteger(run.issue) && run.issue > 0
-    ? `Related [issue #${run.issue}](https://github.com/Frederik91/bim-forge/issues/${run.issue}).`
+  const issue = typeof runRecord.issue === 'number' && Number.isSafeInteger(runRecord.issue) && runRecord.issue > 0
+    ? `Related [issue #${runRecord.issue}](https://github.com/Frederik91/bim-forge/issues/${runRecord.issue}).`
     : 'The related issue has not been supplied.';
-  const provenance = Object.fromEntries(Object.entries(run)
+  const provenance = Object.fromEntries(Object.entries(runRecord)
     .filter(([key]) => ['id', 'issue', 'attempt', 'verifierExecution'].includes(key) || /(?:Sha|Sha256)$/.test(key))
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
   const details = {
-    profile: { label: profile.label, paths: profile.paths, exportName: profile.exportName, errorText: profile.errorText },
+    profile: {
+      label: profileRecord.label,
+      paths: profileRecord.paths,
+      exportName: profileRecord.exportName,
+      errorText: profileRecord.errorText,
+    },
     run: provenance,
     observationsSha256: Array.isArray(observations)
       ? createHash('sha256').update(JSON.stringify(observations)).digest('hex') : null,
