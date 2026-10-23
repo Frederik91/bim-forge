@@ -1,11 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { parseCodexOutput, disabledFeatures } from './codex-planner.ts';
-import { codingSchema, readCodingSpec, codingProfile } from './coding.mjs';
-import { readProtectedCodingFile } from './coding-store.mjs';
+import { parseCodexOutput, disabledFeatures, type ParsedCodexOutput } from './codex-planner.ts';
+import { codingSchema, readCodingSpec, codingProfile, type CodingSpec } from './coding.ts';
+import { readProtectedCodingFile } from './coding-store.ts';
 
-export function coderCommand(job, spec, context) {
+interface CoderCommand {
+  readonly executable: string;
+  readonly args: string[];
+  readonly input: string;
+  readonly env: Record<string, string>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function coderCommand(job: string, spec: CodingSpec, context: unknown): CoderCommand {
   const input = ['Implement the approved read-only BIM Forge issue as complete inline UTF-8 files matching the schema.',
     'Do not use tools, execute code, access external data, claim tests passed, change the approved paths, or alter policy.',
     'Return questions rather than guessing if scope is insufficient. Test execution and publication happen separately.',
@@ -22,35 +33,39 @@ export function coderCommand(job, spec, context) {
       PATH: '/opt/bim-forge/node/bin:/usr/bin:/bin', LANG: 'C.UTF-8' } };
 }
 
-export async function generateCodingAnswer(id) {
-  if (!/^[a-f0-9-]{36}$/.test(id) || process.platform !== 'linux' || process.getuid() === 0) throw new Error('Isolated generator required');
+export async function generateCodingAnswer(id: unknown): Promise<void> {
+  if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/.test(id) || process.platform !== 'linux'
+      || typeof process.getuid !== 'function' || process.getuid() === 0) {
+    throw new Error('Isolated generator required');
+  }
   const job = `/var/lib/bim-forge-coding/jobs/${id}`;
   const spec = readCodingSpec(readProtectedCodingFile(path.join(job, 'spec.json')));
-  const context = JSON.parse(readProtectedCodingFile(path.join(job, 'context.json')).toString('utf8'));
+  const context: unknown = JSON.parse(readProtectedCodingFile(path.join(job, 'context.json')).toString('utf8'));
   const command = coderCommand(job, spec, context);
   const outputDir = `/var/lib/bim-forge/coding/${id}`;
-  const output = await new Promise((resolve, reject) => {
+  const output = await new Promise<string>((resolve, reject) => {
     const child = spawn(command.executable, command.args, { env: command.env, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     child.stdout.setEncoding('utf8');
-    let text = ''; let error; let length = 0;
-    const timer = setTimeout(() => { error = new Error('Coding generation timed out'); child.kill('SIGKILL'); }, 600000);
-    child.stdout.on('data', (chunk) => {
+    let text = ''; let failure: Error | undefined; let length = 0;
+    const timer = setTimeout(() => { failure = new Error('Coding generation timed out'); child.kill('SIGKILL'); }, 600000);
+    child.stdout.on('data', (chunk: string) => {
       length += Buffer.byteLength(chunk);
-      if (length > 1024 * 1024) { error = new Error('Coding output exceeded its limit'); child.kill('SIGKILL'); }
-      else text += chunk.toString('utf8');
+      if (length > 1024 * 1024) { failure = new Error('Coding output exceeded its limit'); child.kill('SIGKILL'); }
+      else text += chunk;
     });
     child.stderr.resume();
     child.stdin.on('error', () => {});
     child.once('error', (failure) => { clearTimeout(timer); reject(failure); });
-    child.once('close', (code) => { clearTimeout(timer); if (error || code !== 0) reject(error ?? new Error('Coding model process failed')); else resolve(text); });
+    child.once('close', (code) => { clearTimeout(timer); if (failure || code !== 0) reject(failure ?? new Error('Coding model process failed')); else resolve(text); });
     child.stdin.end(command.input);
   });
   fs.writeFileSync(path.join(outputDir, 'protocol.jsonl'), output, { mode: 0o600, flag: 'wx' });
-  let parsed;
+  let parsed: ParsedCodexOutput;
   try { parsed = parseCodexOutput(output); }
   catch (error) {
-    if (error.usage) fs.writeFileSync(path.join(outputDir, 'answer.json'), JSON.stringify({ answer: null,
-      usage: error.usage, warnings: [], rejected: true }), { mode: 0o600, flag: 'wx' });
+    const usage = isRecord(error) ? error.usage : undefined;
+    if (usage !== undefined) fs.writeFileSync(path.join(outputDir, 'answer.json'), JSON.stringify({ answer: null,
+      usage, warnings: [], rejected: true }), { mode: 0o600, flag: 'wx' });
     throw error;
   }
   fs.writeFileSync(path.join(outputDir, 'answer.json'), JSON.stringify({ answer: parsed.plan,
