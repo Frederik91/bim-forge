@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { parseScheduleApproval } from './schedule-approval.mjs';
+import { parseScheduleApproval } from './schedule-approval.ts';
 
 const start = '2026-10-22T00:00:00.000Z';
 const end = '2026-10-23T00:00:00.000Z';
-const fixture = (changes = {}) => ({
+const fixture = (changes: Record<string, unknown> = {}): Record<string, unknown> => ({
   version: 1,
   repository: 'Frederik91/bim-forge',
   scopeSha256: 'a'.repeat(64),
@@ -15,15 +15,17 @@ const fixture = (changes = {}) => ({
   dailyLimit: 3,
   ...changes,
 });
-const encode = (value) => Buffer.from(`${JSON.stringify(value)}\n`);
-const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const parse = (value, now = new Date(start)) => {
+const encode = (value: unknown): Buffer => Buffer.from(`${JSON.stringify(value)}\n`);
+const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
+const parse = (value: unknown, now: unknown = new Date(start)) => {
   const bytes = encode(value);
   return parseScheduleApproval(bytes, digest(bytes), now);
 };
-const rejectBytes = (bytes, error) => assert.throws(
-  () => parseScheduleApproval(bytes, digest(bytes), new Date(start)), error,
-);
+const rejectBytes = (bytes: Buffer, error?: RegExp | ErrorConstructor): void => {
+  const action = () => parseScheduleApproval(bytes, digest(bytes), new Date(start));
+  if (error === undefined) assert.throws(action);
+  else assert.throws(action, error);
+};
 
 test('returns exactly the validated approval and freezes it without changing inputs', () => {
   const value = fixture();
@@ -34,8 +36,8 @@ test('returns exactly the validated approval and freezes it without changing inp
   assert.deepEqual(result, value);
   assert.notEqual(result, value);
   assert.equal(Object.isFrozen(result), true);
-  assert.throws(() => { result.dailyLimit = 1; }, TypeError);
-  assert.throws(() => { result.command = 'run'; }, TypeError);
+  assert.throws(() => { Object.defineProperty(result, 'dailyLimit', { value: 1 }); }, TypeError);
+  assert.throws(() => { Object.defineProperty(result, 'command', { value: 'run' }); }, TypeError);
   assert.deepEqual(bytes, original);
   assert.equal(now.toISOString(), start);
 });
@@ -55,7 +57,7 @@ test('not-before is inclusive, expiry is exclusive, and a 24-hour window is allo
   }
   const value = fixture({ expiresAt: '2026-10-22T00:00:00.001Z' });
   assert.deepEqual(parse(value), value);
-  assert.throws(() => parse(value, new Date(value.expiresAt)), /time window/);
+  assert.throws(() => parse(value, new Date(String(value.expiresAt))), /time window/);
 });
 
 test('rejects zero, reversed, and over-24-hour windows', () => {
@@ -190,7 +192,7 @@ test('timestamps require real calendar dates in canonical UTC with milliseconds'
     }
   }
   const leapDay = fixture({ notBefore: '2028-02-29T00:00:00.000Z', expiresAt: '2028-03-01T00:00:00.000Z' });
-  assert.deepEqual(parse(leapDay, new Date(leapDay.notBefore)), leapDay);
+  assert.deepEqual(parse(leapDay, new Date(String(leapDay.notBefore))), leapDay);
 });
 
 test('rejects invalid clocks and clocks outside the approved interval', () => {

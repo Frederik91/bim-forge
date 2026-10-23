@@ -3,23 +3,30 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { sha256 } from './coding.mjs';
+import { sha256 } from './coding.ts';
 
-const command = (file, args) => execFileSync(file, args, { encoding: 'utf8', timeout: 10000,
+const command = (file: string, args: string[]): string => execFileSync(file, args, { encoding: 'utf8', timeout: 10000,
   maxBuffer: 256 * 1024, env: { PATH: '/usr/bin:/bin', LANG: 'C', HOME: '/nonexistent' } }).trim();
 const dummy = '00000000-0000-0000-0000-000000000000';
 export const deploymentUnits = Object.freeze(['bim-forge-code-generate@.service', 'bim-forge-code-case@.service',
   'bim-forge-code-verify@.service', 'bim-forge-publish@.service', 'bim-forge-scheduled-publish@.service',
   'bim-forge-schedule.service', 'bim-forge-schedule.timer']);
 
-export function assertEffectiveUnit(state, filename) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function assertEffectiveUnit(state: unknown, filename: string): void {
+  if (!isRecord(state)) throw new Error('Unsupported effective unit or pending daemon reload');
   if (state.LoadState !== 'loaded' || state.FragmentPath !== filename || state.DropInPaths !== ''
       || state.NeedDaemonReload !== 'no') throw new Error('Unsupported effective unit or pending daemon reload');
 }
 
-export function assertUnitDeployment(unit) {
+export function assertUnitDeployment(unit: unknown): void {
+  if (typeof unit !== 'string') throw new Error('Unsupported exact service instance');
   const match = /^(bim-forge-code-(?:generate|case|verify)|bim-forge-scheduled-publish)@([a-f0-9-]+)\.service$/.exec(unit);
-  if (!match || !(match[1] === 'bim-forge-scheduled-publish' ? /^[a-f0-9]{64}$/ : /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/).test(match[2])) {
+  const instance = match?.[2];
+  if (!match || !instance || !(match[1] === 'bim-forge-scheduled-publish' ? /^[a-f0-9]{64}$/ : /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/).test(instance)) {
     throw new Error('Unsupported exact service instance');
   }
   const filename = `/etc/systemd/system/${match[1]}@.service`;
@@ -30,7 +37,7 @@ export function assertUnitDeployment(unit) {
   assertEffectiveUnit(state, filename);
 }
 
-export function assertImmutableAncestors(filename, ownerUid = 0) {
+export function assertImmutableAncestors(filename: string, ownerUid = 0): void {
   let current = filename;
   while (true) {
     const stat = fs.lstatSync(current);
@@ -43,10 +50,12 @@ export function assertImmutableAncestors(filename, ownerUid = 0) {
   }
 }
 
-const sameFile = (left, right) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeMs', 'ctimeMs']
-  .every((key) => left[key] === right[key]);
+const sameFile = (left: fs.Stats, right: fs.Stats): boolean => left.dev === right.dev
+  && left.ino === right.ino && left.mode === right.mode && left.uid === right.uid
+  && left.gid === right.gid && left.nlink === right.nlink && left.size === right.size
+  && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
 
-function hashFile(filename, expected) {
+function hashFile(filename: string, expected: fs.Stats): string {
   const fd = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
   try {
     if (!sameFile(expected, fs.fstatSync(fd))) throw new Error('Trusted file changed before measurement');
@@ -68,10 +77,21 @@ function hashFile(filename, expected) {
 
 // Hash a complete installed tree, including internal link names and their targets.
 // External links, special files, writable ancestors and oversized trees fail closed.
-export function measureTree(directory, { ownerUid = 0, checkAncestors = true } = {}) {
+interface MeasureTreeOptions {
+  readonly ownerUid?: number;
+  readonly checkAncestors?: boolean;
+}
+
+export interface TreeMeasurement {
+  readonly sha256: string;
+  readonly entries: number;
+  readonly bytes: number;
+}
+
+export function measureTree(directory: string, { ownerUid = 0, checkAncestors = true }: MeasureTreeOptions = {}): TreeMeasurement {
   if (checkAncestors) assertImmutableAncestors(directory, ownerUid);
-  const entries = []; let total = 0;
-  const visit = (relative) => {
+  const entries: unknown[][] = []; let total = 0;
+  const visit = (relative: string): void => {
     if (entries.length >= 20000) throw new Error('Trusted tree exceeds its file limit');
     const filename = path.join(directory, relative);
     const stat = fs.lstatSync(filename);
@@ -94,7 +114,9 @@ export function measureTree(directory, { ownerUid = 0, checkAncestors = true } =
 }
 
 export function measureDeployment() {
-  if (process.platform !== 'linux' || process.getuid() !== 0) throw new Error('Deployment measurement requires the VM administrator');
+  if (process.platform !== 'linux' || typeof process.getuid !== 'function' || process.getuid() !== 0) {
+    throw new Error('Deployment measurement requires the VM administrator');
+  }
   const release = fs.realpathSync('/opt/bim-forge/coding-current');
   if (!/^\/opt\/bim-forge\/releases\/[a-zA-Z0-9-]+$/.test(release)
       || fs.realpathSync('/opt/bim-forge/publisher-current') !== release) throw new Error('Coding and publishing need the same reviewed release');
@@ -140,7 +162,10 @@ export function measureDeployment() {
   for (const binary of binaries) {
     const dependencies = command('/usr/bin/ldd', [binary]);
     if (/not found/.test(dependencies)) throw new Error('Missing runtime dependency');
-    for (const match of dependencies.matchAll(/(?:=>\s*)?(\/[^\s()]+)/g)) files.add(fs.realpathSync(match[1]));
+    for (const match of dependencies.matchAll(/(?:=>\s*)?(\/[^\s()]+)/g)) {
+      const dependency = match[1];
+      if (dependency) files.add(fs.realpathSync(dependency));
+    }
   }
   const runtime = [...files].sort().map((file) => {
     assertImmutableAncestors(file);
