@@ -7,7 +7,7 @@ const digest = (value: string) => createHash('sha256').update(value).digest('hex
 const input = () => ({
   outcome: 'Report which rooms need coordination',
   why: 'Engineers need to identify incomplete room assignments',
-  profile: { label: 'read-only application module', paths: ['src/room-report.mjs', 'src/room-report.test.mjs', 'package.json'],
+  profile: { label: 'read-only application module', paths: ['src/room-report.ts', 'src/room-report.test.ts', 'package.json'],
     exportName: 'evaluate', errorText: 'Invalid application input' },
   observations: [
     { name: 'valid-room', mode: 'api', exitCode: 0, signal: null, stdout: '{"rooms":[]}\n', stderr: '' },

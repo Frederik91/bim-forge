@@ -1,13 +1,13 @@
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { openPublication } from './publish-store.mjs';
+import { openPublication } from './publish-store.ts';
 
 const linux = process.platform === 'linux';
-function fixture(t) {
+function fixture(t: TestContext) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-publish-store-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const approvalsDir = path.join(root, 'approvals'); const ledgerDir = path.join(root, 'ledger');
@@ -20,7 +20,8 @@ function fixture(t) {
     const filename = path.join(approvalsDir, `${digest}.json`); fs.writeFileSync(filename, bytes, { mode: 0o640 });
     return { digest, filename, bytes };
   };
-  return { root, approvalsDir, ledgerDir, stage, open: (digest) => openPublication({ digest, approvalsDir, ledgerDir, ownerUid: process.getuid() }) };
+  return { root, approvalsDir, ledgerDir, stage,
+    open: (digest: string) => openPublication({ digest, approvalsDir, ledgerDir, ownerUid: process.getuid?.() ?? 0 }) };
 }
 
 test('approved files are privately snapshotted and only one publisher can run', { skip: !linux }, (t) => {
@@ -31,8 +32,10 @@ test('approved files are privately snapshotted and only one publisher can run', 
     assert.deepEqual(store.bytes, item.bytes);
     store.record({ stage: 'approved', attemptLimit: 3 }); store.finish({ status: 'published' });
   } finally { store.close(); }
-  const events = fs.readFileSync(path.join(f.ledgerDir, `${item.digest}.jsonl`), 'utf8').trim().split('\n').map(JSON.parse);
-  assert.deepEqual(events.map((event) => event.stage), ['started', 'approved', 'finished']);
+  const events: unknown[] = fs.readFileSync(path.join(f.ledgerDir, `${item.digest}.jsonl`), 'utf8')
+    .trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => typeof event === 'object' && event !== null && 'stage' in event ? event.stage : undefined),
+    ['started', 'approved', 'finished']);
   assert.equal(fs.existsSync(path.join(f.ledgerDir, 'publisher.lock')), false);
 });
 

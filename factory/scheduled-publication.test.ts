@@ -1,33 +1,58 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { sha256 } from './coding.mjs';
+import { sha256 } from './coding.ts';
 import { POLICY, parseActivation, createScheduledPermit, assertScheduledPermit,
-  readScheduledPermit } from './scheduled-publication.mjs';
+  readScheduledPermit } from './scheduled-publication.ts';
 
-const encode = (value) => Buffer.from(`${JSON.stringify(value)}\n`);
+const encode = (value: unknown): Buffer => Buffer.from(`${JSON.stringify(value)}\n`);
 const publicationSha256 = 'c'.repeat(64);
 const bootId = '01234567-89ab-cdef-0123-456789abcdef';
 const runId = 'fedcba98-7654-3210-fedc-ba9876543210';
 const startedNs = '5000000000';
 const deadlineNs = '1205000000000';
+interface PermitInput {
+  readonly publicationSha256: unknown;
+  readonly approvalBytes: unknown;
+  readonly approvedSha256: unknown;
+  readonly activationBytes: unknown;
+  readonly runId: unknown;
+  readonly bootId: unknown;
+  readonly startedNs: unknown;
+  readonly deadlineNs: unknown;
+}
+
+interface StoredPermitFixture {
+  readonly root: string;
+  readonly scheduled: string;
+  readonly pointer: string;
+  readonly permit: string;
+  readonly options: {
+    approvalsDir: string;
+    ownerUid: number;
+    codingPausePath: string;
+    clock: unknown;
+  };
+  readonly read: () => unknown;
+}
+
 const clock = () => ({ now: new Date('2026-10-22T12:00:00.000Z'), bootId, monotonicNs: BigInt(startedNs) });
-const approval = (changes = {}) => ({ version: 1, repository: 'Frederik91/bim-forge',
+const approval = (changes: Record<string, unknown> = {}): Record<string, unknown> => ({ version: 1, repository: 'Frederik91/bim-forge',
   scopeSha256: 'a'.repeat(64), deploymentSha256: 'b'.repeat(64),
   notBefore: '2026-10-22T00:00:00.000Z', expiresAt: '2026-10-23T00:00:00.000Z', dailyLimit: 3,
   ...changes });
-const activation = (approvalSha256 = sha256(encode(approval()))) => ({ version: 1, approvalSha256, publicationPolicy: POLICY });
-function fixture(changes = {}) {
+const activation = (approvalSha256: unknown = sha256(encode(approval()))): Record<string, unknown> => ({ version: 1, approvalSha256, publicationPolicy: POLICY });
+function fixture(changes: Record<string, unknown> = {}): PermitInput {
   const approvalBytes = encode(approval());
   return { publicationSha256, approvalBytes, approvedSha256: sha256(approvalBytes),
     activationBytes: encode(activation()), runId, bootId, startedNs, deadlineNs, ...changes };
 }
-const make = (input = fixture(), current = clock()) => createScheduledPermit(input, current);
-const check = (bytes = make(), input = fixture(), current = clock()) =>
+const make = (input: PermitInput = fixture(), current: unknown = clock()): Buffer => createScheduledPermit(input, current);
+const check = (bytes: unknown = make(), input: PermitInput = fixture(), current: unknown = clock()) =>
   assertScheduledPermit(bytes, input.publicationSha256, input.activationBytes, current);
-const mutate = (changes) => encode({ ...JSON.parse(make()), ...changes });
+const mutate = (changes: Record<string, unknown>): Buffer => encode({ ...JSON.parse(make().toString('utf8')), ...changes });
 
 test('activation has exactly three frozen fields; null means enabled and idle', () => {
   assert.equal(POLICY, 'profile-additions-draft-v1');
@@ -36,7 +61,8 @@ test('activation has exactly three frozen fields; null means enabled and idle', 
     const result = parseActivation(bytes);
     assert.deepEqual(result, value);
     assert.equal(Object.isFrozen(result), true);
-    assert.throws(() => { result.approvalSha256 = null; }, TypeError);
+    const replacement = result.approvalSha256 === null ? 'a'.repeat(64) : null;
+    assert.throws(() => { Object.defineProperty(result, 'approvalSha256', { value: replacement }); }, TypeError);
     assert.deepEqual(bytes, encode(value));
   }
 });
@@ -58,10 +84,11 @@ test('activation rejects missing, extra, mistyped and unknown policy fields', ()
 });
 
 test('activation and permit require bounded Buffers and exact compact JSON plus one newline', () => {
-  for (const [bytes, parse, maximum] of [
-    [encode(activation()), parseActivation, 4096],
-    [make(), (bytes) => assertScheduledPermit(bytes, publicationSha256, fixture().activationBytes, clock()), 32768],
-  ]) {
+  const parsers: { readonly bytes: Buffer; readonly parse: (input: unknown) => unknown; readonly maximum: number }[] = [
+    { bytes: encode(activation()), parse: parseActivation, maximum: 4096 },
+    { bytes: make(), parse: (input) => assertScheduledPermit(input, publicationSha256, fixture().activationBytes, clock()), maximum: 32768 },
+  ];
+  for (const { bytes, parse, maximum } of parsers) {
     for (const input of [undefined, null, bytes.toString(), new Uint8Array(bytes), {}]) {
       assert.throws(() => parse(input), /Buffer/);
     }
@@ -89,6 +116,7 @@ test('activation and permit require bounded Buffers and exact compact JSON plus 
 
 test('permit is canonical, binds exact approval and activation bytes, and returns frozen values', () => {
   const input = fixture();
+  assert.ok(Buffer.isBuffer(input.approvalBytes) && Buffer.isBuffer(input.activationBytes));
   const bytes = make(input);
   const { permit, approval: parsed } = check(bytes);
   assert.deepEqual(Object.keys(permit), ['version', 'publicationSha256', 'approvalSha256', 'approvalJson',
@@ -103,11 +131,11 @@ test('permit is canonical, binds exact approval and activation bytes, and return
 });
 
 test('permit rejects all missing or extra fields and invalid shapes', () => {
-  for (const key of Object.keys(JSON.parse(make()))) {
-    const value = JSON.parse(make()); delete value[key];
+  for (const key of Object.keys(JSON.parse(make().toString('utf8')))) {
+    const value: Record<string, unknown> = JSON.parse(make().toString('utf8')); delete value[key];
     assert.throws(() => check(encode(value)), /fields/);
   }
-  for (const value of [null, [], true, 1, 'permit', {}, { ...JSON.parse(make()), retry: true }]) {
+  for (const value of [null, [], true, 1, 'permit', {}, { ...JSON.parse(make().toString('utf8')), retry: true }]) {
     assert.throws(() => check(encode(value)), /fields/);
   }
   for (const changes of [{ version: 2 }, { version: '1' }, { approvalJson: null }, { approvalJson: {} }]) {
@@ -218,14 +246,14 @@ test('invalid clocks always fail with a generic error without disclosing supplie
     { ...clock(), now: secret }, { ...clock(), bootId: secret }, { ...clock(), monotonicNs: secret },
     { ...clock(), monotonicNs: 1 }, { ...clock(), monotonicNs: -1n }]) {
     for (const invoke of [() => check(make(), fixture(), current), () => make(fixture(), current)]) {
-      assert.throws(invoke, (error) => error.message === 'Invalid scheduled publication clock'
-        && !error.message.includes(secret));
+      assert.throws(invoke, (error: unknown) => error instanceof Error
+        && error.message === 'Invalid scheduled publication clock' && !error.message.includes(secret));
     }
   }
 });
 
 const linux = { skip: process.platform !== 'linux' };
-function store(t) {
+function store(t: TestContext): StoredPermitFixture {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scheduled-publication-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.chmodSync(root, 0o700);
@@ -233,9 +261,12 @@ function store(t) {
   fs.mkdirSync(scheduled, { mode: 0o755 });
   const pointer = path.join(root, 'SCHEDULED');
   const permit = path.join(scheduled, `${publicationSha256}.permit.json`);
-  fs.writeFileSync(pointer, fixture().activationBytes, { mode: 0o644 });
+  const activationBytes = fixture().activationBytes;
+  assert.ok(Buffer.isBuffer(activationBytes));
+  fs.writeFileSync(pointer, activationBytes, { mode: 0o644 });
   fs.writeFileSync(permit, make(), { mode: 0o644 });
-  const options = { approvalsDir: root, ownerUid: process.getuid(), codingPausePath: path.join(root, 'coding-PAUSED'), clock: clock() };
+  const options = { approvalsDir: root, ownerUid: process.getuid?.() ?? 0,
+    codingPausePath: path.join(root, 'coding-PAUSED'), clock: clock() };
   return { root, scheduled, pointer, permit, options, read: () => readScheduledPermit(publicationSha256, options) };
 }
 
@@ -245,15 +276,18 @@ test('protected read accepts administrator-owned app-readable files without file
   assert.deepEqual(value.read(), check());
   const after = [value.root, value.scheduled, value.pointer, value.permit].map((file) => fs.statSync(file));
   for (let i = 0; i < before.length; i += 1) {
-    assert.equal(after[i].mtimeMs, before[i].mtimeMs);
-    assert.equal(after[i].size, before[i].size);
+    const beforeStat = before[i]; const afterStat = after[i];
+    assert.ok(beforeStat && afterStat);
+    assert.equal(afterStat.mtimeMs, beforeStat.mtimeMs);
+    assert.equal(afterStat.size, beforeStat.size);
   }
   assert.deepEqual(fs.readdirSync(value.root).sort(), ['SCHEDULED', 'scheduled']);
   assert.deepEqual(fs.readdirSync(value.scheduled), [`${publicationSha256}.permit.json`]);
 });
 
 test('protected read rejects absent permits or activation without falling back to manual files', linux, (t) => {
-  for (const key of ['pointer', 'permit']) {
+  const protectedFiles: ('pointer' | 'permit')[] = ['pointer', 'permit'];
+  for (const key of protectedFiles) {
     const value = store(t);
     fs.writeFileSync(path.join(value.root, `${publicationSha256}.json`), make(), { mode: 0o600 });
     fs.unlinkSync(value[key]);
@@ -270,7 +304,8 @@ test('protected read rejects absent permits or activation without falling back t
 });
 
 test('both directories must be real protected directories owned by the selected administrator', linux, (t) => {
-  for (const key of ['root', 'scheduled']) {
+  const protectedDirectories: ('root' | 'scheduled')[] = ['root', 'scheduled'];
+  for (const key of protectedDirectories) {
     for (const mode of [0o775, 0o757, 0o777]) {
       const value = store(t); fs.chmodSync(value[key], mode);
       assert.throws(value.read, /directory/);
@@ -286,11 +321,13 @@ test('both directories must be real protected directories owned by the selected 
     assert.throws(value.read, /directory/);
   }
   const value = store(t);
-  assert.throws(() => readScheduledPermit(publicationSha256, { ...value.options, ownerUid: process.getuid() + 1 }), /directory/);
+  assert.throws(() => readScheduledPermit(publicationSha256,
+    { ...value.options, ownerUid: (process.getuid?.() ?? 0) + 1 }), /directory/);
 });
 
 test('both protected files reject writable modes, symlinks, hard links, directories and oversized bytes', linux, (t) => {
-  for (const key of ['pointer', 'permit']) {
+  const protectedFiles: ('pointer' | 'permit')[] = ['pointer', 'permit'];
+  for (const key of protectedFiles) {
     for (const mode of [0o664, 0o646, 0o666]) {
       const value = store(t); fs.chmodSync(value[key], mode);
       assert.throws(value.read, /protected/);
@@ -311,8 +348,10 @@ test('both protected files reject writable modes, symlinks, hard links, director
   }
 });
 
-test('both protected files independently reject a different owner', { skip: process.platform !== 'linux' || process.getuid() !== 0 }, (t) => {
-  for (const key of ['pointer', 'permit', 'scheduled']) {
+test('both protected files independently reject a different owner',
+  { skip: process.platform !== 'linux' || process.getuid?.() !== 0 }, (t) => {
+  const ownedPaths: ('pointer' | 'permit' | 'scheduled')[] = ['pointer', 'permit', 'scheduled'];
+  for (const key of ownedPaths) {
     const value = store(t);
     fs.chownSync(value[key], 1, 1);
     assert.throws(value.read, /protected|directory/);
