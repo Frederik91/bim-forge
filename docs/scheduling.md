@@ -4,7 +4,7 @@
 
 The owner selected hourly coding and draft publication. Human review and merging remain required. The two manual trial utilities and schedule admission library are merged. Both fixed profiles now exist on main, so neither is eligible for another additions-only run.
 
-`factory/schedule-job.mjs` connects the existing controller and publisher. New trusted code still requires human review before installation. A merged PR does not install a release, approve a task, or enable a timer. The [deployment guide](scheduled-dispatch.md) contains the default-disabled units and qualification steps.
+`factory/schedule-job.ts` connects the existing controller and publisher. New trusted code still requires human review before installation. A merged PR does not install a release, approve a task, or enable a timer. The [deployment guide](scheduled-dispatch.md) contains the default-disabled units and qualification steps.
 
 ## One approved scope per activation
 
@@ -31,7 +31,7 @@ The dispatcher uses the coding ledger as the sole admission record. It holds the
 
 The dispatcher reopens the protected verified ledger, exact candidate bytes, independent observations, and verifier log. It derives the manifest append from the pinned baseline. It permits only the selected profile's new files and that exact append. It never imports candidate code or reads the App key.
 
-Scheduled packages and permits live only in `approvals/scheduled`. `publish.mjs --scheduled-sha` requires the permit. Missing or invalid scheduled authorization never falls back to `--approved-sha`. The existing manual spool remains separate.
+Scheduled packages and permits live only in `approvals/scheduled`. `publish.ts --scheduled-sha` requires the permit. Missing or invalid scheduled authorization never falls back to `--approved-sha`. The existing manual spool remains separate.
 
 The App publisher checks current activation, both local pause files, approval expiry, boot identity, and the original monotonic deadline before each repository request. Existing remote issue, main, pause, protection, intent, issue-budget, and reconciliation checks remain active. Only the isolated App service receives a credential. Token revocation remains allowed after work authorization expires.
 

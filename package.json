@@ -8,14 +8,15 @@
     "node": ">=24"
   },
   "scripts": {
-    "validate": "node scripts/validate-policy.mjs",
+    "validate": "npm run lint && npm run typecheck && node scripts/validate-policy.ts",
+    "lint": "node scripts/validate-typescript.ts",
     "typecheck": "tsc --noEmit",
     "build:demo": "esbuild demo/room-app.ts --bundle --platform=browser --format=esm --target=es2023 --outfile=dist/demo/room-app.mjs",
-    "test": "npm run build:demo && node --test factory/runner.test.mjs factory/live.test.mjs factory/publisher.test.mjs factory/publisher-identity.test.mjs factory/publish-store.test.mjs factory/coding.test.mjs factory/health.test.mjs factory/schedule-check.test.mjs src/room-model.test.ts src/chatgpt-plan.test.ts demo/server.test.ts",
-    "factory": "node factory/cli.mjs",
-    "factory:plan": "node factory/live.mjs",
-    "factory:publish": "node factory/publish.mjs",
-    "factory:code": "node factory/code-job.mjs"
+    "test": "npm run build:demo && node --test factory/runner.test.ts factory/live.test.ts factory/publisher.test.ts factory/publisher-identity.test.ts factory/publish-store.test.ts factory/coding.test.ts factory/health.test.ts factory/schedule-check.test.ts src/room-model.test.ts src/chatgpt-plan.test.ts demo/server.test.ts",
+    "factory": "node factory/cli.ts",
+    "factory:plan": "node factory/live.ts",
+    "factory:publish": "node factory/publish.ts",
+    "factory:code": "node factory/code-job.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
