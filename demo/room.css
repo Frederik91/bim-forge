@@ -165,6 +165,8 @@ input[aria-invalid="true"] { border: 2px solid #a44932; }
 .auth-symbol { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; color: #176f65; background: #dff2ec; font-size: 24px; }
 .auth-state h3 { font-size: 17px; }
 .auth-state h3 + p { margin-top: 4px; color: var(--muted); }
+.pair-command { display: block; padding: 11px 12px; overflow-x: auto; color: #28564f; background: #edf5f2; border: 1px solid #cfe2dc; border-radius: 8px; font-size: 11px; white-space: nowrap; }
+.pair-command[hidden] { display: none; }
 .auth-state .modal-footnote { margin: 14px -22px -22px; }
 .connected-account { padding: 14px; display: flex; align-items: center; gap: 13px; border: 1px solid #cfe5de; border-radius: 11px; background: #f2faf7; }
 .connected-account .connection-dot { width: 12px; height: 12px; }

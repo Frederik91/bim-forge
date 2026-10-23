@@ -160,3 +160,54 @@ test('local connection completes sign-in, discovers models, serializes refresh a
   assert.match(after, /oaiapp_bim_forge/);
 });
 
+test('credential transfer preserves the destination host identity and rejects injected fields', async (t: TestContext) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'bim-chatgpt-transfer-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const sourceHost = 'urn:uuid:11111111-1111-4111-8111-111111111111';
+  const serverHost = 'urn:uuid:22222222-2222-4222-8222-222222222222';
+  const profile = {
+    clientId: 'oaiapp_bim_forge', issuer: 'https://auth.openai.com', subject: 'account-1',
+    email: 'designer@example.com', name: 'Model Designer', idToken: 'identity-token',
+    accessToken: 'access-token', refreshToken: 'refresh-token',
+    scopes: ['openid', 'profile', 'email', 'offline_access', 'resource.invoke', 'chatgpt.tokens.use.direct'],
+    expiresAt: now + 3_600_000,
+  };
+  const source = new ChatGPTPlanConnection({
+    version: 1, hostId: sourceHost, registrationClientId: profile.clientId, profile,
+    models: [{ slug: 'gpt-6.1-sol', displayName: 'GPT-6.1 Sol' }], selectedModel: 'gpt-6.1-sol',
+  }, { storageFile: path.join(directory, 'source.json'), protectFile: async () => {} });
+  const transfer = source.credentialTransfer();
+  assert.equal(Object.hasOwn(transfer, 'hostId'), false);
+  const bootstrap = source.pairingBootstrap();
+  assert.equal(JSON.stringify(bootstrap).includes('access-token'), false);
+  assert.equal(JSON.stringify(bootstrap).includes('refresh-token'), false);
+
+  const temporaryPairingFile = path.join(directory, 'pairing.json');
+  const temporaryPairing = await ChatGPTPlanConnection.open({
+    storageFile: temporaryPairingFile, hostId: serverHost, protectFile: async () => {},
+  });
+  await temporaryPairing.importPairingBootstrap(bootstrap);
+  assert.equal(temporaryPairing.publicSession().connected, false);
+  const pairedSeed = jsonRecord(await fs.readFile(temporaryPairingFile, 'utf8'));
+  assert.equal(pairedSeed.hostId, serverHost);
+  assert.equal(pairedSeed.registrationClientId, 'oaiapp_bim_forge');
+  assert.doesNotMatch(JSON.stringify(pairedSeed), /access-token|refresh-token/);
+  await assert.rejects(temporaryPairing.importPairingBootstrap({ ...bootstrap, hostId: sourceHost }), /invalid/);
+
+  const destinationFile = path.join(directory, 'destination.json');
+  const destination = await ChatGPTPlanConnection.open({
+    storageFile: destinationFile, hostId: serverHost, protectFile: async () => {},
+  });
+  const session = await destination.importCredentialTransfer(transfer);
+  assert.equal(session.account?.email, 'designer@example.com');
+  assert.equal(session.selectedModel, 'gpt-6.1-sol');
+  const saved = jsonRecord(await fs.readFile(destinationFile, 'utf8'));
+  assert.equal(saved.hostId, serverHost);
+  assert.equal(saved.registrationClientId, 'oaiapp_bim_forge');
+
+  await assert.rejects(destination.importCredentialTransfer({ ...transfer, hostId: sourceHost }), /invalid/);
+  await assert.rejects(ChatGPTPlanConnection.open({
+    storageFile: destinationFile, hostId: sourceHost, protectFile: async () => {},
+  }), /does not match/);
+});
+

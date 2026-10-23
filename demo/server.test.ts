@@ -6,7 +6,7 @@ import type { IncomingHttpHeaders, RequestOptions } from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createDemoServer } from './server.ts';
+import { createDemoServer, parseDemoServerConfig } from './server.ts';
 import type { DemoServerOptions } from './server.ts';
 import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
@@ -29,8 +29,9 @@ async function listen(
   t: TestContext,
   modelWorker: ModelWorker | null = null,
   chatgpt: TestChatGPT | null = null,
+  serverOptions: Pick<DemoServerOptions, 'runtimeMode' | 'publicOrigin'> = {},
 ): Promise<TestRequester> {
-  const server = createDemoServer({ modelWorker, chatgpt });
+  const server = createDemoServer({ modelWorker, chatgpt, ...serverOptions });
   const directory = process.platform === 'linux' ? fs.mkdtempSync(path.join(os.tmpdir(), 'bim-room-http-')) : null;
   const socketPath = directory && path.join(directory, 'test.sock');
   await new Promise<void>((resolve) => {
@@ -67,6 +68,7 @@ test('local demo serves only explicit assets and exposes only the bounded propos
   assert.equal((await request('/', { method: 'HEAD' })).body, '');
   assert.equal((await request('/', { method: 'POST' })).status, 405);
   const auth = await request('/api/auth/session'); assert.equal(auth.status, 200); assert.equal(jsonObject(auth.body).connected, false);
+  assert.equal(jsonObject((await request('/api/health')).body).status, 'ok');
   assert.equal((await request('/api/auth/start', { method: 'POST' })).status, 503);
   assert.equal((await request('/api/proposals')).status, 405);
   assert.equal((await request('/api/proposals', { method: 'POST' })).status, 503);
@@ -74,6 +76,60 @@ test('local demo serves only explicit assets and exposes only the bounded propos
     assert.equal((await request(target)).status, 404);
   }
   assert.equal((await request('/', { headers: { Host: 'attacker.example' } })).status, 403);
+});
+
+test('remote runtime exposes pairing state without attempting OAuth on the server', async (t) => {
+  let signIns = 0;
+  const session = {
+    connected: false, sharing: false, account: null, models: [], selectedModel: null,
+  };
+  const chatgpt: TestChatGPT = {
+    publicSession: () => session,
+    async signIn() { signIns += 1; return session; },
+    async refreshModels() { return session; },
+    async selectModel() { return session; },
+    async signOut() { return { ...session, revocationConfirmed: true }; },
+    async getAccessToken() { throw new Error('not connected'); },
+    selectedModel() { throw new Error('not connected'); },
+  };
+  const request = await listen(t, null, chatgpt, {
+    runtimeMode: 'remote', publicOrigin: 'https://preview.example:9443',
+  });
+  const headers = { Host: 'preview.example:9443', Origin: 'https://preview.example:9443', 'Sec-Fetch-Site': 'same-origin' };
+  const publicState = jsonObject((await request('/api/auth/session', { headers })).body);
+  assert.equal(publicState.signInMode, 'remote-pairing');
+  const start = await request('/api/auth/start', { method: 'POST', headers });
+  assert.equal(start.status, 409);
+  assert.match(String(jsonObject(start.body).error), /npm run chatgpt:pair/);
+  assert.equal(signIns, 0);
+  assert.equal((await request('/api/auth/start', {
+    method: 'POST', headers: { ...headers, Origin: 'https://attacker.example' },
+  })).status, 400);
+  assert.equal((await request('/api/health', { headers: { Host: 'attacker.example' } })).status, 403);
+  const health = jsonObject((await request('/api/health', { headers })).body);
+  assert.equal(health.runtimeMode, 'remote');
+});
+
+test('server configuration parses local TCP and bounded remote Unix socket modes', () => {
+  assert.deepEqual(parseDemoServerConfig({ PORT: '4180' }), {
+    runtimeMode: 'local', publicOrigin: null, storageFile: undefined,
+    listen: { kind: 'tcp', host: '127.0.0.1', port: 4180 },
+  });
+  assert.deepEqual(parseDemoServerConfig({
+    BIM_FORGE_RUNTIME: 'remote',
+    BIM_FORGE_PUBLIC_ORIGIN: 'https://192.168.1.17:9443',
+    BIM_FORGE_SOCKET: '/run/bim-preview/api.sock',
+    BIM_FORGE_STORAGE_FILE: '/var/lib/bim-forge/chatgpt/connection.json',
+  }), {
+    runtimeMode: 'remote', publicOrigin: 'https://192.168.1.17:9443',
+    storageFile: '/var/lib/bim-forge/chatgpt/connection.json',
+    listen: { kind: 'socket', path: '/run/bim-preview/api.sock' },
+  });
+  assert.throws(() => parseDemoServerConfig({ BIM_FORGE_RUNTIME: 'remote' }), /PUBLIC_ORIGIN/);
+  assert.throws(() => parseDemoServerConfig({
+    BIM_FORGE_RUNTIME: 'remote', BIM_FORGE_PUBLIC_ORIGIN: 'http://preview.example',
+    BIM_FORGE_SOCKET: '/tmp/app.sock', BIM_FORGE_STORAGE_FILE: '/tmp/connection.json',
+  }), /HTTPS origin/);
 });
 
 test('authentication endpoints expose only public connection state and reject cross-origin mutations', async (t) => {

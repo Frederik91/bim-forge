@@ -19,6 +19,7 @@ interface AuthSession {
   models: AuthModel[];
   selectedModel: string | null;
   revocationConfirmed: boolean | undefined;
+  signInMode: 'local-browser' | 'remote-pairing';
 }
 interface ActiveReview {
   requestId: string;
@@ -62,7 +63,9 @@ function nullableText(value: unknown, field: string): string | null {
 
 function parseAuthSession(value: unknown): AuthSession {
   if (!isRecord(value) || typeof value.connected !== 'boolean' || typeof value.sharing !== 'boolean'
-    || !Array.isArray(value.models)) throw new Error('The ChatGPT connection returned an invalid session.');
+    || !Array.isArray(value.models) || (value.signInMode !== 'local-browser' && value.signInMode !== 'remote-pairing')) {
+    throw new Error('The ChatGPT connection returned an invalid session.');
+  }
   const models = value.models.map((model) => {
     if (!isRecord(model) || typeof model.slug !== 'string' || typeof model.displayName !== 'string') {
       throw new Error('The ChatGPT connection returned an invalid model list.');
@@ -81,6 +84,7 @@ function parseAuthSession(value: unknown): AuthSession {
     connected: value.connected, sharing: value.sharing, account, models,
     selectedModel: nullableText(value.selectedModel, 'selected model'),
     revocationConfirmed: value.revocationConfirmed,
+    signInMode: value.signInMode,
   };
 }
 
@@ -145,6 +149,8 @@ const ui = {
   'auth-dialog': dialog('auth-dialog'), 'auth-close': button('auth-close'), 'auth-error': generic('auth-error'),
   'auth-disconnected': generic('auth-disconnected'), 'auth-connected': generic('auth-connected'),
   'auth-connect': button('auth-connect'), 'auth-account': generic('auth-account'),
+  'auth-connect-heading': generic('auth-connect-heading'), 'auth-connect-copy': generic('auth-connect-copy'),
+  'auth-pair-command': generic('auth-pair-command'),
   'auth-plan-status': generic('auth-plan-status'), 'auth-model': select('auth-model'),
   'auth-refresh-models': button('auth-refresh-models'), 'auth-signout': button('auth-signout'),
 };
@@ -166,7 +172,10 @@ let gesture: GestureState | null = null;
 let activeReview: ActiveReview | null = null;
 let currentPage: PageName = 'request';
 let authBusy = false;
-let authSession: AuthSession = { connected: false, sharing: false, account: null, models: [], selectedModel: null, revocationConfirmed: undefined };
+let authSession: AuthSession = {
+  connected: false, sharing: false, account: null, models: [], selectedModel: null,
+  revocationConfirmed: undefined, signInMode: 'local-browser',
+};
 const planCameras = new WeakMap<SVGSVGElement, PlanCamera>();
 const encoder = new TextEncoder();
 const number = new Intl.NumberFormat('en', { maximumFractionDigits: 3 });
@@ -234,6 +243,7 @@ function closeDialog(target: HTMLDialogElement): void {
 
 function renderAuth() {
   const usable = authSession.connected && authSession.sharing && Boolean(authSession.selectedModel);
+  const remotePairing = authSession.signInMode === 'remote-pairing';
   ui['auth-menu'].classList.toggle('connected', usable);
   const authMenuLabel = ui['auth-menu'].querySelector('span:last-child');
   if (!(authMenuLabel instanceof HTMLSpanElement)) throw new Error('Missing ChatGPT menu label.');
@@ -247,15 +257,21 @@ function renderAuth() {
   proposalConnection.classList.toggle('connected', usable);
   ui['auth-disconnected'].hidden = authSession.connected;
   ui['auth-connected'].hidden = !authSession.connected;
+  ui['auth-connect-heading'].textContent = remotePairing ? 'Pair this preview once' : 'Ready when you are';
+  ui['auth-connect-copy'].textContent = remotePairing
+    ? 'For your security, ChatGPT consent happens on a trusted computer. Run the pairing command there, then check this connection.'
+    : 'BIM Forge will open ChatGPT in your browser so you can choose an account and allow plan usage.';
+  ui['auth-pair-command'].hidden = !remotePairing;
   ui['auth-connect'].disabled = authBusy;
-  ui['auth-connect'].textContent = authBusy ? 'Waiting for ChatGPT…' : 'Continue with ChatGPT';
+  ui['auth-connect'].textContent = authBusy ? (remotePairing ? 'Checking…' : 'Waiting for ChatGPT…')
+    : remotePairing ? 'Check connection' : 'Continue with ChatGPT';
   ui['auth-refresh-models'].disabled = authBusy || !authSession.sharing;
   ui['auth-signout'].disabled = authBusy;
   ui['auth-model'].disabled = authBusy || !usable;
   if (authSession.account) {
     ui['auth-account'].textContent = authSession.account.email || authSession.account.name || 'Connected ChatGPT account';
     ui['auth-plan-status'].textContent = authSession.sharing
-      ? 'ChatGPT plan usage is enabled for this local app.'
+      ? `ChatGPT plan usage is enabled for this ${remotePairing ? 'preview server' : 'local app'}.`
       : 'This connection did not grant ChatGPT plan usage. Disconnect and reconnect to review consent.';
   }
   const selected = authSession.selectedModel;
@@ -532,7 +548,11 @@ ui['start-dialog'].addEventListener('cancel', (event) => {
 for (const authButton of [ui['auth-menu'], ui['proposal-auth-action']]) authButton.addEventListener('click', () => openDialog(ui['auth-dialog']));
 ui['auth-close'].addEventListener('click', () => closeDialog(ui['auth-dialog']));
 ui['auth-connect'].addEventListener('click', () => {
-  void runAuth(() => authRequest('/api/auth/start', { method: 'POST' }), 'Finish connecting ChatGPT in the browser window that just opened.');
+  if (authSession.signInMode === 'remote-pairing') {
+    void runAuth(() => authRequest('/api/auth/session'), 'Checking the preview server connection…');
+  } else {
+    void runAuth(() => authRequest('/api/auth/start', { method: 'POST' }), 'Finish connecting ChatGPT in the browser window that just opened.');
+  }
 });
 ui['auth-refresh-models'].addEventListener('click', () => {
   void runAuth(() => authRequest('/api/auth/models', { method: 'POST' }), 'Refreshing models available to this ChatGPT account…');

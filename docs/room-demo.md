@@ -12,7 +12,15 @@ node demo/server.ts
 
 Open `http://127.0.0.1:4173`, choose **Connect ChatGPT**, and complete consent in the browser. Eligible accounts can use their ChatGPT plan for proposals through the official [Sign in with ChatGPT open-source flow](https://developers.openai.com/siwc/token-sharing-open-source). The local server performs OAuth with PKCE, validates the OpenAI ID token, stores rotating credentials outside the browser and project, discovers account-visible models, and sends stateless streaming Responses requests. No API key or client secret is used.
 
-The current restricted static preview cannot run this flow because sign-in requires a loopback callback and protected local credential storage. Never place OAuth tokens in static assets, browser storage, project JSON, logs or exported evidence.
+The Docker preview runs the same API behind its HTTPS proxy, but OAuth consent still happens on a trusted local computer because the required callback is `127.0.0.1`. The **Connect ChatGPT** dialog shows the remote pairing state. An operator pairs the server once with `npm run chatgpt:pair`; the command transfers the validated session over SSH without printing tokens or replacing the server's stable host identity. Never place OAuth tokens in static assets, browser storage, project JSON, logs or exported evidence.
+
+For the current preview host, run this from a trusted checkout and complete the browser consent:
+
+```sh
+npm run chatgpt:pair -- --remote frederik@192.168.1.17
+```
+
+The remote runtime must already be running. The command reads its non-secret host ID and saved registration hint, completes OAuth locally for that host, sends the validated credential transfer over SSH stdin, restarts only the app container, verifies its health and unchanged host ID, and removes its temporary local credential directory. The server owns later token refreshes. See [`deploy/preview/README.md`](../deploy/preview/README.md) for deployment and rollback.
 
 ## Request, review and revise
 

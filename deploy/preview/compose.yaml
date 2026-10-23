@@ -1,0 +1,72 @@
+name: bim-preview
+services:
+  app:
+    image: ${BIM_FORGE_IMAGE:?Set BIM_FORGE_IMAGE to the reviewed immutable image tag}
+    container_name: bim-preview-app
+    user: "65032:33"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: always
+    cpus: 1.5
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 128
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
+    environment:
+      BIM_FORGE_RUNTIME: remote
+      BIM_FORGE_PUBLIC_ORIGIN: ${BIM_FORGE_PUBLIC_ORIGIN:?Set the external HTTPS origin}
+      BIM_FORGE_SOCKET: /run/bim-preview/api.sock
+      BIM_FORGE_STORAGE_FILE: /var/lib/bim-forge/chatgpt/connection.json
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    volumes:
+      - /run/bim-preview:/run/bim-preview:rw
+      - /srv/bim-preview/state:/var/lib/bim-forge/chatgpt:rw
+    healthcheck:
+      test: ["CMD", "node", "scripts/container-healthcheck.ts"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 4m
+        max-file: "2"
+
+  static:
+    image: nginx@sha256:84ed8c0dd296c188bfc24ed506f46589e9285fb0b11cf3a04d91d524d3067e11
+    container_name: bim-preview-static
+    user: "65031:33"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: always
+    cpus: 0.25
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 32
+    ulimits:
+      nofile:
+        soft: 256
+        hard: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=8m,mode=1777
+    volumes:
+      - /opt/bim-preview/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /srv/bim-preview/data:/srv/preview:ro
+      - /run/bim-preview:/run/bim-preview:rw
+    depends_on:
+      app:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 2m
+        max-file: "2"
