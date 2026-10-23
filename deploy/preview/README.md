@@ -1,6 +1,6 @@
 # Docker preview runtime
 
-This deployment keeps the existing TLS proxy and static release mechanism. Nginx remains network-isolated and talks to the Node runtime through `/run/bim-preview/api.sock`. Only the Node container has outbound network access. ChatGPT credentials live in `/srv/bim-preview/state`, outside the image and static release.
+This deployment keeps the existing TLS proxy and static release mechanism. Nginx remains network-isolated and talks to the Node runtime through `/run/bim-preview/api.sock`. Only the Node container has outbound network access. Codex owns ChatGPT credentials below `/srv/bim-preview/state`, outside the image and static release.
 
 ## Build and install a reviewed revision
 
@@ -32,18 +32,16 @@ docker compose --project-directory /opt/bim-preview --file /opt/bim-preview/comp
 docker compose --project-directory /opt/bim-preview --file /opt/bim-preview/compose.yaml up --detach --wait
 ```
 
-Verify `/api/health` through HTTPS and confirm that `/api/auth/session` reports `remote-pairing` before pairing.
+Verify `/api/health` through HTTPS and confirm that `/api/auth/session` reports `disconnected` before sign-in.
 
-## Pair a ChatGPT plan
+## Connect a ChatGPT plan
 
-The required OAuth callback is local to the browser computer. From a trusted checkout on that computer, run:
+Open the preview, choose **Connect ChatGPT**, and request a one-time code. Open the displayed OpenAI URL on any phone or computer, sign in, and enter the code. The dialog checks the server automatically and changes to the connected account when authorization completes.
 
-```sh
-npm run chatgpt:pair -- --remote <user>@<preview-host>
-```
+Device-code authorization must be enabled in the account's ChatGPT security settings or by the workspace administrator. The preview never returns tokens to the browser and does not expose the Codex app-server transport over the network.
 
-The SSH user must be able to run `docker exec` and `docker restart` for `bim-preview-app`. The helper fetches the server's stable host ID and saved registration hint, completes OAuth locally, transfers a strict credential document over SSH stdin, restarts only the app container, waits for its Unix-socket health check, verifies the host ID, and deletes its temporary local files. It never transfers or replaces the host ID. Do not copy a laptop `connection.json` over the server file.
+This is a private, self-hosted preview integration. Reassess the production sign-in design against the current Sign in with ChatGPT requirements before any public or commercial launch.
 
 ## Roll back
 
-Set `BIM_FORGE_IMAGE` in `/opt/bim-preview/.env` to the previous reviewed image and run `docker compose up --detach --wait`. Restore the previous `compose.yaml` and `nginx.conf` together if their interface changed. The persistent credential directory is not part of an image rollback; do not delete it. To disconnect safely, use the preview's **Disconnect ChatGPT** action so remote revocation is attempted before local credentials are cleared.
+Set `BIM_FORGE_IMAGE` in `/opt/bim-preview/.env` to the previous reviewed image and run `docker compose up --detach --wait`. Restore the previous `compose.yaml` and `nginx.conf` together if their interface changed. The persistent Codex directory is not part of an image rollback; do not delete it. Use the preview's **Disconnect ChatGPT** action to clear the installation's Codex session.

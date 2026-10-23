@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { RoomRepository, diffSnapshots, rectangleLayout, previewRectangle } from './room-model.ts';
-import { createChatGPTPlanModelWorker, MODEL_PROPOSAL_TOOLS, prepareModelProposal } from './model-proposal.ts';
+import { prepareModelProposal } from './model-proposal.ts';
 import type { Door, Entity, HostingRelationship, ModelSnapshot, Point, RoomLayout, Wall } from './room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
 
@@ -796,90 +796,4 @@ test('model worker can decline without changing repository history', async () =>
   });
   assert.equal(result.status, 'declined'); assert.equal(result.repository, repo);
   assert.equal(result.repository.serialize(), saved); assert.equal(result.review.proposalRevisionId, null);
-});
-
-test('ChatGPT plan adapter keeps OAuth credentials server-side and replays bounded stateless Responses turns', async () => {
-  interface CapturedRequest { url: string; options: RequestInit }
-  const requests: CapturedRequest[] = [];
-  const responses: unknown[] = [
-    { id: 'response-one', usage: { input_tokens: 50, output_tokens: 8, total_tokens: 58 }, output: [
-      { type: 'reasoning', id: 'reasoning-one', encrypted_content: 'opaque' },
-      { type: 'function_call', namespace: 'bim_model', name: 'inspect_model', arguments: '{}', call_id: 'call-one' },
-    ] },
-    { id: 'response-two', usage: { input_tokens: 70, output_tokens: 12, total_tokens: 82 }, output: [
-      { type: 'function_call', namespace: 'bim_model', name: 'submit_proposal', arguments: '{"summary":"done"}', call_id: 'call-two' },
-    ] },
-  ];
-  const worker = createChatGPTPlanModelWorker({
-    getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model',
-    fetchImpl: async (url: string | URL | Request, options: RequestInit = {}) => {
-      requests.push({ url: String(url), options });
-      const event = { type: 'response.completed', response: responses.shift() };
-      return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
-    },
-  });
-  const calls: Array<[string, unknown]> = [];
-  const events: unknown[] = [];
-  await worker.run({
-    instructions: 'Use bounded tools.', input: { request: 'test' }, tools: MODEL_PROPOSAL_TOOLS,
-    recordProviderEvent: (event: unknown) => { events.push(event); },
-    executeTool: async (name: string, argumentsValue: unknown) => {
-      calls.push([name, argumentsValue]);
-      return name === 'submit_proposal' ? { ok: true, done: true } : { ok: true };
-    },
-  });
-  assert.deepEqual(calls, [['inspect_model', {}], ['submit_proposal', { summary: 'done' }]]);
-  assert.deepEqual(worker.identity, { provider: 'openai-chatgpt-plan', model: 'configured-model' });
-  assert.deepEqual(events, [
-    { responseId: 'response-one', inputTokens: 50, outputTokens: 8, totalTokens: 58 },
-    { responseId: 'response-two', inputTokens: 70, outputTokens: 12, totalTokens: 82 },
-  ]);
-  assert.equal(requests.length, 2);
-  const firstRequest = first(requests, 'first provider request');
-  const secondRequest = requests[1];
-  if (!secondRequest) throw new Error('Missing second provider request.');
-  assert.equal(firstRequest.url, 'https://api.openai.com/v1/responses');
-  assert.equal(new Headers(firstRequest.options.headers).get('Authorization'), 'Bearer server-only-oauth-token');
-  assert.equal(firstRequest.options.signal instanceof AbortSignal, true);
-  if (typeof firstRequest.options.body !== 'string' || typeof secondRequest.options.body !== 'string') throw new Error('Expected JSON request bodies.');
-  const firstBody = parseRecord(firstRequest.options.body); const secondBody = parseRecord(secondRequest.options.body);
-  assert.equal(firstBody.model, 'configured-model'); assert.equal(firstBody.tool_choice, 'required');
-  assert.equal(firstBody.store, false); assert.equal(firstBody.stream, true);
-  assert.equal(firstBody.parallel_tool_calls, false); assert.equal(Object.hasOwn(firstBody, 'previous_response_id'), false);
-  assert.equal(Object.hasOwn(firstBody, 'max_output_tokens'), false);
-  const namespaceTool = first(recordArray(firstBody, 'tools'), 'namespace tool');
-  assert.equal(namespaceTool.type, 'namespace'); assert.equal(namespaceTool.name, 'bim_model');
-  assert.deepEqual(recordArray(namespaceTool, 'tools').map((tool) => tool.name), MODEL_PROPOSAL_TOOLS.map((tool) => tool.name));
-  const secondInput = recordArray(secondBody, 'input');
-  assert.equal(first(secondInput, 'initial input').role, 'user');
-  assert.deepEqual(secondInput.slice(1), [
-    { type: 'reasoning', id: 'reasoning-one', encrypted_content: 'opaque' },
-    { type: 'function_call', namespace: 'bim_model', name: 'inspect_model', arguments: '{}', call_id: 'call-one' },
-    { type: 'function_call_output', call_id: 'call-one', output: '{"ok":true}' },
-  ]);
-  assert.equal(firstRequest.options.body.includes('server-only-oauth-token'), false);
-});
-
-test('ChatGPT plan adapter rejects provider streams above its byte budget and requires completion', async () => {
-  const worker = createChatGPTPlanModelWorker({
-    getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model', maxResponseBytes: 1024,
-    fetchImpl: async () => new Response(`data: ${'x'.repeat(1025)}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } }),
-  });
-  await assert.rejects(worker.run({
-    instructions: 'Use bounded tools.', input: {}, tools: MODEL_PROPOSAL_TOOLS,
-    executeTool: async () => ({ ok: true }), recordProviderEvent() {},
-  }), /byte limit/);
-});
-
-test('ChatGPT plan adapter fails closed on explicit failure and interrupted SSE streams', async () => {
-  const run = (event: unknown) => createChatGPTPlanModelWorker({
-    getAccessToken: async () => 'server-only-oauth-token', model: 'configured-model',
-    fetchImpl: async () => new Response(event ? `data: ${JSON.stringify(event)}\n\n` : 'data: [DONE]\n\n'),
-  }).run({
-    instructions: 'Use bounded tools.', input: {}, tools: MODEL_PROPOSAL_TOOLS,
-    executeTool: async () => ({ ok: true }), recordProviderEvent() {},
-  });
-  await assert.rejects(run({ type: 'response.failed', response: { error: { code: 'subscription_sharing_usage_limit_exceeded' } } }), /usage_limit_exceeded/);
-  await assert.rejects(run({ type: 'response.incomplete', response: {} }), /incomplete/);
-  await assert.rejects(run(null), /without a completed response/);
 });

@@ -20,12 +20,13 @@ services:
       BIM_FORGE_RUNTIME: remote
       BIM_FORGE_PUBLIC_ORIGIN: ${BIM_FORGE_PUBLIC_ORIGIN:?Set the external HTTPS origin}
       BIM_FORGE_SOCKET: /run/bim-preview/api.sock
-      BIM_FORGE_STORAGE_FILE: /var/lib/bim-forge/chatgpt/connection.json
+      CODEX_HOME: /var/lib/bim-forge/codex
+      BIM_FORGE_AGENT_WORKDIR: /tmp/bim-forge-agent
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
     volumes:
       - /run/bim-preview:/run/bim-preview:rw
-      - /srv/bim-preview/state:/var/lib/bim-forge/chatgpt:rw
+      - /srv/bim-preview/state:/var/lib/bim-forge/codex:rw
     healthcheck:
       test: ["CMD", "node", "scripts/container-healthcheck.ts"]
       interval: 15s
