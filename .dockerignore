@@ -1,0 +1,12 @@
+**
+!package.json
+!demo/
+!demo/server.ts
+!src/
+!src/**
+!scripts/
+!scripts/chatgpt-transfer.ts
+!scripts/container-healthcheck.ts
+!deploy/
+!deploy/preview/
+!deploy/preview/Dockerfile

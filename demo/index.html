@@ -111,11 +111,12 @@
 
     <dialog id="auth-dialog" class="modal auth-modal" aria-labelledby="auth-heading">
       <div class="dialog-heading"><div><p class="eyebrow">AI CONNECTION</p><h2 id="auth-heading">Use your ChatGPT plan</h2></div><button id="auth-close" class="icon-button" type="button" aria-label="Close ChatGPT connection">×</button></div>
-      <p>Connect this local BIM Forge installation to an eligible ChatGPT plan. Your browser handles consent; credentials stay in protected local server storage and never enter the room project.</p>
+      <p>Connect this BIM Forge installation to an eligible ChatGPT plan. Your browser handles consent; credentials stay in protected server storage and never enter the room project.</p>
       <div id="auth-error" class="dialog-error" role="alert" hidden></div>
       <section id="auth-disconnected" class="auth-state" aria-labelledby="auth-connect-heading">
         <div class="auth-symbol" aria-hidden="true">✦</div>
-        <div><h3 id="auth-connect-heading">Ready when you are</h3><p>BIM Forge will open ChatGPT in your browser so you can choose an account and allow plan usage.</p></div>
+        <div><h3 id="auth-connect-heading">Ready when you are</h3><p id="auth-connect-copy">BIM Forge will open ChatGPT in your browser so you can choose an account and allow plan usage.</p></div>
+        <code id="auth-pair-command" class="pair-command" hidden>npm run chatgpt:pair</code>
         <button id="auth-connect" class="button primary full" type="button">Continue with ChatGPT</button>
         <p class="modal-footnote">This does not grant access to your ChatGPT conversations.</p>
       </section>

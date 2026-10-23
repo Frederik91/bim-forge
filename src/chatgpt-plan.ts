@@ -16,6 +16,7 @@ const REQUIRED_SCOPE = 'chatgpt.tokens.use.direct';
 const CALLBACK_PATH = '/auth/callback';
 const DYNAMIC_CLIENT = 'dynamic_agent_client';
 const STORE_VERSION = 1;
+const TRANSFER_VERSION = 1;
 const CLOCK_TOLERANCE_SECONDS = 5;
 const MAX_AUTH_RESPONSE_BYTES = 256 * 1024;
 
@@ -46,6 +47,29 @@ interface SavedStore {
   profile: SavedProfile | null;
   models: ChatGPTModel[];
   selectedModel: string | null;
+}
+
+export interface ChatGPTCredentialTransfer {
+  version: 1;
+  registrationClientId: string;
+  profile: SavedProfile;
+  models: ChatGPTModel[];
+  selectedModel: string | null;
+}
+
+interface PairingProfile {
+  clientId: string;
+  issuer: string;
+  subject: string;
+  email: string | null;
+  name: string | null;
+  idToken: string | null;
+}
+
+export interface ChatGPTPairingBootstrap {
+  version: 1;
+  registrationClientId: string | null;
+  profile: PairingProfile | null;
 }
 
 interface AuthorizationOptions {
@@ -91,6 +115,7 @@ type OpenBrowser = (url: string) => Promise<void>;
 
 export interface ChatGPTPlanConnectionOptions {
   storageFile?: string;
+  hostId?: string;
   fetchImpl?: typeof globalThis.fetch;
   openBrowser?: OpenBrowser;
   protectFile?: ProtectFile;
@@ -144,20 +169,104 @@ function isChatGPTModel(value: unknown): value is ChatGPTModel {
   return isRecord(value) && typeof value.slug === 'string' && typeof value.displayName === 'string';
 }
 
+function validatedHostId(value: unknown): string {
+  if (typeof value !== 'string' || !/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    fail('The saved ChatGPT host identifier is invalid.');
+  }
+  return value;
+}
+
+function validatedModels(value: unknown): ChatGPTModel[] {
+  if (!Array.isArray(value) || !value.every(isChatGPTModel)) fail('The saved ChatGPT models are invalid.');
+  const slugs = new Set<string>();
+  const models: ChatGPTModel[] = [];
+  for (const model of value) {
+    if (!model.slug || model.slug.length > 100 || !model.displayName || model.displayName.length > 120 || slugs.has(model.slug)) {
+      fail('The saved ChatGPT models are invalid.');
+    }
+    slugs.add(model.slug);
+    models.push({ slug: model.slug, displayName: model.displayName });
+  }
+  return models;
+}
+
+function validatedSelectedModel(value: unknown, models: readonly ChatGPTModel[]): string | null {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !models.some((model) => model.slug === value)) fail('The saved ChatGPT model selection is invalid.');
+  return value;
+}
+
 function validateStore(value: unknown): SavedStore {
   if (!isRecord(value) || value.version !== STORE_VERSION) fail('The saved ChatGPT connection is invalid.');
-  if (typeof value.hostId !== 'string' || !/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.hostId)) fail('The saved ChatGPT host identifier is invalid.');
-  if (value.registrationClientId !== null && typeof value.registrationClientId !== 'string') fail('The saved ChatGPT registration is invalid.');
+  const hostId = validatedHostId(value.hostId);
+  if (value.registrationClientId !== null && (typeof value.registrationClientId !== 'string' || !value.registrationClientId.startsWith('oaiapp_'))) fail('The saved ChatGPT registration is invalid.');
   if (value.profile !== null && !isSavedProfile(value.profile)) fail('The saved ChatGPT profile is invalid.');
-  if (!Array.isArray(value.models) || !value.models.every(isChatGPTModel)) fail('The saved ChatGPT models are invalid.');
-  if (value.selectedModel !== null && typeof value.selectedModel !== 'string') fail('The saved ChatGPT model selection is invalid.');
+  if (value.profile && value.registrationClientId !== value.profile.clientId) fail('The saved ChatGPT registration does not match its profile.');
+  const models = validatedModels(value.models);
+  const selectedModel = validatedSelectedModel(value.selectedModel, models);
   return {
     version: 1,
-    hostId: value.hostId,
+    hostId,
     registrationClientId: value.registrationClientId,
     profile: value.profile,
-    models: value.models,
-    selectedModel: value.selectedModel,
+    models,
+    selectedModel,
+  };
+}
+
+function validateCredentialTransfer(value: unknown): ChatGPTCredentialTransfer {
+  if (!isRecord(value) || value.version !== TRANSFER_VERSION
+      || Object.keys(value).length !== 5
+      || !Object.hasOwn(value, 'registrationClientId') || !Object.hasOwn(value, 'profile')
+      || !Object.hasOwn(value, 'models') || !Object.hasOwn(value, 'selectedModel')) {
+    fail('The ChatGPT credential transfer is invalid.');
+  }
+  if (typeof value.registrationClientId !== 'string' || !value.registrationClientId.startsWith('oaiapp_')) {
+    fail('The ChatGPT credential transfer has an invalid registration.');
+  }
+  if (!isSavedProfile(value.profile) || value.profile.clientId !== value.registrationClientId
+      || !value.profile.idToken || !value.profile.accessToken || !value.profile.refreshToken) {
+    fail('The ChatGPT credential transfer has an invalid profile.');
+  }
+  const models = validatedModels(value.models);
+  return {
+    version: 1,
+    registrationClientId: value.registrationClientId,
+    profile: structuredClone(value.profile),
+    models,
+    selectedModel: validatedSelectedModel(value.selectedModel, models),
+  };
+}
+
+function validatePairingBootstrap(value: unknown): ChatGPTPairingBootstrap {
+  if (!isRecord(value) || value.version !== TRANSFER_VERSION || Object.keys(value).length !== 3
+      || !Object.hasOwn(value, 'registrationClientId') || !Object.hasOwn(value, 'profile')) {
+    fail('The ChatGPT pairing bootstrap is invalid.');
+  }
+  if (value.registrationClientId !== null
+      && (typeof value.registrationClientId !== 'string' || !value.registrationClientId.startsWith('oaiapp_'))) {
+    fail('The ChatGPT pairing bootstrap has an invalid registration.');
+  }
+  if (value.profile === null) return { version: 1, registrationClientId: value.registrationClientId, profile: null };
+  if (!isRecord(value.profile) || Object.keys(value.profile).length !== 6
+      || typeof value.profile.clientId !== 'string' || value.profile.clientId !== value.registrationClientId
+      || value.profile.issuer !== ISSUER || typeof value.profile.subject !== 'string' || !value.profile.subject
+      || (value.profile.email !== null && typeof value.profile.email !== 'string')
+      || (value.profile.name !== null && typeof value.profile.name !== 'string')
+      || (value.profile.idToken !== null && typeof value.profile.idToken !== 'string')) {
+    fail('The ChatGPT pairing bootstrap has an invalid profile.');
+  }
+  return {
+    version: 1,
+    registrationClientId: value.registrationClientId,
+    profile: {
+      clientId: value.profile.clientId,
+      issuer: value.profile.issuer,
+      subject: value.profile.subject,
+      email: value.profile.email,
+      name: value.profile.name,
+      idToken: value.profile.idToken,
+    },
   };
 }
 
@@ -320,10 +429,20 @@ export class ChatGPTPlanConnection {
   static async open(options: ChatGPTPlanConnectionOptions = {}): Promise<ChatGPTPlanConnection> {
     const storageFile = options.storageFile ?? path.join(defaultStorageDirectory(), 'connection.json');
     let saved: SavedStore;
-    try { saved = validateStore(JSON.parse(await fs.readFile(storageFile, 'utf8'))); }
+    try {
+      saved = validateStore(JSON.parse(await fs.readFile(storageFile, 'utf8')));
+      if (options.hostId && saved.hostId !== validatedHostId(options.hostId)) fail('The saved ChatGPT host identifier does not match this host.');
+    }
     catch (error) {
       if (!isRecord(error) || error.code !== 'ENOENT') throw error;
-      saved = { version: STORE_VERSION, hostId: `urn:uuid:${crypto.randomUUID()}`, registrationClientId: null, profile: null, models: [], selectedModel: null };
+      saved = {
+        version: STORE_VERSION,
+        hostId: options.hostId ? validatedHostId(options.hostId) : `urn:uuid:${crypto.randomUUID()}`,
+        registrationClientId: null,
+        profile: null,
+        models: [],
+        selectedModel: null,
+      };
       await writeAtomic(storageFile, saved, options.protectFile);
     }
     return new ChatGPTPlanConnection(saved, { ...options, storageFile });
@@ -342,6 +461,76 @@ export class ChatGPTPlanConnection {
   }
 
   async save(): Promise<void> { await writeAtomic(this.storageFile, this.saved, this.protectFile); }
+
+  hostId(): string { return this.saved.hostId; }
+
+  pairingBootstrap(): ChatGPTPairingBootstrap {
+    const profile = this.saved.profile;
+    return validatePairingBootstrap({
+      version: TRANSFER_VERSION,
+      registrationClientId: this.saved.registrationClientId,
+      profile: profile ? {
+        clientId: profile.clientId,
+        issuer: profile.issuer,
+        subject: profile.subject,
+        email: profile.email,
+        name: profile.name,
+        idToken: profile.idToken,
+      } : null,
+    });
+  }
+
+  async importPairingBootstrap(value: unknown): Promise<void> {
+    if (this.saved.profile?.accessToken || this.saved.profile?.refreshToken) {
+      fail('Pairing bootstrap can only initialize a disconnected temporary connection.');
+    }
+    const bootstrap = validatePairingBootstrap(value);
+    this.saved = {
+      ...this.saved,
+      registrationClientId: bootstrap.registrationClientId,
+      profile: bootstrap.profile ? {
+        ...bootstrap.profile,
+        accessToken: null,
+        refreshToken: null,
+        scopes: [],
+        expiresAt: 0,
+      } : null,
+      models: [],
+      selectedModel: null,
+    };
+    await this.save();
+  }
+
+  credentialTransfer(): ChatGPTCredentialTransfer {
+    const profile = this.saved.profile;
+    if (!profile?.idToken || !profile.accessToken || !profile.refreshToken || !this.saved.registrationClientId) {
+      fail('Connect a ChatGPT plan before transferring credentials.');
+    }
+    return validateCredentialTransfer({
+      version: TRANSFER_VERSION,
+      registrationClientId: this.saved.registrationClientId,
+      profile,
+      models: this.saved.models,
+      selectedModel: this.saved.selectedModel,
+    });
+  }
+
+  async importCredentialTransfer(value: unknown): Promise<PublicChatGPTSession> {
+    const transfer = validateCredentialTransfer(value);
+    const existing = this.saved.profile;
+    if (existing && (existing.issuer !== transfer.profile.issuer || existing.subject !== transfer.profile.subject)) {
+      fail('Disconnect the current ChatGPT account before pairing a different account.');
+    }
+    this.saved = {
+      ...this.saved,
+      registrationClientId: transfer.registrationClientId,
+      profile: transfer.profile,
+      models: transfer.models,
+      selectedModel: transfer.selectedModel,
+    };
+    await this.save();
+    return this.publicSession();
+  }
 
   publicSession(): PublicChatGPTSession {
     const profile = this.saved.profile;
