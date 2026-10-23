@@ -26,8 +26,8 @@ After=network-online.target
 Type=oneshot
 User=root
 WorkingDirectory=/opt/bim-forge/coding-current
-ExecStart=/opt/bim-forge/node/bin/node /opt/bim-forge/coding-current/factory/schedule-job.mjs --once
-ExecStopPost=/opt/bim-forge/node/bin/node /opt/bim-forge/coding-current/factory/schedule-job.mjs --cleanup
+ExecStart=/opt/bim-forge/node/bin/node /opt/bim-forge/coding-current/factory/schedule-job.ts --once
+ExecStopPost=/opt/bim-forge/node/bin/node /opt/bim-forge/coding-current/factory/schedule-job.ts --cleanup
 Environment=PATH=/opt/bim-forge/node/bin:/usr/bin:/bin
 NoNewPrivileges=true
 ProtectSystem=strict
@@ -84,7 +84,7 @@ RemainAfterExit=yes
 User=bimforge-github
 Group=bimforge-github
 WorkingDirectory=/opt/bim-forge/publisher-current
-ExecStart=/opt/bim-forge/node/bin/node /opt/bim-forge/publisher-current/factory/publish.mjs --scheduled-sha %i
+ExecStart=/opt/bim-forge/node/bin/node /opt/bim-forge/publisher-current/factory/publish.ts --scheduled-sha %i
 LoadCredential=github-app-key:/etc/bim-forge/github-app.pem
 StateDirectory=bim-forge-publisher
 StateDirectoryMode=0700
@@ -124,7 +124,7 @@ Validate the files with `systemd-analyze verify`, then reload the service manage
    ```
 
 3. Start the scheduler service once. Expect `idle` with reason `no-approved-scope`. Confirm that no child service started and no admission record appeared.
-4. Run `schedule-job.mjs --measure` as the administrator using the installed Node binary. Record its complete evidence and SHA-256. A mutable executable, unsupported link, different release alias, drop-in, or pending reload must refuse measurement. Do not replace the result with a Git SHA.
+4. Run `schedule-job.ts --measure` as the administrator using the installed Node binary. Record its complete evidence and SHA-256. A mutable executable, unsupported link, different release alias, drop-in, or pending reload must refuse measurement. Do not replace the result with a Git SHA.
 5. Re-run the credential-free full Linux suite against the installed release. Qualify pause, deadline, failed cleanup, and interruption with disposable fixtures. Preserve any failed-state evidence. Do not bypass a stale lease to make qualification pass.
 
 ## Approve one eligible task

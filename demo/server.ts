@@ -5,6 +5,7 @@ import path from 'node:path';
 import { RoomRepository } from '../src/room-model.ts';
 import { ChatGPTPlanConnection, ChatGPTPlanError } from '../src/chatgpt-plan.ts';
 import { createChatGPTPlanModelWorker, ModelWorkerError, prepareModelProposal } from '../src/model-proposal.ts';
+import type { ModelWorker } from '../src/model-proposal.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
@@ -54,9 +55,9 @@ function proposalPayload(value: unknown): { project: unknown; request: unknown }
   return { project: value.project, request: value.request };
 }
 
-interface DemoServerOptions {
-  modelWorker?: unknown | null;
-  chatgpt?: ChatGPTPlanConnection | null;
+export interface DemoServerOptions {
+  modelWorker?: ModelWorker | null;
+  chatgpt?: Pick<ChatGPTPlanConnection, 'publicSession' | 'signIn' | 'refreshModels' | 'selectModel' | 'signOut' | 'getAccessToken' | 'selectedModel'> | null;
 }
 
 export function createDemoServer({ modelWorker = null, chatgpt = null }: DemoServerOptions = {}): http.Server {
@@ -99,7 +100,7 @@ export function createDemoServer({ modelWorker = null, chatgpt = null }: DemoSer
       if (request.method !== 'POST') { response.writeHead(405, { Allow: 'POST' }); response.end('Proposal endpoint requires POST.'); return; }
       try {
         localRequest(request);
-        let worker: unknown = modelWorker;
+        let worker: ModelWorker | null = modelWorker;
         if (!worker && chatgpt) {
           const session = chatgpt.publicSession();
           if (!session.sharing) { send(response, 401, { error: 'Connect a ChatGPT plan before preparing a proposal.' }); return; }

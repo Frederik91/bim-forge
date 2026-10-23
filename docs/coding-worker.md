@@ -1,6 +1,6 @@
 # Run the manual coding trial
 
-The worker supports two fixed read-only task profiles. The health profile adds `factory/health.mjs` and `factory/health.test.mjs`. The schedule-check profile adds `factory/schedule-check.mjs` and `factory/schedule-check.test.mjs`. It is not a general shell agent. The administrator supplies a ready plan and independent input/output cases before generation. The existing planner and publisher keep their separate responsibilities.
+The worker supports two fixed read-only task profiles. The health profile adds `factory/health.ts` and `factory/health.test.ts`. The schedule-check profile adds `factory/schedule-check.ts` and `factory/schedule-check.test.ts`. It is not a general shell agent. The administrator supplies a ready plan and independent input/output cases before generation. The existing planner and publisher keep their separate responsibilities.
 
 ```text
 administrator-approved scope
@@ -19,7 +19,7 @@ Install a reviewed, root-owned release at `/opt/bim-forge/coding-current` and th
 
 Create a UTF-8 JSON scope with exactly `version`, `repository`, `issue`, `baseSha`, `plan`, `paths`, and `acceptanceCases`. Version is `1`; repository is `Frederik91/bim-forge`. `issue` contains the current `number`, `title`, `body`, and `updated_at`. Use a full main SHA and the existing ready-plan schema, with no questions and change class `read-only`. Paths must match one complete profile pair above. Mixed pairs and unknown paths are rejected. New files only: a merged task cannot be rerun to overwrite its existing files.
 
-Each independent case has exactly `mode`, `name`, `input`, and `output`. Mode is `cli` or `api`, selecting the installed command or exported-function adapter. Input is literal stdin text. A JSON object output requires successful exit, no stderr, and that exact serialized object plus a newline. Null output requires a normal nonzero exit, empty stdout, and the profile's fixed error plus a newline on stderr. Health uses `summarizeRunHealth` and `Invalid run records`. Schedule-check uses `checkSchedule` and `Invalid schedule snapshot`. Cases never select executables, shell commands, imports, network destinations, or secret paths. `factory/code-acceptance.mjs` supplies 24 health cases and 32 schedule-check cases.
+Each independent case has exactly `mode`, `name`, `input`, and `output`. Mode is `cli` or `api`, selecting the installed command or exported-function adapter. Input is literal stdin text. A JSON object output requires successful exit, no stderr, and that exact serialized object plus a newline. Null output requires a normal nonzero exit, empty stdout, and the profile's fixed error plus a newline on stderr. Health uses `summarizeRunHealth` and `Invalid run records`. Schedule-check uses `checkSchedule` and `Invalid schedule snapshot`. Cases never select executables, shell commands, imports, network destinations, or secret paths. `factory/code-acceptance.ts` supplies 24 health cases and 32 schedule-check cases.
 
 The controller writes protected `paths.json` into each new case directory. The case adapter resolves it through the same fixed profile table. Old case artifacts remain evidence, not reusable execution inputs for the new adapter. Deploy controller and adapter bytes together; do not change a running job's release.
 
@@ -28,7 +28,7 @@ The schedule checker reports on supplied data only. Its `eligible` result is not
 Review the complete scope, then install it as a root-owned regular file with no group or world write access. From the VM administrator account:
 
 ```sh
-sudo /opt/bim-forge/node/bin/node /opt/bim-forge/coding-current/factory/code-job.mjs --spec /var/lib/bim-forge-coding/health-scope.json
+sudo /opt/bim-forge/node/bin/node /opt/bim-forge/coding-current/factory/code-job.ts --spec /var/lib/bim-forge-coding/health-scope.json
 ```
 
 The controller records the exact scope hash before starting a model. A verified outcome identifies a root-owned `publication.json`, its SHA-256, private observations, and the verification log. Failed case observations are saved before comparison, and supplemental logs are collected on failure too. Review the actual source and evidence, then follow [Publish an approved change](publisher.md). Dispatch approval is not publishing approval or merge approval.
