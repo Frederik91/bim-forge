@@ -28,7 +28,7 @@ The fingerprint is SHA-256 of `JSON.stringify({ number: issue.number, title: iss
 Inspect the package without credentials:
 
 ```sh
-node factory/publish.mjs --inspect proposal.json
+node factory/publish.ts --inspect proposal.json
 ```
 
 Record the reported SHA-256 independently. Changing any byte requires another publication approval. Limits are 512 KiB per package, 64 KiB per file, and at most the pinned repository's file limit, capped at 12. Only additions and replacements of regular text files are supported.

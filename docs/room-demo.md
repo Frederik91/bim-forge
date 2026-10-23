@@ -7,7 +7,7 @@ This disposable demo turns a visual gesture and written request into input for a
 Use Node.js 24 or newer. Start the local server without an API key:
 
 ```sh
-node demo/server.mjs
+node demo/server.ts
 ```
 
 Open `http://127.0.0.1:4173`, choose **Connect ChatGPT**, and complete consent in the browser. Eligible accounts can use their ChatGPT plan for proposals through the official [Sign in with ChatGPT open-source flow](https://developers.openai.com/siwc/token-sharing-open-source). The local server performs OAuth with PKCE, validates the OpenAI ID token, stores rotating credentials outside the browser and project, discovers account-visible models, and sends stateless streaming Responses requests. No API key or client secret is used.
