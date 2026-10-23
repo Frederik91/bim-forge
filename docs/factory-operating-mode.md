@@ -4,7 +4,7 @@ The owner delegates routine factory preparation, implementation, testing, and dr
 
 ## Application task contract
 
-The additions-only worker accepts a pair of new files such as `src/model-summary.mjs` and `src/model-summary.test.mjs`. Names use lowercase words separated by hyphens. Nested directories and changes to existing source remain unsupported. Existing fixed factory profiles retain their contracts.
+The additions-only worker accepts a pair of new files such as `src/model-summary.ts` and `src/model-summary.test.ts`. Names use lowercase words separated by hyphens. Nested directories and changes to existing source remain unsupported. Existing fixed factory profiles retain their contracts.
 
 Every application module exports `evaluate(input)`. The command reads JSON from standard input and prints one JSON result line. Invalid command input produces only `Invalid application input` and a newline on standard error, with a nonzero exit. The function throws on invalid input. Modules operate on supplied disposable data, not production models or external services.
 
