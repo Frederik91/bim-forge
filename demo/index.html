@@ -15,6 +15,7 @@
       <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Room studies</small></span></a>
       <div class="project-identity"><span class="workspace-label"><i class="live-dot" aria-hidden="true"></i> LOCAL STUDY</span><strong id="project-title">No project open</strong></div>
       <div class="header-actions">
+        <button id="auth-menu" class="button connection-button" type="button"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
         <button id="export-project" class="button quiet" type="button" disabled>Export</button>
         <button id="import-project" class="button quiet" type="button" disabled>Import</button>
@@ -65,6 +66,7 @@
             </div>
             <p id="edit-feedback" class="editor-feedback" role="status" aria-live="polite">The markup communicates intent. It is never committed directly.</p>
             <form id="proposal-form" class="proposal-form">
+              <div class="proposal-connection"><div><span class="connection-dot" aria-hidden="true"></span><p><strong id="proposal-auth-copy">Connect ChatGPT to prepare this proposal</strong><small>Uses your eligible ChatGPT plan. No API key is required.</small></p></div><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
               <div><label for="request-text">What do you want the AI to achieve?</label><textarea id="request-text" maxlength="1000" rows="3" aria-describedby="proposal-help" required disabled>Prepare the shown layout while preserving stable object identities and the hosted door relationship.</textarea></div>
               <div class="proposal-footer"><div><label for="proposal-name">Proposal name</label><input id="proposal-name" value="room-study" pattern="[a-z]+(-[a-z]+)*" maxlength="64" aria-describedby="proposal-help" required disabled></div><button id="save-proposal" type="submit" class="button primary" disabled>Prepare proposal <span aria-hidden="true">→</span></button></div>
               <p id="proposal-help" class="editor-help">AI receives the exact revision, selected object, markup and request. It can only return a separately validated proposal.</p>
@@ -94,7 +96,7 @@
         </div>
       </section>
 
-      <footer class="disclaimer"><span class="pill">Concept demo</span><p>Local disposable storage. No IFC support, construction checks, production model access or automatic merge.</p></footer>
+      <footer class="disclaimer"><span class="pill">Concept demo</span><p>Local project storage and explicit ChatGPT plan connection. No IFC support, construction checks, production model access or automatic merge.</p></footer>
       <noscript>This workbench requires JavaScript and IndexedDB local storage.</noscript>
     </main>
 
@@ -105,6 +107,24 @@
       <button id="load-sample" class="button outline full" type="button" disabled>Explore the 6 × 4 m sample room</button>
       <button id="start-close" class="text-button modal-close" type="button" hidden>Return to current project</button>
       <p class="modal-footnote"><i class="live-dot" aria-hidden="true"></i> Saved only in this browser. Demo JSON, not IFC.</p>
+    </dialog>
+
+    <dialog id="auth-dialog" class="modal auth-modal" aria-labelledby="auth-heading">
+      <div class="dialog-heading"><div><p class="eyebrow">AI CONNECTION</p><h2 id="auth-heading">Use your ChatGPT plan</h2></div><button id="auth-close" class="icon-button" type="button" aria-label="Close ChatGPT connection">×</button></div>
+      <p>Connect this local BIM Forge installation to an eligible ChatGPT plan. Your browser handles consent; credentials stay in protected local server storage and never enter the room project.</p>
+      <div id="auth-error" class="dialog-error" role="alert" hidden></div>
+      <section id="auth-disconnected" class="auth-state" aria-labelledby="auth-connect-heading">
+        <div class="auth-symbol" aria-hidden="true">✦</div>
+        <div><h3 id="auth-connect-heading">Ready when you are</h3><p>BIM Forge will open ChatGPT in your browser so you can choose an account and allow plan usage.</p></div>
+        <button id="auth-connect" class="button primary full" type="button">Continue with ChatGPT</button>
+        <p class="modal-footnote">This does not grant access to your ChatGPT conversations.</p>
+      </section>
+      <section id="auth-connected" class="auth-state" aria-labelledby="auth-account" hidden>
+        <div class="connected-account"><span class="connection-dot" aria-hidden="true"></span><div><small>CONNECTED ACCOUNT</small><h3 id="auth-account">ChatGPT account</h3><p id="auth-plan-status">Checking plan access…</p></div></div>
+        <div><label for="auth-model">Model for proposals</label><select id="auth-model"></select><p class="editor-help">Only models available to this account are shown.</p></div>
+        <div class="auth-actions"><button id="auth-refresh-models" class="button outline" type="button">Refresh models</button><a class="button quiet" href="https://chatgpt.com/#settings/Usage" target="_blank" rel="noreferrer">Manage usage</a></div>
+        <button id="auth-signout" class="text-button danger-text" type="button">Disconnect ChatGPT</button>
+      </section>
     </dialog>
 
     <dialog id="original-dialog" class="modal wide-modal" aria-labelledby="original-title"><div class="dialog-heading"><div><p class="eyebrow">PRESERVED REFERENCE</p><h2 id="original-title">Original room</h2></div><button class="icon-button" data-close="original-dialog" type="button" aria-label="Close original room">×</button></div><div id="original-drawing" class="drawing-surface"><p class="canvas-empty">Your original room will appear here.</p></div><p class="dialog-note">This root revision is never overwritten. Dashed comparisons always return to this model.</p></dialog>

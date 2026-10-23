@@ -1,0 +1,5 @@
+ts	phase	decision	why	evidence	result
+2026-10-23T00:00:00Z	start	resumed the strict TypeScript migration from the change-review slice	the remaining work must preserve the green stack and delete each JavaScript implementation with its callers	commit 363e4e8	25 source mjs files remain
+2026-10-23T00:00:01Z	sequence	migrate leaf contracts before coding and publication orchestrators	this keeps every policy-sized PR independently executable and avoids compatibility adapters	issues 62, 60, 58, 56, 54, 52	unit order fixed
+2026-10-23T00:00:02Z	schedule-approval	replaced the schedule approval implementation and every direct caller in one slice	canonical approval bytes and time-window checks are now typed without a legacy module	issue 62	typecheck and 216 tests green
+2026-10-23T04:39:17Z	complete	replaced every remaining factory and policy JavaScript source with strict TypeScript and added a no-JavaScript no-any lint gate	the early project can move as one coherent migration without carrying compatibility adapters	all changed files checked; 49 TypeScript sources linted; 247 tests executed	216 pass, 31 platform skips, 0 fail
