@@ -39,6 +39,32 @@ A view records the projection needed to return to the same working context: revi
 
 A discipline workspace is a scoped lens over the shared model. It combines relevant views, systems, properties, findings, proposals, and policies for one discipline while retaining cross-discipline context.
 
+### Adaptive work context and progressive disclosure
+
+BIM Forge will eventually contain more capabilities than any one person needs at once. The interface should be assembled around the person's explicit work context rather than exposing one growing toolbar.
+
+A work context combines:
+
+- project role and discipline;
+- project phase;
+- model scope, such as site, building, level, zone, system, work package, or selection;
+- current task or decision.
+
+An experience policy uses that context to emphasize the most relevant views, properties, commands, agents, checks, notifications, deliverables, and next actions. For example:
+
+- an architect in concept design sees room requirements, options, massing, area, and early performance checks;
+- an MEP engineer working on level 03 sees systems, routing, clearances, connected loads, and discipline properties;
+- a site manager in construction sees the issued baseline, work packages, RFIs, installation status, and field observations;
+- a maintenance technician in operations sees assets, live observations, alarms, history, procedures, and open work.
+
+The active context remains visible and easy to switch. A person may hold several roles on the same project. Search, command access, and an explicit Show all path keep the full product discoverable, while personal preferences refine presentation inside project policy.
+
+Presentation is not authorization. Work context can change what is emphasized, but access policy still controls what can be read or changed, authority scope controls what can be approved, and validation policy controls mandatory evidence. Findings, affected disciplines, and connected dependencies remain visible when they cross the selected model scope.
+
+Intents, proposals, agent runs, reviews, and evidence retain the work context in which they were created. Agents state which role, phase, model scope, task, and project guidance they used. Project-phase transitions and context changes are auditable and never rewrite historical decisions.
+
+This capability is tracked in [issue #71](https://github.com/Frederik91/bim-forge/issues/71).
+
 ## Capturing intent in 2D, 3D, and VR
 
 People should be able to select, comment, point, drag, measure, sketch, or speak in whichever view best expresses the problem. These interactions capture intent; they do not directly author accepted geometry.
@@ -182,6 +208,8 @@ Across these capabilities, the product should show an editable intent contract b
 - The accepted model changes only by creating a new immutable revision.
 - A 2D, 3D, or VR interaction captures intent; it does not silently commit model state.
 - Stable entity identities and source revisions anchor every proposal.
+- Work context changes presentation and defaults without granting access, tool permission, or approval authority.
+- Mandatory findings and connected impacts remain visible across role, phase, and model-scope boundaries.
 - External values retain their source system, external identity, data authority, units, time, and freshness.
 - Operational observations remain distinct from accepted design properties.
 - Anyone may propose, while each affected authority retains control of its scope.
@@ -197,13 +225,13 @@ Across these capabilities, the product should show an editable intent contract b
 
 The first cohesive product slice should demonstrate the whole interaction model at small scale:
 
-1. Choose a sample project and open its overview.
-2. Navigate the same accepted revision in a shared 3D view and a templated 2D plan.
+1. Choose a sample project, open its overview, and inspect the active work context.
+2. Select a mechanical detailed-design context for level 03, then navigate the same accepted revision in a shared 3D view and a templated 2D plan.
 3. Open one discipline workspace, inspect property provenance, and follow one room to a simulated externally owned room record.
 4. Select a pump and distinguish a simulated live observation from its accepted design properties.
 5. Drag a visual target, add a measurement and comment, confirm the interpreted intent, and submit it.
 6. Let a discipline work agent prepare a bounded proposal and impact analysis.
-7. Review mechanical and electrical impact packages, with exact-content approval requirements.
+7. Switch to the electrical reviewer context and review both mechanical and electrical impact packages, with exact-content approval requirements.
 8. Demonstrate delegated agent approval for a safe metadata change while retaining human approval for geometry and coordination.
 9. Apply the approved change as one new revision and inspect its semantic delta and audit trail.
 

@@ -6,7 +6,7 @@ BIM Forge treats a building model as a versioned, queryable project graph. Engin
 
 The long-term ambition is full BIM authoring and coordination that can replace the Revit-centered workflow. The first milestone is smaller and deliberate: build the factory that can safely build the product.
 
-The intended end-user flow is **project overview → shared 2D/3D/VR model views → captured intent → AI-prepared proposal → coordinated review → versioned acceptance**. See the [product vision](docs/product-vision.md) for the shared-model experience, property provenance, source-owned external data, cross-discipline authority, and discipline-agent boundaries.
+The intended end-user flow is **project overview → context-aware 2D/3D/VR model views → captured intent → AI-prepared proposal → coordinated review → versioned acceptance**. See the [product vision](docs/product-vision.md) for adaptive workspaces, property provenance, source-owned external data, cross-discipline authority, and discipline-agent boundaries.
 
 ## Current phase
 

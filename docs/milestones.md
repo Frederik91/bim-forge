@@ -50,9 +50,9 @@ The [product vision](product-vision.md) runs across the risk-reduction milestone
 
 ### P1 — Project and model workspace
 
-Goal: let a person choose a project, understand its current state, and navigate one accepted revision through shared 3D and templated 2D views.
+Goal: let a person choose a project, enter an explicit role/phase/model-scope context, understand current state, and navigate one accepted revision through shared 3D and templated 2D views.
 
-Exit evidence: project overview, discipline workspace, stable selection, view persistence, and property provenance work against the same fixture revision.
+Exit evidence: project overview, visible and switchable work context, discipline workspace, stable selection, view persistence, and property provenance work against the same fixture revision. Context-specific presentation preserves Show all access, mandatory findings, permissions, and approval requirements.
 
 ### P2 — AI-native change session
 

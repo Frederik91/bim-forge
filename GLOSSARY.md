@@ -39,6 +39,33 @@ A reusable configuration for creating consistent views.
 **Discipline workspace**:
 A discipline-specific lens over the shared model, its views, properties, findings, and proposals.
 
+**User role**:
+A named set of project responsibilities that helps describe a person's work without itself granting permission or approval authority.
+
+**Role assignment**:
+The association of a person with a user role for a defined project context.
+
+**Project phase**:
+A declared stage of the building lifecycle that frames current goals, evidence, deliverables, and workflows.
+
+**Model scope**:
+The site, building, level, zone, system, work package, selection, or other bounded part of the model relevant to current work.
+
+**Work context**:
+The explicit combination of role, discipline, project phase, model scope, and task used to frame work.
+
+**Workspace profile**:
+A reusable presentation of views, properties, actions, agents, checks, notifications, and deliverables for a work context.
+
+**Experience policy**:
+A rule that tailors presentation and defaults to a work context without changing access or authority.
+
+**Access policy**:
+A rule defining what an actor may read or change.
+
+**Validation policy**:
+A rule defining the checks and evidence required for identified work.
+
 **Intent**:
 A person's revision-bound request for model work, anchored to relevant entities, locations, measurements, and view context.
 
