@@ -14,7 +14,7 @@ import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
 interface TestResponse { status: number | undefined; headers: IncomingHttpHeaders; body: string }
 interface TestRequestOptions extends RequestOptions { body?: string }
 type TestRequester = (target: string, options?: TestRequestOptions) => Promise<TestResponse>;
-type TestChatGPT = NonNullable<DemoServerOptions['chatgpt']>;
+type TestCodex = NonNullable<DemoServerOptions['codex']>;
 
 function jsonObject(text: string): Record<string, unknown> {
   const value: unknown = JSON.parse(text);
@@ -28,10 +28,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function listen(
   t: TestContext,
   modelWorker: ModelWorker | null = null,
-  chatgpt: TestChatGPT | null = null,
+  codex: TestCodex | null = null,
   serverOptions: Pick<DemoServerOptions, 'runtimeMode' | 'publicOrigin'> = {},
 ): Promise<TestRequester> {
-  const server = createDemoServer({ modelWorker, chatgpt, ...serverOptions });
+  const server = createDemoServer({ modelWorker, codex, ...serverOptions });
   const directory = process.platform === 'linux' ? fs.mkdtempSync(path.join(os.tmpdir(), 'bim-room-http-')) : null;
   const socketPath = directory && path.join(directory, 'test.sock');
   await new Promise<void>((resolve) => {
@@ -62,7 +62,7 @@ async function listen(
 test('local demo serves only explicit assets and exposes only the bounded proposal endpoint', async (t) => {
   const request = await listen(t);
   const page = await request('/'); assert.equal(page.status, 200);
-  assert.match(page.body, /BIM Forge/); assert.match(page.body, /Continue with ChatGPT/); assert.equal(page.headers['cache-control'], 'no-store');
+  assert.match(page.body, /BIM Forge/); assert.match(page.body, /Get sign-in code/); assert.equal(page.headers['cache-control'], 'no-store');
   assert.match(String(page.headers['content-security-policy']), /connect-src 'self'/);
   assert.equal((await request('/room-app.mjs')).status, 200);
   assert.equal((await request('/', { method: 'HEAD' })).body, '');
@@ -78,30 +78,36 @@ test('local demo serves only explicit assets and exposes only the bounded propos
   assert.equal((await request('/', { headers: { Host: 'attacker.example' } })).status, 403);
 });
 
-test('remote runtime exposes pairing state without attempting OAuth on the server', async (t) => {
+test('remote runtime starts device authorization without exposing credentials', async (t) => {
   let signIns = 0;
   const session = {
-    connected: false, sharing: false, account: null, models: [], selectedModel: null,
+    status: 'disconnected' as const, connected: false as const, account: null, models: [], selectedModel: null,
   };
-  const chatgpt: TestChatGPT = {
+  const pending = {
+    status: 'pending' as const, connected: false as const, account: null, models: [], selectedModel: null,
+    device: { verificationUrl: 'https://auth.openai.com/codex/device' as const, userCode: 'ABCD-1234', expiresAt: 10_000 },
+  };
+  const codex: TestCodex = {
     publicSession: () => session,
-    async signIn() { signIns += 1; return session; },
+    async startDeviceLogin() { signIns += 1; return pending; },
+    async cancelDeviceLogin() { return session; },
     async refreshModels() { return session; },
     async selectModel() { return session; },
-    async signOut() { return { ...session, revocationConfirmed: true }; },
-    async getAccessToken() { throw new Error('not connected'); },
-    selectedModel() { throw new Error('not connected'); },
+    async signOut() { return session; },
+    modelWorker() { throw new Error('not connected'); },
   };
-  const request = await listen(t, null, chatgpt, {
+  const request = await listen(t, null, codex, {
     runtimeMode: 'remote', publicOrigin: 'https://preview.example:9443',
   });
   const headers = { Host: 'preview.example:9443', Origin: 'https://preview.example:9443', 'Sec-Fetch-Site': 'same-origin' };
   const publicState = jsonObject((await request('/api/auth/session', { headers })).body);
-  assert.equal(publicState.signInMode, 'remote-pairing');
+  assert.equal(publicState.status, 'disconnected');
   const start = await request('/api/auth/start', { method: 'POST', headers });
-  assert.equal(start.status, 409);
-  assert.match(String(jsonObject(start.body).error), /npm run chatgpt:pair/);
-  assert.equal(signIns, 0);
+  assert.equal(start.status, 200);
+  const started = jsonObject(start.body);
+  assert.equal(started.status, 'pending');
+  assert.equal(JSON.stringify(started).includes('token'), false);
+  assert.equal(signIns, 1);
   assert.equal((await request('/api/auth/start', {
     method: 'POST', headers: { ...headers, Origin: 'https://attacker.example' },
   })).status, 400);
@@ -112,46 +118,46 @@ test('remote runtime exposes pairing state without attempting OAuth on the serve
 
 test('server configuration parses local TCP and bounded remote Unix socket modes', () => {
   assert.deepEqual(parseDemoServerConfig({ PORT: '4180' }), {
-    runtimeMode: 'local', publicOrigin: null, storageFile: undefined,
+    runtimeMode: 'local', publicOrigin: null, codexHome: undefined, workingDirectory: undefined,
     listen: { kind: 'tcp', host: '127.0.0.1', port: 4180 },
   });
   assert.deepEqual(parseDemoServerConfig({
     BIM_FORGE_RUNTIME: 'remote',
     BIM_FORGE_PUBLIC_ORIGIN: 'https://192.168.1.17:9443',
     BIM_FORGE_SOCKET: '/run/bim-preview/api.sock',
-    BIM_FORGE_STORAGE_FILE: '/var/lib/bim-forge/chatgpt/connection.json',
+    CODEX_HOME: '/var/lib/bim-forge/codex', BIM_FORGE_AGENT_WORKDIR: '/tmp/bim-forge-agent',
   }), {
     runtimeMode: 'remote', publicOrigin: 'https://192.168.1.17:9443',
-    storageFile: '/var/lib/bim-forge/chatgpt/connection.json',
+    codexHome: '/var/lib/bim-forge/codex', workingDirectory: '/tmp/bim-forge-agent',
     listen: { kind: 'socket', path: '/run/bim-preview/api.sock' },
   });
   assert.throws(() => parseDemoServerConfig({ BIM_FORGE_RUNTIME: 'remote' }), /PUBLIC_ORIGIN/);
   assert.throws(() => parseDemoServerConfig({
     BIM_FORGE_RUNTIME: 'remote', BIM_FORGE_PUBLIC_ORIGIN: 'http://preview.example',
-    BIM_FORGE_SOCKET: '/tmp/app.sock', BIM_FORGE_STORAGE_FILE: '/tmp/connection.json',
+    BIM_FORGE_SOCKET: '/tmp/app.sock', CODEX_HOME: '/tmp/codex', BIM_FORGE_AGENT_WORKDIR: '/var/tmp/agent',
   }), /HTTPS origin/);
 });
 
 test('authentication endpoints expose only public connection state and reject cross-origin mutations', async (t) => {
-  let session: ReturnType<TestChatGPT['publicSession']> = {
-    connected: true, sharing: true, account: { email: 'designer@example.com', name: 'Designer' },
+  let session: ReturnType<TestCodex['publicSession']> = {
+    status: 'connected', connected: true, account: { email: 'designer@example.com', planType: 'plus' },
     models: [{ slug: 'gpt-test', displayName: 'GPT Test' }], selectedModel: 'gpt-test',
   };
   const calls: Array<string | [string, string]> = [];
-  const chatgpt = {
+  const codex: TestCodex = {
     publicSession: () => session,
-    async signIn() { calls.push('sign-in'); return session; },
+    async startDeviceLogin() { calls.push('sign-in'); return session; },
+    async cancelDeviceLogin() { calls.push('cancel'); return session; },
     async refreshModels() { calls.push('models'); return session; },
     async selectModel(model: string) { calls.push(['model', model]); session = { ...session, selectedModel: model }; return session; },
     async signOut() {
       calls.push('sign-out');
-      session = { connected: false, sharing: false, account: null, models: [], selectedModel: null };
-      return { ...session, revocationConfirmed: true };
+      session = { status: 'disconnected', connected: false, account: null, models: [], selectedModel: null };
+      return session;
     },
-    async getAccessToken() { return 'test-access-token'; },
-    selectedModel() { return session.selectedModel ?? 'gpt-test'; },
+    modelWorker() { throw new Error('not used'); },
   };
-  const request = await listen(t, null, chatgpt);
+  const request = await listen(t, null, codex);
   const publicState = jsonObject((await request('/api/auth/session')).body);
   assert.equal(jsonObject(JSON.stringify(publicState.account)).email, 'designer@example.com'); assert.equal(JSON.stringify(publicState).includes('token'), false);
   assert.equal((await request('/api/auth/start', { method: 'POST', headers: { Origin: 'http://attacker.example' } })).status, 400);

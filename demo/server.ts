@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { RoomRepository } from '../src/room-model.ts';
-import { ChatGPTPlanConnection, ChatGPTPlanError } from '../src/chatgpt-plan.ts';
-import { createChatGPTPlanModelWorker, ModelWorkerError, prepareModelProposal } from '../src/model-proposal.ts';
+import { CodexAccountConnection, CodexAppServerError } from '../src/codex-app-server.ts';
+import { ModelWorkerError, prepareModelProposal } from '../src/model-proposal.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -14,7 +14,7 @@ const assets = new Map<string, readonly [string, string]>([
   ['/room.css', ['demo/room.css', 'text/css; charset=utf-8']],
 ]);
 const MAX_REQUEST_BYTES = 384 * 1024;
-const disconnected = Object.freeze({ connected: false, sharing: false, account: null, models: Object.freeze([]), selectedModel: null });
+const disconnected = Object.freeze({ status: 'disconnected', connected: false, account: null, models: Object.freeze([]), selectedModel: null });
 
 export type DemoRuntimeMode = 'local' | 'remote';
 export type DemoListenTarget = Readonly<{ kind: 'tcp'; host: '127.0.0.1'; port: number }>
@@ -23,7 +23,8 @@ export type DemoListenTarget = Readonly<{ kind: 'tcp'; host: '127.0.0.1'; port: 
 export interface DemoServerConfig {
   runtimeMode: DemoRuntimeMode;
   publicOrigin: string | null;
-  storageFile: string | undefined;
+  codexHome: string | undefined;
+  workingDirectory: string | undefined;
   listen: DemoListenTarget;
 }
 
@@ -69,17 +70,12 @@ function proposalPayload(value: unknown): { project: unknown; request: unknown }
 
 export interface DemoServerOptions {
   modelWorker?: ModelWorker | null;
-  chatgpt?: Pick<ChatGPTPlanConnection, 'publicSession' | 'signIn' | 'refreshModels' | 'selectModel' | 'signOut' | 'getAccessToken' | 'selectedModel'> | null;
+  codex?: Pick<CodexAccountConnection, 'publicSession' | 'startDeviceLogin' | 'cancelDeviceLogin' | 'refreshModels' | 'selectModel' | 'signOut' | 'modelWorker'> | null;
   runtimeMode?: DemoRuntimeMode;
   publicOrigin?: string | null;
 }
 
-function sessionPayload(chatgpt: DemoServerOptions['chatgpt'], runtimeMode: DemoRuntimeMode): unknown {
-  return {
-    ...(chatgpt?.publicSession() ?? disconnected),
-    signInMode: runtimeMode === 'local' ? 'local-browser' : 'remote-pairing',
-  };
-}
+function sessionPayload(codex: DemoServerOptions['codex']): unknown { return codex?.publicSession() ?? disconnected; }
 
 function validatedPublicOrigin(value: string): string {
   let origin: URL;
@@ -100,20 +96,28 @@ export function parseDemoServerConfig(environment: NodeJS.ProcessEnv = process.e
     if (!socketPath || !/^\/run\/bim-preview\/[A-Za-z0-9_.-]+\.sock$/.test(socketPath)) {
       throw new Error('BIM_FORGE_SOCKET must be a socket below /run/bim-preview.');
     }
-    const storageFile = environment.BIM_FORGE_STORAGE_FILE;
-    if (!storageFile || !/^\/var\/lib\/bim-forge\/chatgpt\/[A-Za-z0-9_.-]+\.json$/.test(storageFile)) {
-      throw new Error('BIM_FORGE_STORAGE_FILE must be a JSON file below /var/lib/bim-forge/chatgpt.');
+    const codexHome = environment.CODEX_HOME;
+    if (!codexHome || !/^\/var\/lib\/bim-forge\/codex$/.test(codexHome)) {
+      throw new Error('CODEX_HOME must be /var/lib/bim-forge/codex.');
     }
-    return { runtimeMode, publicOrigin, storageFile, listen: { kind: 'socket', path: socketPath } };
+    const workingDirectory = environment.BIM_FORGE_AGENT_WORKDIR;
+    if (!workingDirectory || !/^\/tmp\/bim-forge-agent$/.test(workingDirectory)) {
+      throw new Error('BIM_FORGE_AGENT_WORKDIR must be /tmp/bim-forge-agent.');
+    }
+    return { runtimeMode, publicOrigin, codexHome, workingDirectory, listen: { kind: 'socket', path: socketPath } };
   }
   const port = Number(environment.PORT ?? 4173);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be an integer from 1 through 65535.');
-  return { runtimeMode, publicOrigin: null, storageFile: environment.BIM_FORGE_STORAGE_FILE, listen: { kind: 'tcp', host: '127.0.0.1', port } };
+  return {
+    runtimeMode, publicOrigin: null, codexHome: environment.CODEX_HOME,
+    workingDirectory: environment.BIM_FORGE_AGENT_WORKDIR,
+    listen: { kind: 'tcp', host: '127.0.0.1', port },
+  };
 }
 
 export function createDemoServer({
   modelWorker = null,
-  chatgpt = null,
+  codex = null,
   runtimeMode = 'local',
   publicOrigin = null,
 }: DemoServerOptions = {}): http.Server {
@@ -130,38 +134,35 @@ export function createDemoServer({
     response.setHeader('Referrer-Policy', 'no-referrer');
     if (request.url === '/api/health') {
       if (request.method !== 'GET') { response.writeHead(405, { Allow: 'GET' }); response.end('Health endpoint requires GET.'); return; }
-      send(response, 200, { status: 'ok', runtimeMode, chatgptConnected: Boolean(chatgpt?.publicSession().connected) });
+      send(response, 200, { status: 'ok', runtimeMode, chatgptConnected: Boolean(codex?.publicSession().connected) });
       return;
     }
     if (request.url === '/api/auth/session') {
       if (request.method !== 'GET') { response.writeHead(405, { Allow: 'GET' }); response.end('Session endpoint requires GET.'); return; }
-      send(response, 200, sessionPayload(chatgpt, runtimeMode));
+      send(response, 200, sessionPayload(codex));
       return;
     }
     if (request.url === '/api/auth/start' || request.url === '/api/auth/models'
-        || request.url === '/api/auth/model' || request.url === '/api/auth/signout') {
+        || request.url === '/api/auth/model' || request.url === '/api/auth/cancel' || request.url === '/api/auth/signout') {
       if (request.method !== 'POST') { response.writeHead(405, { Allow: 'POST' }); response.end('Authentication endpoint requires POST.'); return; }
-      if (!chatgpt) { send(response, 503, { error: 'ChatGPT sign-in is unavailable.' }); return; }
+      if (!codex) { send(response, 503, { error: 'ChatGPT sign-in is unavailable.' }); return; }
       try {
         sameOriginRequest(request, publicOrigin);
-        if (request.url === '/api/auth/start' && runtimeMode === 'remote') {
-          send(response, 409, { error: 'Pair this preview from a trusted computer with npm run chatgpt:pair, then check the connection again.' });
-          return;
-        }
         let session: object;
-        if (request.url === '/api/auth/start') session = await chatgpt.signIn();
-        else if (request.url === '/api/auth/models') session = await chatgpt.refreshModels();
-        else if (request.url === '/api/auth/signout') session = await chatgpt.signOut();
+        if (request.url === '/api/auth/start') session = await codex.startDeviceLogin();
+        else if (request.url === '/api/auth/cancel') session = await codex.cancelDeviceLogin();
+        else if (request.url === '/api/auth/models') session = await codex.refreshModels();
+        else if (request.url === '/api/auth/signout') session = await codex.signOut();
         else {
           const value = await readJson(request, 1024);
           if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.model !== 'string') {
             throw new Error('Model selection must contain exactly one model identifier.');
           }
-          session = await chatgpt.selectModel(value.model);
+          session = await codex.selectModel(value.model);
         }
-        send(response, 200, { ...session, signInMode: runtimeMode === 'local' ? 'local-browser' : 'remote-pairing' });
+        send(response, 200, session);
       } catch (error) {
-        send(response, error instanceof ChatGPTPlanError ? 502 : 400, { error: error instanceof Error ? error.message : 'ChatGPT connection failed.' });
+        send(response, error instanceof CodexAppServerError ? 502 : 400, { error: error instanceof Error ? error.message : 'ChatGPT connection failed.' });
       }
       return;
     }
@@ -170,10 +171,9 @@ export function createDemoServer({
       try {
         sameOriginRequest(request, publicOrigin);
         let worker: ModelWorker | null = modelWorker;
-        if (!worker && chatgpt) {
-          const session = chatgpt.publicSession();
-          if (!session.sharing) { send(response, 401, { error: 'Connect a ChatGPT plan before preparing a proposal.' }); return; }
-          worker = createChatGPTPlanModelWorker({ getAccessToken: () => chatgpt.getAccessToken(), model: chatgpt.selectedModel() });
+        if (!worker && codex) {
+          if (!codex.publicSession().connected) { send(response, 401, { error: 'Connect a ChatGPT plan before preparing a proposal.' }); return; }
+          worker = codex.modelWorker();
         }
         if (!worker) { send(response, 503, { error: 'No server-side model worker is configured.' }); return; }
         const payload = proposalPayload(await readJson(request));
@@ -202,8 +202,13 @@ export function createDemoServer({
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const config = parseDemoServerConfig();
-  const chatgpt = await ChatGPTPlanConnection.open(config.storageFile ? { storageFile: config.storageFile } : {});
-  const server = createDemoServer({ chatgpt, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin });
+  const connectionOptions = {
+    ...(config.codexHome ? { codexHome: config.codexHome } : {}),
+    ...(config.workingDirectory ? { workingDirectory: config.workingDirectory } : {}),
+  };
+  const codex = await CodexAccountConnection.open(connectionOptions);
+  const server = createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin });
+  server.on('close', () => codex.close());
   server.on('error', () => { console.error('The BIM Forge preview runtime could not start.'); process.exitCode = 1; });
   const listen = config.listen;
   if (listen.kind === 'socket') {

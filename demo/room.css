@@ -165,9 +165,14 @@ input[aria-invalid="true"] { border: 2px solid #a44932; }
 .auth-symbol { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; color: #176f65; background: #dff2ec; font-size: 24px; }
 .auth-state h3 { font-size: 17px; }
 .auth-state h3 + p { margin-top: 4px; color: var(--muted); }
-.pair-command { display: block; padding: 11px 12px; overflow-x: auto; color: #28564f; background: #edf5f2; border: 1px solid #cfe2dc; border-radius: 8px; font-size: 11px; white-space: nowrap; }
-.pair-command[hidden] { display: none; }
 .auth-state .modal-footnote { margin: 14px -22px -22px; }
+.auth-symbol.pending { color: #76520d; background: #faedcf; font-size: 16px; font-weight: 800; }
+.device-code-panel { padding: 16px; display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; align-items: center; border: 1px solid #cfe2dc; border-radius: 12px; background: #edf5f2; }
+.device-code-panel > span { grid-column: 1 / -1; color: #607a74; font-size: 9px; font-weight: 750; letter-spacing: .14em; }
+.device-code-panel code { color: #173f3a; font-family: ui-monospace, "Cascadia Code", monospace; font-size: clamp(22px, 7vw, 32px); font-weight: 760; letter-spacing: .08em; overflow-wrap: anywhere; }
+.device-code-panel .button { min-width: 96px; }
+.auth-state > a.full { display: flex; align-items: center; justify-content: center; gap: 7px; text-decoration: none; }
+.device-status { padding: 10px 12px; color: #5d746f; background: #f7f9f8; border-radius: 8px; font-size: 11px; text-align: center; }
 .connected-account { padding: 14px; display: flex; align-items: center; gap: 13px; border: 1px solid #cfe5de; border-radius: 11px; background: #f2faf7; }
 .connected-account .connection-dot { width: 12px; height: 12px; }
 .connected-account small { color: #638078; font-size: 8px; font-weight: 750; letter-spacing: .12em; }
