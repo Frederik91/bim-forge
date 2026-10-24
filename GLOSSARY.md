@@ -66,6 +66,45 @@ An assignment that relates model data to a defined category or external system.
 **Property provenance**:
 The recorded origin, method, evidence, and authority for a property value.
 
+**Constraint**:
+A declared relationship or condition that model state is expected to preserve.
+
+**Regeneration**:
+The deterministic recalculation of dependent model state after an input changes.
+
+**Federated model**:
+A coordinated view of multiple source models that preserves each source's identity and ownership.
+
+**External system**:
+A system outside BIM Forge that remains authoritative for identified records or observations.
+
+**External record**:
+An identified item whose authoritative state is maintained by an external system.
+
+**Data authority**:
+The person or organization accountable for an identified class of data and its change policy.
+
+**External data binding**:
+A governed connection between model context and an external record or observation that preserves source, authority, mapping, time, and freshness.
+
+**Observation**:
+A time-stamped measured or reported value that describes a condition without becoming accepted design intent.
+
+**Digital twin context**:
+A model view that combines accepted design or asset state with source-owned operational observations while keeping their meanings distinct.
+
+**Knowledge pack**:
+A versioned collection of governed requirements, standards, content, rules, and accepted project guidance.
+
+**Design scenario**:
+An isolated alternative derived from a shared revision for comparison against other alternatives.
+
+**Baseline**:
+An immutable, issued project state against which later work and delivery readiness are compared.
+
+**Deliverable package**:
+A versioned set of model state, views, schedules, documents, evidence, approvals, and declared exceptions issued together.
+
 **Authority scope**:
 The defined discipline and model aspect over which an actor may make or approve decisions.
 

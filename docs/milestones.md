@@ -65,3 +65,21 @@ Exit evidence: the reviewer can inspect what changed, why, assumptions, uncertai
 Goal: coordinate one connected mechanical/electrical change through separate authority scopes, and prove that desktop and simulated review-walk input produce the same intent contract.
 
 Exit evidence: impact packages, mandatory approvals, stale-approval behavior, atomic application, independent discipline-agent review for an allowlisted metadata change, and a complete audit trail are demonstrated end to end.
+
+### P4 — Federated sources and connected data
+
+Goal: coordinate source-aware model revisions and connect model context to externally owned requirements, project records, asset data, and operational observations.
+
+Exit evidence: two source fixtures preserve identity and provenance across an update; a room record, project-system item, and simulated pump observation expose data authority and freshness; unavailable or stale data is explicit; no observation silently changes the accepted revision.
+
+### P5 — Constraint-aware options and governed knowledge
+
+Goal: regenerate dependent model state from declared constraints, apply versioned requirements and knowledge packs, and compare isolated design scenarios with explainable analysis.
+
+Exit evidence: one bounded parameter change propagates deterministically or reports an unsatisfied constraint; two scenarios compare model, requirement, quantity, and one simulation outcome from the same source revision.
+
+### P6 — Issued information and lifecycle continuity
+
+Goal: produce dependable sheets, schedules, quantities, baselines, scoped review packages, field feedback, and handover records from versioned model state.
+
+Exit evidence: an issued package records its exact revision, evidence, approvals, and exceptions; one external reviewer responds in a scoped room; one field or commissioning record remains linked to the final asset handover.
