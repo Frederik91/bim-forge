@@ -706,7 +706,7 @@ test('model-working AI receives bounded tools and saves only its validated propo
     async run(session: ModelWorkerSession) {
       const input = isRecord(session.input) ? session.input : {};
       const request = isRecord(input.request) ? input.request : {};
-      assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'submit_proposal', 'decline_request']);
+      assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'preview_furnishings', 'submit_proposal', 'decline_request']);
       assert.equal(request.baseRevisionId, original.head('main'));
       assert.deepEqual(request.selectedObjectIds, ['door-entry']);
       const inspected = await session.executeTool('inspect_model', {});
@@ -724,7 +724,7 @@ test('model-working AI receives bounded tools and saves only its validated propo
         constraints: 'The rectangular-room tool preserves identifiers, wall properties and the hosted-by relationship.',
         uncertainty: 'Concept geometry only; no accessibility, structural, code or coordination approval was performed.',
       });
-      assert.deepEqual(submitted, { ok: true, done: true, proposalRevisionId: submitted.proposalRevisionId });
+      assert.deepEqual(submitted, { ok: true, done: true });
     },
   };
   const result = await prepareModelProposal(original, visualRequest(original, layout), worker);

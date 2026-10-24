@@ -1,4 +1,4 @@
-import { diffSnapshots, previewRectangle, rectangleLayout } from './room-model.ts';
+import { diffSnapshots, previewRectangle, previewFurnishings, rectangleLayout, FURNITURE_KINDS } from './room-model.ts';
 import type {
   CollectionChanges, Entity, EntityId, HostingRelationship, ModelDelta, ModelSnapshot,
   ProposalReview, Revision, RoomLayout, RoomRepository,
@@ -9,8 +9,7 @@ const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
 const BRANCH = /^[a-z]+(?:-[a-z]+)*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MAX_TOOL_CALLS = 12;
-type SupportedToolName = 'inspect_model' | 'preview_rectangle' | 'submit_proposal' | 'decline_request';
-const TOOL_NAMES: readonly SupportedToolName[] = Object.freeze(['inspect_model', 'preview_rectangle', 'submit_proposal', 'decline_request']);
+type SupportedToolName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'submit_proposal' | 'decline_request';
 type EvidenceToolName = SupportedToolName | 'unsupported_tool';
 type ToolStatus = 'accepted' | 'rejected';
 
@@ -148,6 +147,10 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   });
 }
 
+export function validateModelProposalRequest(repository: RoomRepository, input: unknown): void {
+  request(input, repository);
+}
+
 function summarizeSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
   return {
     units: snapshot.units,
@@ -227,8 +230,25 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([
     strict: true,
   }),
   Object.freeze({
+    type: 'function', name: 'preview_furnishings',
+    description: 'Replace the COMPLETE furnishing set in the current preview, preserving walls, openings and equipment. Include existing furnishings you wish to retain. Positions/dimensions are metres on a 1 mm grid; position is the footprint centre. Rotation 0 faces north (+Y), 90 faces west. Monitor/laptop supportId must reference a desk/table in this set; their elevation is the support height. Floor items use null. Checks room containment, overlaps and doorway clearance. Inspect first.',
+    parameters: {
+      type: 'object', properties: { furnishings: { type: 'array', maxItems: 32, items: {
+        type: 'object', properties: {
+          id: { type: 'string', pattern: IDENTIFIER.source }, type: { type: 'string', enum: ['Furniture'] },
+          name: { type: 'string', minLength: 1, maxLength: 80 }, kind: { type: 'string', enum: FURNITURE_KINDS },
+          position: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+          width: { type: 'number', minimum: 0.05, maximum: 5 }, depth: { type: 'number', minimum: 0.05, maximum: 5 },
+          height: { type: 'number', minimum: 0.02, maximum: 3 }, rotationDeg: { type: 'integer', enum: [0, 90, 180, 270] },
+          supportId: { type: ['string', 'null'] },
+        }, required: ['id', 'type', 'name', 'kind', 'position', 'width', 'depth', 'height', 'rotationDeg', 'supportId'], additionalProperties: false,
+      } } }, required: ['furnishings'], additionalProperties: false,
+    },
+    strict: true,
+  }),
+  Object.freeze({
     type: 'function', name: 'submit_proposal',
-    description: 'Submit the latest validated preview as a separate proposal with a concise human review. Call only after preview_rectangle succeeds.',
+    description: 'Submit the latest validated preview as a separate proposal with a concise human review. Call only after a preview tool succeeds.',
     parameters: reviewParameters,
     strict: true,
   }),
@@ -249,7 +269,7 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([
 ]);
 
 export async function prepareModelProposal(repository: RoomRepository, input: unknown, worker: unknown): Promise<ModelProposalResult> {
-  if (!repository || typeof repository.view !== 'function' || typeof repository.proposeReviewedLayout !== 'function') fail('A validated room repository is required.');
+  if (!repository || typeof repository.view !== 'function' || typeof repository.proposeReviewedModel !== 'function') fail('A validated room repository is required.');
   if (!isModelWorker(worker)) fail('A model worker with an auditable identity is required.');
   fields(worker.identity, ['provider', 'model']);
   const workerIdentity = Object.freeze({
@@ -260,6 +280,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   let candidate: ModelSnapshot | null = null;
   let delta: ModelDelta | null = null;
   let result: ModelProposalResult | null = null;
+  const pending: { value: { snapshot: ModelSnapshot; delta: ModelDelta; summary: string; rationale: string; constraints: string; uncertainty: string } | null } = { value: null };
   let calls = 0;
   const toolCalls: ToolEvidence[] = [];
   const providerEvents: ProviderEvent[] = [];
@@ -286,7 +307,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 })),
   });
 
-  const evidenceName = (name: string): EvidenceToolName => name === 'inspect_model' || name === 'preview_rectangle'
+  const evidenceName = (name: string): EvidenceToolName => name === 'inspect_model' || name === 'preview_rectangle' || name === 'preview_furnishings'
     || name === 'submit_proposal' || name === 'decline_request' ? name : 'unsupported_tool';
   const recordTool = (name: string, status: ToolStatus, error: string | null = null): void => {
     toolCalls.push(Object.freeze({ name: evidenceName(name), status, error }));
@@ -295,20 +316,28 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   const executeTool = async (name: string, argumentsValue: unknown): Promise<Record<string, unknown>> => {
     calls += 1;
     if (calls > MAX_TOOL_CALLS) fail('The model worker exceeded the bounded tool-call budget.');
-    if (result) return { ok: false, error: 'This proposal session has already finished.' };
+    if (result || pending.value) return { ok: false, error: 'This proposal session has already finished.' };
     try {
       if (name === 'inspect_model') {
         fields(argumentsValue, []);
-        const output = { ok: true, revisionId: bound.base.id, selectedObjectIds: bound.selectedObjectIds, model: summarizeSnapshot(bound.base.snapshot) };
+        const output = { ok: true, revisionId: bound.base.id, selectedObjectIds: bound.selectedObjectIds, model: summarizeSnapshot(candidate ?? bound.base.snapshot),
+          placement: { layout: rectangleLayout(candidate ?? bound.base.snapshot), coordinates: 'Metres. X east, Y north. Furniture centred on position; keep clear of wall thickness and entry door.',
+            suggestedDimensions: { desk: [1.8, 0.8, 0.75], monitor: [0.6, 0.2, 0.45], laptop: [0.35, 0.25, 0.24], chair: [0.6, 0.6, 1], table: [0.6, 0.6, 0.55], plant: [0.5, 0.5, 1.1] } } };
         recordTool(name, 'accepted');
         return output;
       }
       if (name === 'preview_rectangle') {
-        candidate = previewRectangle(bound.base.snapshot, argumentsValue);
+        candidate = previewRectangle(candidate ?? bound.base.snapshot, argumentsValue);
         delta = diffSnapshots(bound.base.snapshot, candidate);
         const output = { ok: true, layout: rectangleLayout(candidate), changes: summarizeDelta(delta) };
         recordTool(name, 'accepted');
         return output;
+      }
+      if (name === 'preview_furnishings') {
+        candidate = previewFurnishings(candidate ?? bound.base.snapshot, argumentsValue);
+        delta = diffSnapshots(bound.base.snapshot, candidate);
+        recordTool(name, 'accepted');
+        return { ok: true, model: summarizeSnapshot(candidate), changes: summarizeDelta(delta) };
       }
       if (name === 'submit_proposal') {
         fields(argumentsValue, ['summary', 'rationale', 'constraints', 'uncertainty']);
@@ -318,22 +347,9 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         const rationale = text(argumentsValue.rationale, 'Rationale', 800);
         const constraints = text(argumentsValue.constraints, 'Constraints', 600);
         const uncertainty = text(argumentsValue.uncertainty, 'Uncertainty', 400);
-        const acceptedTools = Object.freeze([...toolCalls, Object.freeze({ name, status: 'accepted', error: null })]);
-        const next = await repository.proposeReviewedLayout({
-          name: bound.proposalName, from: bound.base.id, layout: rectangleLayout(candidate),
-          review: {
-            requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
-            summary, rationale, constraints, uncertainty, worker: workerEvidence(), toolCalls: acceptedTools,
-            validator: 'room-graph-v1',
-          },
-        });
         recordTool(name, 'accepted');
-        const ready: ReadyResult = Object.freeze({
-          status: 'ready', repository: next,
-          review: Object.freeze({ ...next.review(bound.proposalName), changes: summarizeDelta(delta) }),
-        });
-        result = ready;
-        return { ok: true, done: true, proposalRevisionId: ready.review.proposalRevisionId };
+        pending.value = { snapshot: candidate, delta, summary, rationale, constraints, uncertainty };
+        return { ok: true, done: true };
       }
       if (name === 'decline_request') {
         fields(argumentsValue, ['reason', 'uncertainty']);
@@ -343,7 +359,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
             requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
             proposalRevisionId: null, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
             summary: 'No model proposal was prepared.', rationale: text(argumentsValue.reason, 'Reason', 800),
-            constraints: 'The bounded rectangular-room tools could not represent this request.',
+            constraints: 'The bounded model tools could not safely represent this request.',
             uncertainty: text(argumentsValue.uncertainty, 'Uncertainty', 400), changes: null,
           }),
         });
@@ -362,7 +378,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
 
   try {
     await worker.run({
-      instructions: 'You prepare BIM model proposals for human review. Work only on the bound revision. Inspect when needed, use preview_rectangle for every geometry candidate, and finish with submit_proposal or decline_request. The visual layout is intent, not authoritative geometry. Never claim construction, code, accessibility, or coordination approval.',
+      instructions: 'You prepare BIM model proposals for human review. Work only on the bound revision. Inspect the model first. Use preview_rectangle for shell changes and preview_furnishings for actual visible desk, monitor, laptop, chair, table and plant components. Preserve the shell unless requested otherwise. Furnishing previews replace the entire furnishing set; retain existing items unless asked to remove them. Place devices on a desk/table using supportId; floor items use null. Leave a useful circulation route from the door to the chair. Explain unresolved limitations honestly. Finish with submit_proposal or decline_request. The visual layout is intent, not authoritative geometry. Never claim construction, code, accessibility, or coordination approval.',
       input: {
         request: {
           requestId: bound.requestId,
@@ -380,6 +396,18 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     });
   } catch (error) {
     throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error });
+  }
+  if (pending.value) {
+    const { snapshot, delta: submittedDelta, summary, rationale, constraints, uncertainty } = pending.value;
+    const next = await repository.proposeReviewedModel({
+      name: bound.proposalName, from: bound.base.id, snapshot,
+      review: {
+        requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
+        summary, rationale, constraints, uncertainty, worker: workerEvidence(), toolCalls, validator: 'room-graph-v1',
+      },
+    });
+    return Object.freeze({ status: 'ready', repository: next,
+      review: Object.freeze({ ...next.review(bound.proposalName), changes: summarizeDelta(submittedDelta) }) });
   }
   const finalResult = result;
   if (!finalResult) throw new ModelWorkerError('The model worker ended without submitting or declining the request.');
