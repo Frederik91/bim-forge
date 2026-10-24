@@ -10,17 +10,19 @@ Use Node.js 24 or newer. Start the local server without an API key:
 node demo/server.ts
 ```
 
-Open `http://127.0.0.1:4173`, choose **Connect ChatGPT**, and complete consent in the browser. Eligible accounts can use their ChatGPT plan for proposals through the official [Sign in with ChatGPT open-source flow](https://developers.openai.com/siwc/token-sharing-open-source). The local server performs OAuth with PKCE, validates the OpenAI ID token, stores rotating credentials outside the browser and project, discovers account-visible models, and sends stateless streaming Responses requests. No API key or client secret is used.
+Open `http://127.0.0.1:4173`, choose **Connect ChatGPT → Continue with ChatGPT**, and approve the displayed one-time code at OpenAI. Scan the QR from another device or open the link on the same device. The pinned Codex runtime handles device authorization and rotating credentials. The app checks completion automatically; no API key, local package, or terminal is needed by the person connecting.
 
-The Docker preview runs the same API behind its HTTPS proxy, but OAuth consent still happens on a trusted local computer because the required callback is `127.0.0.1`. The **Connect ChatGPT** dialog shows the remote pairing state. An operator pairs the server once with `npm run chatgpt:pair`; the command transfers the validated session over SSH without printing tokens or replacing the server's stable host identity. Never place OAuth tokens in static assets, browser storage, project JSON, logs or exported evidence.
+The private Docker preview uses the same device flow. The QR contains only `https://auth.openai.com/codex/device`; enter the separate short code there. Codes expire after at most 15 minutes and can be cancelled or retried. Cancelling or expiring an attempt makes later completion notifications ineffective. The account belongs to this server installation and is shared by its trusted users behind the firewall/Twingate gate.
 
-For the current preview host, run this from a trusted checkout and complete the browser consent:
+Open the deployed preview at:
 
 ```sh
-npm run chatgpt:pair -- --remote frederik@192.168.1.17
+https://192.168.1.17:9443
 ```
 
-The remote runtime must already be running. The command reads its non-secret host ID and saved registration hint, completes OAuth locally for that host, sends the validated credential transfer over SSH stdin, restarts only the app container, verifies its health and unchanged host ID, and removes its temporary local credential directory. The server owns later token refreshes. See [`deploy/preview/README.md`](../deploy/preview/README.md) for deployment and rollback.
+Credentials remain in `/srv/bim-preview/state`, outside the image, browser, project, and static releases. No credential transfer helper remains. The model catalog is a list of candidates, not proof of entitlement; a completed proposal verifies access to the chosen model.
+
+This integration is for the private self-hosted open-source prototype. OpenAI documents Codex app-server authentication for local/open-source applications and excludes commercial or hosted services. Before offering BIM Forge as a service, use [Sign in with ChatGPT](https://developers.openai.com/siwc) and the approved hosted-service integration. See the [Codex app-server auth contract](https://learn.chatgpt.com/docs/app-server#auth-endpoints) and [deployment instructions](../deploy/preview/README.md).
 
 ## Request, review and revise
 

@@ -22,16 +22,16 @@ type BoundSide = 'minX' | 'maxX' | 'minY' | 'maxY';
 type GestureOperation = 'wall' | 'door-move' | 'door-width';
 
 interface AuthModel { slug: string; displayName: string }
-interface AuthAccount { email: string | null; name: string | null }
-interface AuthSession {
-  connected: boolean;
-  sharing: boolean;
-  account: AuthAccount | null;
+interface AuthAccount { email: string | null; planType: string }
+interface AuthSessionBase {
   models: AuthModel[];
   selectedModel: string | null;
-  revocationConfirmed: boolean | undefined;
-  signInMode: 'local-browser' | 'remote-pairing';
 }
+type AuthSession =
+  | (AuthSessionBase & { status: 'disconnected'; connected: false; account: null })
+  | (AuthSessionBase & { status: 'failed'; connected: false; account: null; error: string })
+  | (AuthSessionBase & { status: 'pending'; connected: false; account: null; device: { verificationUrl: string; userCode: string; expiresAt: number } })
+  | (AuthSessionBase & { status: 'connected'; connected: true; account: AuthAccount });
 interface ActiveReview {
   requestId: string;
   proposalName: string;
@@ -82,8 +82,8 @@ function nullableText(value: unknown, field: string): string | null {
 }
 
 function parseAuthSession(value: unknown): AuthSession {
-  if (!isRecord(value) || typeof value.connected !== 'boolean' || typeof value.sharing !== 'boolean'
-    || !Array.isArray(value.models) || (value.signInMode !== 'local-browser' && value.signInMode !== 'remote-pairing')) {
+  if (!isRecord(value) || typeof value.connected !== 'boolean' || !Array.isArray(value.models)
+      || (value.status !== 'disconnected' && value.status !== 'failed' && value.status !== 'pending' && value.status !== 'connected')) {
     throw new Error('The ChatGPT connection returned an invalid session.');
   }
   const models = value.models.map((model) => {
@@ -92,20 +92,30 @@ function parseAuthSession(value: unknown): AuthSession {
     }
     return { slug: model.slug, displayName: model.displayName };
   });
-  let account: AuthAccount | null = null;
-  if (value.account !== null) {
-    if (!isRecord(value.account)) throw new Error('The ChatGPT connection returned an invalid account.');
-    account = { email: nullableText(value.account.email, 'account email'), name: nullableText(value.account.name, 'account name') };
+  const selectedModel = nullableText(value.selectedModel, 'selected model');
+  if (value.status === 'connected') {
+    if (!value.connected || !isRecord(value.account) || typeof value.account.planType !== 'string') {
+      throw new Error('The ChatGPT connection returned an invalid connected account.');
+    }
+    return { status: 'connected', connected: true, account: {
+      email: nullableText(value.account.email, 'account email'), planType: value.account.planType,
+    }, models, selectedModel };
   }
-  if (value.revocationConfirmed !== undefined && typeof value.revocationConfirmed !== 'boolean') {
-    throw new Error('The ChatGPT connection returned an invalid revocation status.');
+  if (value.connected || value.account !== null) throw new Error('The ChatGPT connection returned an invalid disconnected account.');
+  if (value.status === 'pending') {
+    if (!isRecord(value.device) || value.device.verificationUrl !== 'https://auth.openai.com/codex/device'
+        || typeof value.device.userCode !== 'string' || typeof value.device.expiresAt !== 'number') {
+      throw new Error('The ChatGPT connection returned an invalid device authorization.');
+    }
+    return { status: 'pending', connected: false, account: null, models, selectedModel, device: {
+      verificationUrl: value.device.verificationUrl, userCode: value.device.userCode, expiresAt: value.device.expiresAt,
+    } };
   }
-  return {
-    connected: value.connected, sharing: value.sharing, account, models,
-    selectedModel: nullableText(value.selectedModel, 'selected model'),
-    revocationConfirmed: value.revocationConfirmed,
-    signInMode: value.signInMode,
-  };
+  if (value.status === 'failed') {
+    if (typeof value.error !== 'string') throw new Error('The ChatGPT connection returned an invalid failure.');
+    return { status: 'failed', connected: false, account: null, models, selectedModel, error: value.error };
+  }
+  return { status: 'disconnected', connected: false, account: null, models, selectedModel };
 }
 
 interface HtmlConstructor<T extends HTMLElement> { new(): T }
@@ -181,7 +191,11 @@ const ui = {
   'auth-disconnected': generic('auth-disconnected'), 'auth-connected': generic('auth-connected'),
   'auth-connect': button('auth-connect'), 'auth-account': generic('auth-account'),
   'auth-connect-heading': generic('auth-connect-heading'), 'auth-connect-copy': generic('auth-connect-copy'),
-  'auth-pair-command': generic('auth-pair-command'),
+  'auth-pending': generic('auth-pending'), 'auth-device-code': generic('auth-device-code'),
+  'auth-device-link': requiredElement('auth-device-link', HTMLAnchorElement),
+  'auth-device-qr': requiredElement('auth-device-qr', HTMLImageElement),
+  'auth-device-status': generic('auth-device-status'), 'auth-device-expiry': generic('auth-device-expiry'),
+  'auth-copy-code': button('auth-copy-code'), 'auth-cancel': button('auth-cancel'),
   'auth-plan-status': generic('auth-plan-status'), 'auth-model': select('auth-model'),
   'auth-refresh-models': button('auth-refresh-models'), 'auth-signout': button('auth-signout'),
 };
@@ -207,10 +221,8 @@ let modelView: ModelView = 'plan';
 let modelCamera: ModelViewCamera = DEFAULT_MODEL_VIEW_CAMERA;
 let cameraGesture: CameraGesture | null = null;
 let authBusy = false;
-let authSession: AuthSession = {
-  connected: false, sharing: false, account: null, models: [], selectedModel: null,
-  revocationConfirmed: undefined, signInMode: 'local-browser',
-};
+let authSession: AuthSession = { status: 'disconnected', connected: false, account: null, models: [], selectedModel: null };
+let authPollTimer: number | null = null;
 const planCameras = new WeakMap<SVGSVGElement, PlanCamera>();
 const encoder = new TextEncoder();
 const number = new Intl.NumberFormat('en', { maximumFractionDigits: 3 });
@@ -380,37 +392,47 @@ function closeDialog(target: HTMLDialogElement): void {
 }
 
 function renderAuth() {
-  const usable = authSession.connected && authSession.sharing && Boolean(authSession.selectedModel);
-  const remotePairing = authSession.signInMode === 'remote-pairing';
+  const usable = authSession.status === 'connected' && Boolean(authSession.selectedModel);
   ui['auth-menu'].classList.toggle('connected', usable);
   const authMenuLabel = ui['auth-menu'].querySelector('span:last-child');
   if (!(authMenuLabel instanceof HTMLSpanElement)) throw new Error('Missing ChatGPT menu label.');
-  authMenuLabel.textContent = usable ? 'ChatGPT connected' : authSession.connected ? 'Finish ChatGPT setup' : 'Connect ChatGPT';
+  authMenuLabel.textContent = usable ? 'ChatGPT connected' : authSession.status === 'pending' ? 'Finish ChatGPT sign-in' : 'Connect ChatGPT';
   ui['proposal-auth-action'].textContent = usable ? 'Settings' : 'Connect';
   ui['proposal-auth-copy'].textContent = usable
     ? `Using ChatGPT plan · ${authSession.models.find((model) => model.slug === authSession.selectedModel)?.displayName ?? authSession.selectedModel}`
-    : authSession.connected ? 'ChatGPT is connected, but plan usage needs attention' : 'Connect ChatGPT to prepare this proposal';
+    : authSession.status === 'pending' ? 'Finish the one-time ChatGPT sign-in to continue' : 'Connect ChatGPT to prepare this proposal';
   const proposalConnection = ui['proposal-auth-action'].closest('.proposal-connection');
   if (!(proposalConnection instanceof HTMLElement)) throw new Error('Missing proposal connection panel.');
   proposalConnection.classList.toggle('connected', usable);
-  ui['auth-disconnected'].hidden = authSession.connected;
-  ui['auth-connected'].hidden = !authSession.connected;
-  ui['auth-connect-heading'].textContent = remotePairing ? 'Pair this preview once' : 'Ready when you are';
-  ui['auth-connect-copy'].textContent = remotePairing
-    ? 'For your security, ChatGPT consent happens on a trusted computer. Run the pairing command there, then check this connection.'
-    : 'BIM Forge will open ChatGPT in your browser so you can choose an account and allow plan usage.';
-  ui['auth-pair-command'].hidden = !remotePairing;
+  ui['auth-disconnected'].hidden = authSession.status === 'connected' || authSession.status === 'pending';
+  ui['auth-pending'].hidden = authSession.status !== 'pending';
+  ui['auth-connected'].hidden = authSession.status !== 'connected';
+  ui['auth-connect-heading'].textContent = authSession.status === 'failed' ? 'Let’s try that again' : 'Ready when you are';
+  ui['auth-connect-copy'].textContent = authSession.status === 'failed'
+    ? 'The previous code could not be completed. Start again to receive a fresh one-time code.'
+    : 'Get a one-time code, then approve this installation from ChatGPT on any phone or computer.';
   ui['auth-connect'].disabled = authBusy;
-  ui['auth-connect'].textContent = authBusy ? (remotePairing ? 'Checking…' : 'Waiting for ChatGPT…')
-    : remotePairing ? 'Check connection' : 'Continue with ChatGPT';
-  ui['auth-refresh-models'].disabled = authBusy || !authSession.sharing;
+  ui['auth-connect'].textContent = authBusy ? 'Getting a secure code…' : authSession.status === 'failed' ? 'Get a new code' : 'Continue with ChatGPT';
+  ui['auth-cancel'].disabled = authBusy;
+  ui['auth-refresh-models'].disabled = authBusy || authSession.status !== 'connected';
   ui['auth-signout'].disabled = authBusy;
   ui['auth-model'].disabled = authBusy || !usable;
-  if (authSession.account) {
-    ui['auth-account'].textContent = authSession.account.email || authSession.account.name || 'Connected ChatGPT account';
-    ui['auth-plan-status'].textContent = authSession.sharing
-      ? `ChatGPT plan usage is enabled for this ${remotePairing ? 'preview server' : 'local app'}.`
-      : 'This connection did not grant ChatGPT plan usage. Disconnect and reconnect to review consent.';
+  if (authSession.status === 'pending') {
+    ui['auth-device-code'].textContent = authSession.device.userCode;
+    const qrSource = '/api/auth/qr';
+    if (ui['auth-device-qr'].getAttribute('src') !== qrSource) ui['auth-device-qr'].src = qrSource;
+    const minutes = Math.max(0, Math.ceil((authSession.device.expiresAt - Date.now()) / 60_000));
+    ui['auth-device-expiry'].textContent = `Code expires in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`;
+    ui['auth-device-link'].href = authSession.device.verificationUrl;
+    ui['auth-device-status'].textContent = authBusy ? 'Checking approval…' : 'Waiting for approval…';
+  } else {
+    ui['auth-device-qr'].removeAttribute('src');
+    ui['auth-device-code'].textContent = '';
+    ui['auth-device-link'].removeAttribute('href');
+  }
+  if (authSession.status === 'connected') {
+    ui['auth-account'].textContent = authSession.account.email || 'Connected ChatGPT account';
+    ui['auth-plan-status'].textContent = `${authSession.account.planType} plan · ready for proposals on this installation.`;
   }
   const selected = authSession.selectedModel;
   ui['auth-model'].replaceChildren(...authSession.models.map((model) => {
@@ -418,7 +440,7 @@ function renderAuth() {
     option.selected = model.slug === selected; return option;
   }));
   if (!authSession.models.length) {
-    const option = document.createElement('option'); option.value = ''; option.textContent = authSession.sharing ? 'Refresh models to continue' : 'Plan usage is not enabled';
+    const option = document.createElement('option'); option.value = ''; option.textContent = authSession.status === 'connected' ? 'Refresh models to continue' : 'Connect ChatGPT first';
     ui['auth-model'].append(option);
   }
 }
@@ -435,22 +457,26 @@ async function authRequest(target: string, options: RequestInit = {}): Promise<A
 }
 
 async function runAuth(action: () => Promise<AuthSession>, progress: string): Promise<boolean> {
+  if (authBusy) return false;
+  if (authPollTimer !== null) window.clearTimeout(authPollTimer);
+  authPollTimer = null;
   authBusy = true;
   ui['auth-error'].hidden = true;
   renderAuth(); updateControls(); status(progress);
   try {
     authSession = await action();
     renderAuth(); updateControls();
-    if (authSession.connected && authSession.sharing && authSession.selectedModel) {
+    if (authSession.status === 'connected' && authSession.selectedModel) {
       status('ChatGPT plan connected. AI proposals are ready.');
-    } else if (!authSession.connected) {
-      status('ChatGPT disconnected from this local installation.');
-      if (authSession.revocationConfirmed === false) {
-        ui['auth-error'].textContent = 'Local credentials were cleared, but remote revocation could not be confirmed. Remove BIM Forge from ChatGPT Settings if it still appears there.';
-        ui['auth-error'].hidden = false;
-      }
+    } else if (authSession.status === 'pending') {
+      status('Enter the one-time code on the secure OpenAI page. This page will update automatically.');
+      scheduleAuthPoll();
+    } else if (authSession.status === 'failed') {
+      status('ChatGPT sign-in needs a new code.');
+      ui['auth-error'].textContent = authSession.error;
+      ui['auth-error'].hidden = false;
     } else {
-      status('ChatGPT connection needs attention before AI proposals can run.');
+      status('ChatGPT disconnected from this local installation.');
     }
     return true;
   } catch (error) {
@@ -460,9 +486,31 @@ async function runAuth(action: () => Promise<AuthSession>, progress: string): Pr
   } finally { authBusy = false; renderAuth(); updateControls(); }
 }
 
+function scheduleAuthPoll(): void {
+  if (authPollTimer !== null) window.clearTimeout(authPollTimer);
+  if (authSession.status !== 'pending') { authPollTimer = null; return; }
+  authPollTimer = window.setTimeout(() => {
+    authPollTimer = null;
+    const polledCode = authSession.status === 'pending' ? authSession.device.userCode : null;
+    void authRequest('/api/auth/session').then((session) => {
+      if (authBusy || authSession.status !== 'pending' || authSession.device.userCode !== polledCode) return;
+      authSession = session;
+      renderAuth(); updateControls();
+      if (session.status === 'pending') scheduleAuthPoll();
+      else if (session.status === 'connected') status('ChatGPT plan connected. AI proposals are ready.');
+      else if (session.status === 'failed') {
+        ui['auth-error'].textContent = session.error; ui['auth-error'].hidden = false;
+      }
+    }).catch((error: unknown) => {
+      ui['auth-device-status'].textContent = error instanceof Error ? error.message : 'Connection check failed. Retrying…';
+      scheduleAuthPoll();
+    });
+  }, 2000);
+}
+
 function updateControls() {
   const writable = Boolean(store) && !busy && !writesBlocked && !gesture;
-  const modelReady = authSession.connected && authSession.sharing && Boolean(authSession.selectedModel);
+  const modelReady = authSession.connected && Boolean(authSession.selectedModel);
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
@@ -733,11 +781,17 @@ ui['start-dialog'].addEventListener('cancel', (event) => {
 for (const authButton of [ui['auth-menu'], ui['proposal-auth-action']]) authButton.addEventListener('click', () => openDialog(ui['auth-dialog']));
 ui['auth-close'].addEventListener('click', () => closeDialog(ui['auth-dialog']));
 ui['auth-connect'].addEventListener('click', () => {
-  if (authSession.signInMode === 'remote-pairing') {
-    void runAuth(() => authRequest('/api/auth/session'), 'Checking the preview server connection…');
-  } else {
-    void runAuth(() => authRequest('/api/auth/start', { method: 'POST' }), 'Finish connecting ChatGPT in the browser window that just opened.');
-  }
+  void runAuth(() => authRequest('/api/auth/start', { method: 'POST' }), 'Requesting a secure one-time code…');
+});
+ui['auth-copy-code'].addEventListener('click', () => {
+  if (authSession.status !== 'pending') return;
+  void navigator.clipboard.writeText(authSession.device.userCode).then(() => {
+    ui['auth-copy-code'].textContent = 'Copied';
+    window.setTimeout(() => { ui['auth-copy-code'].textContent = 'Copy code'; }, 1600);
+  }).catch(() => { ui['auth-device-status'].textContent = 'Select the code above to copy it manually.'; });
+});
+ui['auth-cancel'].addEventListener('click', () => {
+  void runAuth(() => authRequest('/api/auth/cancel', { method: 'POST' }), 'Cancelling ChatGPT sign-in…');
 });
 ui['auth-refresh-models'].addEventListener('click', () => {
   void runAuth(() => authRequest('/api/auth/models', { method: 'POST' }), 'Refreshing models available to this ChatGPT account…');
@@ -750,7 +804,7 @@ ui['auth-model'].addEventListener('change', () => {
   }), 'Selecting the model for future proposals…');
 });
 ui['auth-signout'].addEventListener('click', () => {
-  void runAuth(() => authRequest('/api/auth/signout', { method: 'POST' }), 'Disconnecting ChatGPT from this local installation…');
+  void runAuth(() => authRequest('/api/auth/signout', { method: 'POST' }), 'Disconnecting ChatGPT from this installation…');
 });
 
 interface ProposalResponse {
@@ -812,7 +866,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
   void perform(async () => {
     writableStore();
     if (!repo) throw new Error('Create a project first.');
-    if (!authSession.connected || !authSession.sharing || !authSession.selectedModel) throw new Error('Connect a ChatGPT plan and choose a model first.');
+    if (!authSession.connected || !authSession.selectedModel) throw new Error('Connect a ChatGPT plan and choose a model first.');
     if (!layout || invalidInput) throw new Error('Fix the visual request input before asking AI to prepare a proposal.');
     const name = ui['proposal-name'].value.trim();
     if (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main') throw new Error('Use lowercase words separated by hyphens, and choose a name other than main.');
@@ -1632,6 +1686,7 @@ async function initialize() {
   try {
     authSession = await authRequest('/api/auth/session');
     renderAuth();
+    if (authSession.status === 'pending') scheduleAuthPoll();
   } catch (error) {
     ui['auth-error'].textContent = error instanceof Error ? error.message : 'ChatGPT connection status is unavailable.';
     ui['auth-error'].hidden = false;
