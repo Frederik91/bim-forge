@@ -205,6 +205,8 @@ export class JsonLineCodexRpc implements CodexRpcClient {
 
 interface ActiveRun {
   session: ModelWorkerSession;
+  signal: AbortSignal;
+  cancel: () => void;
   done: boolean;
   turnId: string | null;
   usage: Readonly<{ inputTokens: number; outputTokens: number; totalTokens: number }> | null;
@@ -359,7 +361,11 @@ export class CodexAccountConnection {
     });
   }
 
-  close(): void { this.#authEpoch += 1; this.#clearLogin(); this.#rpc.close(); }
+  close(): void {
+    this.#authEpoch += 1; this.#clearLogin();
+    for (const run of this.#runs.values()) run.cancel();
+    this.#rpc.close();
+  }
 
   async #models(): Promise<readonly Readonly<CodexModel>[]> {
     const response = await this.#rpc.request('model/list', { includeHidden: false, limit: 100 });
@@ -399,78 +405,108 @@ export class CodexAccountConnection {
     if (method !== 'item/tool/call' || !isRecord(params)) fail('Codex requested an unsupported operation.');
     const threadId = text(params.threadId, 'tool thread identifier', 128);
     const run = this.#runs.get(threadId);
-    if (!run || params.namespace !== 'bim_model') fail('Codex requested a tool outside the active BIM proposal.');
+    if (!run || run.signal.aborted || params.namespace !== 'bim_model') fail('Codex requested a tool outside the active BIM proposal.');
+    if (run.turnId !== null && params.turnId !== undefined && params.turnId !== run.turnId) fail('Codex requested a tool outside the active BIM proposal turn.');
     const tool = text(params.tool, 'tool name', 80);
+    if (tool !== 'run_model_script') fail('Codex requested an unsupported model tool.');
+    if (run.done) fail('This proposal session has already finished.');
     const output = await run.session.executeTool(tool, params.arguments);
+    if (run.signal.aborted || this.#runs.get(threadId) !== run) fail('The BIM proposal was cancelled.');
     if (output.done === true) run.done = true;
     return { contentItems: [{ type: 'inputText', text: JSON.stringify(output) }], success: true };
   }
 
   async #runModel(session: ModelWorkerSession, model: string): Promise<void> {
-    const tools = session.tools.map((tool) => ({
-      type: 'function', name: tool.name, description: tool.description, inputSchema: tool.parameters,
-    }));
-    const threadResponse = await this.#rpc.request('thread/start', {
-      model,
-      cwd: this.#workingDirectory,
-      approvalPolicy: 'never',
-      sandbox: 'read-only',
-      config: {
-        'features.shell_tool': false,
-        'features.unified_exec': false,
-        'features.code_mode': false,
-        'features.code_mode_host': false,
-        'features.multi_agent': false,
-        'features.apps': false,
-        web_search: 'disabled',
-        mcp_servers: {},
-      },
-      ephemeral: true,
-      historyMode: 'legacy',
-      baseInstructions: session.instructions,
-      developerInstructions: 'Use only tools in the bim_model namespace. Call exactly one tool at a time. Finish only after submit_proposal or decline_request returns done true. Do not use shell, files, web, apps, or other tools.',
-      dynamicTools: [{
-        type: 'namespace', name: 'bim_model',
-        description: 'Bounded BIM inspection, deterministic preview, and human-review proposal tools.',
-        tools,
-      }],
-    });
-    if (!isRecord(threadResponse) || !isRecord(threadResponse.thread)) fail('Codex app-server did not start a proposal thread.');
-    const threadId = text(threadResponse.thread.id, 'thread identifier', 128);
-    let timer: NodeJS.Timeout | null = null;
-    const completion = new Promise<readonly ['completed' | 'failed' | 'interrupted', string | null]>((resolve, reject) => {
+    if (session.signal.aborted) fail('The BIM proposal was cancelled.');
+    const controller = new AbortController();
+    const signal = AbortSignal.any([session.signal, controller.signal]);
+    let threadId: string | null = null;
+    let turnId: string | null = null;
+    let stoppedError: CodexAppServerError | null = null;
+    let interrupted = false;
+    let rejectStopped: (error: CodexAppServerError) => void = () => {};
+    const stopped = new Promise<never>((_resolve, reject) => { rejectStopped = reject; });
+    // Startup RPCs may settle after cancellation; their observers still revoke the late turn.
+    const interrupt = (): void => {
+      if (!threadId || !turnId || interrupted) return;
+      interrupted = true;
+      void this.#rpc.request('turn/interrupt', { threadId, turnId }).catch(() => {});
+    };
+    const stop = (message: string): void => {
+      if (stoppedError) return;
+      stoppedError = new CodexAppServerError(message);
+      controller.abort();
+      if (threadId) this.#runs.delete(threadId);
+      interrupt();
+      rejectStopped(stoppedError);
+    };
+    const onAbort = (): void => stop('The BIM proposal was cancelled.');
+    session.signal.addEventListener('abort', onAbort, { once: true });
+    const timer = setTimeout(() => stop('Codex exceeded the proposal turn timeout.'), this.#turnTimeoutMs);
+    timer.unref();
+    void stopped.catch(() => {});
+    try {
+      const tools = session.tools.map((tool) => ({
+        type: 'function', name: tool.name, description: tool.description, inputSchema: tool.parameters,
+      }));
+      const threadResponse = await Promise.race([this.#rpc.request('thread/start', {
+        model,
+        cwd: this.#workingDirectory,
+        approvalPolicy: 'never',
+        sandbox: 'read-only',
+        config: {
+          'features.shell_tool': false,
+          'features.unified_exec': false,
+          'features.code_mode': false,
+          'features.code_mode_host': false,
+          'features.multi_agent': false,
+          'features.apps': false,
+          web_search: 'disabled',
+          mcp_servers: {},
+        },
+        ephemeral: true,
+        historyMode: 'legacy',
+        baseInstructions: session.instructions,
+        developerInstructions: 'Use only bim_model.run_model_script. Call exactly one script at a time. Scripts return an observe, propose, or decline decision. Finish only after run_model_script returns done true. Do not use shell, files, web, apps, or other tools.',
+        dynamicTools: [{
+          type: 'namespace', name: 'bim_model',
+          description: 'Atomic model scripts with bounded inspection, validated previews, and human-review proposals.',
+          tools,
+        }],
+      }), stopped]);
+      if (!isRecord(threadResponse) || !isRecord(threadResponse.thread)) fail('Codex app-server did not start a proposal thread.');
+      threadId = text(threadResponse.thread.id, 'thread identifier', 128);
+      if (signal.aborted) throw stoppedError ?? new CodexAppServerError('The BIM proposal was cancelled.');
+      let resolveCompletion: ActiveRun['resolve'] = () => {};
+      const completion = new Promise<readonly ['completed' | 'failed' | 'interrupted', string | null]>((resolve) => {
+        resolveCompletion = (status, error) => resolve([status, error]);
+      });
       const run: ActiveRun = {
-        session, done: false, turnId: null, usage: null,
-        resolve: (status, error) => resolve([status, error] as const),
+        session, signal, cancel: onAbort, done: false, turnId: null, usage: null,
+        resolve: resolveCompletion,
       };
       this.#runs.set(threadId, run);
-      timer = setTimeout(() => {
-        const active = this.#runs.get(threadId);
-        if (active?.turnId) {
-          void this.#rpc.request('turn/interrupt', { threadId, turnId: active.turnId }).catch(() => {});
-        }
-        this.#runs.delete(threadId);
-        reject(new CodexAppServerError('Codex exceeded the proposal turn timeout.'));
-      }, this.#turnTimeoutMs);
-      timer.unref();
-    });
-    try {
-      const turnResponse = await this.#rpc.request('turn/start', {
+      const starting = this.#rpc.request('turn/start', {
         threadId,
         input: [{ type: 'text', text: JSON.stringify(session.input), text_elements: [] }],
+      }).then((turnResponse) => {
+        if (!isRecord(turnResponse) || !isRecord(turnResponse.turn)) fail('Codex app-server did not start a proposal turn.');
+        turnId = text(turnResponse.turn.id, 'turn identifier', 128);
+        run.turnId = turnId;
+        if (signal.aborted) interrupt();
+        return turnId;
       });
-      if (!isRecord(turnResponse) || !isRecord(turnResponse.turn)) fail('Codex app-server did not start a proposal turn.');
-      const turnId = text(turnResponse.turn.id, 'turn identifier', 128);
-      const run = this.#runs.get(threadId);
-      if (!run) fail('Codex proposal turn ended before it started.');
-      run.turnId = turnId;
-      const [status, error] = await completion;
-      session.recordProviderEvent({ responseId: turnId, ...(run.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }) });
+      const responseId = await Promise.race([starting, stopped]);
+      const [status, error] = await Promise.race([completion, stopped]);
+      if (signal.aborted) throw stoppedError ?? new CodexAppServerError('The BIM proposal was cancelled.');
+      session.recordProviderEvent({ responseId, ...(run.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }) });
       if (status !== 'completed') fail(error ?? `Codex proposal turn ${status}.`);
-      if (!run.done) fail('Codex ended without submitting or declining the proposal.');
+      if (!run.done) fail('Codex ended without a completed model script proposal or decline.');
     } finally {
-      if (timer) clearTimeout(timer);
-      this.#runs.delete(threadId);
+      clearTimeout(timer);
+      session.signal.removeEventListener('abort', onAbort);
+      controller.abort();
+      if (threadId) this.#runs.delete(threadId);
     }
   }
 
@@ -479,6 +515,7 @@ export class CodexAccountConnection {
     const threadId = typeof params.threadId === 'string' ? params.threadId : null;
     const run = threadId ? this.#runs.get(threadId) : null;
     if (!run) return;
+    if (run.turnId !== null && params.turn.id !== run.turnId) return;
     const status = params.turn.status;
     if (status !== 'completed' && status !== 'failed' && status !== 'interrupted') return;
     const error = isRecord(params.turn.error) ? safeError(params.turn.error.message) : null;

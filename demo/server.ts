@@ -117,13 +117,15 @@ export function parseDemoServerConfig(environment: NodeJS.ProcessEnv = process.e
   };
 }
 
+export type DemoServer = http.Server & { closeModelWorkers(): Promise<void> };
+
 export function createDemoServer({
   modelWorker = null,
   codex = null,
   runtimeMode = 'local',
   publicOrigin = null,
   backlogFile = ':memory:',
-}: DemoServerOptions = {}): http.Server {
+}: DemoServerOptions = {}): DemoServer {
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
   const backlog = new ChangeRequests(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
   const server = http.createServer(async (request, response) => {
@@ -214,7 +216,7 @@ export function createDemoServer({
             send(response, 200, await backlog.decide(id, await readJson(request, 2048)));
           } else {
             if (request.method !== 'GET') { send(response, 405, { error: 'A request requires GET.' }); return; }
-            send(response, 200, { ticket: backlog.get(id) });
+            send(response, 200, { ticket: { ...backlog.get(id), executions: backlog.executions(id) } });
           }
         }
       } catch (error) { send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Backlog unavailable.' }); }
@@ -232,8 +234,12 @@ export function createDemoServer({
       response.end(request.method === 'HEAD' ? undefined : bytes);
     } catch { response.writeHead(500); response.end('Demo asset unavailable.'); }
   });
-  server.on('close', () => backlog.close());
-  return server;
+  server.on('close', () => {
+    void backlog.close().catch(() => {
+      console.error('The BIM Forge request workers could not shut down cleanly.'); process.exitCode = 1;
+    });
+  });
+  return Object.assign(server, { closeModelWorkers: () => backlog.close() });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -247,7 +253,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   await fs.mkdir(backlogDirectory, { recursive: true, mode: 0o700 });
   const server = createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin,
     backlogFile: path.join(backlogDirectory, 'bim-change-requests.sqlite') });
-  server.on('close', () => codex.close());
+  server.on('close', () => { void server.closeModelWorkers().finally(() => codex.close()).catch(() => {}); });
   server.on('error', () => { console.error('The BIM Forge preview runtime could not start.'); process.exitCode = 1; });
   const listen = config.listen;
   if (listen.kind === 'socket') {
