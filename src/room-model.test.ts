@@ -660,12 +660,18 @@ test('accepting an AI proposal advances main while preserving the original and p
   const result = await prepareModelProposal(original, visualRequest(original, layout, { proposalName: 'wider-entry' }), {
     identity: { provider: 'test', model: 'scripted-room-worker' },
     async run(session: ModelWorkerSession) {
-      await session.executeTool('preview_rectangle', layout);
-      await session.executeTool('submit_proposal', {
+      const review = {
         summary: 'The entry is widened to 1200 mm.',
         rationale: 'The requested width fits the preserved host wall.',
         constraints: 'Door height, host relationship and all wall geometry remain unchanged.',
         uncertainty: 'Concept-only geometry; no code or coordination checks were run.',
+      };
+      await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          await model.previewRectangle(${JSON.stringify(layout)});
+          return { kind: 'propose', review: ${JSON.stringify(review)} };
+        `,
       });
     },
   });
@@ -708,25 +714,43 @@ test('model-working AI receives bounded tools and saves only its validated propo
     async run(session: ModelWorkerSession) {
       const input = isRecord(session.input) ? session.input : {};
       const request = isRecord(input.request) ? input.request : {};
-      assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'preview_furnishings', 'preview_room_furnishings', 'submit_proposal', 'decline_request']);
+      assert.deepEqual(session.tools.map((tool) => tool.name), ['run_model_script']);
+      assert.deepEqual(session.tools, MODEL_PROPOSAL_TOOLS);
       assert.equal(request.baseRevisionId, original.head('main'));
       assert.deepEqual(request.selectedObjectIds, ['door-entry']);
-      const inspected = await session.executeTool('inspect_model', {});
-      const model = isRecord(inspected.model) ? inspected.model : {};
+      const inspected = await session.executeTool('run_model_script', {
+        language: 'typescript', source: "return { kind: 'observe', observation: await model.inspect() };",
+      });
+      const observation = isRecord(inspected.observation) ? inspected.observation : {};
+      const model = isRecord(observation.model) ? observation.model : {};
       assert.equal(inspected.ok, true); assert.equal(Array.isArray(model.entities) ? model.entities.length : -1, 5);
       const visualIntent = isRecord(request.visualIntent) ? request.visualIntent : {};
-      const previewed = await session.executeTool('preview_rectangle', visualIntent.layout);
+      const previewed = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          return { kind: 'observe', observation: await model.previewRectangle(${JSON.stringify(visualIntent.layout)}) };
+        `,
+      });
       assert.equal(previewed.ok, true);
-      const changes = isRecord(previewed.changes) ? previewed.changes : {};
+      const preview = isRecord(previewed.observation) ? previewed.observation : {};
+      const changes = isRecord(preview.changes) ? preview.changes : {};
       const entities = isRecord(changes.entities) ? changes.entities : {};
       assert.deepEqual(Array.isArray(entities.modified) ? [...entities.modified].sort() : [], ['door-entry', 'wall-east', 'wall-north', 'wall-south'].sort());
-      const submitted = await session.executeTool('submit_proposal', {
+      const review = {
         summary: 'The entrance is 1200 mm wide and the room extends one metre east.',
         rationale: 'This follows the selected door and the visual request while preserving connected walls and hosting.',
         constraints: 'The rectangular-room tool preserves identifiers, wall properties and the hosted-by relationship.',
         uncertainty: 'Concept geometry only; no accessibility, structural, code or coordination approval was performed.',
+      };
+      const submitted = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          await model.previewRectangle(${JSON.stringify(visualIntent.layout)});
+          return { kind: 'propose', review: ${JSON.stringify(review)} };
+        `,
       });
-      assert.deepEqual(submitted, { ok: true, done: true });
+      assert.equal(submitted.ok, true);
+      assert.equal(submitted.done, true);
     },
   };
   const result = await prepareModelProposal(original, visualRequest(original, layout), worker);
@@ -775,15 +799,37 @@ test('proposal requests reject stale identities before calling AI and let AI rec
     identity: { provider: 'test', model: 'retry-worker' },
     async run(session: ModelWorkerSession) {
       const invalid = structuredClone(layout); invalid.door.offsetMm = 5900; invalid.door.widthMm = 1200;
-      const rejected = await session.executeTool('preview_rectangle', invalid);
+      const rejected = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          return { kind: 'observe', observation: await model.previewRectangle(${JSON.stringify(invalid)}) };
+        `,
+      });
       assert.equal(rejected.ok, false); assert.match(String(rejected.error), /fit inside/);
       const valid = structuredClone(layout); valid.door.widthMm = 1200;
-      assert.equal((await session.executeTool('preview_rectangle', valid)).ok, true);
-      assert.equal((await session.executeTool('submit_proposal', {
+      const review = {
         summary: 'The entrance is widened to 1200 mm.', rationale: 'The valid retry fits its host wall.',
         constraints: 'The hosted door and rectangular wall topology are preserved.',
         uncertainty: 'Concept-only validation.',
-      })).done, true);
+      };
+      const submitted = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          let rejected = false;
+          try {
+            await model.previewRectangle(${JSON.stringify(invalid)});
+          } catch (error) {
+            if (!(error instanceof Error) || error.name !== 'ModelValidationError'
+                || !error.message.includes('fit inside')) throw error;
+            rejected = true;
+          }
+          if (!rejected) throw new Error('Invalid geometry was unexpectedly accepted.');
+          await model.previewRectangle(${JSON.stringify(valid)});
+          return { kind: 'propose', review: ${JSON.stringify(review)} };
+        `,
+      });
+      assert.equal(submitted.ok, true);
+      assert.equal(submitted.done, true);
     },
   };
   const result = await prepareModelProposal(repo, visualRequest(repo, layout), worker);
@@ -796,9 +842,13 @@ test('model worker can decline without changing repository history', async () =>
   const result = await prepareModelProposal(repo, visualRequest(repo, layout), {
     identity: { provider: 'test', model: 'declining-worker' },
     async run(session: ModelWorkerSession) {
-      const output = await session.executeTool('decline_request', {
+      const decision = {
+        kind: 'decline',
         reason: 'The requested operation is outside the rectangular room tool.',
         uncertainty: 'No geometry was prepared.',
+      };
+      const output = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `return ${JSON.stringify(decision)};`,
       });
       assert.equal(output.done, true);
     },
