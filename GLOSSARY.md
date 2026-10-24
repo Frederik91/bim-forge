@@ -29,3 +29,60 @@ _Avoid_: Text diff
 
 **Conflict**:
 Different changes to the same entity or relationship in proposals with a shared ancestor, requiring a review decision.
+
+**View**:
+A saved projection of a model revision for navigation, inspection, or review in 2D, 3D, or an immersive environment.
+
+**View template**:
+A reusable configuration for creating consistent views.
+
+**Discipline workspace**:
+A discipline-specific lens over the shared model, its views, properties, findings, and proposals.
+
+**Intent**:
+A person's revision-bound request for model work, anchored to relevant entities, locations, measurements, and view context.
+
+**Change session**:
+A group of related intentions and the proposals produced from them.
+
+**Review walk**:
+A time-ordered, spatial record of intentions captured while moving through a model.
+
+**Parameter**:
+A named input or constraint used to describe or calculate model state.
+
+**Property**:
+A named value that describes an entity, relationship, or project.
+
+**Derived value**:
+A property calculated from declared inputs and a reproducible method.
+
+**Requirement**:
+A condition that model state is expected to satisfy.
+
+**Classification**:
+An assignment that relates model data to a defined category or external system.
+
+**Property provenance**:
+The recorded origin, method, evidence, and authority for a property value.
+
+**Authority scope**:
+The defined discipline and model aspect over which an actor may make or approve decisions.
+
+**Coordinated change set**:
+A proposal whose connected impacts across authority scopes must be reviewed and applied as one unit.
+
+**Impact package**:
+The subset of a coordinated change set, evidence, and findings relevant to one authority scope.
+
+**Approval requirement**:
+A policy-derived decision that must be satisfied before a proposal can be applied.
+
+**Delegated authority policy**:
+A discipline-controlled rule defining the narrow proposal classes an agent may approve without a human decision.
+
+**Discipline work agent**:
+An agent acting for a discipline to inspect the model and prepare bounded proposals.
+
+**Discipline review agent**:
+An independently instructed agent acting for a discipline to evaluate a proposal within delegated authority.
