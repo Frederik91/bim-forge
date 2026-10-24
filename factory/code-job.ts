@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { readCodingSpec, prepareCodingPackage, materializeCodingFiles, sha256, codingProfile, type CodingSpec } from './coding.ts';
+import { readCodingSpec, prepareCodingPackage, materializeCodingFiles, sha256, codingScope, type CodingSpec } from './coding.ts';
 import { readProtectedCodingFile, openCodingRun, saveCodingJson, type CodingRun } from './coding-store.ts';
 import { issueFingerprint, approvePackage } from './publish-request.ts';
 import { generateCodingAnswer } from './code-generate.ts';
@@ -274,7 +274,7 @@ export async function runCodingJob(
   await guard();
   const bytes = readProtectedCodingFile(filename);
   const spec = readCodingSpec(bytes);
-  const profile = codingProfile(spec.paths);
+  const scope = codingScope(spec);
   await gates(spec);
   await guard(); signal.throwIfAborted();
   const store = openCodingRun({ root, bytes, retry, schedule });
@@ -303,7 +303,15 @@ export async function runCodingJob(
       sourceBytes += Number(match[2] ?? Number.NaN);
     }
     if (inventory.length > 512 || sourceBytes > 8 * 1024 * 1024) throw new Error('Pinned source exceeds coding limits');
-    const context = Object.fromEntries(['README.md', 'AGENTS.md', 'package.json', 'policy/gate.json'].map((file) => [file, git('show', `${spec.baseSha}:${file}`)]));
+    const pinnedPaths = new Set(git('ls-tree', '-r', '--name-only', spec.baseSha).split('\n').filter(Boolean));
+    const approvedFiles = Object.fromEntries(spec.paths.map((file) => [
+      file, pinnedPaths.has(file) ? git('show', `${spec.baseSha}:${file}`) : null,
+    ]));
+    const context = {
+      repository: Object.fromEntries(['README.md', 'AGENTS.md', 'package.json', 'policy/gate.json']
+        .map((file) => [file, git('show', `${spec.baseSha}:${file}`)])),
+      approvedFiles,
+    };
     createCodingInput(path.join(job, 'context.json'), JSON.stringify(context));
     const runtimeDirectory = path.dirname(fileURLToPath(import.meta.url));
     const runtimeInventory = fs.readdirSync(runtimeDirectory).filter((name) => name.endsWith('.ts')).sort()
@@ -327,19 +335,21 @@ export async function runCodingJob(
     if (!response || response.usage.input_tokens + response.usage.output_tokens > 60000) throw new Error('Coding usage exceeds the supported budget');
     const prepared = prepareCodingPackage(spec, response.answer, policy, manifest);
     git('worktree', 'add', '--detach', path.join(job, 'candidate'), spec.baseSha);
-    materializeCodingFiles(path.join(job, 'candidate'), prepared.proposal);
+    materializeCodingFiles(path.join(job, 'candidate'), prepared.proposal,
+      scope.kind === 'repository-change' ? 'replace-approved' : 'additions-only');
     exposeCodingCandidate(path.join(job, 'candidate'));
     createCodingInput(path.join(job, 'preliminary.json'), prepared.bytes);
     const observations: Record<string, unknown>[] = [];
     await gates(spec);
     for (const acceptance of spec.acceptanceCases) {
+      if (scope.kind !== 'fixed-contract') throw new Error('Repository changes cannot execute fixed-contract cases');
       const caseId = randomUUID();
       const caseDir = path.join(root, 'cases', caseId);
       createCodingInput(caseDir);
       fs.symlinkSync(path.join(job, 'candidate'), path.join(caseDir, 'candidate'));
       createCodingInput(path.join(caseDir, 'input'), acceptance.input);
       createCodingInput(path.join(caseDir, 'mode'), acceptance.mode);
-      createCodingInput(path.join(caseDir, 'paths.json'), JSON.stringify(profile.paths));
+      createCodingInput(path.join(caseDir, 'paths.json'), JSON.stringify(scope.profile.paths));
       for (const name of ['stdout', 'stderr']) fs.writeFileSync(path.join(caseDir, name), '', { mode: 0o600, flag: 'wx' });
       const unit = `bim-forge-code-case@${caseId}.service`;
       store.record({ phase: 'acceptance', activeUnit: unit });
@@ -355,7 +365,7 @@ export async function runCodingJob(
         observations.push(observation);
         saveCodingJson(path.join(job, 'observations.json'), observations);
       });
-      assertCodingObservation(acceptance, observation, profile.paths);
+      assertCodingObservation(acceptance, observation, scope.profile.paths);
     }
     store.record({ phase: 'supplemental-checks', activeUnit: `bim-forge-code-verify@${run.id}.service` });
     let verification: string | Buffer | undefined;
@@ -374,7 +384,7 @@ export async function runCodingJob(
     proposal.body = renderChangeReview({
       outcome: spec.plan.outcome,
       why: spec.issue.title,
-      profile: { ...profile, paths: proposal.files.map((file) => file.path) },
+      profile: { ...(scope.kind === 'fixed-contract' ? scope.profile : scope), paths: proposal.files.map((file) => file.path) },
       observations,
       run: { ...run, issueSha256: proposal.issueSha256, verifierExecution },
       verificationSha256: sha256(verification),

@@ -62,6 +62,13 @@ const roomDemoPaths = new Set([
   'src/room-model.ts', 'src/room-model.test.ts',
 ]);
 
+export function isSupportedPublicationPath(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 160
+    && (/^(?:docs\/[a-z0-9][a-z0-9\/-]*\.md|factory\/[a-z0-9][a-z0-9.-]*\.ts|src\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.test)?\.ts|package\.json)$/.test(value)
+      || roomDemoPaths.has(value))
+    && !value.includes('//') && !/(?:^|\/)(?:agents|claude|skill)\.md$/i.test(value);
+}
+
 export const issueFingerprint = (issue: PublicationIssue): string => createHash('sha256').update(JSON.stringify({
   number: issue.number, title: issue.title, body: issue.body,
 })).digest('hex');
@@ -92,10 +99,7 @@ function assertNoDuplicateFields(json: string): void {
 }
 
 function parsePublicationFile(value: unknown): PublicationFile {
-  if (!exactKeys(value, ['path', 'content']) || typeof value.path !== 'string' || value.path.length > 160
-      || (!/^(?:docs\/[a-z0-9][a-z0-9\/-]*\.md|factory\/[a-z0-9][a-z0-9.-]*\.ts|src\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.test)?\.ts|package\.json)$/.test(value.path)
-        && !roomDemoPaths.has(value.path))
-      || value.path.includes('//') || /(?:^|\/)(?:agents|claude|skill)\.md$/i.test(value.path)
+  if (!exactKeys(value, ['path', 'content']) || !isSupportedPublicationPath(value.path)
       || !cleanText(value.content, 64 * 1024)
       || Buffer.from(value.content).toString('utf8') !== value.content) {
     throw new Error('Publication contains an unsupported path, content, duplicate, or operation');
