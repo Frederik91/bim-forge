@@ -143,13 +143,23 @@
       <section id="auth-disconnected" class="auth-state" aria-labelledby="auth-connect-heading">
         <div class="auth-symbol" aria-hidden="true">✦</div>
         <div><h3 id="auth-connect-heading">Ready when you are</h3><p id="auth-connect-copy">BIM Forge will open ChatGPT in your browser so you can choose an account and allow plan usage.</p></div>
-        <code id="auth-pair-command" class="pair-command" hidden>npm run chatgpt:pair</code>
         <button id="auth-connect" class="button primary full" type="button">Continue with ChatGPT</button>
         <p class="modal-footnote">This does not grant access to your ChatGPT conversations.</p>
       </section>
+      <section id="auth-pending" class="auth-state" aria-labelledby="auth-device-heading" hidden>
+        <h3 id="auth-device-heading">Finish connecting with ChatGPT</h3>
+        <p>Scan this QR code or open the secure OpenAI page, then enter the code below.</p>
+        <img id="auth-device-qr" class="device-qr" width="192" height="192" alt="QR code for the OpenAI device sign-in page">
+        <div class="device-code-row"><code id="auth-device-code" aria-label="One-time sign-in code"></code><button id="auth-copy-code" class="button outline" type="button">Copy code</button></div>
+        <a id="auth-device-link" class="button primary full" target="_blank" rel="noopener noreferrer">Open ChatGPT sign-in <span aria-hidden="true">↗</span></a>
+        <p class="device-status" id="auth-device-status" role="status">Waiting for approval…</p>
+        <p id="auth-device-expiry" class="modal-footnote"></p>
+        <p class="modal-footnote">Only approve a code you requested here. You are connecting this BIM Forge server to your plan. This page updates automatically after approval.</p>
+        <button id="auth-cancel" class="text-button" type="button">Cancel sign-in</button>
+      </section>
       <section id="auth-connected" class="auth-state" aria-labelledby="auth-account" hidden>
         <div class="connected-account"><span class="connection-dot" aria-hidden="true"></span><div><small>CONNECTED ACCOUNT</small><h3 id="auth-account">ChatGPT account</h3><p id="auth-plan-status">Checking plan access…</p></div></div>
-        <div><label for="auth-model">Model for proposals</label><select id="auth-model"></select><p class="editor-help">Only models available to this account are shown.</p></div>
+        <div><label for="auth-model">Model for proposals</label><select id="auth-model"></select><p class="editor-help">Codex model catalog. Access is verified when a proposal runs.</p></div>
         <div class="auth-actions"><button id="auth-refresh-models" class="button outline" type="button">Refresh models</button><a class="button quiet" href="https://chatgpt.com/#settings/Usage" target="_blank" rel="noreferrer">Manage usage</a></div>
         <button id="auth-signout" class="text-button danger-text" type="button">Disconnect ChatGPT</button>
       </section>

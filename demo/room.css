@@ -226,8 +226,10 @@ input[aria-invalid="true"] { border: 2px solid #a44932; }
 .auth-symbol { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; color: #176f65; background: #dff2ec; font-size: 24px; }
 .auth-state h3 { font-size: 17px; }
 .auth-state h3 + p { margin-top: 4px; color: var(--muted); }
-.pair-command { display: block; padding: 11px 12px; overflow-x: auto; color: #28564f; background: #edf5f2; border: 1px solid #cfe2dc; border-radius: 8px; font-size: 11px; white-space: nowrap; }
-.pair-command[hidden] { display: none; }
+.device-qr { display: block; margin: 4px auto; width: 192px; height: 192px; border-radius: 12px; border: 1px solid var(--line); }
+.device-code-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; }
+#auth-device-code { padding: 10px 14px; border-radius: 8px; background: #edf5f2; font-size: clamp(20px, 6vw, 28px); letter-spacing: .1em; user-select: all; }
+.device-status { color: #276f61; text-align: center; font-weight: 650; }
 .auth-state .modal-footnote { margin: 14px -22px -22px; }
 .connected-account { padding: 14px; display: flex; align-items: center; gap: 13px; border: 1px solid #cfe5de; border-radius: 11px; background: #f2faf7; }
 .connected-account .connection-dot { width: 12px; height: 12px; }
