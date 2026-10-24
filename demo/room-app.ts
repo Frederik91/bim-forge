@@ -1,5 +1,7 @@
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
 import { furnitureFaces } from '../src/furniture-geometry.ts';
+import { discoverWorkstation, workstationIntent, workstationGhost, previewWorkstationMove, wallFrame } from '../src/workstation.ts';
+import type { Workstation, WorkstationWallMove } from '../src/workstation.ts';
 import type {
   Door, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, Point, ProposalReview, RoomLayout, Wall, Window,
 } from '../src/room-model.ts';
@@ -70,6 +72,22 @@ interface CameraGesture {
   readonly mode: 'orbit' | 'pan';
   readonly objectId: string | null;
   moved: boolean;
+}
+
+interface WorkstationDraft {
+  readonly intent: WorkstationWallMove;
+  readonly ghost: ModelSnapshot;
+  readonly originalInstruction: string;
+  readonly validation: { kind: 'valid' } | { kind: 'needs-adjustment'; reason: string };
+}
+interface WorkstationGesture {
+  readonly id: number;
+  readonly root: SVGSVGElement;
+  readonly group: Workstation;
+  readonly previous: WorkstationDraft | null;
+  readonly origin: Point;
+  moved: boolean;
+  overWall: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -155,6 +173,9 @@ const ui = {
   'selected-title': generic('selected-title'), 'selected-badge': generic('selected-badge'),
   'model-revision': generic('model-revision'), 'view-plan': button('view-plan'), 'view-3d': button('view-3d'),
   'model-3d-controls': generic('model-3d-controls'), 'reset-3d': button('reset-3d'), 'view-caption': generic('view-caption'),
+  'workstation-panel': generic('workstation-panel'), 'workstation-members': generic('workstation-members'),
+  'workstation-feedback': generic('workstation-feedback'), 'workstation-wall': select('workstation-wall'),
+  'clear-workstation-move': button('clear-workstation-move'), 'prepare-workstation-move': button('prepare-workstation-move'),
   'change-count': generic('change-count'),
   'property-rows': requiredElement('property-rows', HTMLTableSectionElement),
   'comparison-note': generic('comparison-note'), 'history-list': generic('history-list'),
@@ -222,6 +243,16 @@ let currentPage: PageName = 'request';
 let modelView: ModelView = 'plan';
 let modelCamera: ModelViewCamera = DEFAULT_MODEL_VIEW_CAMERA;
 let cameraGesture: CameraGesture | null = null;
+let workstationDraft: WorkstationDraft | null = null;
+let workstationGesture: WorkstationGesture | null = null;
+let drawingWidth = 0;
+const drawingResizeObserver = new ResizeObserver((entries) => {
+  const width = entries[0]?.contentRect.width;
+  if (!width || Math.abs(width - drawingWidth) < .5 || !repo || busy || gesture || workstationGesture || cameraGesture) return;
+  drawingWidth = width;
+  renderComparison();
+});
+drawingResizeObserver.observe(ui['proposal-drawing']);
 let authBusy = false;
 let authSession: AuthSession = { status: 'disconnected', connected: false, account: null, models: [], selectedModel: null };
 let authPollTimer: number | null = null;
@@ -512,27 +543,28 @@ function scheduleAuthPoll(): void {
 }
 
 function updateControls() {
-  const writable = Boolean(store) && !busy && !writesBlocked && !gesture;
+  const dragging = Boolean(gesture || workstationGesture);
+  const writable = Boolean(store) && !busy && !writesBlocked && !dragging;
   const modelReady = authSession.connected && Boolean(authSession.selectedModel);
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
   for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture);
-  ui['selected-object'].disabled = busy || !preview || Boolean(gesture);
+  ui['selected-object'].disabled = busy || !preview || dragging;
   ui['proposal-name'].disabled = !writable || !layout || Boolean(gesture);
   ui['request-text'].disabled = !writable || !layout || Boolean(gesture);
   ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture) || !modelReady;
   ui['save-proposal'].textContent = modelReady ? 'Prepare proposal →' : 'Connect ChatGPT first';
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
-  ui['discard-preview'].disabled = busy || !repo || !dirty() || Boolean(gesture);
-  ui['export-project'].disabled = busy || !repo || savedText === null;
-  ui['new-project'].disabled = !store || busy || writesBlocked;
-  ui['project-overview'].disabled = busy || !repo;
-  ui['view-original'].disabled = busy || !repo;
-  ui['nav-request'].disabled = busy || !repo;
-  ui['nav-history'].disabled = busy || !repo;
-  ui['nav-review'].disabled = busy || !activeReview;
+  ui['discard-preview'].disabled = busy || !repo || !dirty() || dragging;
+  ui['export-project'].disabled = busy || !repo || savedText === null || dragging;
+  ui['new-project'].disabled = !store || busy || writesBlocked || dragging;
+  ui['project-overview'].disabled = busy || !repo || dragging;
+  ui['view-original'].disabled = busy || !repo || dragging;
+  ui['nav-request'].disabled = busy || !repo || dragging;
+  ui['nav-history'].disabled = busy || !repo || dragging;
+  ui['nav-review'].disabled = busy || !activeReview || dragging;
   ui['view-changes'].disabled = busy || !activeReview || activeReview.proposalRevisionId === null;
   const alternatives = repo ? repo.branches().filter((branch) => branch.name !== 'main') : [];
   const canCompare = !busy && alternatives.length >= 2;
@@ -546,11 +578,12 @@ function updateControls() {
   ui['request-revision'].disabled = !writable || !reviewMatches || (state !== 'pending' && state !== 'declined');
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
-  for (const historyButton of ui['history-list'].querySelectorAll('button')) historyButton.disabled = busy || Boolean(gesture);
+  for (const historyButton of ui['history-list'].querySelectorAll('button')) historyButton.disabled = busy || dragging;
+  renderWorkstationPanel();
 }
 
 function dirty(): boolean {
-  return invalidInput || Boolean(repo && preview && JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot));
+  return Boolean(workstationDraft) || invalidInput || Boolean(repo && preview && JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot));
 }
 
 function feedback(message: string, invalid = false): void {
@@ -559,6 +592,7 @@ function feedback(message: string, invalid = false): void {
 }
 
 function resetEditor() {
+  workstationDraft = null;
   invalidInput = false; layout = null; preview = null;
   if (!repo) return;
   preview = repo.view(selectedRevision).snapshot;
@@ -613,7 +647,12 @@ function syncInspector() {
 }
 
 function chooseObject(id: string): void {
-  if (!repo || busy || gesture) return;
+  if (!repo || busy || gesture || workstationGesture) return;
+  if (workstationDraft && id !== selectedObject) {
+    if (!window.confirm('Discard the workstation move request and select another object?')) return;
+    ui['request-text'].value = workstationDraft.originalInstruction;
+    workstationDraft = null;
+  }
   if (invalidInput && !window.confirm('Discard the incomplete or invalid input and select another object?')) return;
   invalidInput = false; clearError(); selectedObject = id; syncInspector(); renderComparison(); updateControls();
 }
@@ -656,13 +695,14 @@ function editFields(event: Event): void {
 }
 for (const field of [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']]) field.addEventListener('input', editFields);
 ui['discard-preview'].addEventListener('click', () => {
-  if (busy || gesture || !repo) return;
+  if (busy || gesture || workstationGesture || !repo) return;
+  if (workstationDraft) ui['request-text'].value = workstationDraft.originalInstruction;
   resetEditor(); renderComparison(); updateControls(); status('Visual request sketch discarded. Saved model history is unchanged.');
 });
 window.addEventListener('beforeunload', (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } });
 
 async function perform(action: () => void | Promise<void>): Promise<void> {
-  if (busy || gesture) return;
+  if (busy || gesture || workstationGesture) return;
   busy = true;
   clearError();
   updateControls();
@@ -754,6 +794,7 @@ ui['nav-history'].addEventListener('click', () => showPage('history'));
 function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
   if (gesture) endGesture(true);
+  if (workstationGesture) endWorkstationGesture(true);
   cameraGesture = null;
   modelView = next;
   renderComparison();
@@ -900,8 +941,8 @@ ui['proposal-form'].addEventListener('submit', (event) => {
         project: repo.serialize(),
         request: {
           requestId: globalThis.crypto.randomUUID(), proposalName: name, baseRevisionId: selectedRevision,
-          selectedObjectIds: [selectedObject], instruction,
-          visualIntent: { kind: 'rectangle-layout-sketch', layout },
+          selectedObjectIds: workstationDraft ? workstationDraft.intent.memberIds : [selectedObject], instruction,
+          visualIntent: workstationDraft ? workstationDraft.intent : { kind: 'rectangle-layout-sketch', layout },
         },
       }),
     });
@@ -1269,6 +1310,7 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
       handle(widthHandle, 'door-width', 'Resize Entry door', true);
     }
   }
+  if (interactive) drawWorkstationOverlay(svg, snapshot, (point) => transform(point), 'plan');
   return svg;
 }
 
@@ -1359,6 +1401,10 @@ function drawModel3d(snapshot: ModelSnapshot, label: string, identifier = 'selec
   const selected = snapshot.entities.find((entity) => entity.id === selectedObject);
   svg.append(svgNode('text', { x: 24, y: 34, fill: '#234d4b', 'font-size': 12, 'font-weight': 700 }, selected ? selected.name : 'No object selected'));
   svg.append(svgNode('text', { x: 24, y: 53, fill: '#5f7772', 'font-size': 9 }, `Stable ID · ${selected?.id ?? '—'}`));
+  if (identifier === 'selected') drawWorkstationOverlay(svg, snapshot, ([x, y], z) => {
+    const point = projectModelPoint([x - (minX + maxX) / 2, y - (minY + maxY) / 2, z], modelCamera, centre);
+    return [point.x, point.y];
+  }, '3d');
   return svg;
 }
 
@@ -1370,7 +1416,173 @@ function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamer
     (193 - point.y) / camera.scale + (camera.minY + camera.maxY) / 2];
 }
 
+function selectedWorkstation() {
+  if (!repo || !preview) return { kind: 'unavailable' as const, reason: 'Open a room model first.' };
+  if (JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot)) {
+    return { kind: 'unavailable' as const, reason: 'Reset the shell markup before moving a workstation.' };
+  }
+  return discoverWorkstation(preview, selectedObject);
+}
+
+function renderWorkstationPanel(): void {
+  const selected = preview?.entities.find((item) => item.id === selectedObject);
+  const visible = selected?.type === 'Furniture' && selected.kind === 'desk';
+  ui['workstation-panel'].hidden = !visible;
+  if (!visible || !preview) return;
+  const selection = selectedWorkstation();
+  ui['workstation-wall'].replaceChildren(new Option('Drag to a wall or choose one', ''),
+    ...preview.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
+  ui['workstation-wall'].value = workstationDraft?.intent.targetWallId ?? '';
+  ui['workstation-wall'].disabled = busy || Boolean(workstationGesture) || selection.kind !== 'ready';
+  ui['clear-workstation-move'].disabled = busy || !workstationDraft || Boolean(workstationGesture);
+  ui['prepare-workstation-move'].disabled = busy || !workstationDraft || Boolean(workstationGesture) || !authSession.connected || writesBlocked;
+  ui['workstation-panel'].dataset.valid = String(workstationDraft?.validation.kind !== 'needs-adjustment');
+  if (selection.kind !== 'ready') {
+    ui['workstation-members'].textContent = selection.reason;
+    ui['workstation-feedback'].textContent = 'No objects will move until the association is clear.';
+    return;
+  }
+  ui['workstation-members'].textContent = `Moves together: ${selection.group.members.map((item) => item.name).join(', ')}. ${selection.group.chair ? 'Chair association is inferred from proximity; check this scope before asking AI.' : 'No associated chair found.'} Other furniture stays put.`;
+  const wall = preview.entities.find((item) => item.id === workstationDraft?.intent.targetWallId);
+  ui['workstation-feedback'].textContent = workstationDraft
+    ? `${wall && 'name' in wall ? wall.name : 'Wall'} selected. Ghost only; the saved model is unchanged.${workstationDraft.validation.kind === 'needs-adjustment' ? ` ${workstationDraft.validation.reason} AI must adjust the placement along this wall or decline.` : ' Ask AI to prepare the move for review.'}`
+    : 'Drag the teal move handle onto another wall, or choose a destination below. Press Escape to cancel a drag.';
+}
+
+function stageWorkstationMove(group: Workstation, wallId: string, alongWallMm: number): void {
+  if (!preview) return;
+  const intent = workstationIntent(preview, group.desk.id, wallId, alongWallMm);
+  let validation: WorkstationDraft['validation'] = { kind: 'valid' };
+  try { previewWorkstationMove(preview, intent, { alongWallMm, wallGapMm: 150 }); }
+  catch (error) { validation = { kind: 'needs-adjustment', reason: error instanceof Error ? error.message : 'Placement needs validation.' }; }
+  workstationDraft = { intent, ghost: workstationGhost(preview, intent), validation,
+    originalInstruction: workstationDraft?.originalInstruction ?? ui['request-text'].value };
+}
+
+function describeWorkstationMove(): void {
+  if (!workstationDraft || !preview) return;
+  const wall = preview.entities.find((item) => item.id === workstationDraft?.intent.targetWallId);
+  ui['request-text'].value = `Move the entire selected workstation to ${wall && 'name' in wall ? wall.name : 'the indicated wall'}, near ${workstationDraft.intent.alongWallMm} mm from its start. Rotate the desk, its supported monitor/laptop and companion chair together. Keep their dimensions, supports and relative arrangement. Preserve every unrelated object and the room shell. Adjust along this wall only if validation requires it, and explain any adjustment.`;
+  if (repo?.branches().some((branch) => branch.name === ui['proposal-name'].value.trim())) ui['proposal-name'].value = '';
+  feedback('Workstation destination marked. Ask AI to prepare a validated proposal; nothing has moved in the saved model.');
+}
+
+ui['workstation-wall'].addEventListener('change', () => {
+  const selection = selectedWorkstation();
+  if (busy || !preview || selection.kind !== 'ready') return;
+  if (!ui['workstation-wall'].value) { clearWorkstationMove(); return; }
+  const { lengthMm } = wallFrame(preview, ui['workstation-wall'].value);
+  stageWorkstationMove(selection.group, ui['workstation-wall'].value, Math.round(lengthMm / 2));
+  describeWorkstationMove(); renderComparison(); updateControls();
+});
+
+function clearWorkstationMove(): void {
+  if (workstationDraft) ui['request-text'].value = workstationDraft.originalInstruction;
+  workstationDraft = null;
+  feedback('Workstation move request cleared. Saved model history is unchanged.');
+  renderComparison(); updateControls();
+}
+ui['clear-workstation-move'].addEventListener('click', clearWorkstationMove);
+ui['prepare-workstation-move'].addEventListener('click', () => {
+  if (!workstationDraft || busy) return;
+  if (!ui['proposal-name'].checkValidity()) {
+    showRequestPane('details'); ui['proposal-name'].reportValidity(); ui['proposal-name'].focus(); return;
+  }
+  ui['proposal-form'].requestSubmit();
+});
+
+function drawWorkstationOverlay(svg: SVGSVGElement, snapshot: ModelSnapshot, project: (point: Point, z: number) => Point, view: ModelView): void {
+  const selection = selectedWorkstation();
+  if (selection.kind !== 'ready' || writesBlocked || busy) return;
+  const group = selection.group;
+  const cssScale = (view === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
+  const draft = workstationDraft;
+  if (draft) {
+    const wall = snapshot.entities.find((item) => item.id === draft.intent.targetWallId);
+    const color = draft.validation.kind === 'valid' ? '#178b79' : '#ba791f';
+    if (wall?.type === 'Wall') {
+      const a = project(wall.start, .03); const b = project(wall.end, .03);
+      svg.append(svgNode('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: color, 'stroke-width': 7 * cssScale,
+        'data-target-wall': wall.id, class: 'workstation-ghost' }));
+      const mid = project([(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2], .3);
+      svg.append(svgNode('text', { x: mid[0], y: mid[1] - 10 * cssScale, fill: color, 'font-size': 11 * cssScale,
+        'text-anchor': 'middle', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * cssScale, class: 'workstation-ghost' }, `${wall.name} · target`));
+    }
+    for (const item of draft.ghost.entities) {
+      if (item.type !== 'Furniture' || !draft.intent.memberIds.includes(item.id)) continue;
+      const polygons = view === '3d' ? furnitureFaces(item, draft.ghost).map((face) => face.points.map(([x, y, z]) => project([x, y], z)))
+        : (() => { const f = furnitureFootprint(item); return [[[f.minX, f.minY], [f.maxX, f.minY], [f.maxX, f.maxY], [f.minX, f.maxY]].map(([x, y]) => project([x, y], 0))]; })();
+      for (const polygon of polygons) svg.append(svgNode('polygon', { points: polygon.map((point) => point.join(',')).join(' '),
+        fill: draft.validation.kind === 'valid' ? '#50c7a840' : '#e8b54c40', stroke: color, 'stroke-width': 1.3 * cssScale,
+        'stroke-dasharray': `${4 * cssScale} ${3 * cssScale}`, 'data-ghost-object': item.id, class: 'workstation-ghost' }));
+    }
+  }
+  const desk = draft?.ghost.entities.find((item) => item.id === group.desk.id) ?? group.desk;
+  if (desk.type !== 'Furniture') return;
+  const centre = project(desk.position, view === '3d' ? desk.height + .18 : 0);
+  const radius = 22 * cssScale;
+  const handle = svgNode('g', { 'data-workstation-handle': group.desk.id, role: 'button', tabindex: 0,
+    'aria-label': 'Drag workstation to another wall', 'aria-describedby': 'workstation-members workstation-feedback', class: 'workstation-handle' });
+  handle.append(svgNode('circle', { cx: centre[0], cy: centre[1], r: radius, fill: '#167e70', stroke: '#fff', 'stroke-width': 3 * cssScale }));
+  handle.append(svgNode('path', { d: `M${centre[0] - radius * .5},${centre[1]}h${radius} M${centre[0]},${centre[1] - radius * .5}v${radius} M${centre[0] - radius * .25},${centre[1] - radius * .25}l${radius * .25},${-radius * .25}l${radius * .25},${radius * .25} M${centre[0] - radius * .25},${centre[1] + radius * .25}l${radius * .25},${radius * .25}l${radius * .25},${-radius * .25}`, fill: 'none', stroke: '#fff', 'stroke-width': 2 * cssScale, 'pointer-events': 'none' }));
+  handle.append(svgNode('text', { x: centre[0], y: centre[1] + radius + 13 * cssScale, fill: '#11594f',
+    'text-anchor': 'middle', 'font-size': 11 * cssScale, 'font-weight': 700, 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * cssScale }, 'Move workstation'));
+  svg.append(handle);
+}
+
+function workstationDrop(event: PointerEvent, root: SVGSVGElement): { wallId: string; alongWallMm: number } | null {
+  if (!preview) return null;
+  const matrix = root.getScreenCTM(); if (!matrix) return null;
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+  const bounds = rectangleLayout(preview).boundsMm;
+  const plan = planCameras.get(root);
+  const project = ([x, y]: Point): Point => {
+    if (modelView === 'plan' && plan) return [300 + (x - (plan.minX + plan.maxX) / 2) * plan.scale, 193 - (y - (plan.minY + plan.maxY) / 2) * plan.scale];
+    const p = projectModelPoint([x - (bounds.minX + bounds.maxX) / 2000, y - (bounds.minY + bounds.maxY) / 2000, 0], modelCamera, [400, 290]);
+    return [p.x, p.y];
+  };
+  const hitId = document.elementFromPoint(event.clientX, event.clientY)?.closest<SVGElement>('[data-object]')?.dataset.object;
+  let best: { wallId: string; alongWallMm: number; distance: number } | null = null;
+  for (const wall of preview.entities.filter(isWall)) {
+    const a = project(wall.start); const b = project(wall.end);
+    const dx = b[0] - a[0]; const dy = b[1] - a[1];
+    const hitWall = hitId === wall.id;
+    const raw = modelView === '3d' && hitWall && Math.abs(dx) > .1 ? (point.x - a[0]) / dx
+      : ((point.x - a[0]) * dx + (point.y - a[1]) * dy) / (dx * dx + dy * dy);
+    const t = Math.max(0, Math.min(1, raw));
+    const distance = hitWall ? 0 : Math.hypot(point.x - a[0] - dx * t, point.y - a[1] - dy * t);
+    if (best && best.distance <= distance) continue;
+    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
+    best = { wallId: wall.id, alongWallMm: Math.round(t * length * 1000), distance };
+  }
+  const tolerance = 30 * (modelView === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
+  return best && best.distance <= tolerance ? best : null;
+}
+
+function endWorkstationGesture(cancel: boolean): void {
+  if (!workstationGesture) return;
+  const active = workstationGesture; workstationGesture = null;
+  delete active.root.dataset.workstationDragging;
+  if (cancel || !active.overWall) workstationDraft = active.previous;
+  else describeWorkstationMove();
+  if (active.root.hasPointerCapture(active.id)) active.root.releasePointerCapture(active.id);
+  renderComparison(); updateControls();
+  if (cancel || !active.overWall) feedback('Move cancelled. Drop the handle onto a wall to mark a destination.');
+}
+
 ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
+  if (event.target instanceof Element && event.target.closest('[data-workstation-handle]')) {
+    if (!repo || busy || gesture || cameraGesture || workstationGesture || writesBlocked || event.button !== 0 || !event.isPrimary) return;
+    const selection = selectedWorkstation();
+    const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
+    if (selection.kind !== 'ready' || !root) return;
+    event.preventDefault();
+    workstationGesture = { id: event.pointerId, root, group: selection.group, previous: workstationDraft,
+      origin: [event.clientX, event.clientY], moved: false, overWall: false };
+    root.dataset.workstationDragging = 'true';
+    root.setPointerCapture(event.pointerId); updateControls();
+    return;
+  }
   if (modelView === '3d') {
     if (!repo || busy || cameraGesture || event.button !== 0 || !event.isPrimary || !(event.target instanceof Element)) return;
     const target = event.target.closest<SVGElement>('[data-object]');
@@ -1407,6 +1619,17 @@ ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
   root.setPointerCapture(event.pointerId); updateControls();
 });
 ui['proposal-drawing'].addEventListener('pointermove', (event) => {
+  if (workstationGesture?.id === event.pointerId) {
+    const active = workstationGesture;
+    if (!active.moved && Math.hypot(event.clientX - active.origin[0], event.clientY - active.origin[1]) < 5) return;
+    active.moved = true; event.preventDefault();
+    const target = workstationDrop(event, active.root);
+    active.overWall = Boolean(target);
+    if (target) stageWorkstationMove(active.group, target.wallId, target.alongWallMm);
+    else workstationDraft = active.previous;
+    renderComparison(); updateControls();
+    return;
+  }
   if (cameraGesture?.id === event.pointerId) {
     const active = cameraGesture;
     const delta: Point = [event.clientX - active.origin[0], event.clientY - active.origin[1]];
@@ -1448,6 +1671,9 @@ function endGesture(cancel = false): void {
   syncInspector(); renderComparison(); updateControls();
 }
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) ui['proposal-drawing'].addEventListener(type, (event) => {
+  if (event instanceof PointerEvent && workstationGesture?.id === event.pointerId) {
+    endWorkstationGesture(type !== 'pointerup'); return;
+  }
   if (event instanceof PointerEvent && cameraGesture?.id === event.pointerId) {
     const active = cameraGesture;
     cameraGesture = null;
@@ -1459,14 +1685,19 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) ui['pro
   if (event instanceof PointerEvent && gesture?.id === event.pointerId) endGesture(type !== 'pointerup');
 });
 ui['proposal-drawing'].addEventListener('wheel', (event) => {
+  if (workstationGesture) { event.preventDefault(); return; }
   if (modelView !== '3d' || !repo) return;
   event.preventDefault();
   modelCamera = zoomModelView(modelCamera, event.deltaY);
   renderComparison();
 }, { passive: false });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && gesture) { event.preventDefault(); endGesture(true); } });
+window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && workstationGesture) { event.preventDefault(); endWorkstationGesture(true); } });
 ui['proposal-drawing'].addEventListener('keydown', (event) => {
   if (!(event.target instanceof Element)) return;
+  if (event.target.closest('[data-workstation-handle]') && ['Enter', ' '].includes(event.key)) {
+    event.preventDefault(); ui['workstation-wall'].focus(); return;
+  }
   const target = event.target.closest<SVGElement>('[data-object]');
   if (target && ['Enter', ' '].includes(event.key)) {
     const objectId = target.dataset.object;
@@ -1649,7 +1880,7 @@ function renderComparison(): void {
   if (modelView === 'plan') {
     const next = drawPlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
-    if (root && gesture) {
+    if (root && (gesture || workstationGesture)) {
       // Keep the capture root stable throughout a geometry-request drag.
       root.replaceChildren(...next.childNodes);
       const role = next.getAttribute('role');
@@ -1661,7 +1892,7 @@ function renderComparison(): void {
   } else {
     const next = drawModel3d(selected, `${selectedBranch} room model`);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
-    if (root && cameraGesture) root.replaceChildren(...next.childNodes);
+    if (root && (cameraGesture || workstationGesture)) root.replaceChildren(...next.childNodes);
     else ui['proposal-drawing'].replaceChildren(next);
   }
   ui['proposal-drawing'].dataset.modelView = modelView;

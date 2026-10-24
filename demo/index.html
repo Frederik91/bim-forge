@@ -73,6 +73,12 @@
             <header class="card-heading model-card-heading"><div><span class="card-kicker">SYNCHRONIZED MODEL VIEW</span><h2 id="selected-title">Room awaiting a request</h2><small id="model-revision">Revision —</small></div><div class="view-switch" role="group" aria-label="Model view"><button id="view-plan" type="button" aria-pressed="true">Plan</button><button id="view-3d" type="button" aria-pressed="false">3D</button></div><span id="selected-badge" class="pill teal">Not started</span></header>
             <div id="proposal-drawing" class="drawing-surface" data-model-view="plan"><p class="canvas-empty">Create a project or load the sample to begin.</p></div>
             <div id="model-3d-controls" class="model-3d-controls" hidden><span>Drag to orbit · Shift-drag to pan · Scroll to zoom</span><button id="reset-3d" class="text-button" type="button">Reset camera</button></div>
+            <section id="workstation-panel" class="workstation-panel" aria-labelledby="workstation-heading" hidden>
+              <div><p class="eyebrow">VISUAL MOVE REQUEST</p><h3 id="workstation-heading">Move this workstation</h3><p id="workstation-members"></p></div>
+              <p id="workstation-feedback" role="status" aria-live="polite">Drag the teal move handle to another wall. The ghost is intent only.</p>
+              <div class="workstation-actions"><label for="workstation-wall">Destination wall<select id="workstation-wall" aria-label="Destination wall"><option value="">Drag to a wall or choose one</option></select></label><button id="clear-workstation-move" type="button" class="button outline">Clear move</button></div>
+              <button id="prepare-workstation-move" type="button" class="button primary full" disabled>Ask AI to move workstation</button>
+            </section>
             <footer><span>Select an object in either view. Selection follows you between Plan and 3D.</span><b id="view-caption">PLAN · METRES</b><button id="to-request-details" class="button primary mobile-only" type="button">Continue <span aria-hidden="true">→</span></button></footer>
           </section>
 
