@@ -38,11 +38,12 @@ test('a complete office is a validated six-object delta and survives reviewed ac
   }, {
     identity: { provider: 'test', model: 'office-worker' },
     async run(session: import('./model-proposal.ts').ModelWorkerSession) {
-      assert.equal((await session.executeTool('preview_furnishings', { furnishings: officeItems })).ok, true);
-      assert.equal((await session.executeTool('submit_proposal', {
-        summary: 'Add six office furnishings.', rationale: 'Clear entry with a desk facing north.',
-        constraints: 'One entry door retained.', uncertainty: 'Concept only, not construction approval.',
-      })).ok, true);
+      assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
+        await model.inspect();
+        await model.previewFurnishings(${JSON.stringify({ furnishings: officeItems })});
+        return {kind:'propose',review:{summary:'Add six office furnishings.',rationale:'Clear entry with a desk facing north.',
+          constraints:'One entry door retained.',uncertainty:'Concept only, not construction approval.'}};
+      ` })).ok, true);
       session.recordProviderEvent({ responseId: 'office-turn', inputTokens: 100, outputTokens: 50, totalTokens: 150 });
     },
   });

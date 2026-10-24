@@ -3,6 +3,9 @@
 !package-lock.json
 !demo/
 !demo/server.ts
+!demo/change-requests.ts
+!vendor/
+!vendor/frederik91-scriptbox-0.1.0.tgz
 !src/
 !src/**
 !scripts/

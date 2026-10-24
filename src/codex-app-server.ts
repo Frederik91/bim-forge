@@ -419,7 +419,7 @@ export class CodexAccountConnection {
   async #runModel(session: ModelWorkerSession, model: string): Promise<void> {
     if (session.signal.aborted) fail('The BIM proposal was cancelled.');
     const controller = new AbortController();
-    const signal = AbortSignal.any([session.signal, controller.signal]);
+    const signal = controller.signal;
     let threadId: string | null = null;
     let turnId: string | null = null;
     let stoppedError: CodexAppServerError | null = null;

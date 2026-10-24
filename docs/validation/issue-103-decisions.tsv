@@ -1,0 +1,4 @@
+ts	phase	decision	why	evidence	result
+2026-10-24T21:03:35Z	ground	Use the residential-floor preview revision as the base	Main lacks the current viewer and backlog features	10982ab9c97d3bde9c95a7b8515bba39d7c591a7	Isolated issue-103 branch created
+2026-10-24T21:10:00Z	dependency	Build and pin the upstream npm tarball on the server	The npm package is unpublished and must install without a local runtime	vendor/frederik91-scriptbox-0.1.0.tgz	Built from upstream 9a9b327 and integrity pinned in lockfile
+2026-10-24T21:14:00Z	design	Use one atomic script with an observe/propose/decline return	A script owns one draft and cannot select an implicit prior checkpoint	docs/scriptbox-integration.md	Two candidates compared and independent review preferred the atomic design
