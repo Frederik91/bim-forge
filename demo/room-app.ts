@@ -1,7 +1,7 @@
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
 import { furnitureFaces } from '../src/furniture-geometry.ts';
-import { discoverWorkstation, workstationIntent, workstationGhost, previewWorkstationMove, wallFrame } from '../src/workstation.ts';
-import type { Workstation, WorkstationWallMove } from '../src/workstation.ts';
+import { parseVisualRequest } from '../src/visual-request.ts';
+import type { SpatialReference } from '../src/visual-request.ts';
 import type {
   Door, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, Point, ProposalReview, RoomLayout, Wall, Window,
 } from '../src/room-model.ts';
@@ -16,8 +16,9 @@ import {
   type ModelViewCamera,
 } from '../src/model-view.ts';
 import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
+import type { RequestState } from './change-requests.ts';
 
-type PageName = 'project' | 'request' | 'review' | 'history';
+type PageName = 'project' | 'request' | 'backlog' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
 type ModelView = 'plan' | '3d';
 type ReviewState = 'pending' | 'accepted' | 'superseded' | 'declined';
@@ -74,20 +75,14 @@ interface CameraGesture {
   moved: boolean;
 }
 
-interface WorkstationDraft {
-  readonly intent: WorkstationWallMove;
-  readonly ghost: ModelSnapshot;
-  readonly originalInstruction: string;
-  readonly validation: { kind: 'valid' } | { kind: 'needs-adjustment'; reason: string };
-}
-interface WorkstationGesture {
+type VisualDraft = SpatialReference;
+interface VisualGesture {
   readonly id: number;
   readonly root: SVGSVGElement;
-  readonly group: Workstation;
-  readonly previous: WorkstationDraft | null;
+  readonly previous: VisualDraft | null;
   readonly origin: Point;
   moved: boolean;
-  overWall: boolean;
+  overTarget: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -173,9 +168,15 @@ const ui = {
   'selected-title': generic('selected-title'), 'selected-badge': generic('selected-badge'),
   'model-revision': generic('model-revision'), 'view-plan': button('view-plan'), 'view-3d': button('view-3d'),
   'model-3d-controls': generic('model-3d-controls'), 'reset-3d': button('reset-3d'), 'view-caption': generic('view-caption'),
-  'workstation-panel': generic('workstation-panel'), 'workstation-members': generic('workstation-members'),
-  'workstation-feedback': generic('workstation-feedback'), 'workstation-wall': select('workstation-wall'),
-  'clear-workstation-move': button('clear-workstation-move'), 'prepare-workstation-move': button('prepare-workstation-move'),
+  'visual-panel': generic('visual-panel'), 'visual-context': generic('visual-context'),
+  'visual-feedback': generic('visual-feedback'), 'visual-wall': select('visual-wall'),
+  'visual-x': input('visual-x'), 'visual-y': input('visual-y'), 'mark-visual-point': button('mark-visual-point'),
+  'clear-visual-reference': button('clear-visual-reference'), 'describe-visual-reference': button('describe-visual-reference'),
+  'backlog-page': generic('backlog-page'), 'nav-backlog': button('nav-backlog'), 'open-backlog': button('open-backlog'),
+  'backlog-list': generic('backlog-list'), 'backlog-filter': select('backlog-filter'), 'backlog-summary': generic('backlog-summary'),
+  'backlog-connection': generic('backlog-connection'), 'open-current-model': button('open-current-model'),
+  'reject-proposal': button('reject-proposal'),
+  'ticket-history': generic('ticket-history'),
   'change-count': generic('change-count'),
   'property-rows': requiredElement('property-rows', HTMLTableSectionElement),
   'comparison-note': generic('comparison-note'), 'history-list': generic('history-list'),
@@ -205,7 +206,7 @@ const ui = {
   'evidence-kind': generic('evidence-kind'), 'evidence-description': generic('evidence-description'),
   'evidence-metadata': requiredElement('evidence-metadata', HTMLDListElement),
   'evidence-source': requiredElement('evidence-source', HTMLAnchorElement),
-  'working-dialog': dialog('working-dialog'), 'editor-panel': generic('editor-panel'),
+  'editor-panel': generic('editor-panel'),
   'request-canvas-tab': button('request-canvas-tab'), 'request-details-tab': button('request-details-tab'),
   'request-canvas-pane': generic('request-canvas-pane'), 'to-request-details': button('to-request-details'),
   'back-to-canvas': button('back-to-canvas'), 'auth-menu': button('auth-menu'),
@@ -238,17 +239,23 @@ let selectedObject = 'door-entry';
 let invalidInput = false;
 let gesture: GestureState | null = null;
 let activeReview: ActiveReview | null = null;
+let reviewRepository: RoomRepository | null = null;
+let activeTicketId: string | null = null;
+let revisionTicketId: string | null = null;
+let backlogItems: BacklogItem[] = [];
+let serverProjectText: string | null = null;
+let submission: { fingerprint: string; requestId: string } | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = 'plan';
 let modelCamera: ModelViewCamera = DEFAULT_MODEL_VIEW_CAMERA;
 let cameraGesture: CameraGesture | null = null;
-let workstationDraft: WorkstationDraft | null = null;
-let workstationGesture: WorkstationGesture | null = null;
+let visualDraft: VisualDraft | null = null;
+let visualGesture: VisualGesture | null = null;
 let drawingWidth = 0;
 const drawingResizeObserver = new ResizeObserver((entries) => {
   const width = entries[0]?.contentRect.width;
-  if (!width || Math.abs(width - drawingWidth) < .5 || !repo || busy || gesture || workstationGesture || cameraGesture) return;
+  if (!width || Math.abs(width - drawingWidth) < .5 || !repo || busy || gesture || visualGesture || cameraGesture) return;
   drawingWidth = width;
   renderComparison();
 });
@@ -398,6 +405,7 @@ function showPage(name: PageName): void {
   ui.journey.hidden = name === 'project';
   const pages = [
     { name: 'request', page: ui['request-page'], navigation: ui['nav-request'] },
+    { name: 'backlog', page: ui['backlog-page'], navigation: ui['nav-backlog'] },
     { name: 'review', page: ui['review-page'], navigation: ui['nav-review'] },
     { name: 'history', page: ui['history-page'], navigation: ui['nav-history'] },
   ];
@@ -543,9 +551,8 @@ function scheduleAuthPoll(): void {
 }
 
 function updateControls() {
-  const dragging = Boolean(gesture || workstationGesture);
+  const dragging = Boolean(gesture || visualGesture);
   const writable = Boolean(store) && !busy && !writesBlocked && !dragging;
-  const modelReady = authSession.connected && Boolean(authSession.selectedModel);
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
@@ -553,8 +560,8 @@ function updateControls() {
   ui['selected-object'].disabled = busy || !preview || dragging;
   ui['proposal-name'].disabled = !writable || !layout || Boolean(gesture);
   ui['request-text'].disabled = !writable || !layout || Boolean(gesture);
-  ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture) || !modelReady;
-  ui['save-proposal'].textContent = modelReady ? 'Prepare proposal →' : 'Connect ChatGPT first';
+  ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture);
+  ui['save-proposal'].textContent = busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
   ui['discard-preview'].disabled = busy || !repo || !dirty() || dragging;
@@ -564,6 +571,8 @@ function updateControls() {
   ui['view-original'].disabled = busy || !repo || dragging;
   ui['nav-request'].disabled = busy || !repo || dragging;
   ui['nav-history'].disabled = busy || !repo || dragging;
+  ui['nav-backlog'].disabled = busy || !repo || dragging;
+  ui['open-backlog'].disabled = busy || !repo || dragging;
   ui['nav-review'].disabled = busy || !activeReview || dragging;
   ui['view-changes'].disabled = busy || !activeReview || activeReview.proposalRevisionId === null;
   const alternatives = repo ? repo.branches().filter((branch) => branch.name !== 'main') : [];
@@ -573,17 +582,20 @@ function updateControls() {
   ui['check-conflicts'].disabled = !canCompare;
   ui['recover-save'].disabled = busy;
   const reviewMatches = activeReview?.proposalRevisionId === null || activeReview?.proposalRevisionId === selectedRevision;
-  ui['accept-proposal'].disabled = !writable || !reviewMatches || selectedBranch === 'main' || reviewState(activeReview) !== 'pending';
+  const ticket = backlogItems.find((item) => item.id === activeTicketId);
+  ui['accept-proposal'].disabled = !writable || !activeTicketId || ticket?.state !== 'ready' || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || reviewState(activeReview) !== 'pending';
+  ui['reject-proposal'].disabled = !writable || !ticket || !['ready', 'needs-input', 'failed'].includes(ticket.state);
   const state = reviewState(activeReview);
   ui['request-revision'].disabled = !writable || !reviewMatches || (state !== 'pending' && state !== 'declined');
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
   for (const historyButton of ui['history-list'].querySelectorAll('button')) historyButton.disabled = busy || dragging;
-  renderWorkstationPanel();
+  for (const ticketButton of ui['backlog-list'].querySelectorAll('button')) ticketButton.disabled = busy || dragging;
+  renderVisualPanel();
 }
 
 function dirty(): boolean {
-  return Boolean(workstationDraft) || invalidInput || Boolean(repo && preview && JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot));
+  return Boolean(visualDraft) || invalidInput || Boolean(repo && preview && JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot));
 }
 
 function feedback(message: string, invalid = false): void {
@@ -592,10 +604,10 @@ function feedback(message: string, invalid = false): void {
 }
 
 function resetEditor() {
-  workstationDraft = null;
+  visualDraft = null;
   invalidInput = false; layout = null; preview = null;
   if (!repo) return;
-  preview = repo.view(selectedRevision).snapshot;
+  preview = requireRepository().view(selectedRevision).snapshot;
   try { layout = rectangleLayout(preview); feedback('Select an object and sketch the intent. The sketch is not authoritative model geometry.'); }
   catch (error) { feedback(`This saved layout is view-only: ${error instanceof Error ? error.message : 'unsupported geometry'}`, true); }
   const objects = preview.entities;
@@ -647,12 +659,8 @@ function syncInspector() {
 }
 
 function chooseObject(id: string): void {
-  if (!repo || busy || gesture || workstationGesture) return;
-  if (workstationDraft && id !== selectedObject) {
-    if (!window.confirm('Discard the workstation move request and select another object?')) return;
-    ui['request-text'].value = workstationDraft.originalInstruction;
-    workstationDraft = null;
-  }
+  if (!repo || busy || gesture || visualGesture) return;
+  if (visualDraft && id !== selectedObject) visualDraft = null;
   if (invalidInput && !window.confirm('Discard the incomplete or invalid input and select another object?')) return;
   invalidInput = false; clearError(); selectedObject = id; syncInspector(); renderComparison(); updateControls();
 }
@@ -695,20 +703,19 @@ function editFields(event: Event): void {
 }
 for (const field of [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']]) field.addEventListener('input', editFields);
 ui['discard-preview'].addEventListener('click', () => {
-  if (busy || gesture || workstationGesture || !repo) return;
-  if (workstationDraft) ui['request-text'].value = workstationDraft.originalInstruction;
+  if (busy || gesture || visualGesture || !repo) return;
   resetEditor(); renderComparison(); updateControls(); status('Visual request sketch discarded. Saved model history is unchanged.');
 });
 window.addEventListener('beforeunload', (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } });
 
 async function perform(action: () => void | Promise<void>): Promise<void> {
-  if (busy || gesture || workstationGesture) return;
+  if (busy || gesture || visualGesture) return;
   busy = true;
   clearError();
   updateControls();
   try { await action(); }
   catch (error) { status('Action did not complete. The displayed project has not been replaced.'); report(error); }
-  finally { closeDialog(ui['working-dialog']); busy = false; updateControls(); }
+  finally { busy = false; if (repo) renderComparison(); updateControls(); }
 }
 
 function writableStore(): RoomStore {
@@ -723,7 +730,10 @@ async function persist(next: RoomRepository, branch = 'main'): Promise<void> {
   const nextGeneration = await database.saveCAS(text, generation);
   generation = nextGeneration;
   savedText = text;
+  if (repo?.projectId !== next.projectId) { backlogItems = []; serverProjectText = null; revisionTicketId = null; submission = null; }
   repo = next;
+  reviewRepository = null;
+  activeTicketId = null;
   selectedBranch = branch;
   selectedRevision = repo.head(branch);
   resetEditor();
@@ -788,13 +798,23 @@ ui['open-room'].addEventListener('click', () => {
   showPage('request');
   status(`Reference room opened at revision ${selectedRevision.slice(0, 10)}. Plan and 3D share the same selection.`);
 });
-ui['nav-request'].addEventListener('click', () => showPage('request'));
+function beginRequest(): void {
+  if (!repo) return;
+  if (dirty() && !window.confirm('Discard the unsent markup and return to the accepted model?')) return;
+  reviewRepository = null; activeTicketId = null; activeReview = null; revisionTicketId = null;
+  selectedBranch = 'main'; selectedRevision = repo.head('main');
+  resetEditor(); render(); showPage('request');
+}
+ui['nav-request'].addEventListener('click', beginRequest);
+for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
+  showPage('backlog'); void refreshBacklog();
+});
 ui['nav-review'].addEventListener('click', () => showPage('review'));
 ui['nav-history'].addEventListener('click', () => showPage('history'));
 function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
   if (gesture) endGesture(true);
-  if (workstationGesture) endWorkstationGesture(true);
+  if (visualGesture) endVisualGesture(true);
   cameraGesture = null;
   modelView = next;
   renderComparison();
@@ -924,85 +944,180 @@ ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
   void perform(async () => {
     writableStore();
-    if (!repo) throw new Error('Create a project first.');
-    if (!authSession.connected || !authSession.selectedModel) throw new Error('Connect a ChatGPT plan and choose a model first.');
-    if (!layout || invalidInput) throw new Error('Fix the visual request input before asking AI to prepare a proposal.');
+    if (!repo || !layout || invalidInput) throw new Error('Open a project and fix the request input first.');
+    if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
-    if (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main') throw new Error('Use lowercase words separated by hyphens, and choose a name other than main.');
+    if (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main') throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
     const instruction = ui['request-text'].value.trim();
-    if (!instruction || instruction.length > 1000) throw new Error('Describe the requested outcome in 1 to 1000 characters.');
-    status('The model-working AI is inspecting the bound revision and preparing a validated proposal…');
-    generic('working-progress').textContent = 'Inspecting the bound revision, arranging components and running deterministic validation.';
-    openDialog(ui['working-dialog']);
-    const response = await fetch('/api/proposals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project: repo.serialize(),
-        request: {
-          requestId: globalThis.crypto.randomUUID(), proposalName: name, baseRevisionId: selectedRevision,
-          selectedObjectIds: workstationDraft ? workstationDraft.intent.memberIds : [selectedObject], instruction,
-          visualIntent: workstationDraft ? workstationDraft.intent : { kind: 'rectangle-layout-sketch', layout },
-        },
-      }),
+    if (!instruction || instruction.length > 1000) throw new Error('Describe the outcome in 1 to 1000 characters.');
+    const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
+      : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
+    const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: selectedRevision,
+      selectedObjectIds: [selectedObject], instruction, visualIntent } };
+    const fingerprint = JSON.stringify(content);
+    if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
+    const response = await fetch(revisionTicketId ? `/api/change-requests/${encodeURIComponent(revisionTicketId)}/revision` : '/api/change-requests', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...content, request: { ...content.request, requestId: submission.requestId } }),
     });
-    let value = await proposalJson(response);
-    if (!isRecord(value) || typeof value.jobId !== 'string' || !/^[a-f0-9-]{36}$/.test(value.jobId)) throw new Error('The proposal service did not return a valid job identity.');
-    const jobId = value.jobId;
-    const started = Date.now();
-    do {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 1200));
-      const seconds = Math.round((Date.now() - started) / 1000);
-      status(`AI is preparing your model proposal · ${seconds}s. Your saved model remains unchanged.`);
-      generic('working-progress').textContent = `Arranging the requested components and validating the proposal · ${seconds}s. Your saved model is unchanged.`;
-      value = await pollProposalJob(jobId);
-      if (Date.now() - started > 240_000) throw new Error('The proposal took too long. Your saved model is unchanged. Try a smaller request.');
-    } while (isRecord(value) && value.status === 'working');
-    const result = parseProposalResponse(value);
-    const review = result.review;
-    if (result.status === 'declined') {
-      activeReview = review;
-      renderReview();
-      showPage('review');
-      status('The AI could not prepare a proposal with the bounded model tools. Review the reason and revise the request.');
-      return;
-    }
-    const next = await RoomRepository.restore(result.project);
-    if (next.head(name) !== result.review.proposalRevisionId) throw new Error('The returned proposal is not bound to its claimed revision.');
-    await persist(next, name);
-    activeReview = repo.review(name);
-    renderReview();
-    showPage('review');
-    status(`AI proposal “${name}” is validated and saved separately. Review it before accepting or requesting a revision.`);
+    await proposalJson(response);
+    const submittedName = name;
+    submission = null; revisionTicketId = null;
+    ui['request-text'].value = ''; ui['proposal-name'].value = '';
+    resetEditor(); renderComparison();
+    await refreshBacklog();
+    status(`“${submittedName}” sent to the backlog. Keep exploring or send another request; the agent works on the server.`);
+    showRequestPane('details');
   });
 });
 
 async function proposalJson(response: Response): Promise<unknown> {
   let value: unknown;
-  try { value = await response.json(); } catch { throw new Error(`The proposal connection failed (HTTP ${response.status}). Your saved model is unchanged; try again.`); }
-  if (!response.ok) throw new Error(isRecord(value) && typeof value.error === 'string' ? value.error : `Proposal service failed (HTTP ${response.status}).`);
+  try { value = await response.json(); } catch { throw new Error(`The request service returned unreadable data (HTTP ${response.status}). Retry the same submission safely.`); }
+  if (!response.ok) throw new Error(isRecord(value) && typeof value.error === 'string' ? value.error : `Request service failed (HTTP ${response.status}).`);
   return value;
 }
 
-async function pollProposalJob(jobId: string): Promise<unknown> {
-  for (let attempt = 0; ; attempt += 1) {
-    let response: Response;
-    try { response = await fetch(`/api/proposals/${jobId}`); }
-    catch (error) {
-      if (attempt >= 2) throw error;
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 1500));
-      continue;
-    }
-    return proposalJson(response);
+interface BacklogItem {
+  id: string; projectId: string; state: RequestState; createdAt: number; attempts: number; error: string | null;
+  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string };
+}
+function parseBacklogItem(value: unknown): BacklogItem {
+  if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
+      || typeof value.createdAt !== 'number' || typeof value.attempts !== 'number' || (value.error !== null && typeof value.error !== 'string')) throw new Error('Invalid backlog item.');
+  const state = value.state;
+  if (state !== 'queued' && state !== 'working' && state !== 'needs-input' && state !== 'ready'
+      && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
+  return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, attempts: value.attempts, error: value.error,
+    request: { requestId: requiredText(value.request, 'requestId'), proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId: requiredText(value.request, 'baseRevisionId') } };
+}
+const stateLabels: Record<RequestState, string> = { queued: 'Queued', working: 'Working', 'needs-input': 'Needs your input',
+  ready: 'Ready for review', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed' };
+let backlogRefreshing = false;
+async function refreshBacklog(): Promise<void> {
+  if (!repo || backlogRefreshing) return;
+  backlogRefreshing = true;
+  const projectId = repo.projectId;
+  try {
+    const value = await proposalJson(await fetch(`/api/projects/${encodeURIComponent(projectId)}/change-requests`));
+    if (!isRecord(value) || !Array.isArray(value.tickets) || (value.project !== null && typeof value.project !== 'string')) throw new Error('Invalid project backlog.');
+    const items = value.tickets.map(parseBacklogItem);
+    if (repo?.projectId !== projectId) return;
+    const changed = JSON.stringify(items) !== JSON.stringify(backlogItems);
+    backlogItems = items; serverProjectText = value.project;
+    ui['backlog-connection'].textContent = 'Synced with server · work continues when this page is closed';
+    if (changed) { renderBacklog(); updateControls(); }
+  } catch (error) {
+    ui['backlog-connection'].textContent = `Backlog offline · ${error instanceof Error ? error.message : 'retrying'} · server work is independent of this page`;
+  } finally { backlogRefreshing = false; }
+}
+function renderBacklog(): void {
+  const items = backlogItems.filter((item) => item.projectId === repo?.projectId);
+  const ready = items.filter((item) => item.state === 'ready').length;
+  const pending = items.filter((item) => item.state === 'queued' || item.state === 'working').length;
+  ui['nav-backlog'].replaceChildren(element('span', '2'), element('b', 'Backlog'), element('small', `${ready} ready for review`));
+  ui['open-backlog'].textContent = `Change requests · ${items.length}`;
+  ui['backlog-summary'].textContent = `${pending} in progress · ${ready} ready for review · ${items.length} total`;
+  const visible = items.filter((item) => ui['backlog-filter'].value === 'all' || item.state === ui['backlog-filter'].value).reverse();
+  ui['backlog-list'].replaceChildren(...visible.map((item) => {
+    const card = element('article', undefined, 'request-ticket'); card.dataset.state = item.state;
+    const heading = element('header'); heading.append(element('h2', item.request.proposalName), element('span', stateLabels[item.state], 'pill'));
+    card.append(heading, element('p', item.request.instruction), element('small', `Base ${item.request.baseRevisionId.slice(0, 10)} · ${new Date(item.createdAt).toLocaleString()} · attempt ${item.attempts}`));
+    if (item.error) card.append(element('p', item.error, 'ticket-error'));
+    if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Based on a different revision. Revise against the current model before accepting.', 'ticket-warning'));
+    const actions = element('div', undefined, 'ticket-actions');
+    const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
+    if (item.state === 'ready' || item.state === 'needs-input' || item.state === 'completed' || item.state === 'rejected') add('Open request', () => { void perform(() => openTicket(item.id)); });
+    if (item.state === 'queued' || item.state === 'working') add('Cancel request', () => { void perform(() => decideTicket(item.id, 'cancel')); });
+    if (item.state === 'failed' && item.attempts < 3) add('Retry agent', () => { void perform(() => decideTicket(item.id, 'retry')); });
+    if (item.state === 'failed' || item.state === 'needs-input' || item.state === 'ready') add('Revise request', () => { void perform(() => reviseTicket(item)); });
+    card.append(actions); return card;
+  }));
+  if (!visible.length) ui['backlog-list'].append(element('p', items.length ? 'No requests in this view.' : 'Your requests will appear here. Send one from the model and keep working.', 'empty-note'));
+}
+ui['backlog-filter'].addEventListener('change', renderBacklog);
+async function openTicket(id: string): Promise<void> {
+  if (dirty() && !window.confirm('Discard unsent markup and open this request?')) return;
+  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+  if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
+  const ticket = parseBacklogItem(value.ticket);
+  if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
+  if (!isRecord(value.ticket.request)) throw new Error('Missing request binding.');
+  const result = parseProposalResponse(value.ticket.result ?? { status: 'declined', project: value.ticket.project, review: {
+    ...value.ticket.request, proposalRevisionId: null, summary: 'No model proposal is available for this attempt.',
+    rationale: ticket.error ?? `Request ${stateLabels[ticket.state].toLowerCase()}.`, constraints: 'The accepted model has not been changed by this attempt.', uncertainty: 'No validated proposal was produced.',
+  } });
+  const proposed = await RoomRepository.restore(result.project);
+  if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
+  reviewRepository = proposed; activeTicketId = id; activeReview = result.review;
+  if (ticket.state === 'completed') activeReview.decision = { status: 'accepted' };
+  if (ticket.state === 'rejected') activeReview.decision = { status: 'superseded' };
+  selectedBranch = result.status === 'ready' ? result.review.proposalName : 'main';
+  selectedRevision = proposed.head(selectedBranch);
+  resetEditor(); render(); showPage('review');
+  ui['ticket-history'].replaceChildren();
+  if (Array.isArray(value.ticket.history)) for (const [index, archived] of value.ticket.history.entries()) {
+    if (typeof archived !== 'string') throw new Error('Invalid request history.');
+    const version: unknown = JSON.parse(archived);
+    if (!isRecord(version)) throw new Error('Invalid earlier request.');
+    const earlier = parseBacklogItem(version);
+    const detail = element('details'); detail.append(element('summary', `Earlier attempt ${index + 1} · ${earlier.request.proposalName}`), element('p', earlier.request.instruction));
+    if (isRecord(version.result) && isRecord(version.result.review) && typeof version.result.review.summary === 'string') detail.append(element('p', version.result.review.summary));
+    ui['ticket-history'].append(detail);
   }
 }
+async function decideTicket(id: string, action: string): Promise<void> {
+  const expectedRequestId = activeTicketId === id && activeReview ? activeReview.requestId : backlogItems.find((item) => item.id === id)?.request.requestId;
+  if (!expectedRequestId) throw new Error('Refresh the ticket before deciding.');
+  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}/decision`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, decisionId: globalThis.crypto.randomUUID(), expectedRequestId }),
+  }));
+  if (!isRecord(value) || typeof value.project !== 'string') throw new Error('Missing accepted server project.');
+  if (action === 'accept') {
+    const next = await RoomRepository.restore(value.project);
+    await persist(next); activeReview = next.review(backlogItems.find((item) => item.id === id)?.request.proposalName ?? '');
+    renderReview(); showPage('backlog'); status('Proposal accepted. The server model and decision were saved together.');
+  } else { showPage('backlog'); status(`Request ${action === 'retry' ? 'queued for another attempt' : action === 'reject' ? 'rejected' : 'cancelled'}.`); }
+  await refreshBacklog();
+}
+async function reviseTicket(item: BacklogItem): Promise<void> {
+  await refreshBacklog();
+  if (!serverProjectText) throw new Error('Refresh the server model before revising.');
+  const next = await RoomRepository.restore(serverProjectText);
+  const detail = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
+  if (!isRecord(detail) || !isRecord(detail.ticket) || !isRecord(detail.ticket.request)) throw new Error('Missing original request context.');
+  const originalRequest = detail.ticket.request;
+  await persist(next);
+  activeReview = null; revisionTicketId = item.id;
+  const firstSelected = Array.isArray(originalRequest.selectedObjectIds) ? originalRequest.selectedObjectIds[0] : null;
+  if (typeof firstSelected === 'string' && next.view(next.head('main')).snapshot.entities.some((entity) => entity.id === firstSelected)) selectedObject = firstSelected;
+  resetEditor();
+  const visual = parseVisualRequest(next.view(next.head('main')).snapshot, originalRequest.visualIntent);
+  if (visual.kind === 'spatial-reference') visualDraft = visual.destination;
+  ui['request-text'].value = item.request.instruction;
+  ui['proposal-name'].value = '';
+  render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
+  status('Revise this ticket against the current accepted model. Earlier attempts and proposals remain on the ticket.');
+}
+ui['open-current-model'].addEventListener('click', () => {
+  void perform(async () => {
+    await refreshBacklog();
+    if (!serverProjectText) { beginRequest(); return; }
+    if (dirty() && !window.confirm('Discard unsent markup and open the server model?')) return;
+    await persist(await RoomRepository.restore(serverProjectText));
+    activeReview = null; revisionTicketId = null; render(); showPage('request');
+    status('Opened the current accepted server model.');
+  });
+});
+window.setInterval(() => { void refreshBacklog(); }, 2000);
 
 function renderReview() {
   const review = activeReview;
   ui['review-panel'].hidden = !review;
   if (!review) return;
   const state = reviewState(review);
-  ui['review-status'].textContent = state === 'accepted' ? 'Accepted version'
+  const ticket = backlogItems.find((item) => item.id === activeTicketId);
+  ui['review-status'].textContent = ticket?.state === 'rejected' ? 'Rejected' : ticket?.state === 'needs-input' ? 'Needs your input' : state === 'accepted' ? 'Accepted version'
     : state === 'superseded' ? 'Earlier accepted version'
       : state === 'declined' ? 'No proposal prepared' : 'Ready for review';
   ui['review-summary'].textContent = review.summary;
@@ -1015,31 +1130,14 @@ function renderReview() {
 }
 
 ui['accept-proposal'].addEventListener('click', () => {
-  void perform(async () => {
-    writableStore();
-    if (!repo || !activeReview || activeReview.proposalRevisionId !== selectedRevision || selectedBranch === 'main') {
-      throw new Error('Select the AI-prepared proposal before accepting it.');
-    }
-    const acceptedName = selectedBranch;
-    const next = repo.accept(acceptedName, { decisionId: globalThis.crypto.randomUUID(), actor: 'local-human' });
-    await persist(next, 'main');
-    activeReview = repo.review(acceptedName);
-    renderReview();
-    showPage('review');
-    status(`Accepted “${acceptedName}” as the current model version. The original and proposal branch remain in history.`);
-  });
+  if (activeTicketId) void perform(() => decideTicket(activeTicketId ?? '', 'accept'));
 });
-
+ui['reject-proposal'].addEventListener('click', () => {
+  if (activeTicketId) void perform(() => decideTicket(activeTicketId ?? '', 'reject'));
+});
 ui['request-revision'].addEventListener('click', () => {
-  if (busy || !activeReview || (activeReview.proposalRevisionId !== null && activeReview.proposalRevisionId !== selectedRevision)) return;
-  activeReview = null;
-  ui['proposal-name'].value = '';
-  ui['request-text'].value = `Revise the selected AI proposal. ${ui['request-text'].value.trim()}`.slice(0, 1000);
-  renderReview(); updateControls();
-  showRequestPane('details');
-  showPage('request');
-  ui['proposal-name'].focus();
-  status('Revision request started from the selected proposal. Choose a new proposal name; the earlier proposal remains unchanged.');
+  const item = backlogItems.find((ticket) => ticket.id === activeTicketId);
+  if (item) void perform(() => reviseTicket(item));
 });
 
 function download(text: string, filename: string): void {
@@ -1310,7 +1408,7 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
       handle(widthHandle, 'door-width', 'Resize Entry door', true);
     }
   }
-  if (interactive) drawWorkstationOverlay(svg, snapshot, (point) => transform(point), 'plan');
+  if (interactive) drawVisualOverlay(svg, snapshot, (point) => transform(point), 'plan');
   return svg;
 }
 
@@ -1401,7 +1499,7 @@ function drawModel3d(snapshot: ModelSnapshot, label: string, identifier = 'selec
   const selected = snapshot.entities.find((entity) => entity.id === selectedObject);
   svg.append(svgNode('text', { x: 24, y: 34, fill: '#234d4b', 'font-size': 12, 'font-weight': 700 }, selected ? selected.name : 'No object selected'));
   svg.append(svgNode('text', { x: 24, y: 53, fill: '#5f7772', 'font-size': 9 }, `Stable ID · ${selected?.id ?? '—'}`));
-  if (identifier === 'selected') drawWorkstationOverlay(svg, snapshot, ([x, y], z) => {
+  if (identifier === 'selected') drawVisualOverlay(svg, snapshot, ([x, y], z) => {
     const point = projectModelPoint([x - (minX + maxX) / 2, y - (minY + maxY) / 2, z], modelCamera, centre);
     return [point.x, point.y];
   }, '3d');
@@ -1416,121 +1514,81 @@ function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamer
     (193 - point.y) / camera.scale + (camera.minY + camera.maxY) / 2];
 }
 
-function selectedWorkstation() {
-  if (!repo || !preview) return { kind: 'unavailable' as const, reason: 'Open a room model first.' };
-  if (JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot)) {
-    return { kind: 'unavailable' as const, reason: 'Reset the shell markup before moving a workstation.' };
-  }
-  return discoverWorkstation(preview, selectedObject);
-}
-
-function renderWorkstationPanel(): void {
+function renderVisualPanel(): void {
   const selected = preview?.entities.find((item) => item.id === selectedObject);
-  const visible = selected?.type === 'Furniture' && selected.kind === 'desk';
-  ui['workstation-panel'].hidden = !visible;
-  if (!visible || !preview) return;
-  const selection = selectedWorkstation();
-  ui['workstation-wall'].replaceChildren(new Option('Drag to a wall or choose one', ''),
-    ...preview.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
-  ui['workstation-wall'].value = workstationDraft?.intent.targetWallId ?? '';
-  ui['workstation-wall'].disabled = busy || Boolean(workstationGesture) || selection.kind !== 'ready';
-  ui['clear-workstation-move'].disabled = busy || !workstationDraft || Boolean(workstationGesture);
-  ui['prepare-workstation-move'].disabled = busy || !workstationDraft || Boolean(workstationGesture) || !authSession.connected || writesBlocked;
-  ui['workstation-panel'].dataset.valid = String(workstationDraft?.validation.kind !== 'needs-adjustment');
-  if (selection.kind !== 'ready') {
-    ui['workstation-members'].textContent = selection.reason;
-    ui['workstation-feedback'].textContent = 'No objects will move until the association is clear.';
-    return;
+  ui['visual-panel'].hidden = !selected;
+  if (!selected || !preview) return;
+  ui['visual-context'].textContent = `Reference: ${selected.name}. A location does not imply moving this object or its neighbours. Describe what to create, move or copy.`;
+  ui['visual-wall'].replaceChildren(new Option('Optional wall reference', ''), ...preview.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
+  ui['visual-wall'].value = visualDraft?.kind === 'wall-point' ? visualDraft.wallId : '';
+  const locked = busy || Boolean(visualGesture);
+  for (const control of [ui['visual-wall'], ui['visual-x'], ui['visual-y'], ui['mark-visual-point']]) control.disabled = locked;
+  ui['clear-visual-reference'].disabled = locked || !visualDraft;
+  ui['describe-visual-reference'].disabled = locked || !visualDraft;
+  if (visualDraft?.kind === 'floor-point') {
+    ui['visual-x'].value = String(visualDraft.positionMm[0]); ui['visual-y'].value = String(visualDraft.positionMm[1]);
   }
-  ui['workstation-members'].textContent = `Moves together: ${selection.group.members.map((item) => item.name).join(', ')}. ${selection.group.chair ? 'Chair association is inferred from proximity; check this scope before asking AI.' : 'No associated chair found.'} Other furniture stays put.`;
-  const wall = preview.entities.find((item) => item.id === workstationDraft?.intent.targetWallId);
-  ui['workstation-feedback'].textContent = workstationDraft
-    ? `${wall && 'name' in wall ? wall.name : 'Wall'} selected. Ghost only; the saved model is unchanged.${workstationDraft.validation.kind === 'needs-adjustment' ? ` ${workstationDraft.validation.reason} AI must adjust the placement along this wall or decline.` : ' Ask AI to prepare the move for review.'}`
-    : 'Drag the teal move handle onto another wall, or choose a destination below. Press Escape to cancel a drag.';
+  ui['visual-feedback'].textContent = visualDraft
+    ? visualDraft.kind === 'floor-point' ? `Floor reference: ${visualDraft.positionMm.join(', ')} mm. The model is unchanged.`
+      : `Wall reference: ${visualDraft.wallId}, ${visualDraft.alongWallMm} mm from its start. The model is unchanged.`
+    : 'Drag the teal handle to a floor location or wall, or use the coordinates below. Escape cancels a drag.';
 }
-
-function stageWorkstationMove(group: Workstation, wallId: string, alongWallMm: number): void {
+function stageVisualReference(destination: SpatialReference): void {
   if (!preview) return;
-  const intent = workstationIntent(preview, group.desk.id, wallId, alongWallMm);
-  let validation: WorkstationDraft['validation'] = { kind: 'valid' };
-  try { previewWorkstationMove(preview, intent, { alongWallMm, wallGapMm: 150 }); }
-  catch (error) { validation = { kind: 'needs-adjustment', reason: error instanceof Error ? error.message : 'Placement needs validation.' }; }
-  workstationDraft = { intent, ghost: workstationGhost(preview, intent), validation,
-    originalInstruction: workstationDraft?.originalInstruction ?? ui['request-text'].value };
+  const parsed = parseVisualRequest(preview, { kind: 'spatial-reference', destination });
+  if (parsed.kind === 'spatial-reference') visualDraft = parsed.destination;
 }
-
-function describeWorkstationMove(): void {
-  if (!workstationDraft || !preview) return;
-  const wall = preview.entities.find((item) => item.id === workstationDraft?.intent.targetWallId);
-  ui['request-text'].value = `Move the entire selected workstation to ${wall && 'name' in wall ? wall.name : 'the indicated wall'}, near ${workstationDraft.intent.alongWallMm} mm from its start. Rotate the desk, its supported monitor/laptop and companion chair together. Keep their dimensions, supports and relative arrangement. Preserve every unrelated object and the room shell. Adjust along this wall only if validation requires it, and explain any adjustment.`;
-  if (repo?.branches().some((branch) => branch.name === ui['proposal-name'].value.trim())) ui['proposal-name'].value = '';
-  feedback('Workstation destination marked. Ask AI to prepare a validated proposal; nothing has moved in the saved model.');
-}
-
-ui['workstation-wall'].addEventListener('change', () => {
-  const selection = selectedWorkstation();
-  if (busy || !preview || selection.kind !== 'ready') return;
-  if (!ui['workstation-wall'].value) { clearWorkstationMove(); return; }
-  const { lengthMm } = wallFrame(preview, ui['workstation-wall'].value);
-  stageWorkstationMove(selection.group, ui['workstation-wall'].value, Math.round(lengthMm / 2));
-  describeWorkstationMove(); renderComparison(); updateControls();
-});
-
-function clearWorkstationMove(): void {
-  if (workstationDraft) ui['request-text'].value = workstationDraft.originalInstruction;
-  workstationDraft = null;
-  feedback('Workstation move request cleared. Saved model history is unchanged.');
+ui['visual-wall'].addEventListener('change', () => {
+  const wall = preview?.entities.find((item) => item.id === ui['visual-wall'].value);
+  if (busy || wall?.type !== 'Wall') return;
+  stageVisualReference({ kind: 'wall-point', wallId: wall.id, alongWallMm: Math.round(Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 500) });
   renderComparison(); updateControls();
-}
-ui['clear-workstation-move'].addEventListener('click', clearWorkstationMove);
-ui['prepare-workstation-move'].addEventListener('click', () => {
-  if (!workstationDraft || busy) return;
-  if (!ui['proposal-name'].checkValidity()) {
-    showRequestPane('details'); ui['proposal-name'].reportValidity(); ui['proposal-name'].focus(); return;
-  }
-  ui['proposal-form'].requestSubmit();
 });
+ui['mark-visual-point'].addEventListener('click', () => {
+  try {
+    stageVisualReference({ kind: 'floor-point', positionMm: [ui['visual-x'].valueAsNumber, ui['visual-y'].valueAsNumber] });
+    renderComparison(); updateControls();
+  } catch (error) { report(error); }
+});
+ui['clear-visual-reference'].addEventListener('click', () => { visualDraft = null; renderComparison(); updateControls(); });
+ui['describe-visual-reference'].addEventListener('click', () => { showRequestPane('details'); ui['request-text'].focus(); });
 
-function drawWorkstationOverlay(svg: SVGSVGElement, snapshot: ModelSnapshot, project: (point: Point, z: number) => Point, view: ModelView): void {
-  const selection = selectedWorkstation();
-  if (selection.kind !== 'ready' || writesBlocked || busy) return;
-  const group = selection.group;
-  const cssScale = (view === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
-  const draft = workstationDraft;
-  if (draft) {
-    const wall = snapshot.entities.find((item) => item.id === draft.intent.targetWallId);
-    const color = draft.validation.kind === 'valid' ? '#178b79' : '#ba791f';
-    if (wall?.type === 'Wall') {
-      const a = project(wall.start, .03); const b = project(wall.end, .03);
-      svg.append(svgNode('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: color, 'stroke-width': 7 * cssScale,
-        'data-target-wall': wall.id, class: 'workstation-ghost' }));
-      const mid = project([(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2], .3);
-      svg.append(svgNode('text', { x: mid[0], y: mid[1] - 10 * cssScale, fill: color, 'font-size': 11 * cssScale,
-        'text-anchor': 'middle', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * cssScale, class: 'workstation-ghost' }, `${wall.name} · target`));
-    }
-    for (const item of draft.ghost.entities) {
-      if (item.type !== 'Furniture' || !draft.intent.memberIds.includes(item.id)) continue;
-      const polygons = view === '3d' ? furnitureFaces(item, draft.ghost).map((face) => face.points.map(([x, y, z]) => project([x, y], z)))
-        : (() => { const f = furnitureFootprint(item); return [[[f.minX, f.minY], [f.maxX, f.minY], [f.maxX, f.maxY], [f.minX, f.maxY]].map(([x, y]) => project([x, y], 0))]; })();
-      for (const polygon of polygons) svg.append(svgNode('polygon', { points: polygon.map((point) => point.join(',')).join(' '),
-        fill: draft.validation.kind === 'valid' ? '#50c7a840' : '#e8b54c40', stroke: color, 'stroke-width': 1.3 * cssScale,
-        'stroke-dasharray': `${4 * cssScale} ${3 * cssScale}`, 'data-ghost-object': item.id, class: 'workstation-ghost' }));
-    }
+function objectAnchor(item: Entity, snapshot: ModelSnapshot): Point {
+  if (item.type === 'Furniture' || item.type === 'Equipment') return item.position;
+  if (item.type === 'Wall') return [(item.start[0] + item.end[0]) / 2, (item.start[1] + item.end[1]) / 2];
+  const host = hostFor(snapshot, item);
+  if (!host) return [0, 0];
+  const t = (host.link.offset + item.width / 2) / Math.hypot(host.wall.end[0] - host.wall.start[0], host.wall.end[1] - host.wall.start[1]);
+  return [host.wall.start[0] + (host.wall.end[0] - host.wall.start[0]) * t, host.wall.start[1] + (host.wall.end[1] - host.wall.start[1]) * t];
+}
+function referencePoint(reference: SpatialReference, snapshot: ModelSnapshot): Point {
+  if (reference.kind === 'floor-point') return [reference.positionMm[0] / 1000, reference.positionMm[1] / 1000];
+  const wall = snapshot.entities.find((item) => item.id === reference.wallId);
+  if (wall?.type !== 'Wall') throw new Error('Missing referenced wall.');
+  const t = reference.alongWallMm / (Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000);
+  return [wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t];
+}
+function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelSnapshot, project: (point: Point, z: number) => Point, view: ModelView): void {
+  const selected = snapshot.entities.find((item) => item.id === selectedObject);
+  if (!selected || writesBlocked || busy) return;
+  const scale = (view === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
+  const height = view === '3d' && (selected.type === 'Furniture' || selected.type === 'Equipment') ? selected.height + .15 : 0;
+  const centre = project(objectAnchor(selected, snapshot), height);
+  if (visualDraft) {
+    const target = project(referencePoint(visualDraft, snapshot), .02);
+    svg.append(svgNode('line', { x1: centre[0], y1: centre[1], x2: target[0], y2: target[1], stroke: '#178b79', 'stroke-width': 2 * scale, 'stroke-dasharray': '5 4', class: 'visual-marker' }));
+    svg.append(svgNode('circle', { cx: target[0], cy: target[1], r: 10 * scale, fill: '#ffffffaa', stroke: '#178b79', 'stroke-width': 3 * scale, class: 'visual-marker', 'data-destination': visualDraft.kind }));
+    svg.append(svgNode('text', { x: target[0], y: target[1] - 18 * scale, fill: '#11594f', 'font-size': 11 * scale, 'text-anchor': 'middle', class: 'visual-marker', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * scale }, 'Reference location'));
   }
-  const desk = draft?.ghost.entities.find((item) => item.id === group.desk.id) ?? group.desk;
-  if (desk.type !== 'Furniture') return;
-  const centre = project(desk.position, view === '3d' ? desk.height + .18 : 0);
-  const radius = 22 * cssScale;
-  const handle = svgNode('g', { 'data-workstation-handle': group.desk.id, role: 'button', tabindex: 0,
-    'aria-label': 'Drag workstation to another wall', 'aria-describedby': 'workstation-members workstation-feedback', class: 'workstation-handle' });
-  handle.append(svgNode('circle', { cx: centre[0], cy: centre[1], r: radius, fill: '#167e70', stroke: '#fff', 'stroke-width': 3 * cssScale }));
-  handle.append(svgNode('path', { d: `M${centre[0] - radius * .5},${centre[1]}h${radius} M${centre[0]},${centre[1] - radius * .5}v${radius} M${centre[0] - radius * .25},${centre[1] - radius * .25}l${radius * .25},${-radius * .25}l${radius * .25},${radius * .25} M${centre[0] - radius * .25},${centre[1] + radius * .25}l${radius * .25},${radius * .25}l${radius * .25},${-radius * .25}`, fill: 'none', stroke: '#fff', 'stroke-width': 2 * cssScale, 'pointer-events': 'none' }));
-  handle.append(svgNode('text', { x: centre[0], y: centre[1] + radius + 13 * cssScale, fill: '#11594f',
-    'text-anchor': 'middle', 'font-size': 11 * cssScale, 'font-weight': 700, 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * cssScale }, 'Move workstation'));
+  const radius = 22 * scale;
+  const handle = svgNode('g', { 'data-visual-handle': selected.id, role: 'button', tabindex: 0,
+    'aria-label': `Mark a destination using ${selected.name} as reference`, 'aria-describedby': 'visual-context visual-feedback', class: 'visual-handle' });
+  handle.append(svgNode('circle', { cx: centre[0], cy: centre[1], r: radius, fill: '#167e70', stroke: '#fff', 'stroke-width': 3 * scale }));
+  handle.append(svgNode('path', { d: `M${centre[0] - radius * .5},${centre[1]}h${radius} M${centre[0]},${centre[1] - radius * .5}v${radius}`, fill: 'none', stroke: '#fff', 'stroke-width': 2 * scale, 'pointer-events': 'none' }));
+  handle.append(svgNode('text', { x: centre[0], y: centre[1] + radius + 13 * scale, fill: '#11594f', 'text-anchor': 'middle', 'font-size': 11 * scale, 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * scale }, 'Mark location'));
   svg.append(handle);
 }
-
-function workstationDrop(event: PointerEvent, root: SVGSVGElement): { wallId: string; alongWallMm: number } | null {
+function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference | null {
   if (!preview) return null;
   const matrix = root.getScreenCTM(); if (!matrix) return null;
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
@@ -1544,42 +1602,48 @@ function workstationDrop(event: PointerEvent, root: SVGSVGElement): { wallId: st
   const hitId = document.elementFromPoint(event.clientX, event.clientY)?.closest<SVGElement>('[data-object]')?.dataset.object;
   let best: { wallId: string; alongWallMm: number; distance: number } | null = null;
   for (const wall of preview.entities.filter(isWall)) {
-    const a = project(wall.start); const b = project(wall.end);
-    const dx = b[0] - a[0]; const dy = b[1] - a[1];
+    const a = project(wall.start); const b = project(wall.end); const dx = b[0] - a[0]; const dy = b[1] - a[1];
     const hitWall = hitId === wall.id;
-    const raw = modelView === '3d' && hitWall && Math.abs(dx) > .1 ? (point.x - a[0]) / dx
-      : ((point.x - a[0]) * dx + (point.y - a[1]) * dy) / (dx * dx + dy * dy);
+    const raw = modelView === '3d' && hitWall && Math.abs(dx) > .1 ? (point.x - a[0]) / dx : ((point.x - a[0]) * dx + (point.y - a[1]) * dy) / (dx * dx + dy * dy);
     const t = Math.max(0, Math.min(1, raw));
     const distance = hitWall ? 0 : Math.hypot(point.x - a[0] - dx * t, point.y - a[1] - dy * t);
     if (best && best.distance <= distance) continue;
-    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
-    best = { wallId: wall.id, alongWallMm: Math.round(t * length * 1000), distance };
+    best = { wallId: wall.id, alongWallMm: Math.round(t * Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000), distance };
   }
-  const tolerance = 30 * (modelView === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
-  return best && best.distance <= tolerance ? best : null;
+  const tolerance = 18 * (modelView === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
+  if (best && best.distance <= tolerance) return { kind: 'wall-point', wallId: best.wallId, alongWallMm: best.alongWallMm };
+  let world: Point;
+  if (modelView === 'plan' && plan) world = pointerPlan(event, root, plan);
+  else {
+    const origin = project([0, 0]); const x = project([1, 0]); const y = project([0, 1]);
+    const ax = x[0] - origin[0]; const ay = x[1] - origin[1]; const bx = y[0] - origin[0]; const by = y[1] - origin[1];
+    const det = ax * by - ay * bx; if (Math.abs(det) < .0001) return null;
+    const px = point.x - origin[0]; const py = point.y - origin[1];
+    world = [(px * by - py * bx) / det, (ax * py - ay * px) / det];
+  }
+  const positionMm: Point = [Math.round(world[0] * 1000), Math.round(world[1] * 1000)];
+  if (positionMm[0] < bounds.minX || positionMm[0] > bounds.maxX || positionMm[1] < bounds.minY || positionMm[1] > bounds.maxY) return null;
+  return { kind: 'floor-point', positionMm };
 }
-
-function endWorkstationGesture(cancel: boolean): void {
-  if (!workstationGesture) return;
-  const active = workstationGesture; workstationGesture = null;
-  delete active.root.dataset.workstationDragging;
-  if (cancel || !active.overWall) workstationDraft = active.previous;
-  else describeWorkstationMove();
+function endVisualGesture(cancel: boolean): void {
+  if (!visualGesture) return;
+  const active = visualGesture; visualGesture = null;
+  delete active.root.dataset.visualDragging;
+  if (cancel || !active.overTarget) visualDraft = active.previous;
   if (active.root.hasPointerCapture(active.id)) active.root.releasePointerCapture(active.id);
   renderComparison(); updateControls();
-  if (cancel || !active.overWall) feedback('Move cancelled. Drop the handle onto a wall to mark a destination.');
+  feedback(cancel || !active.overTarget ? 'Reference drag cancelled. The model is unchanged.' : 'Location marked. Describe what to create, move or copy here; no model objects have moved.');
 }
 
 ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
-  if (event.target instanceof Element && event.target.closest('[data-workstation-handle]')) {
-    if (!repo || busy || gesture || cameraGesture || workstationGesture || writesBlocked || event.button !== 0 || !event.isPrimary) return;
-    const selection = selectedWorkstation();
+  if (event.target instanceof Element && event.target.closest('[data-visual-handle]')) {
+    if (!repo || busy || gesture || cameraGesture || visualGesture || writesBlocked || event.button !== 0 || !event.isPrimary) return;
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
-    if (selection.kind !== 'ready' || !root) return;
+    if (!root || !preview) return;
     event.preventDefault();
-    workstationGesture = { id: event.pointerId, root, group: selection.group, previous: workstationDraft,
-      origin: [event.clientX, event.clientY], moved: false, overWall: false };
-    root.dataset.workstationDragging = 'true';
+    visualGesture = { id: event.pointerId, root, previous: visualDraft,
+      origin: [event.clientX, event.clientY], moved: false, overTarget: false };
+    root.dataset.visualDragging = 'true';
     root.setPointerCapture(event.pointerId); updateControls();
     return;
   }
@@ -1619,14 +1683,14 @@ ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
   root.setPointerCapture(event.pointerId); updateControls();
 });
 ui['proposal-drawing'].addEventListener('pointermove', (event) => {
-  if (workstationGesture?.id === event.pointerId) {
-    const active = workstationGesture;
+  if (visualGesture?.id === event.pointerId) {
+    const active = visualGesture;
     if (!active.moved && Math.hypot(event.clientX - active.origin[0], event.clientY - active.origin[1]) < 5) return;
     active.moved = true; event.preventDefault();
-    const target = workstationDrop(event, active.root);
-    active.overWall = Boolean(target);
-    if (target) stageWorkstationMove(active.group, target.wallId, target.alongWallMm);
-    else workstationDraft = active.previous;
+    const target = visualDrop(event, active.root);
+    active.overTarget = Boolean(target);
+    if (target) stageVisualReference(target);
+    else visualDraft = active.previous;
     renderComparison(); updateControls();
     return;
   }
@@ -1671,8 +1735,8 @@ function endGesture(cancel = false): void {
   syncInspector(); renderComparison(); updateControls();
 }
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) ui['proposal-drawing'].addEventListener(type, (event) => {
-  if (event instanceof PointerEvent && workstationGesture?.id === event.pointerId) {
-    endWorkstationGesture(type !== 'pointerup'); return;
+  if (event instanceof PointerEvent && visualGesture?.id === event.pointerId) {
+    endVisualGesture(type !== 'pointerup'); return;
   }
   if (event instanceof PointerEvent && cameraGesture?.id === event.pointerId) {
     const active = cameraGesture;
@@ -1685,18 +1749,18 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) ui['pro
   if (event instanceof PointerEvent && gesture?.id === event.pointerId) endGesture(type !== 'pointerup');
 });
 ui['proposal-drawing'].addEventListener('wheel', (event) => {
-  if (workstationGesture) { event.preventDefault(); return; }
+  if (visualGesture) { event.preventDefault(); return; }
   if (modelView !== '3d' || !repo) return;
   event.preventDefault();
   modelCamera = zoomModelView(modelCamera, event.deltaY);
   renderComparison();
 }, { passive: false });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && gesture) { event.preventDefault(); endGesture(true); } });
-window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && workstationGesture) { event.preventDefault(); endWorkstationGesture(true); } });
+window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && visualGesture) { event.preventDefault(); endVisualGesture(true); } });
 ui['proposal-drawing'].addEventListener('keydown', (event) => {
   if (!(event.target instanceof Element)) return;
-  if (event.target.closest('[data-workstation-handle]') && ['Enter', ' '].includes(event.key)) {
-    event.preventDefault(); ui['workstation-wall'].focus(); return;
+  if (event.target.closest('[data-visual-handle]') && ['Enter', ' '].includes(event.key)) {
+    event.preventDefault(); ui['visual-wall'].focus(); return;
   }
   const target = event.target.closest<SVGElement>('[data-object]');
   if (target && ['Enter', ' '].includes(event.key)) {
@@ -1801,11 +1865,12 @@ function renderProperties(original: ModelSnapshot, selected: ModelSnapshot, delt
 
 function selectRevision(branch: string, revisionId: string): void {
   if (busy || gesture || !repo) return;
-  const project = repo;
+  const project = requireRepository();
   if (dirty() && !window.confirm('Discard the unsaved request sketch and view this saved revision?')) return;
   selectedBranch = branch;
   selectedRevision = revisionId;
   activeReview = project.reviews().find((review) => review.proposalRevisionId === revisionId) ?? null;
+  activeTicketId = backlogItems.find((item) => item.request.requestId === activeReview?.requestId)?.id ?? null;
   resetEditor();
   renderComparison();
   renderReview();
@@ -1822,7 +1887,7 @@ function selectRevision(branch: string, revisionId: string): void {
 
 function requireRepository(): RoomRepository {
   if (!repo) throw new Error('Create or open a project first.');
-  return repo;
+  return reviewRepository ?? repo;
 }
 
 function renderHistory(): void {
@@ -1880,7 +1945,7 @@ function renderComparison(): void {
   if (modelView === 'plan') {
     const next = drawPlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
-    if (root && (gesture || workstationGesture)) {
+    if (root && (gesture || visualGesture)) {
       // Keep the capture root stable throughout a geometry-request drag.
       root.replaceChildren(...next.childNodes);
       const role = next.getAttribute('role');
@@ -1892,7 +1957,7 @@ function renderComparison(): void {
   } else {
     const next = drawModel3d(selected, `${selectedBranch} room model`);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
-    if (root && (cameraGesture || workstationGesture)) root.replaceChildren(...next.childNodes);
+    if (root && (cameraGesture || visualGesture)) root.replaceChildren(...next.childNodes);
     else ui['proposal-drawing'].replaceChildren(next);
   }
   ui['proposal-drawing'].dataset.modelView = modelView;
@@ -1990,6 +2055,7 @@ function render(): void {
   renderHistory();
   renderConflictChoices();
   renderReview();
+  renderBacklog();
   updateControls();
 }
 
