@@ -99,10 +99,18 @@ function execution(value: unknown): ScriptExecutionEvidence {
       column: value.column === null ? null : positiveInteger(value.column),
     };
   }
+  const status = choice(item.status, statuses);
+  const disposition = choice(item.disposition, dispositions);
+  const validation = choice(item.validation, validations);
+  if (disposition === 'discarded') {
+    if (validation === 'passed' || diagnostic === null) fail('discarded executions require a diagnostic and cannot pass validation.');
+  } else if (status !== 'completed' || diagnostic !== null
+      || validation !== (disposition === 'proposal' ? 'passed' : 'not-run')) {
+    fail('successful decisions require a completed execution, matching validation and no diagnostic.');
+  }
   return {
     version: 1, executionId, language: choice(item.language, ['javascript', 'typescript']),
-    sourceSha256: sha256(item.sourceSha256), status: choice(item.status, statuses),
-    disposition: choice(item.disposition, dispositions), validation: choice(item.validation, validations),
+    sourceSha256: sha256(item.sourceSha256), status, disposition, validation,
     contractSha256: sha256(item.contractSha256), policyVersion: readable(item.policyVersion, 128),
     runtime: {
       packageVersion: readable(runtime.packageVersion, 128), guestAbi: positiveInteger(runtime.guestAbi),

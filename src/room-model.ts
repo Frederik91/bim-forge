@@ -332,6 +332,40 @@ function boundedInteger(value: unknown, name: string): number {
   return value;
 }
 
+function validateScriptReview(executions: ScriptExecutionEvidence[], toolCalls: ToolCallEvidence[]): void {
+  const terminal = executions.at(-1);
+  if (!terminal || terminal.status !== 'completed' || terminal.disposition !== 'proposal'
+      || terminal.validation !== 'passed' || terminal.diagnostic !== null) {
+    fail('Script reviews require a final completed and validated proposal execution.');
+  }
+  const fatalCodes = ['execution-integrity', 'internal', 'audit-failure', 'protocol-mismatch', 'host-failure', 'denied'];
+  for (const [index, execution] of executions.entries()) {
+    if (index < executions.length - 1 && (execution.disposition === 'proposal' || execution.disposition === 'declined')) {
+      fail('Script reviews cannot continue after a terminal proposal or decline.');
+    }
+    if (execution.status === 'cancelled' || execution.status === 'timed-out' || execution.status === 'resource-limit'
+        || fatalCodes.includes(execution.diagnostic?.code ?? '')
+        || execution.calls.some((call) => call.disposition !== 'completed' && call.disposition !== 'app-error')) {
+      fail('Script reviews cannot contain executions that lost authority.');
+    }
+  }
+  if (toolCalls.some((call) => call.name !== 'run_model_script' && !(call.name === 'unsupported_tool' && call.status === 'rejected'))) {
+    fail('Script reviews require only actual script tool calls.');
+  }
+  const scriptCalls = toolCalls.filter((call) => call.name === 'run_model_script');
+  if (scriptCalls.length !== executions.length || toolCalls.at(-1) !== scriptCalls.at(-1)) {
+    fail('Script reviews require one matching tool call per execution and no calls after the terminal proposal.');
+  }
+  for (const [index, execution] of executions.entries()) {
+    const call = scriptCalls[index];
+    const rejected = execution.disposition === 'discarded';
+    if (!call || call.status !== (rejected ? 'rejected' : 'accepted')
+        || call.error !== (rejected ? execution.diagnostic?.message : null)) {
+      fail('Script review tool outcomes must match their execution evidence.');
+    }
+  }
+}
+
 function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, branches: Map<BranchName, Branch>): ProposalReview {
   const review = copy(input);
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
@@ -386,10 +420,8 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   }
   const scriptEvidence: Pick<ProposalReview, 'scriptExecutions'> = hasScripts ? { scriptExecutions: parseScriptExecutions(review.scriptExecutions) } : {};
   if (hasScripts || toolCalls.some((call) => call.name === 'run_model_script')) {
-    if (!scriptEvidence.scriptExecutions?.length || !toolCalls.some((call) => call.name === 'run_model_script')
-        || toolCalls.some((call) => call.name !== 'run_model_script' && !(call.name === 'unsupported_tool' && call.status === 'rejected'))) {
-      fail('Script reviews require execution evidence and only actual script tool calls.');
-    }
+    if (!scriptEvidence.scriptExecutions) fail('Script reviews require execution evidence.');
+    validateScriptReview(scriptEvidence.scriptExecutions, toolCalls);
   }
   if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
   fields(review.decision, ['status', 'decisionId', 'actor']);
