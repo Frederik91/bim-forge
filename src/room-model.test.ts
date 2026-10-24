@@ -868,6 +868,16 @@ function scriptExecution(overrides: Partial<ScriptExecutionEvidence> = {}): Scri
   };
 }
 
+function discardedExecution(overrides: Partial<ScriptExecutionEvidence> = {}): ScriptExecutionEvidence {
+  return scriptExecution({ status: 'failed', disposition: 'discarded', validation: 'not-run',
+    diagnostic: { code: 'script-error', message: 'The script failed.', line: null, column: null }, ...overrides });
+}
+
+function scriptToolCalls(executions: ScriptExecutionEvidence[]) {
+  return executions.map((execution) => ({ name: 'run_model_script',
+    status: execution.disposition === 'discarded' ? 'rejected' : 'accepted', error: execution.diagnostic?.message ?? null }));
+}
+
 function scriptProposalInput(repo: RoomRepository, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   const base = repo.view(repo.head('main')).snapshot;
   const layout = rectangleLayout(base);
@@ -942,19 +952,23 @@ test('script evidence parses every upstream call disposition and returns detache
     'completed', 'replaced', 'denied', 'unknown-method', 'invalid-arguments', 'invalid-result', 'app-error',
     'host-failure', 'host-timeout', 'response-too-large', 'revoked', 'queue-full', 'request-too-large',
   ];
-  const input = scriptExecution({ calls: callDispositions.map((disposition, index) => ({ sequence: index + 1, method: 'model.inspect', disposition })) });
+  const input = discardedExecution({ status: 'completed',
+    diagnostic: { code: 'execution-integrity', message: 'A host call failed.', line: null, column: null },
+    calls: callDispositions.map((disposition, index) => ({ sequence: index + 1, method: 'model.inspect', disposition })) });
   const parsed = parseScriptExecutionEvidence(input);
   assert.deepEqual(parsed, input);
   input.calls[0].method = 'caller-changed';
   assert.equal(parsed.calls[0].method, 'model.inspect');
   assert.deepEqual(parseScriptExecutions([]), []);
   for (const status of ['completed', 'failed', 'cancelled', 'timed-out', 'resource-limit'] as const) {
-    assert.equal(parseScriptExecutionEvidence(scriptExecution({ status, disposition: 'discarded' })).status, status);
+    assert.equal(parseScriptExecutionEvidence(discardedExecution({ status })).status, status);
   }
   for (const disposition of ['observation', 'proposal', 'declined', 'discarded'] as const) {
-    assert.equal(parseScriptExecutionEvidence(scriptExecution({ disposition })).disposition, disposition);
+    const input = disposition === 'discarded' ? discardedExecution()
+      : scriptExecution({ disposition, validation: disposition === 'proposal' ? 'passed' : 'not-run' });
+    assert.equal(parseScriptExecutionEvidence(input).disposition, disposition);
   }
-  assert.equal(parseScriptExecutionEvidence(scriptExecution({ language: 'javascript', validation: 'failed' })).language, 'javascript');
+  assert.equal(parseScriptExecutionEvidence(discardedExecution({ language: 'javascript', status: 'completed', validation: 'failed' })).language, 'javascript');
 });
 
 test('script evidence rejects unknown fields, raw payloads, malformed digests, enums and coordinates', () => {
@@ -1011,7 +1025,7 @@ test('execution count and aggregate host-call limits are inclusive and sequences
 });
 
 test('script execution evidence enforces the exact UTF-8 byte boundary without truncation', () => {
-  const executions = Array.from({ length: MAX_SCRIPT_EXECUTIONS }, (_, index) => scriptExecution({
+  const executions = Array.from({ length: MAX_SCRIPT_EXECUTIONS }, (_, index) => discardedExecution({
     executionId: `execution-${index}`, calls: Array.from({ length: 10 }, (_, call) => ({
       sequence: call + 1, method: 'm'.repeat(256), disposition: 'completed',
     })), diagnostic: { code: 'script-error', message: 'a', line: null, column: null },
@@ -1062,4 +1076,91 @@ test('invalid script evidence fails proposal creation and saved-review restorati
   delete first(recordArray(damaged, 'reviews'), 'review').scriptExecutions;
   await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)), /execution evidence/);
   assert.equal(repo.serialize(), saved);
+});
+
+test('script evidence rejects contradictory atomic outcomes and retains genuine discarded audit records', () => {
+  const diagnostic = { code: 'script-error', message: 'The draft was discarded.', line: null, column: null };
+  for (const status of ['completed', 'failed', 'cancelled', 'timed-out', 'resource-limit'] as const) {
+    for (const disposition of ['observation', 'proposal', 'declined', 'discarded'] as const) {
+      for (const validation of ['passed', 'failed', 'not-run'] as const) {
+        for (const error of [null, diagnostic]) {
+          const input = scriptExecution({ status, disposition, validation, diagnostic: error });
+          const permitted = disposition === 'discarded' ? validation !== 'passed' && error !== null
+            : status === 'completed' && error === null && validation === (disposition === 'proposal' ? 'passed' : 'not-run');
+          const label = `${status}/${disposition}/${validation}/${error === null ? 'no diagnostic' : 'diagnostic'}`;
+          if (permitted) {
+            assert.deepEqual(parseScriptExecutionEvidence(input), input, label);
+            assert.deepEqual(parseScriptExecutions([input]), [input], label);
+          } else {
+            assert.throws(() => parseScriptExecutionEvidence(input), /Invalid script evidence/, label);
+            assert.throws(() => parseScriptExecutions([input]), /Invalid script evidence/, label);
+          }
+        }
+      }
+    }
+  }
+  const integrity = discardedExecution({ status: 'completed', validation: 'not-run',
+    diagnostic: { code: 'execution-integrity', message: 'A caught host failure revoked this draft.', line: null, column: null },
+    calls: [{ sequence: 1, method: 'model.inspect', disposition: 'host-failure' }] });
+  assert.deepEqual(parseScriptExecutionEvidence(integrity), integrity);
+});
+
+test('saved script reviews require one final successful proposal and matching actual tool evidence', async () => {
+  const repo = await RoomRepository.create(); const saved = repo.serialize();
+  const proposed = await repo.proposeReviewedModel(scriptProposalInput(repo));
+  const observation = scriptExecution({ executionId: 'earlier-observation', disposition: 'observation', validation: 'not-run' });
+  const fatalCodes = ['execution-integrity', 'internal', 'audit-failure', 'protocol-mismatch', 'host-failure', 'denied'];
+  const fatalCalls: ScriptExecutionEvidence['calls'][number]['disposition'][] = ['replaced', 'denied', 'unknown-method',
+    'invalid-arguments', 'invalid-result', 'host-failure', 'host-timeout', 'response-too-large', 'revoked', 'queue-full', 'request-too-large'];
+  const traces: ScriptExecutionEvidence[][] = [
+    [discardedExecution()], [observation],
+    [scriptExecution({ disposition: 'declined', validation: 'not-run' })],
+    [scriptExecution({ executionId: 'earlier-proposal' }), scriptExecution()],
+    [scriptExecution({ executionId: 'earlier-decline', disposition: 'declined', validation: 'not-run' }), scriptExecution()],
+    ...(['cancelled', 'timed-out', 'resource-limit'] as const).map((status) => [discardedExecution({ executionId: 'earlier-fatal', status }), scriptExecution()]),
+    ...fatalCodes.map((code) => [discardedExecution({ executionId: 'earlier-fatal',
+      diagnostic: { code, message: 'The attempt lost execution authority.', line: null, column: null } }), scriptExecution()]),
+    ...fatalCalls.map((disposition) => [discardedExecution({ executionId: 'earlier-fatal',
+      calls: [{ sequence: 1, method: 'model.inspect', disposition }] }), scriptExecution()]),
+    [scriptExecution({ calls: [{ sequence: 1, method: 'model.inspect', disposition: 'denied' }] })],
+  ];
+  const mutations: Record<string, unknown>[] = traces.map((scriptExecutions) => ({ scriptExecutions, toolCalls: scriptToolCalls(scriptExecutions) }));
+  mutations.push(
+    { toolCalls: [{ name: 'run_model_script', status: 'rejected', error: 'Rejected.' }] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: 'Not a real success.' }] },
+    { scriptExecutions: [observation, scriptExecution()] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'run_model_script', status: 'accepted', error: null }] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'unsupported_tool', status: 'rejected', error: 'After terminal.' }] },
+    { scriptExecutions: [discardedExecution({ executionId: 'earlier-failure' }), scriptExecution()],
+      toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'run_model_script', status: 'accepted', error: null }] },
+    { scriptExecutions: [discardedExecution({ executionId: 'earlier-failure' }), scriptExecution()],
+      toolCalls: [{ name: 'run_model_script', status: 'rejected', error: 'A different failure.' }, { name: 'run_model_script', status: 'accepted', error: null }] },
+  );
+  for (const mutation of mutations) {
+    const label = JSON.stringify(mutation);
+    await assert.rejects(repo.proposeReviewedModel(scriptProposalInput(repo, mutation)), /[Ss]cript/, label);
+    const damaged = parseRecord(proposed.serialize());
+    Object.assign(first(recordArray(damaged, 'reviews'), 'review'), mutation);
+    await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)), /[Ss]cript/, label);
+  }
+  assert.equal(repo.serialize(), saved);
+  assert.equal((await RoomRepository.restore(proposed.serialize())).serialize(), proposed.serialize());
+});
+
+test('recoverable failures and observations retain ordered evidence through proposal acceptance and exact restore', async () => {
+  const repo = await RoomRepository.create();
+  const executions = [discardedExecution({ executionId: 'recoverable-script' }),
+    scriptExecution({ executionId: 'observation', disposition: 'observation', validation: 'not-run' }),
+    discardedExecution({ executionId: 'invalid-return', status: 'completed', validation: 'failed',
+      diagnostic: { code: 'invalid-proposal', message: 'The returned proposal was invalid.', line: null, column: null } }),
+    scriptExecution({ calls: [{ sequence: 1, method: 'model.previewRectangle', disposition: 'app-error' },
+      { sequence: 2, method: 'model.previewRectangle', disposition: 'completed' }] }),
+  ];
+  const toolCalls = [{ name: 'unsupported_tool', status: 'rejected', error: 'Unsupported model tool.' }, ...scriptToolCalls(executions)];
+  const proposed = await repo.proposeReviewedModel(scriptProposalInput(repo, { scriptExecutions: executions, toolCalls }));
+  assert.deepEqual(proposed.review('script-study').scriptExecutions, executions);
+  assert.deepEqual(proposed.review('script-study').toolCalls, toolCalls);
+  const accepted = proposed.accept('script-study', { decisionId: 'accept-recovered', actor: 'human' });
+  assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
+  assert.deepEqual(accepted.review('script-study').scriptExecutions, executions);
 });
