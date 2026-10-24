@@ -1,4 +1,6 @@
 import { validateFloorPlan, spaces, spaceForFootprint } from './floor-plan.ts';
+import { parseScriptExecutions } from './script-evidence.ts';
+import type { ScriptExecutionEvidence } from './script-evidence.ts';
 
 const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
@@ -116,7 +118,7 @@ export interface Branch {
   revisionId: RevisionId;
 }
 
-type ToolCallName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_room_furnishings' | 'preview_workstation_move' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
+type ToolCallName = 'run_model_script' | 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_room_furnishings' | 'preview_workstation_move' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
 type ToolCallStatus = 'accepted' | 'rejected';
 
 export interface ToolCallEvidence {
@@ -149,6 +151,7 @@ export interface ProposalReview {
   uncertainty: string;
   worker: WorkerEvidence;
   toolCalls: ToolCallEvidence[];
+  scriptExecutions?: ScriptExecutionEvidence[];
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
@@ -331,8 +334,10 @@ function boundedInteger(value: unknown, name: string): number {
 
 function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, branches: Map<BranchName, Branch>): ProposalReview {
   const review = copy(input);
+  const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
-    'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision']);
+    'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
+    ...(hasScripts ? ['scriptExecutions'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
   const baseRevisionId = revisionIdentifier(review.baseRevisionId);
@@ -373,11 +378,18 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     const name = call.name;
     const status = call.status;
     const error = call.error;
-    if (name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'preview_furnishings' && name !== 'preview_room_furnishings' && name !== 'preview_workstation_move' && name !== 'submit_proposal'
+    if (name !== 'run_model_script' && name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'preview_furnishings' && name !== 'preview_room_furnishings' && name !== 'preview_workstation_move' && name !== 'submit_proposal'
         && name !== 'decline_request' && name !== 'unsupported_tool') fail('Invalid model tool evidence.');
     if (status !== 'accepted' && status !== 'rejected') fail('Invalid model tool evidence.');
     if (error !== null && (typeof error !== 'string' || !error || error.length > 240)) fail('Invalid model tool evidence.');
     toolCalls.push({ name, status, error });
+  }
+  const scriptEvidence: Pick<ProposalReview, 'scriptExecutions'> = hasScripts ? { scriptExecutions: parseScriptExecutions(review.scriptExecutions) } : {};
+  if (hasScripts || toolCalls.some((call) => call.name === 'run_model_script')) {
+    if (!scriptEvidence.scriptExecutions?.length || !toolCalls.some((call) => call.name === 'run_model_script')
+        || toolCalls.some((call) => call.name !== 'run_model_script' && !(call.name === 'unsupported_tool' && call.status === 'rejected'))) {
+      fail('Script reviews require execution evidence and only actual script tool calls.');
+    }
   }
   if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
   fields(review.decision, ['status', 'decisionId', 'actor']);
@@ -395,7 +407,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   return freeze({
     requestId, proposalName, baseRevisionId, proposalRevisionId, selectedObjectIds, instruction, summary, rationale,
     constraints, uncertainty, worker: { provider, model, responseIds, usage: { inputTokens, outputTokens, totalTokens } },
-    toolCalls, validator: 'room-graph-v1', decision,
+    toolCalls, ...scriptEvidence, validator: 'room-graph-v1', decision,
   });
 }
 
@@ -1033,8 +1045,9 @@ export class RoomRepository {
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
     const details = proposal.review;
+    const hasScripts = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scriptExecutions');
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
-      'uncertainty', 'worker', 'toolCalls', 'validator']);
+      'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : [])]);
     const base = this.view(from);
     const next = await this.#commit(proposalName, base, proposal.snapshot);
     if (next === this) fail('The reviewed proposal must change the bound revision.');
@@ -1044,6 +1057,7 @@ export class RoomRepository {
       instruction: details.instruction, summary: details.summary, rationale: details.rationale,
       constraints: details.constraints, uncertainty: details.uncertainty, worker: details.worker,
       toolCalls: details.toolCalls, validator: details.validator,
+      ...(hasScripts ? { scriptExecutions: details.scriptExecutions } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches));
     const reviews = [...next.reviews(), record];

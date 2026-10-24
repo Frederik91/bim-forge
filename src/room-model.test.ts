@@ -5,6 +5,8 @@ import { RoomRepository, diffSnapshots, rectangleLayout, previewRectangle } from
 import { MODEL_PROPOSAL_TOOLS, prepareModelProposal } from './model-proposal.ts';
 import type { Door, Entity, HostingRelationship, ModelSnapshot, Point, RoomLayout, Wall } from './room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
+import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, MAX_SCRIPT_EVIDENCE_BYTES, parseScriptExecutionEvidence, parseScriptExecutions } from './script-evidence.ts';
+import type { ScriptExecutionEvidence } from './script-evidence.ts';
 
 interface DoorShape { id: string; type: 'Door'; name: string; width: number; height: number }
 interface WallShape { id: string; type: 'Wall'; name: string; start: Point; end: Point; thickness: number; height: number }
@@ -803,4 +805,211 @@ test('model worker can decline without changing repository history', async () =>
   });
   assert.equal(result.status, 'declined'); assert.equal(result.repository, repo);
   assert.equal(result.repository.serialize(), saved); assert.equal(result.review.proposalRevisionId, null);
+});
+
+function scriptExecution(overrides: Partial<ScriptExecutionEvidence> = {}): ScriptExecutionEvidence {
+  return {
+    version: 1, executionId: 'execution-1', language: 'typescript', sourceSha256: 'a'.repeat(64),
+    status: 'completed', disposition: 'proposal', validation: 'passed', contractSha256: 'b'.repeat(64),
+    policyVersion: 'bim-model-v1',
+    runtime: { packageVersion: '0.1.0', guestAbi: 2, bootstrapVersion: 3, artifactSha256: 'c'.repeat(64) },
+    calls: [{ sequence: 1, method: 'model.previewRectangle', disposition: 'completed' }], diagnostic: null,
+    ...overrides,
+  };
+}
+
+function scriptProposalInput(repo: RoomRepository, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const base = repo.view(repo.head('main')).snapshot;
+  const layout = rectangleLayout(base);
+  return {
+    name: 'script-study', from: repo.head('main'),
+    snapshot: previewRectangle(base, { ...layout, door: { ...layout.door, widthMm: 1200 } }),
+    review: {
+      requestId: 'script-request', selectedObjectIds: ['door-entry'], instruction: 'Widen the entry to 1200 mm.',
+      summary: 'Entry widened.', rationale: 'The opening fits its host.', constraints: 'Other objects retained.',
+      uncertainty: 'Concept validation only.', worker: { provider: 'test', model: 'script-worker', responseIds: [],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+      toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }],
+      scriptExecutions: [scriptExecution()], validator: 'room-graph-v1', ...overrides,
+    },
+  };
+}
+
+test('historical reviewed saves retain all legacy evidence names and exact bytes without script evidence', async () => {
+  const repo = await RoomRepository.create();
+  const legacyCalls = ['inspect_model', 'preview_rectangle', 'preview_furnishings', 'preview_room_furnishings',
+    'preview_workstation_move', 'submit_proposal', 'decline_request', 'unsupported_tool']
+    .map((name) => ({ name, status: 'accepted', error: null }));
+  const input = scriptProposalInput(repo, { toolCalls: legacyCalls });
+  if (!isRecord(input.review)) throw new Error('Missing review fixture.');
+  delete input.review.scriptExecutions;
+  const proposed = await repo.proposeReviewedModel(input);
+  const saved = proposed.serialize();
+  const restored = await RoomRepository.restore(saved);
+  assert.equal(restored.serialize(), saved);
+  assert.deepEqual(restored.review('script-study').toolCalls, legacyCalls);
+  assert.equal(Object.hasOwn(restored.review('script-study'), 'scriptExecutions'), false);
+  assert.equal(saved.includes('scriptExecutions'), false);
+  const next = await proposed.proposeReviewedModel({ ...scriptProposalInput(proposed, { requestId: 'script-followup-request' }), name: 'script-followup' });
+  assert.deepEqual(next.review('script-study'), proposed.review('script-study'));
+  assert.equal(Object.hasOwn(next.review('script-study'), 'scriptExecutions'), false);
+  assert.deepEqual(next.review('script-followup').scriptExecutions, [scriptExecution()]);
+  assert.equal((await RoomRepository.restore(next.serialize())).serialize(), next.serialize());
+  const accepted = restored.accept('script-study', { decisionId: 'legacy-accept', actor: 'human' });
+  assert.equal(Object.hasOwn(accepted.review('script-study'), 'scriptExecutions'), false);
+  assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
+});
+
+test('script review evidence survives proposal creation, acceptance and exact restore without legacy submit records', async () => {
+  const repo = await RoomRepository.create(); const saved = repo.serialize();
+  const evidence = [
+    scriptExecution({ executionId: 'execution-failed', status: 'failed', disposition: 'discarded', validation: 'not-run',
+      diagnostic: { code: 'script-error', message: 'The first attempt failed.', line: 3, column: null } }),
+    scriptExecution(),
+  ];
+  const input = scriptProposalInput(repo, { scriptExecutions: evidence,
+    toolCalls: [{ name: 'run_model_script', status: 'rejected', error: 'The first attempt failed.' },
+      { name: 'run_model_script', status: 'accepted', error: null }] });
+  const proposed = await repo.proposeReviewedModel(input);
+  assert.equal(repo.serialize(), saved);
+  assert.equal(proposed.head('main'), repo.head('main'));
+  assert.deepEqual(proposed.review('script-study').scriptExecutions, evidence);
+  evidence[0].runtime.packageVersion = 'caller-changed';
+  assert.equal(proposed.review('script-study').scriptExecutions?.[0].runtime.packageVersion, '0.1.0');
+  assert.deepEqual(proposed.review('script-study').toolCalls.map((call) => call.name), ['run_model_script', 'run_model_script']);
+  assertFrozen(proposed.review('script-study'));
+  assert.equal((await RoomRepository.restore(proposed.serialize())).serialize(), proposed.serialize());
+  const accepted = proposed.accept('script-study', { decisionId: 'script-accept', actor: 'human' });
+  const restored = await RoomRepository.restore(accepted.serialize());
+  assert.equal(restored.serialize(), accepted.serialize());
+  assert.equal(restored.head('main'), proposed.head('script-study'));
+  assert.deepEqual(restored.review('script-study').scriptExecutions, proposed.review('script-study').scriptExecutions);
+  assert.equal(restored.review('script-study').validator, 'room-graph-v1');
+});
+
+test('script evidence parses every upstream call disposition and returns detached data', () => {
+  const callDispositions: ScriptExecutionEvidence['calls'][number]['disposition'][] = [
+    'completed', 'replaced', 'denied', 'unknown-method', 'invalid-arguments', 'invalid-result', 'app-error',
+    'host-failure', 'host-timeout', 'response-too-large', 'revoked', 'queue-full', 'request-too-large',
+  ];
+  const input = scriptExecution({ calls: callDispositions.map((disposition, index) => ({ sequence: index + 1, method: 'model.inspect', disposition })) });
+  const parsed = parseScriptExecutionEvidence(input);
+  assert.deepEqual(parsed, input);
+  input.calls[0].method = 'caller-changed';
+  assert.equal(parsed.calls[0].method, 'model.inspect');
+  assert.deepEqual(parseScriptExecutions([]), []);
+  for (const status of ['completed', 'failed', 'cancelled', 'timed-out', 'resource-limit'] as const) {
+    assert.equal(parseScriptExecutionEvidence(scriptExecution({ status, disposition: 'discarded' })).status, status);
+  }
+  for (const disposition of ['observation', 'proposal', 'declined', 'discarded'] as const) {
+    assert.equal(parseScriptExecutionEvidence(scriptExecution({ disposition })).disposition, disposition);
+  }
+  assert.equal(parseScriptExecutionEvidence(scriptExecution({ language: 'javascript', validation: 'failed' })).language, 'javascript');
+});
+
+test('script evidence rejects unknown fields, raw payloads, malformed digests, enums and coordinates', () => {
+  const valid = scriptExecution();
+  const invalid: unknown[] = [
+    null, [], { ...valid, version: 2 }, { ...valid, executionId: '' }, { ...valid, executionId: 'wrong/id' },
+    { ...valid, executionId: 'x'.repeat(129) }, { ...valid, language: 'python' }, { ...valid, status: 'success' },
+    { ...valid, disposition: 'accepted' }, { ...valid, validation: 'skipped' },
+    { ...valid, sourceSha256: 'A'.repeat(64) }, { ...valid, contractSha256: 'a'.repeat(63) },
+    { ...valid, policyVersion: ' ' }, { ...valid, policyVersion: 'policy\nforged' },
+    { ...valid, runtime: { ...valid.runtime, artifactSha256: 'x'.repeat(64) } },
+    { ...valid, runtime: { ...valid.runtime, guestAbi: 0 } },
+    { ...valid, runtime: { ...valid.runtime, bootstrapVersion: 1.5 } },
+    { ...valid, runtime: { ...valid.runtime, guestAbi: Number.MAX_SAFE_INTEGER + 1 } },
+    { ...valid, runtime: { ...valid.runtime, packageVersion: '' } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad', line: 0, column: null } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad', line: null, column: -1 } },
+    { ...valid, diagnostic: { code: '', message: 'bad', line: null, column: null } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad\u007ftext', line: null, column: null } },
+    { ...valid, calls: [{ sequence: 1, method: 'model.inspect', disposition: 'accepted' }] },
+    { ...valid, calls: [{ sequence: 0, method: 'model.inspect', disposition: 'completed' }] },
+    { ...valid, calls: [{ sequence: 1, method: '', disposition: 'completed' }] },
+    { ...valid, calls: [{ sequence: 1, method: 'model.inspect', disposition: 'completed', args: {} }] },
+    { ...valid, runtime: { ...valid.runtime, rawError: 'not allowed' } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad', line: null, column: null, stack: 'not allowed' } },
+    ...['source', 'args', 'results', 'rawErrors', 'logs'].map((key) => ({ ...valid, [key]: 'not allowed' })),
+  ];
+  for (const value of invalid) assert.throws(() => parseScriptExecutionEvidence(value), /Invalid script evidence/);
+  let accessorCalls = 0;
+  const accessor = { ...valid };
+  Object.defineProperty(accessor, 'policyVersion', { enumerable: true, get() { accessorCalls += 1; return 'policy'; } });
+  assert.throws(() => parseScriptExecutionEvidence(accessor), /accessors/);
+  const sparse = new Array<unknown>(1);
+  assert.throws(() => parseScriptExecutions(sparse), /dense|holes/);
+  const arrayAccessor: unknown[] = [valid];
+  Object.defineProperty(arrayAccessor, '0', { enumerable: true, get() { accessorCalls += 1; return valid; } });
+  assert.throws(() => parseScriptExecutions(arrayAccessor), /accessors/);
+  assert.equal(accessorCalls, 0);
+});
+
+test('execution count and aggregate host-call limits are inclusive and sequences cannot repeat or decrease', () => {
+  const six = Array.from({ length: MAX_SCRIPT_EXECUTIONS }, (_, index) => scriptExecution({ executionId: `execution-${index}` }));
+  assert.equal(parseScriptExecutions(six).length, 6);
+  assert.throws(() => parseScriptExecutions([...six, scriptExecution({ executionId: 'overflow' })]));
+  assert.throws(() => parseScriptExecutions([scriptExecution(), scriptExecution()]), /duplicate/);
+  const calls: ScriptExecutionEvidence['calls'] = Array.from({ length: MAX_SCRIPT_HOST_CALLS }, (_, index) => ({
+    sequence: index + 1, method: 'model.inspect', disposition: 'completed',
+  }));
+  assert.equal(parseScriptExecutions([scriptExecution({ calls })])[0].calls.length, 64);
+  assert.throws(() => parseScriptExecutions([scriptExecution({ calls }), scriptExecution({ executionId: 'overflow' })]), /64 host-call/);
+  assert.throws(() => parseScriptExecutionEvidence(scriptExecution({ calls: [...calls, { sequence: 65, method: 'model.inspect', disposition: 'completed' }] })));
+  assert.throws(() => parseScriptExecutionEvidence(scriptExecution({ calls: [calls[0], calls[0]] })), /sequences/);
+  assert.throws(() => parseScriptExecutionEvidence(scriptExecution({ calls: [calls[1], calls[0]] })), /sequences/);
+});
+
+test('script execution evidence enforces the exact UTF-8 byte boundary without truncation', () => {
+  const executions = Array.from({ length: MAX_SCRIPT_EXECUTIONS }, (_, index) => scriptExecution({
+    executionId: `execution-${index}`, calls: Array.from({ length: 10 }, (_, call) => ({
+      sequence: call + 1, method: 'm'.repeat(256), disposition: 'completed',
+    })), diagnostic: { code: 'script-error', message: 'a', line: null, column: null },
+  }));
+  const bytes = (): number => new TextEncoder().encode(JSON.stringify(executions)).byteLength;
+  let remaining = MAX_SCRIPT_EVIDENCE_BYTES - bytes();
+  assert.ok(remaining > 0);
+  for (const execution of executions) {
+    if (!execution.diagnostic) throw new Error('Missing diagnostic fixture.');
+    const extra = Math.min(2999, remaining);
+    const messageBytes = extra + 1;
+    execution.diagnostic.message = '界'.repeat(Math.floor(messageBytes / 3)) + (messageBytes % 3 === 2 ? 'é' : messageBytes % 3 === 1 ? 'a' : '');
+    remaining -= extra;
+  }
+  assert.equal(remaining, 0);
+  assert.equal(bytes(), 32768);
+  assert.deepEqual(parseScriptExecutions(executions), executions);
+  const last = executions.at(-1);
+  if (!last?.diagnostic) throw new Error('Missing diagnostic fixture.');
+  last.diagnostic.message += 'a';
+  assert.equal(bytes(), 32769);
+  assert.ok(JSON.stringify(executions).length < MAX_SCRIPT_EVIDENCE_BYTES);
+  assert.throws(() => parseScriptExecutions(executions), /UTF-8 byte/);
+});
+
+test('invalid script evidence fails proposal creation and saved-review restoration atomically', async () => {
+  const repo = await RoomRepository.create(); const saved = repo.serialize();
+  const proposed = await repo.proposeReviewedModel(scriptProposalInput(repo));
+  const mutations: Record<string, unknown>[] = [
+    { scriptExecutions: null }, { scriptExecutions: undefined }, { scriptExecutions: [] },
+    { scriptExecutions: [{ ...scriptExecution(), source: 'not allowed' }] },
+    { scriptExecutions: [scriptExecution({ sourceSha256: 'wrong' })] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'submit_proposal', status: 'accepted', error: null }] },
+    { toolCalls: [{ name: 'decline_request', status: 'accepted', error: null }] },
+  ];
+  for (const mutation of mutations) {
+    await assert.rejects(repo.proposeReviewedModel(scriptProposalInput(repo, mutation)));
+    if (Object.hasOwn(mutation, 'scriptExecutions') && mutation.scriptExecutions === undefined) continue;
+    const damaged = parseRecord(proposed.serialize());
+    Object.assign(first(recordArray(damaged, 'reviews'), 'review'), mutation);
+    await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)));
+  }
+  const missing = scriptProposalInput(repo);
+  if (!isRecord(missing.review)) throw new Error('Missing review fixture.');
+  delete missing.review.scriptExecutions;
+  await assert.rejects(repo.proposeReviewedModel(missing), /execution evidence/);
+  const damaged = parseRecord(proposed.serialize());
+  delete first(recordArray(damaged, 'reviews'), 'review').scriptExecutions;
+  await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)), /execution evidence/);
+  assert.equal(repo.serialize(), saved);
 });
