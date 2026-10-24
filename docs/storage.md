@@ -27,6 +27,18 @@ Use JSONB for extensible IFC/native properties, but keep identifiers, ownership,
 
 Artifacts should be immutable, content-addressed, encrypted, and retained according to project policy. Never use object storage as an untracked mutable working directory.
 
+## Independent copies and synchronization
+
+Each participating company can host its own PostgreSQL database and object storage for the agreed shared project data. Treat the source-of-truth responsibilities above as responsibilities within each installation. Project governance determines the accepted revision across installations.
+
+A usable mirror needs revision ancestry, model data, linked files, review evidence, and referenced artifacts within the agreed replication scope. Verify hashes and required content before marking a revision synchronized. Keep the last complete revision usable during interrupted or incomplete transfers. Display that revision and synchronization status to users.
+
+Local startup and continued work must use independently controlled authentication, encryption keys, and stored artifacts. Remote revocation governs future exchange and shared publication. It must not silently delete locally retained history. Retention follows the project agreement, and mirrors still need independent backups.
+
+Use application-level revision and proposal semantics to define synchronization and reconciliation. Database replication alone does not define artifact completeness, model conflicts, or review authority. The initial persistence choice does not commit the project to unrestricted writes to replicated tables.
+
+See [Independent project mirrors](project-mirrors.md) for delivery stages and acceptance evidence. These requirements do not describe an implemented synchronization adapter.
+
 ## Why not start with a document database?
 
 A document store is attractive for variable IFC properties, but it makes transactional branching, permissions, audit history, and cross-entity queries harder to reason about. PostgreSQL gives a strong transactional core and already supports JSONB, full-text search, and extensions. A document or graph projection can be added later when actual access patterns demand it.
