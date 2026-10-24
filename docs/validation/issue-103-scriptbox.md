@@ -23,6 +23,13 @@ The build/test Node image is pinned to `node@sha256:55fb5f5a527ea2c5c4a95f963e48
 
 The runtime image is `bim-forge-preview-app:4a9b9af998d7603d315c106ae56f5f76550891e9`, image ID `sha256:3dbc6307177c51a9e1b9c833a0f3034faa0315cd1f632988a18bdd24ffa794d7`.
 
+Captured command output is committed with this report:
+
+- [Validation output](issue-103-validate.log).
+- [Complete application test output](issue-103-tests.log).
+- [Offline production-image integration output](issue-103-image-tests.log).
+- [Four failing-before regressions](issue-103-regressions-before.log). This replay overlays the pre-fix source at `f892f84` with the current targeted tests in a separate server test directory. It fails four tests before the fixes; those tests pass in the final full-suite output.
+
 Reproduce the principal commands in a server build container with the source and installed dependencies mounted at `/app`:
 
 ```sh
