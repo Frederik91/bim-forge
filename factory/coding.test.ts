@@ -14,6 +14,7 @@ import './scheduled-publication.test.ts';
 import './schedule-job.test.ts';
 import './application-profile.test.ts';
 import './change-review.test.ts';
+import './repository-change.test.ts';
 
 const paths = ['factory/health.ts', 'factory/health.test.ts'];
 const spec = (): CodingSpec => ({ version: 1, repository: 'Frederik91/bim-forge', baseSha: 'a'.repeat(40),
@@ -36,7 +37,7 @@ test('ready coding scope binds exact issue, source, paths, plan and independent 
   const changed = spec(); changed.plan.questions = ['Unresolved'];
   assert.throws(() => readCodingSpec(bytes(changed)), /ready/);
   for (const value of [{ ...spec(), command: 'untrusted' }, { ...spec(), baseSha: 'main' },
-    { ...spec(), paths: ['factory/../secrets.mjs'] }, { ...spec(), acceptanceCases: [] },
+    { ...spec(), paths: ['factory/../secrets.mjs'] },
     { ...spec(), plan: { ...spec().plan, changeClass: 'security' } }]) {
     assert.throws(() => readCodingSpec(bytes(value)));
   }

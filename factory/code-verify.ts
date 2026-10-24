@@ -23,6 +23,7 @@ export function verifyCodingCandidate(id: unknown): void {
   checkFiles();
   const commands: [string, string[]][] = [
     ['/opt/bim-forge/node/bin/node', ['scripts/validate-policy.ts', '--changed-files', ...proposal.files.map((file) => file.path)]],
+    ['/opt/bim-forge/node/bin/npm', ['run', 'validate']],
     ['/opt/bim-forge/node/bin/npm', ['test']],
   ];
   for (const [command, args] of commands) {
