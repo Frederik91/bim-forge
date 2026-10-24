@@ -267,6 +267,18 @@ thead th, tbody th { font-weight: 600; }
 .edit-target:hover { stroke: var(--teal); stroke-opacity: .22; }
 .edit-handle { cursor: grab; touch-action: none; }
 .edit-handle:active { cursor: grabbing; }
+.workstation-panel { padding: 18px 22px; border-top: 1px solid #a9d3c7; background: #eef8f3; }
+.workstation-panel h3 { margin: 3px 0 7px; font-size: 17px; }
+.workstation-panel p:not(.eyebrow) { margin: 7px 0; font-size: 12px; color: #355e56; }
+.workstation-panel[data-valid="false"] { background: #fff5e8; border-color: #dfba7c; }
+.workstation-actions { display: flex; align-items: end; gap: 10px; margin: 12px 0; }
+.workstation-actions label { flex: 1; }
+.workstation-actions .button { min-height: 44px; }
+.workstation-handle { cursor: grab; touch-action: none; }
+.workstation-handle:active { cursor: grabbing; }
+#proposal-drawing svg[data-workstation-dragging="true"], #proposal-drawing svg[data-workstation-dragging="true"] * { cursor: grabbing; }
+.workstation-handle:focus { outline: none; stroke: #d59a30; }
+.workstation-ghost { pointer-events: none; }
 .selection-outline { pointer-events: none; }
 .disclaimer { margin-top: 25px; padding-top: 16px; display: flex; gap: 12px; align-items: start; border-top: 1px solid var(--line); }
 .disclaimer p { color: #6c7d77; font-size: 10px; }

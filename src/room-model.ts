@@ -110,7 +110,7 @@ export interface Branch {
   revisionId: RevisionId;
 }
 
-type ToolCallName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
+type ToolCallName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_workstation_move' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
 type ToolCallStatus = 'accepted' | 'rejected';
 
 export interface ToolCallEvidence {
@@ -367,7 +367,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     const name = call.name;
     const status = call.status;
     const error = call.error;
-    if (name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'preview_furnishings' && name !== 'submit_proposal'
+    if (name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'preview_furnishings' && name !== 'preview_workstation_move' && name !== 'submit_proposal'
         && name !== 'decline_request' && name !== 'unsupported_tool') fail('Invalid model tool evidence.');
     if (status !== 'accepted' && status !== 'rejected') fail('Invalid model tool evidence.');
     if (error !== null && (typeof error !== 'string' || !error || error.length > 240)) fail('Invalid model tool evidence.');
