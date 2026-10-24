@@ -6,6 +6,8 @@ BIM Forge treats a building model as a versioned, queryable project graph. Engin
 
 The long-term ambition is full BIM authoring and coordination that can replace the Revit-centered workflow. The first milestone is smaller and deliberate: build the factory that can safely build the product.
 
+The intended end-user flow is **project overview → context-aware 2D/3D/VR model views → captured intent → AI-prepared proposal → coordinated review → versioned acceptance**. See the [product vision](docs/product-vision.md) for adaptive workspaces, property provenance, source-owned external data, cross-discipline authority, and discipline-agent boundaries.
+
 ## Current phase
 
 This repository is the bootstrap specification and safety harness. It defines the loop, storage direction, agent contracts, and GitHub workflow before the first model-writing feature is added.
@@ -18,7 +20,7 @@ Default operating level is **L1 report-only**. No agent may merge or mutate a pr
 - **Issues are executable intent.** An issue names the outcome, scope, constraints, acceptance checks, and review class.
 - **Agents work in isolation.** Every change attempt gets a dedicated branch/worktree and a bounded budget.
 - **Validation precedes review.** Schema, geometry, coordination, and regression checks produce evidence before a human approves.
-- **Human authority is configurable, never implied away.** Auto-approval is opt-in, path-scoped, confidence-scoped, and disabled for high-impact changes.
+- **Human authority is configurable, never implied away.** Delegated approval is opt-in, evidence-scoped, independently reviewed, and disabled for high-impact changes.
 - **State is durable and observable.** Each loop records its inputs, decisions, costs, validators, and outcome.
 
 ## Repository map
@@ -26,7 +28,7 @@ Default operating level is **L1 report-only**. No agent may merge or mutate a pr
 ```text
 factory/                 Agent loop contract and role contracts
 policy/                  Machine-readable gates and binding constraints
-docs/                    Architecture, storage, milestones, issue bodies
+docs/                    Product vision, architecture, storage, milestones, issue bodies
 scripts/                 Small deterministic local validators
 .github/                 Issue/PR templates and required CI checks
 STATE.md                 Current loop state and kill-switch status
@@ -59,7 +61,7 @@ The validator checks the machine-readable policy and, when run in CI, rejects ch
 
 ## Roadmap
 
-The first six milestones are documented in [docs/milestones.md](docs/milestones.md). Ready-to-copy GitHub issue bodies are in [docs/github-issue-bodies.md](docs/github-issue-bodies.md).
+The product experience is defined in [docs/product-vision.md](docs/product-vision.md), and its delivery tracks are documented in [docs/milestones.md](docs/milestones.md). Ready-to-copy GitHub issue bodies are in [docs/github-issue-bodies.md](docs/github-issue-bodies.md).
 
 ## Status and safety
 
