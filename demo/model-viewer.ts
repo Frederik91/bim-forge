@@ -67,7 +67,7 @@ export class ModelViewer {
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 1.5));
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
-    this.model.camera.attachControl(this.canvas, true);
+    this.model.camera.attachControl(this.canvas, false);
     this.model.scene.executeWhenReady(() => { this.frames = 3; });
     this.observer = new ResizeObserver(() => { this.engine.resize(); this.frames = 3; });
     this.observer.observe(this.root);
@@ -130,7 +130,7 @@ export class ModelViewer {
     const drag = this.drag; if (!drag) return;
     this.drag = null; delete this.root.dataset.marking;
     if (this.handle.hasPointerCapture(drag.id)) this.handle.releasePointerCapture(drag.id);
-    this.model.camera.attachControl(this.canvas, true);
+    this.model.camera.attachControl(this.canvas, false);
     this.model.mark(this.state?.reference ?? null); this.frames = 2; this.updateCaption();
     if (commit && drag.moved && drag.target) this.actions.reference(drag.target);
   }
