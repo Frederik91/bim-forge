@@ -6,9 +6,10 @@ Issue: [103](https://github.com/Frederik91/bim-forge/issues/103).
 
 - [x] Ground the migration in the running residential-floor revision and the pinned ScriptBox source.
 - [x] Compare persistent script checkpoints with atomic per-script drafts. Select the atomic design after independent review.
-- [ ] Implement and verify the runtime, proposal, persistence and cancellation changes together.
-- [ ] Verify feature parity, negative cases, container packaging and the server-hosted UI.
-- [ ] Remove replaced executable authoring paths and open a draft PR with validation evidence.
+- [x] Implement and verify the runtime, proposal, persistence and cancellation changes together.
+- [x] Verify feature parity, negative cases, container packaging and the server-hosted UI.
+- [x] Remove replaced executable authoring paths.
+- [ ] Open a draft PR with validation evidence. Human approval is required before merge or replacement of the shared preview.
 
 The application baseline is `10982ab9c97d3bde9c95a7b8515bba39d7c591a7`, the revision running on the server when this work began. `main` did not yet contain its backlog, Babylon viewer or residential-floor changes. The integration branch therefore starts from that feature revision.
 
@@ -106,8 +107,8 @@ The bundled package is built from [ScriptBox commit `9a9b327206592f191b7773303cf
 
 The package was built and packed in the server container with `npm ci`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`, `node scripts/build.ts --check` and `npm pack`. Package dependencies and tarball integrity are also pinned in the application lockfile. The bundled package retains upstream licenses and notices. A maintainer can replace the tarball with a published version later, after verifying its source and artifact digests.
 
-## Verification still required
+## Verification
 
-Implementation is not complete until the checkboxes above have corresponding evidence. The validation report must cover the real packed dependency, all existing behavior assertions, new execution/cancellation/rollback tests, historical saved-data roundtrips, the server-container build and the server-hosted UI. No local Windows build or test result substitutes for those checks.
+The [validation report](validation/issue-103-scriptbox.md) records the real-package tests, negative regressions, historical saved-data roundtrips, production-style image checks and live server UI scenarios. Builds and tests run in server containers, not on the Windows workstation.
 
 The migration does not add adjacent-room topology editing. That operation still needs a trusted model implementation. ScriptBox makes supported operations composable; it does not create missing geometry capabilities.
