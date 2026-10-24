@@ -54,6 +54,7 @@ The first implementation can be a modular monolith with clear interfaces. Split 
 - Intents, proposals, agent runs, decisions, and evidence record their work context.
 - Role, phase, scope, and workspace-profile changes do not rewrite historical context or expand authority.
 - Presentation rules cannot suppress mandatory findings, connected impacts, or required approvals.
+- Workspace profiles preserve a cross-discipline proposal path even when the suggested change falls outside the user's normal tools or approval authority.
 
 ## First vertical slice
 

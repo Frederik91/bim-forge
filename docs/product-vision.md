@@ -59,6 +59,8 @@ An experience policy uses that context to emphasize the most relevant views, pro
 
 The active context remains visible and easy to switch. A person may hold several roles on the same project. Search, command access, and an explicit Show all path keep the full product discoverable, while personal preferences refine presentation inside project policy.
 
+Contextual defaults are affordances, not proposal boundaries. An electrical engineer may not normally see architectural wall-authoring tools, but can still select a wall, explain why it should move, and submit that cross-discipline intent. BIM Forge routes the resulting proposal and impact package to the architect and every other affected authority. The electrical engineer's role neither blocks the suggestion nor grants authority to apply or approve the architectural change.
+
 Presentation is not authorization. Work context can change what is emphasized, but access policy still controls what can be read or changed, authority scope controls what can be approved, and validation policy controls mandatory evidence. Findings, affected disciplines, and connected dependencies remain visible when they cross the selected model scope.
 
 Intents, proposals, agent runs, reviews, and evidence retain the work context in which they were created. Agents state which role, phase, model scope, task, and project guidance they used. Project-phase transitions and context changes are auditable and never rewrite historical decisions.
@@ -209,6 +211,7 @@ Across these capabilities, the product should show an editable intent contract b
 - A 2D, 3D, or VR interaction captures intent; it does not silently commit model state.
 - Stable entity identities and source revisions anchor every proposal.
 - Work context changes presentation and defaults without granting access, tool permission, or approval authority.
+- Any participant with proposal access can suggest cross-discipline work; the responsible authorities review its affected aspects.
 - Mandatory findings and connected impacts remain visible across role, phase, and model-scope boundaries.
 - External values retain their source system, external identity, data authority, units, time, and freshness.
 - Operational observations remain distinct from accepted design properties.
