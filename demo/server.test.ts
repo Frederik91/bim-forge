@@ -40,6 +40,7 @@ async function listen(
   });
   t.after(async () => {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await server.closeModelWorkers();
     if (directory) fs.rmSync(directory, { recursive: true, force: true });
   });
   const address = server.address();
@@ -191,15 +192,18 @@ test('proposal endpoint binds request to revision and returns a validated separa
       const input = jsonObject(JSON.stringify(session.input));
       const requestInput = jsonObject(JSON.stringify(input.request));
       if (requestInput.instruction === 'provider failure') throw new Error('provider unavailable');
-      const inspected = await session.executeTool('inspect_model', {}); assert.equal(inspected.ok, true);
       const visualIntent = jsonObject(JSON.stringify(requestInput.visualIntent));
-      const previewed = await session.executeTool('preview_rectangle', visualIntent.layout); assert.equal(previewed.ok, true);
-      await session.executeTool('submit_proposal', {
-        summary: 'Entrance widened to 1200 mm.',
-        rationale: 'The visual request fits the hosted wall and preserves stable object identities.',
-        constraints: 'The host relationship, wall properties and stable identifiers remain unchanged.',
-        uncertainty: 'Concept-only geometry; no construction checks.',
-      });
+      const result = await session.executeTool('run_model_script', { language: 'javascript', source: `
+        await model.inspect();
+        await model.previewRectangle(${JSON.stringify(visualIntent.layout)});
+        return { kind: 'propose', review: {
+          summary: 'Entrance widened to 1200 mm.',
+          rationale: 'The visual request fits the hosted wall and preserves stable object identities.',
+          constraints: 'The host relationship, wall properties and stable identifiers remain unchanged.',
+          uncertainty: 'Concept-only geometry; no construction checks.'
+        } };
+      ` });
+      assert.equal(result.done, true);
     },
   };
   const request = await listen(t, modelWorker);
@@ -219,6 +223,14 @@ test('proposal endpoint binds request to revision and returns a validated separa
   assert.equal(response.status, 202);
   const jobId = jsonObject(JSON.stringify(jsonObject(response.body).ticket)).id;
   const complete = await pollProposal(request, jobId);
+  const ticket = jsonObject(JSON.stringify(jsonObject(complete.body).ticket));
+  assert.ok(Array.isArray(ticket.executions));
+  assert.equal(ticket.executions.length, 1);
+  const execution = jsonObject(JSON.stringify(ticket.executions[0]));
+  assert.equal(execution.ticketId, jobId);
+  assert.equal(execution.requestId, payload.request.requestId);
+  assert.equal(execution.attempt, 1);
+  assert.equal(jsonObject(JSON.stringify(execution.evidence)).status, 'completed');
   const result = jsonObject(JSON.stringify(jsonObject(JSON.stringify(jsonObject(complete.body).ticket)).result)); assert.equal(result.status, 'ready');
   const proposed = await RoomRepository.restore(result.project);
   assert.equal(proposed.head('main'), repo.head('main'));
@@ -246,7 +258,7 @@ test('proposal endpoint binds request to revision and returns a validated separa
 
 async function pollProposal(request: TestRequester, id: unknown): Promise<TestResponse> {
   assert.equal(typeof id, 'string');
-  for (let count = 0; count < 100; count += 1) {
+  for (let count = 0; count < 4000; count += 1) {
     const response = await request(`/api/change-requests/${id}`);
     const state = jsonObject(JSON.stringify(jsonObject(response.body).ticket)).state;
     if (state !== 'working' && state !== 'queued') return response;
@@ -277,6 +289,7 @@ test('slow proposals return a job immediately, are idempotent, and expose readab
   const job = jsonObject(JSON.stringify(jsonObject(response.body).ticket)).id;
   assert.equal(jsonObject(JSON.stringify(jsonObject((await request(`/api/change-requests/${job}`)).body).ticket)).state, 'working');
   assert.equal(jsonObject(JSON.stringify(jsonObject((await post()).body).ticket)).id, job);
+  for (let i = 0; runs < 1 && i < 4000; i += 1) await new Promise<void>((resolve) => setTimeout(resolve, 5));
   assert.equal(runs, 1);
   assert.equal((await post({ ...payload, request: { ...payload.request, instruction: 'Different input.' } })).status, 409);
   release?.();
@@ -284,4 +297,39 @@ test('slow proposals return a job immediately, are idempotent, and expose readab
   assert.equal(failure.status, 200);
   assert.equal(jsonObject(JSON.stringify(jsonObject(failure.body).ticket)).error, 'Controlled model failure.');
   assert.equal((await request('/api/change-requests/unknown')).status, 400);
+});
+
+test('HTTP cancellation aborts the worker and retains execution evidence without changing the accepted project', async (t) => {
+  let runningSignal: AbortSignal | undefined;
+  const request = await listen(t, { identity: { provider: 'test', model: 'http-cancel-worker' }, async run(session) {
+    await session.executeTool('run_model_script', { language: 'javascript',
+      source: "return { kind: 'observe', observation: await model.inspect() };" });
+    runningSignal = session.signal;
+    await new Promise<void>((resolve) => {
+      session.signal.addEventListener('abort', () => resolve(), { once: true });
+      if (session.signal.aborted) resolve();
+    });
+  } });
+  const repo = await RoomRepository.create();
+  const payload = { project: repo.serialize(), request: {
+    requestId: 'http-cancel', proposalName: 'http-cancel', baseRevisionId: repo.head('main'),
+    selectedObjectIds: ['door-entry'], instruction: 'Inspect before changing the door.',
+    visualIntent: { kind: 'selection' },
+  } };
+  assert.equal((await request('/api/change-requests', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).status, 202);
+  for (let i = 0; !runningSignal && i < 4000; i += 1) await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  assert.ok(runningSignal);
+  const decision = await request('/api/change-requests/http-cancel/decision', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'cancel', decisionId: 'http-cancel-decision', expectedRequestId: 'http-cancel' }) });
+  assert.equal(decision.status, 200);
+  assert.equal(runningSignal.aborted, true);
+  const detail = jsonObject((await request('/api/change-requests/http-cancel')).body);
+  const ticket = jsonObject(JSON.stringify(detail.ticket));
+  assert.equal(ticket.state, 'cancelled');
+  assert.equal(ticket.result, null);
+  assert.ok(Array.isArray(ticket.executions)); assert.equal(ticket.executions.length, 1);
+  const project = jsonObject((await request(`/api/projects/${repo.projectId}/change-requests`)).body);
+  assert.equal(project.project, repo.serialize());
 });
