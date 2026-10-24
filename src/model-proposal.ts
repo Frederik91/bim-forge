@@ -1,3 +1,4 @@
+import type { ActivityUpdate } from './request-activity.ts';
 import { createHash } from 'node:crypto';
 import { diffSnapshots, previewRectangle, previewFurnishings, rectangleLayout, FURNITURE_KINDS } from './room-model.ts';
 import { parseVisualRequest } from './visual-request.ts';
@@ -276,7 +277,7 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([
   }),
 ]);
 
-export async function prepareModelProposal(repository: RoomRepository, input: unknown, worker: unknown): Promise<ModelProposalResult> {
+export async function prepareModelProposal(repository: RoomRepository, input: unknown, worker: unknown, onActivity: (event: ActivityUpdate) => void = () => {}): Promise<ModelProposalResult> {
   if (!repository || typeof repository.view !== 'function' || typeof repository.proposeReviewedModel !== 'function') fail('A validated room repository is required.');
   if (!isModelWorker(worker)) fail('A model worker with an auditable identity is required.');
   fields(worker.identity, ['provider', 'model']);
@@ -319,12 +320,23 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     || name === 'submit_proposal' || name === 'decline_request' ? name : 'unsupported_tool';
   const recordTool = (name: string, status: ToolStatus, error: string | null = null): void => {
     toolCalls.push(Object.freeze({ name: evidenceName(name), status, error }));
+    if (name === 'preview_rectangle' || name === 'preview_furnishings') {
+      const changes = delta ? summarizeDelta(delta) : null;
+      onActivity({ stage: status === 'accepted' ? 'validated' : 'validation-failed', message: status === 'accepted' && changes
+        ? `Validation passed: ${changes.entities.added.length} added, ${changes.entities.modified.length} changed, ${changes.entities.removed.length} removed objects. Proposal only.`
+        : 'The proposed input did not pass validation. The agent can try another approach; the accepted model is unchanged.' });
+    } else if (name === 'inspect_model' && status === 'accepted') onActivity({ stage: 'inspecting', message: 'Bound model and selected objects inspected.' });
+    else if (status === 'rejected') onActivity({ stage: 'validation-failed', message: 'A tool call was rejected. The accepted model is unchanged.' });
   };
 
   const executeTool = async (name: string, argumentsValue: unknown): Promise<Record<string, unknown>> => {
     calls += 1;
     if (calls > MAX_TOOL_CALLS) fail('The model worker exceeded the bounded tool-call budget.');
     if (result || pending.value) return { ok: false, error: 'This proposal session has already finished.' };
+    if (name === 'inspect_model') onActivity({ stage: 'inspecting', message: 'Inspecting the bound revision, selection and object relationships.' });
+    if (name === 'preview_rectangle' || name === 'preview_furnishings') onActivity({ stage: 'validating', message: name === 'preview_furnishings' ? 'Testing furnishing placement, supports, overlaps and doorway clearance.' : 'Testing the room layout and opening constraints.' });
+    if (name === 'submit_proposal') onActivity({ stage: 'submitting', message: 'Preparing the validated model delta and review explanation.' });
+    if (name === 'decline_request') onActivity({ stage: 'declined', message: 'The agent is requesting clarification instead of changing the model.' });
     try {
       if (name === 'inspect_model') {
         fields(argumentsValue, []);
