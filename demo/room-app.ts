@@ -2,7 +2,8 @@ import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots } from
 import type {
   Door, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, Point, ProposalReview, RoomLayout, Wall, Window,
 } from '../src/room-model.ts';
-import { createHousePilotFixture } from '../src/house-pilot.ts';
+import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pilot.ts';
+import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
 import {
   DEFAULT_MODEL_VIEW_CAMERA,
   orbitModelView,
@@ -155,6 +156,8 @@ const ui = {
   'door-fields': generic('door-fields'), 'wall-fields': generic('wall-fields'),
   'wall-position-label': requiredElement('wall-position-label', HTMLLabelElement),
   'selection-help': generic('selection-help'), 'edit-feedback': generic('edit-feedback'),
+  'knowledge-panel': generic('knowledge-panel'), 'knowledge-summary': generic('knowledge-summary'),
+  'knowledge-empty': generic('knowledge-empty'), 'knowledge-groups': generic('knowledge-groups'),
   'review-panel': generic('review-panel'), 'review-status': generic('review-status'),
   'review-summary': generic('review-summary'), 'review-rationale': generic('review-rationale'),
   'review-uncertainty': generic('review-uncertainty'), 'review-constraints': generic('review-constraints'),
@@ -165,6 +168,10 @@ const ui = {
   'view-original': button('view-original'), 'view-changes': button('view-changes'), 'new-project': button('new-project'),
   'start-dialog': dialog('start-dialog'), 'start-close': button('start-close'),
   'original-dialog': dialog('original-dialog'), 'changes-dialog': dialog('changes-dialog'),
+  'evidence-dialog': dialog('evidence-dialog'), 'evidence-title': generic('evidence-title'),
+  'evidence-kind': generic('evidence-kind'), 'evidence-description': generic('evidence-description'),
+  'evidence-metadata': requiredElement('evidence-metadata', HTMLDListElement),
+  'evidence-source': requiredElement('evidence-source', HTMLAnchorElement),
   'working-dialog': dialog('working-dialog'), 'editor-panel': generic('editor-panel'),
   'request-canvas-tab': button('request-canvas-tab'), 'request-details-tab': button('request-details-tab'),
   'request-canvas-pane': generic('request-canvas-pane'), 'to-request-details': button('to-request-details'),
@@ -194,6 +201,7 @@ let selectedObject = 'door-entry';
 let invalidInput = false;
 let gesture: GestureState | null = null;
 let activeReview: ActiveReview | null = null;
+let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = 'plan';
 let modelCamera: ModelViewCamera = DEFAULT_MODEL_VIEW_CAMERA;
@@ -213,6 +221,107 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
   if (text !== undefined) node.textContent = text;
   if (className) node.className = className;
   return node;
+}
+
+function evidenceById(id: EvidenceItem['id']): EvidenceItem | undefined {
+  return housePilotFixture?.evidence.find((item) => item.id === id);
+}
+
+function evidenceMetadata(item: EvidenceItem): Array<readonly [string, string]> {
+  const anchor = item.anchor.kind === 'entity' ? `Entity · ${item.anchor.entityId}` : `Spatial scope · ${item.anchor.scopeId}`;
+  const source = item.kind === 'measurement' ? `Instrument · ${item.instrument}`
+    : item.kind === 'note' ? `Author · ${item.author}`
+      : item.kind === 'document' ? `Owner · ${item.owner}` : `Media type · ${item.mediaType}`;
+  return [['Evidence ID', item.id], ['Source', source], ['Captured', item.capturedAt], ['Revision', item.revisionId], ['Binding', anchor]];
+}
+
+function openEvidence(item: EvidenceItem): void {
+  ui['evidence-title'].textContent = item.label;
+  ui['evidence-kind'].textContent = item.kind;
+  ui['evidence-description'].textContent = item.kind === 'document'
+    ? 'External product information with an explicit owner and source.'
+    : `${item.kind[0]?.toUpperCase() ?? ''}${item.kind.slice(1)} evidence captured for the House Pilot fixture.`;
+  ui['evidence-metadata'].replaceChildren(...evidenceMetadata(item).map(([term, description]) => {
+    const row = element('div'); row.append(element('dt', term), element('dd', description)); return row;
+  }));
+  if (item.kind === 'document') {
+    ui['evidence-source'].href = item.sourceUrl;
+    ui['evidence-source'].hidden = false;
+  } else {
+    ui['evidence-source'].removeAttribute('href');
+    ui['evidence-source'].hidden = true;
+  }
+  openDialog(ui['evidence-dialog']);
+}
+
+function evidenceLink(id: EvidenceItem['id']): HTMLButtonElement {
+  const item = evidenceById(id);
+  const control = element('button', item?.label ?? id, 'evidence-link');
+  control.type = 'button';
+  control.disabled = !item;
+  control.addEventListener('click', () => { if (item) openEvidence(item); });
+  return control;
+}
+
+function originDescription(assertion: Extract<PropertyAssertion, { status: 'supported' }>): string {
+  const origin = assertion.origin;
+  if (origin.kind === 'documented') return `Documented · owned by ${origin.owner}`;
+  if (origin.kind === 'inferred' || origin.kind === 'assumed') return `${origin.kind} · ${origin.rationale}`;
+  return `${origin.kind} · bound directly to evidence`;
+}
+
+function assertionValue(value: string | number, unit: string): string {
+  return unit === 'text' ? String(value) : `${number.format(Number(value))} ${unit}`;
+}
+
+function renderKnowledge(): void {
+  const entity = preview?.entities.find((item) => item.id === selectedObject);
+  if (!housePilotFixture || !entity) {
+    ui['knowledge-summary'].textContent = 'No evidence';
+    ui['knowledge-empty'].hidden = false;
+    ui['knowledge-groups'].replaceChildren();
+    return;
+  }
+  const knowledge = inspectEntityKnowledge(housePilotFixture, entity.id);
+  const total = knowledge.supported.length + knowledge.uncertain.length + knowledge.conflicting.length + knowledge.unknown.length;
+  ui['knowledge-summary'].textContent = `${total} ${total === 1 ? 'claim' : 'claims'}`;
+  ui['knowledge-empty'].hidden = total > 0;
+  ui['knowledge-empty'].textContent = `No external evidence or unresolved assertions are linked to ${entity.name} yet.`;
+  const groups = [
+    { name: 'Supported', tone: 'supported', values: knowledge.supported },
+    { name: 'Uncertain', tone: 'uncertain', values: knowledge.uncertain },
+    { name: 'Conflicting', tone: 'conflicting', values: knowledge.conflicting },
+    { name: 'Unknown', tone: 'unknown', values: knowledge.unknown },
+  ] as const;
+  ui['knowledge-groups'].replaceChildren(...groups.filter((group) => group.values.length > 0).map((group) => {
+    const section = element('section', undefined, 'knowledge-group'); section.dataset.tone = group.tone;
+    const heading = element('header'); heading.append(element('span', group.name), element('span', String(group.values.length)));
+    section.append(heading);
+    for (const assertion of group.values) {
+      const item = element('div', undefined, 'knowledge-item');
+      item.append(element('div', assertion.property, 'knowledge-property'));
+      if (assertion.status === 'supported') {
+        item.append(element('div', assertionValue(assertion.value, assertion.unit), 'knowledge-value'));
+        const origin = element('p', undefined, 'knowledge-origin');
+        origin.append(element('strong', assertion.origin.kind), document.createTextNode(` · ${originDescription(assertion).replace(`${assertion.origin.kind} · `, '')}`));
+        item.append(origin);
+        const links = element('div', undefined, 'evidence-links'); links.append(...assertion.evidenceIds.map(evidenceLink)); item.append(links);
+      } else if (assertion.status === 'conflicting') {
+        item.append(element('div', 'Values remain separate until a reviewer resolves them.', 'knowledge-origin'));
+        for (const candidate of assertion.candidates) {
+          const candidateNode = element('div', undefined, 'candidate');
+          candidateNode.append(element('div', assertionValue(candidate.value, candidate.unit), 'knowledge-value'),
+            element('p', candidate.origin.kind, 'knowledge-origin'));
+          const links = element('div', undefined, 'evidence-links'); links.append(evidenceLink(candidate.evidenceId)); candidateNode.append(links);
+          item.append(candidateNode);
+        }
+      } else {
+        item.append(element('div', 'No value assigned', 'knowledge-value'), element('p', assertion.reason, 'knowledge-origin'));
+      }
+      section.append(item);
+    }
+    return section;
+  }));
 }
 
 function status(message: string): void { ui.status.textContent = message; }
@@ -429,6 +538,7 @@ function syncInspector() {
   ui['door-fields'].hidden = !isDoor;
   ui['wall-fields'].hidden = !isWall;
   ui['editor-base'].textContent = `Request bound to ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved in history. Unsaved request sketches are lost on reload.`;
+  renderKnowledge();
   if (!layout || !preview || !object || (!isDoor && !isWall)) {
     for (const dimensionInput of dimensionInputs) dimensionInput.value = '';
     ui['selection-help'].textContent = 'This saved revision is view-only. Its geometry and changed properties remain available below.';
@@ -531,12 +641,18 @@ function confirmReplacement(): boolean {
   return !repo || window.confirm('Replace the locally saved project and discard any unsaved request sketch? Export saved work first if you want to keep it.');
 }
 
+async function recognizeHousePilot(project: RoomRepository): Promise<void> {
+  const fixture = await createHousePilotFixture();
+  housePilotFixture = fixture.projectId === project.projectId && fixture.scope.revisionId === project.root() ? fixture : null;
+}
+
 async function createProject(name: string): Promise<void> {
   writableStore();
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
   const next = await RoomRepository.create(name);
   activeReview = null;
+  housePilotFixture = null;
   await persist(next);
   ui['project-name'].value = next.name;
   closeDialog(ui['start-dialog']);
@@ -551,6 +667,7 @@ async function createHousePilot(): Promise<void> {
   status('Opening the House Pilot project…');
   const fixture = await createHousePilotFixture();
   activeReview = null;
+  housePilotFixture = fixture;
   await persist(fixture.repository);
   ui['project-name'].value = fixture.repository.name;
   closeDialog(ui['start-dialog']);
@@ -829,6 +946,7 @@ ui['import-file'].addEventListener('change', () => {
     const next = await RoomRepository.restore(text);
     if (!confirmReplacement()) { status('Import cancelled. Your current project is unchanged.'); return; }
     activeReview = null;
+    await recognizeHousePilot(next);
     await persist(next);
     ui['project-name'].value = next.name;
     activeReview = next.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
@@ -1531,6 +1649,7 @@ async function initialize() {
       const message = error instanceof Error ? error.message : 'The saved data is invalid.';
       throw new Error(`The saved project could not be validated: ${message} It has been left intact. Download it below; local writes are blocked to protect it.`);
     }
+    await recognizeHousePilot(restored);
     repo = restored;
     savedText = record.text;
     selectedBranch = 'main';

@@ -42,7 +42,7 @@ export type EvidenceOrigin =
 
 export interface AssertionCandidate {
   readonly value: string | number;
-  readonly unit: 'm' | 'mm' | 'text';
+  readonly unit: 'm' | 'mm' | 'W' | 'text';
   readonly origin: EvidenceOrigin;
   readonly evidenceId: EvidenceId;
 }
@@ -57,7 +57,7 @@ export type PropertyAssertion =
   | (AssertionBase & {
     readonly status: 'supported';
     readonly value: string | number;
-    readonly unit: 'm' | 'mm' | 'text';
+    readonly unit: 'm' | 'mm' | 'W' | 'text';
     readonly origin: EvidenceOrigin;
     readonly evidenceIds: readonly [EvidenceId, ...EvidenceId[]];
   })
@@ -86,6 +86,17 @@ export interface HousePilotFixture {
 export interface FixtureAssessment {
   readonly conflicts: readonly Extract<PropertyAssertion, { status: 'conflicting' }>[];
   readonly unknowns: readonly Extract<PropertyAssertion, { status: 'unknown' }>[];
+}
+
+type SupportedAssertion = Extract<PropertyAssertion, { status: 'supported' }>;
+type ConflictingAssertion = Extract<PropertyAssertion, { status: 'conflicting' }>;
+type UnknownAssertion = Extract<PropertyAssertion, { status: 'unknown' }>;
+
+export interface EntityKnowledge {
+  readonly supported: readonly SupportedAssertion[];
+  readonly uncertain: readonly SupportedAssertion[];
+  readonly conflicting: readonly ConflictingAssertion[];
+  readonly unknown: readonly UnknownAssertion[];
 }
 
 const semanticId = /^[a-z][a-z0-9-]{0,63}$/;
@@ -189,6 +200,25 @@ export function assessHousePilotFixture(fixture: HousePilotFixture): FixtureAsse
   });
 }
 
+export function inspectEntityKnowledge(fixture: HousePilotFixture, entityId: EntityId): EntityKnowledge {
+  assessHousePilotFixture(fixture);
+  const revision = fixture.repository.view(fixture.scope.revisionId);
+  if (!revision.snapshot.entities.some((entity) => entity.id === entityId)) {
+    throw new Error('Cannot inspect knowledge for an unknown entity.');
+  }
+  const supported: SupportedAssertion[] = [];
+  const uncertain: SupportedAssertion[] = [];
+  const conflicting: ConflictingAssertion[] = [];
+  const unknown: UnknownAssertion[] = [];
+  for (const assertion of fixture.assertions.filter((item) => item.subjectId === entityId)) {
+    if (assertion.status === 'conflicting') conflicting.push(assertion);
+    else if (assertion.status === 'unknown') unknown.push(assertion);
+    else if (assertion.origin.kind === 'inferred' || assertion.origin.kind === 'assumed') uncertain.push(assertion);
+    else supported.push(assertion);
+  }
+  return freeze({ supported, uncertain, conflicting, unknown });
+}
+
 export async function createHousePilotFixture(): Promise<HousePilotFixture> {
   const repository = await RoomRepository.createProject({
     projectId: '00000000-0000-4000-8000-000000000075',
@@ -238,6 +268,18 @@ export async function createHousePilotFixture(): Promise<HousePilotFixture> {
       id: assertionIdentifier('assertion-radiator-product'), status: 'supported', subjectId: entityId('equipment-radiator'),
       property: 'product.source', value: 'Panel radiator product sheet', unit: 'text',
       origin: { kind: 'documented', owner: 'Fixture manufacturer' }, evidenceIds: [productDocument],
+    },
+    {
+      id: assertionIdentifier('assertion-south-wall-construction'), status: 'supported', subjectId: entityId('wall-south'),
+      property: 'construction.system', value: 'Timber frame', unit: 'text',
+      origin: { kind: 'inferred', rationale: 'Inferred from the observed wall thickness and the stated building age.' },
+      evidenceIds: [note],
+    },
+    {
+      id: assertionIdentifier('assertion-radiator-output'), status: 'supported', subjectId: entityId('equipment-radiator'),
+      property: 'mechanical.nominalOutput', value: 800, unit: 'W',
+      origin: { kind: 'assumed', rationale: 'Placeholder capacity until the exact installed product is matched.' },
+      evidenceIds: [productDocument],
     },
     {
       id: assertionIdentifier('assertion-south-wall-length'), status: 'conflicting', subjectId: entityId('wall-south'),

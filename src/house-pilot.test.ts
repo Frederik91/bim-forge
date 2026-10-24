@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessHousePilotFixture, createHousePilotFixture } from './house-pilot.ts';
+import { assessHousePilotFixture, createHousePilotFixture, inspectEntityKnowledge } from './house-pilot.ts';
 import { RoomRepository } from './room-model.ts';
 
 test('canonical House Pilot fixture binds project, room, entities and evidence to one revision', async () => {
@@ -42,6 +42,40 @@ test('supported values preserve measured, observed and documented provenance', a
   assert.ok(origins.includes('observed'));
   assert.ok(origins.includes('documented'));
   assert.equal(fixture.assertions.some((assertion) => assertion.status === 'unknown' && 'value' in assertion), false);
+});
+
+test('entity knowledge separates evidence-backed facts, uncertainty, conflicts and unknowns', async () => {
+  const fixture = await createHousePilotFixture();
+  const entityId = (id: string) => {
+    const entity = fixture.repository.view(fixture.scope.revisionId).snapshot.entities.find((item) => item.id === id);
+    if (!entity) throw new Error('Missing test entity.');
+    return entity.id;
+  };
+  const wall = inspectEntityKnowledge(fixture, entityId('wall-south'));
+  assert.equal(wall.uncertain[0]?.origin.kind, 'inferred');
+  assert.equal(wall.conflicting[0]?.property, 'geometry.length');
+  assert.equal(wall.conflicting[0]?.candidates.length, 2);
+  const radiator = inspectEntityKnowledge(fixture, entityId('equipment-radiator'));
+  assert.equal(radiator.supported[0]?.origin.kind, 'documented');
+  assert.equal(radiator.uncertain[0]?.origin.kind, 'assumed');
+  const panel = inspectEntityKnowledge(fixture, entityId('equipment-panel'));
+  assert.equal(panel.unknown[0]?.property, 'electrical.circuit');
+  assert.equal('value' in panel.unknown[0], false);
+  const window = inspectEntityKnowledge(fixture, entityId('window-north'));
+  assert.equal(window.supported[0]?.origin.kind, 'observed');
+  assert.ok(Object.isFrozen(wall));
+  assert.ok(Object.isFrozen(wall.conflicting));
+});
+
+test('every supported fixture value resolves to inspectable evidence metadata', async () => {
+  const fixture = await createHousePilotFixture();
+  const evidenceIds = new Set(fixture.evidence.map((item) => item.id));
+  for (const assertion of fixture.assertions) {
+    if (assertion.status === 'supported') {
+      assert.ok(assertion.evidenceIds.length > 0);
+      assert.ok(assertion.evidenceIds.every((id) => evidenceIds.has(id)));
+    }
+  }
 });
 
 test('custom project roots serialize and restore without falling back to the demo room', async () => {
