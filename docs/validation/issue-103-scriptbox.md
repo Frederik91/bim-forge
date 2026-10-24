@@ -37,7 +37,7 @@ docker run --rm --network none --cpus=1.5 --memory=1g --pids-limit=128 \
 	bim-forge-preview-app:scriptbox-check node --test src/model-script.test.ts
 ```
 
-`npm run validate` checks policy configuration without inferring a Git diff. Publication also needs the explicit changed-file policy check and a whitespace diff check, recorded when the final documentation is staged.
+`npm run validate` checks policy configuration without inferring a Git diff. The explicit changed-file policy check passed for all 25 changed paths before publication, and `git -c core.whitespace=cr-at-eol diff --check` passed. [Draft PR 104](https://github.com/Frederik91/bim-forge/pull/104) targets the residential-floor branch and awaits maintainer review.
 
 ## Feature parity evidence
 
@@ -97,3 +97,5 @@ This integration does not add arbitrary graph editing, adjacent-room topology, c
 Sandbox execution is bounded, not a guarantee against defects in QuickJS, WASM or Node. Upstream guest-worker crash injection and additional transport fault tests remain upstream qualification work. This application currently registers synchronous, deterministic model operations and static documentation, and checks cancellation and revocation before draft writes.
 
 The change requires human review for its security boundary, review-evidence representation and new queue table. It must not auto-merge. Replacing the shared preview is a separate maintainer decision.
+
+Older readers reject new script-review fields. Deploy the app and browser bundle together, retain compatible readers when rolling back, and preserve the accepted-model database. This task does not perform a data downgrade or shared-preview deployment.

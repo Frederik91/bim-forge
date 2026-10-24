@@ -9,7 +9,7 @@ Issue: [103](https://github.com/Frederik91/bim-forge/issues/103).
 - [x] Implement and verify the runtime, proposal, persistence and cancellation changes together.
 - [x] Verify feature parity, negative cases, container packaging and the server-hosted UI.
 - [x] Remove replaced executable authoring paths.
-- [ ] Open a draft PR with validation evidence. Human approval is required before merge or replacement of the shared preview.
+- [x] Open [draft PR 104](https://github.com/Frederik91/bim-forge/pull/104) with validation evidence. Human approval is required before merge or replacement of the shared preview.
 
 The application baseline is `10982ab9c97d3bde9c95a7b8515bba39d7c591a7`, the revision running on the server when this work began. `main` did not yet contain its backlog, Babylon viewer or residential-floor changes. The integration branch therefore starts from that feature revision.
 
