@@ -1,9 +1,9 @@
 import { diffSnapshots, previewRectangle, previewFurnishings, rectangleLayout, FURNITURE_KINDS } from './room-model.ts';
-import { parseWorkstationIntent, previewWorkstationMove } from './workstation.ts';
-import type { WorkstationWallMove } from './workstation.ts';
+import { parseVisualRequest } from './visual-request.ts';
+import type { VisualRequest } from './visual-request.ts';
 import type {
   CollectionChanges, Entity, EntityId, HostingRelationship, ModelDelta, ModelSnapshot,
-  ProposalReview, Revision, RoomLayout, RoomRepository,
+  ProposalReview, Revision, RoomRepository,
 } from './room-model.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
@@ -11,7 +11,7 @@ const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
 const BRANCH = /^[a-z]+(?:-[a-z]+)*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MAX_TOOL_CALLS = 12;
-type SupportedToolName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_workstation_move' | 'submit_proposal' | 'decline_request';
+type SupportedToolName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'submit_proposal' | 'decline_request';
 type EvidenceToolName = SupportedToolName | 'unsupported_tool';
 type ToolStatus = 'accepted' | 'rejected';
 
@@ -21,7 +21,7 @@ interface BoundRequest {
   baseRevisionId: string;
   selectedObjectIds: readonly EntityId[];
   instruction: string;
-  visualIntent: Readonly<{ kind: 'rectangle-layout-sketch'; layout: RoomLayout }> | WorkstationWallMove;
+  visualIntent: VisualRequest;
   base: Revision;
   selectedObjects: readonly Entity[];
 }
@@ -130,19 +130,7 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid selected object identity.');
   const entities = new Map(base.snapshot.entities.map((entity) => [entity.id, entity]));
   const instruction = text(input.instruction, 'Change request', 1000);
-  let visualIntent: BoundRequest['visualIntent'];
-  if (isRecord(input.visualIntent) && input.visualIntent.kind === 'workstation-wall-move') {
-    const move = parseWorkstationIntent(base.snapshot, input.visualIntent);
-    visualIntent = move;
-    if (selectedObjectIds.length !== move.memberIds.length || selectedObjectIds.some((id, index) => id !== move.memberIds[index])) {
-      fail('Select the exact workstation member identities shown in the visual request.');
-    }
-  } else {
-    fields(input.visualIntent, ['kind', 'layout']);
-    if (input.visualIntent.kind !== 'rectangle-layout-sketch') fail('Unsupported visual request kind.');
-    const visualSnapshot = previewRectangle(base.snapshot, input.visualIntent.layout);
-    visualIntent = { kind: 'rectangle-layout-sketch', layout: rectangleLayout(visualSnapshot) };
-  }
+  const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
   return Object.freeze({
     requestId,
     proposalName,
@@ -159,8 +147,8 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   });
 }
 
-export function validateModelProposalRequest(repository: RoomRepository, input: unknown): void {
-  request(input, repository);
+export function validateModelProposalRequest(repository: RoomRepository, input: unknown): BoundRequest {
+  return request(input, repository);
 }
 
 function summarizeSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
@@ -259,12 +247,6 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([
     strict: true,
   }),
   Object.freeze({
-    type: 'function', name: 'preview_workstation_move',
-    description: 'For a workstation-wall-move request only: relocate the exact bound workstation to its target wall, rigidly rotating desk, supported devices and companion chair together. Other objects, dimensions and supports cannot change. alongWallMm is the desk centre measured from the wall start, matching visual intent; wallGapMm is the clearance from wall inner face to desk back. You may adjust along the SAME wall to avoid collisions. If it cannot fit, decline. Validation checks containment, furniture/equipment overlaps and door clearance.',
-    parameters: { type: 'object', properties: { alongWallMm: { type: 'integer', minimum: 0, maximum: 1000000 }, wallGapMm: { type: 'integer', minimum: 100, maximum: 600 } }, required: ['alongWallMm', 'wallGapMm'], additionalProperties: false },
-    strict: true,
-  }),
-  Object.freeze({
     type: 'function', name: 'submit_proposal',
     description: 'Submit the latest validated preview as a separate proposal with a concise human review. Call only after a preview tool succeeds.',
     parameters: reviewParameters,
@@ -325,7 +307,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 })),
   });
 
-  const evidenceName = (name: string): EvidenceToolName => name === 'inspect_model' || name === 'preview_rectangle' || name === 'preview_furnishings' || name === 'preview_workstation_move'
+  const evidenceName = (name: string): EvidenceToolName => name === 'inspect_model' || name === 'preview_rectangle' || name === 'preview_furnishings'
     || name === 'submit_proposal' || name === 'decline_request' ? name : 'unsupported_tool';
   const recordTool = (name: string, status: ToolStatus, error: string | null = null): void => {
     toolCalls.push(Object.freeze({ name: evidenceName(name), status, error }));
@@ -345,7 +327,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         return output;
       }
       if (name === 'preview_rectangle') {
-        if (bound.visualIntent.kind === 'workstation-wall-move') fail('This request only permits preview_workstation_move; building geometry is protected.');
+        if (bound.visualIntent.kind === 'spatial-reference') fail('A spatial reference does not authorize changing the building shell. Use furnishing tools or request clarification.');
         candidate = previewRectangle(candidate ?? bound.base.snapshot, argumentsValue);
         delta = diffSnapshots(bound.base.snapshot, candidate);
         const output = { ok: true, layout: rectangleLayout(candidate), changes: summarizeDelta(delta) };
@@ -353,18 +335,10 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         return output;
       }
       if (name === 'preview_furnishings') {
-        if (bound.visualIntent.kind === 'workstation-wall-move') fail('Use preview_workstation_move to preserve the exact group and unrelated objects.');
         candidate = previewFurnishings(candidate ?? bound.base.snapshot, argumentsValue);
         delta = diffSnapshots(bound.base.snapshot, candidate);
         recordTool(name, 'accepted');
         return { ok: true, model: summarizeSnapshot(candidate), changes: summarizeDelta(delta) };
-      }
-      if (name === 'preview_workstation_move') {
-        if (bound.visualIntent.kind !== 'workstation-wall-move') fail('A bound workstation visual move request is required.');
-        candidate = previewWorkstationMove(bound.base.snapshot, bound.visualIntent, argumentsValue);
-        delta = diffSnapshots(bound.base.snapshot, candidate);
-        recordTool(name, 'accepted');
-        return { ok: true, model: summarizeSnapshot(candidate), changes: summarizeDelta(delta), targetWallId: bound.visualIntent.targetWallId };
       }
       if (name === 'submit_proposal') {
         fields(argumentsValue, ['summary', 'rationale', 'constraints', 'uncertainty']);
@@ -405,7 +379,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
 
   try {
     await worker.run({
-      instructions: 'You prepare BIM model proposals for human review. Work only on the bound revision. Inspect the model first. For workstation-wall-move intent, use ONLY preview_workstation_move then submit_proposal or decline_request. Start near its alongWallMm with wallGapMm 150; adjust along that same wall if validation requires it. Preserve the grouped relative arrangement, supported devices, chair and every unrelated object. Name the destination wall and all moved items in the review. For other requests, use preview_rectangle for shell changes and preview_furnishings for visible furniture. Furnishing previews replace the entire furnishing set; retain items unless asked to remove them. Leave a useful circulation route from the door to the chair. Explain limitations honestly. Finish with submit_proposal or decline_request. The visual layout is intent, not authoritative geometry. Never claim construction, code, accessibility, or coordination approval.',
+      instructions: 'You prepare BIM model proposals for human review. Work only on the bound revision. Inspect first. Selection and spatial references are CONTEXT, not a move command, group, or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. A request for another desk creates ONLY that desk unless companions are requested; retain existing objects and identities. A freestanding floor point does not imply wall attachment. For moving a setup, reason about supported devices and nearby furniture, but proximity is not an explicit relationship or permission. Never leave devices without valid support; if desk-only movement leaves their intended destination unclear, decline with a specific clarification question. Use preview_rectangle for explicitly requested shell changes; a spatial reference cannot authorize shell edits. Use preview_furnishings for furniture. It replaces the COMPLETE furnishing set, so preserve every unrelated item exactly. Explain the interpreted operation, changed/added objects, preserved objects, dependencies and any adjustment from the destination in the review. If intent or dependencies are ambiguous, decline and ask a specific question. Leave circulation clear. Finish with submit_proposal or decline_request. Visual references are intent, not authoritative geometry. Never claim construction, code, accessibility, or coordination approval.',
       input: {
         request: {
           requestId: bound.requestId,

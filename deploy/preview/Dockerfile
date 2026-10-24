@@ -10,7 +10,7 @@ RUN apt-get update \
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
-COPY --chown=65032:33 demo/server.ts ./demo/server.ts
+COPY --chown=65032:33 demo/server.ts demo/change-requests.ts ./demo/
 COPY --chown=65032:33 src ./src
 COPY --chown=65032:33 scripts/container-healthcheck.ts ./scripts/
 

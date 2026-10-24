@@ -2,11 +2,9 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { randomUUID, createHash } from 'node:crypto';
 import QRCode from 'qrcode';
-import { RoomRepository } from '../src/room-model.ts';
 import { CodexAccountConnection, CodexAppServerError } from '../src/codex-app-server.ts';
-import { ModelWorkerError, prepareModelProposal, validateModelProposalRequest } from '../src/model-proposal.ts';
+import { ChangeRequests, BacklogConflict } from './change-requests.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -57,7 +55,7 @@ async function readJson(request: http.IncomingMessage, maxBytes = MAX_REQUEST_BY
 function sameOriginRequest(request: http.IncomingMessage, publicOrigin: string | null): void {
   const origin = request.headers.origin;
   const expectedOrigin = publicOrigin ?? `http://${request.headers.host}`;
-  if (publicOrigin && origin !== expectedOrigin) throw new Error('A same-origin browser request is required.');
+  if (publicOrigin && request.method !== 'GET' && origin !== expectedOrigin) throw new Error('A same-origin browser request is required.');
   if (origin && origin !== expectedOrigin) throw new Error('Cross-origin requests are not allowed.');
   const site = request.headers['sec-fetch-site'];
   if (site && !['same-origin', 'none'].includes(site)) throw new Error('Cross-site requests are not allowed.');
@@ -76,6 +74,7 @@ export interface DemoServerOptions {
   codex?: Pick<CodexAccountConnection, 'publicSession' | 'startDeviceLogin' | 'cancelDeviceLogin' | 'refreshModels' | 'selectModel' | 'signOut' | 'modelWorker'> | null;
   runtimeMode?: DemoRuntimeMode;
   publicOrigin?: string | null;
+  backlogFile?: string;
 }
 
 function sessionPayload(codex: DemoServerOptions['codex']): unknown { return codex?.publicSession() ?? disconnected; }
@@ -123,16 +122,11 @@ export function createDemoServer({
   codex = null,
   runtimeMode = 'local',
   publicOrigin = null,
+  backlogFile = ':memory:',
 }: DemoServerOptions = {}): http.Server {
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
-  type Job = { fingerprint: string; requestId: string; createdAt: number } & (
-    { status: 'working' } | { status: 'complete'; httpStatus: number; result: unknown }
-  );
-  const jobs = new Map<string, Job>();
-  const expireJobs = (): void => {
-    for (const [id, job] of jobs) if (job.status === 'complete' && Date.now() - job.createdAt > 15 * 60_000) jobs.delete(id);
-  };
-  return http.createServer(async (request, response) => {
+  const backlog = new ChangeRequests(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
+  const server = http.createServer(async (request, response) => {
     const allowedHost = /^127\.0\.0\.1(?::[0-9]{1,5})?$|^localhost(?::[0-9]{1,5})?$/;
     const requestHost = request.headers.host ?? '';
     if (expectedHost ? requestHost !== expectedHost : !allowedHost.test(requestHost)) {
@@ -189,55 +183,41 @@ export function createDemoServer({
       }
       return;
     }
-    if (request.url?.startsWith('/api/proposals/')) {
-      if (request.method !== 'GET') { send(response, 405, { error: 'Proposal status requires GET.' }); return; }
-      expireJobs();
-      const job = jobs.get(request.url.slice('/api/proposals/'.length));
-      if (!job) { send(response, 404, { error: 'This proposal job expired or the server restarted. The saved model is unchanged; submit a new request.' }); return; }
-      if (job.status === 'working') send(response, 200, { status: 'working' });
-      else send(response, job.httpStatus, job.result);
-      return;
-    }
-    if (request.url === '/api/proposals') {
-      if (request.method !== 'POST') { response.writeHead(405, { Allow: 'POST' }); response.end('Proposal endpoint requires POST.'); return; }
+    if (request.url === '/api/change-requests') {
+      if (request.method !== 'POST') { send(response, 405, { error: 'Submit a change request with POST.' }); return; }
       try {
         sameOriginRequest(request, publicOrigin);
-        let worker: ModelWorker | null = modelWorker;
-        if (!worker && codex) {
-          if (!codex.publicSession().connected) { send(response, 401, { error: 'Connect a ChatGPT plan before preparing a proposal.' }); return; }
-          worker = codex.modelWorker();
-        }
-        if (!worker) { send(response, 503, { error: 'No server-side model worker is configured.' }); return; }
         const payload = proposalPayload(await readJson(request));
-        const repository = await RoomRepository.restore(payload.project);
-        validateModelProposalRequest(repository, payload.request);
-        if (!isRecord(payload.request) || typeof payload.request.requestId !== 'string') throw new Error('Invalid request identity.');
-        const requestId = payload.request.requestId;
-        expireJobs();
-        const fingerprint = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-        const existing = [...jobs].find(([, job]) => job.requestId === requestId);
-        if (existing) {
-          if (existing[1].fingerprint !== fingerprint) { send(response, 409, { error: 'This request identity was already used for different input.' }); return; }
-          send(response, 202, { status: 'working', jobId: existing[0] }); return;
-        }
-        if ([...jobs.values()].filter((job) => job.status === 'working').length >= 2 || jobs.size >= 8) {
-          send(response, 429, { error: 'The proposal queue is full. Try again after existing requests finish or expire.' }); return;
-        }
-        const id = randomUUID();
-        const job = { fingerprint, requestId, createdAt: Date.now() };
-        jobs.set(id, { ...job, status: 'working' });
-        send(response, 202, { status: 'working', jobId: id });
-        void prepareModelProposal(repository, payload.request, worker).then((result) => {
-          jobs.set(id, { ...job, status: 'complete', httpStatus: 200,
-            result: { status: result.status, project: result.repository.serialize(), review: result.review } });
-        }).catch((error: unknown) => {
-          jobs.set(id, { ...job, status: 'complete', httpStatus: error instanceof ModelWorkerError ? 502 : 400,
-            result: { error: error instanceof Error ? error.message : 'Proposal request failed.' } });
-        });
+        send(response, 202, { ticket: await backlog.submit(payload.project, payload.request) });
       } catch (error) {
-        const status = error instanceof ModelWorkerError ? 502 : 400;
-        send(response, status, { error: error instanceof Error ? error.message : 'Proposal request failed.' });
+        send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Change request failed.' });
       }
+      return;
+    }
+    const projectRoute = /^\/api\/projects\/([^/]+)\/change-requests$/.exec(request.url ?? '');
+    const ticketRoute = /^\/api\/change-requests\/([^/]+)(\/decision|\/revision)?$/.exec(request.url ?? '');
+    if (projectRoute || ticketRoute) {
+      try {
+        sameOriginRequest(request, publicOrigin);
+        if (projectRoute) {
+          if (request.method !== 'GET') { send(response, 405, { error: 'The backlog requires GET.' }); return; }
+          const id = decodeURIComponent(projectRoute[1] ?? '');
+          send(response, 200, { tickets: backlog.list(id), project: backlog.project(id) });
+        } else if (ticketRoute) {
+          const id = decodeURIComponent(ticketRoute[1] ?? '');
+          if (ticketRoute[2] === '/revision') {
+            if (request.method !== 'POST') { send(response, 405, { error: 'A revision requires POST.' }); return; }
+            const payload = proposalPayload(await readJson(request));
+            send(response, 202, { ticket: await backlog.revise(id, payload.project, payload.request) });
+          } else if (ticketRoute[2]) {
+            if (request.method !== 'POST') { send(response, 405, { error: 'A decision requires POST.' }); return; }
+            send(response, 200, await backlog.decide(id, await readJson(request, 2048)));
+          } else {
+            if (request.method !== 'GET') { send(response, 405, { error: 'A request requires GET.' }); return; }
+            send(response, 200, { ticket: backlog.get(id) });
+          }
+        }
+      } catch (error) { send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Backlog unavailable.' }); }
       return;
     }
     if (!request.method || !['GET', 'HEAD'].includes(request.method)) {
@@ -252,6 +232,8 @@ export function createDemoServer({
       response.end(request.method === 'HEAD' ? undefined : bytes);
     } catch { response.writeHead(500); response.end('Demo asset unavailable.'); }
   });
+  server.on('close', () => backlog.close());
+  return server;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -261,7 +243,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     ...(config.workingDirectory ? { workingDirectory: config.workingDirectory } : {}),
   };
   const codex = await CodexAccountConnection.open(connectionOptions);
-  const server = createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin });
+  const backlogDirectory = config.codexHome ?? path.join(root, '.bim-preview');
+  await fs.mkdir(backlogDirectory, { recursive: true, mode: 0o700 });
+  const server = createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin,
+    backlogFile: path.join(backlogDirectory, 'bim-change-requests.sqlite') });
   server.on('close', () => codex.close());
   server.on('error', () => { console.error('The BIM Forge preview runtime could not start.'); process.exitCode = 1; });
   const listen = config.listen;
