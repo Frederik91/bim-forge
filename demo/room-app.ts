@@ -2,9 +2,9 @@ import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots } from
 import type {
   Door, Entity, HostingRelationship, ModelDelta, ModelSnapshot, Point, ProposalReview, RoomLayout, Wall,
 } from '../src/room-model.ts';
+import { pageAfterReviewDecision, type PageName } from './review-workflow.ts';
 import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
 
-type PageName = 'request' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
 type ReviewState = 'pending' | 'accepted' | 'superseded' | 'declined';
 type BoundSide = 'minX' | 'maxX' | 'minY' | 'maxY';
@@ -746,7 +746,7 @@ ui['accept-proposal'].addEventListener('click', () => {
     await persist(next, 'main');
     activeReview = repo.review(acceptedName);
     renderReview();
-    showPage('review');
+    showPage(pageAfterReviewDecision('accepted'));
     status(`Accepted “${acceptedName}” as the current model version. The original and proposal branch remain in history.`);
   });
 });
@@ -758,7 +758,7 @@ ui['request-revision'].addEventListener('click', () => {
   ui['request-text'].value = `Revise the selected AI proposal. ${ui['request-text'].value.trim()}`.slice(0, 1000);
   renderReview(); updateControls();
   showRequestPane('details');
-  showPage('request');
+  showPage(pageAfterReviewDecision('revision-requested'));
   ui['proposal-name'].focus();
   status('Revision request started from the selected proposal. Choose a new proposal name; the earlier proposal remains unchanged.');
 });
