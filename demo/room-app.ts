@@ -1,5 +1,6 @@
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
-import { furnitureFaces } from '../src/furniture-geometry.ts';
+import { ModelViewer } from './model-viewer.ts';
+import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 import type {
@@ -7,14 +8,6 @@ import type {
 } from '../src/room-model.ts';
 import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pilot.ts';
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
-import {
-  DEFAULT_MODEL_VIEW_CAMERA,
-  orbitModelView,
-  panModelView,
-  projectModelPoint,
-  zoomModelView,
-  type ModelViewCamera,
-} from '../src/model-view.ts';
 import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
 import type { RequestState } from './change-requests.ts';
 
@@ -65,16 +58,6 @@ interface GestureState {
   moved: boolean;
   rejected: boolean;
 }
-interface CameraGesture {
-  readonly id: number;
-  readonly root: SVGSVGElement;
-  readonly origin: Point;
-  readonly camera: ModelViewCamera;
-  readonly mode: 'orbit' | 'pan';
-  readonly objectId: string | null;
-  moved: boolean;
-}
-
 type VisualDraft = SpatialReference;
 interface VisualGesture {
   readonly id: number;
@@ -247,15 +230,17 @@ let serverProjectText: string | null = null;
 let submission: { fingerprint: string; requestId: string } | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
-let modelView: ModelView = 'plan';
-let modelCamera: ModelViewCamera = DEFAULT_MODEL_VIEW_CAMERA;
-let cameraGesture: CameraGesture | null = null;
+let modelView: ModelView = '3d';
+let modelViewer: ModelViewer | null = null;
+let renderingMode: RenderingMode = 'realistic';
+let cutaway = true;
+let viewerFailed = false;
 let visualDraft: VisualDraft | null = null;
 let visualGesture: VisualGesture | null = null;
 let drawingWidth = 0;
 const drawingResizeObserver = new ResizeObserver((entries) => {
   const width = entries[0]?.contentRect.width;
-  if (!width || Math.abs(width - drawingWidth) < .5 || !repo || busy || gesture || visualGesture || cameraGesture) return;
+  if (!width || Math.abs(width - drawingWidth) < .5 || !repo || busy || gesture || visualGesture) return;
   drawingWidth = width;
   renderComparison();
 });
@@ -413,6 +398,7 @@ function showPage(name: PageName): void {
     item.page.hidden = item.name !== name;
     item.navigation.setAttribute('aria-pressed', String(item.name === name));
   }
+  if (repo) renderComparison();
   requiredElement('workbench', HTMLElement).focus({ preventScroll: true });
 }
 
@@ -815,7 +801,6 @@ function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
   if (gesture) endGesture(true);
   if (visualGesture) endVisualGesture(true);
-  cameraGesture = null;
   modelView = next;
   renderComparison();
   status(`${next === 'plan' ? 'Plan' : '3D'} view opened at revision ${selectedRevision.slice(0, 10)}. Selection remains ${selectedObject}.`);
@@ -835,11 +820,18 @@ ui['review-drawing'].addEventListener('keydown', (event) => {
   const id = event.target.closest<SVGElement>('[data-object]')?.dataset.object;
   if (id) { event.preventDefault(); chooseObject(id); }
 });
-ui['reset-3d'].addEventListener('click', () => {
-  modelCamera = DEFAULT_MODEL_VIEW_CAMERA;
-  if (repo) renderComparison();
-  status('3D camera reset. Model geometry and revision are unchanged.');
+for (const id of ['reset-3d', 'review-reset-3d']) button(id).addEventListener('click', () => {
+  modelViewer?.frame();
+  status('3D camera framed. Model geometry and revision are unchanged.');
 });
+for (const prefix of ['', 'review-']) {
+  for (const mode of ['basic', 'realistic'] satisfies RenderingMode[]) button(`${prefix}render-${mode}`).addEventListener('click', () => {
+    renderingMode = mode; if (repo) renderComparison();
+  });
+  button(`${prefix}cutaway`).addEventListener('click', () => { cutaway = !cutaway; if (repo) renderComparison(); });
+}
+window.addEventListener('pagehide', () => { modelViewer?.dispose(); modelViewer = null; });
+window.addEventListener('pageshow', (event) => { if (event.persisted && repo) renderComparison(); });
 ui['request-canvas-tab'].addEventListener('click', () => showRequestPane('canvas'));
 ui['request-details-tab'].addEventListener('click', () => showRequestPane('details'));
 ui['to-request-details'].addEventListener('click', () => {
@@ -947,7 +939,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (!repo || !layout || invalidInput) throw new Error('Open a project and fix the request input first.');
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
-    if (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main') throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
+    if (name && (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main')) throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
     const instruction = ui['request-text'].value.trim();
     if (!instruction || instruction.length > 1000) throw new Error('Describe the outcome in 1 to 1000 characters.');
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
@@ -960,13 +952,14 @@ ui['proposal-form'].addEventListener('submit', (event) => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...content, request: { ...content.request, requestId: submission.requestId } }),
     });
-    await proposalJson(response);
-    const submittedName = name;
+    const acknowledgement = await proposalJson(response);
+    if (!isRecord(acknowledgement)) throw new Error('Invalid request acknowledgement.');
+    const submittedName = parseBacklogItem(acknowledgement.ticket).request.proposalName;
     submission = null; revisionTicketId = null;
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
     resetEditor(); renderComparison();
     await refreshBacklog();
-    status(`“${submittedName}” sent to the backlog. Keep exploring or send another request; the agent works on the server.`);
+    status(`“${requestLabel(submittedName)}” sent to the backlog. Keep exploring or send another request; the agent works on the server.`);
     showRequestPane('details');
   });
 });
@@ -1011,6 +1004,12 @@ async function refreshBacklog(): Promise<void> {
     ui['backlog-connection'].textContent = `Backlog offline · ${error instanceof Error ? error.message : 'retrying'} · server work is independent of this page`;
   } finally { backlogRefreshing = false; }
 }
+function requestLabel(name: string): string {
+  if (!/-[a-p]{32}$/.test(name)) return name;
+  const title = name.replace(/-[a-p]{32}$/, '').replaceAll('-', ' ');
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
 function renderBacklog(): void {
   const items = backlogItems.filter((item) => item.projectId === repo?.projectId);
   const ready = items.filter((item) => item.state === 'ready').length;
@@ -1021,7 +1020,7 @@ function renderBacklog(): void {
   const visible = items.filter((item) => ui['backlog-filter'].value === 'all' || item.state === ui['backlog-filter'].value).reverse();
   ui['backlog-list'].replaceChildren(...visible.map((item) => {
     const card = element('article', undefined, 'request-ticket'); card.dataset.state = item.state;
-    const heading = element('header'); heading.append(element('h2', item.request.proposalName), element('span', stateLabels[item.state], 'pill'));
+    const heading = element('header'); heading.append(element('h2', requestLabel(item.request.proposalName)), element('span', stateLabels[item.state], 'pill'));
     card.append(heading, element('p', item.request.instruction), element('small', `Base ${item.request.baseRevisionId.slice(0, 10)} · ${new Date(item.createdAt).toLocaleString()} · attempt ${item.attempts}`));
     if (item.error) card.append(element('p', item.error, 'ticket-error'));
     if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Based on a different revision. Revise against the current model before accepting.', 'ticket-warning'));
@@ -1061,7 +1060,7 @@ async function openTicket(id: string): Promise<void> {
     const version: unknown = JSON.parse(archived);
     if (!isRecord(version)) throw new Error('Invalid earlier request.');
     const earlier = parseBacklogItem(version);
-    const detail = element('details'); detail.append(element('summary', `Earlier attempt ${index + 1} · ${earlier.request.proposalName}`), element('p', earlier.request.instruction));
+    const detail = element('details'); detail.append(element('summary', `Earlier attempt ${index + 1} · ${requestLabel(earlier.request.proposalName)}`), element('p', earlier.request.instruction));
     if (isRecord(version.result) && isRecord(version.result.review) && typeof version.result.review.summary === 'string') detail.append(element('p', version.result.review.summary));
     ui['ticket-history'].append(detail);
   }
@@ -1408,101 +1407,7 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
       handle(widthHandle, 'door-width', 'Resize Entry door', true);
     }
   }
-  if (interactive) drawVisualOverlay(svg, snapshot, (point) => transform(point), 'plan');
-  return svg;
-}
-
-type ModelPoint = readonly [number, number, number];
-interface ModelFace {
-  readonly points: readonly ModelPoint[];
-  readonly fill: string;
-  readonly stroke: string;
-  readonly object: Entity | undefined;
-}
-
-function boxFaces(equipment: Equipment): ModelFace[] {
-  const halfWidth = equipment.width / 2; const halfDepth = equipment.depth / 2;
-  const x0 = equipment.position[0] - halfWidth; const x1 = equipment.position[0] + halfWidth;
-  const y0 = equipment.position[1] - halfDepth; const y1 = equipment.position[1] + halfDepth;
-  const z0 = equipment.elevation; const z1 = equipment.elevation + equipment.height;
-  const fill = equipment.category === 'electrical' ? '#c99438' : '#4f9789';
-  return [
-    { points: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], fill, stroke: '#274f4c', object: equipment },
-    { points: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], fill, stroke: '#274f4c', object: equipment },
-    { points: [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]], fill, stroke: '#274f4c', object: equipment },
-  ];
-}
-
-function openingFace(snapshot: ModelSnapshot, opening: Door | Window): ModelFace | null {
-  const host = hostFor(snapshot, opening);
-  if (!host) return null;
-  const dx = host.wall.end[0] - host.wall.start[0]; const dy = host.wall.end[1] - host.wall.start[1];
-  const length = Math.hypot(dx, dy); const ux = dx / length; const uy = dy / length;
-  const normal: Point = [-uy * 0.006, ux * 0.006];
-  const start: Point = [host.wall.start[0] + ux * host.link.offset + normal[0], host.wall.start[1] + uy * host.link.offset + normal[1]];
-  const end: Point = [start[0] + ux * opening.width, start[1] + uy * opening.width];
-  const sill = opening.type === 'Window' ? opening.sillHeight : 0;
-  return {
-    points: [[start[0], start[1], sill], [end[0], end[1], sill], [end[0], end[1], sill + opening.height], [start[0], start[1], sill + opening.height]],
-    fill: opening.type === 'Window' ? '#9bcbd6dd' : '#d9c7a9', stroke: opening.type === 'Window' ? '#246b7c' : '#6f5b42', object: opening,
-  };
-}
-
-function drawModel3d(snapshot: ModelSnapshot, label: string, identifier = 'selected'): SVGSVGElement {
-  const svg = svgNode('svg', { viewBox: '0 0 800 500', role: 'group', 'aria-labelledby': `model-${identifier}-title model-${identifier}-desc` });
-  svg.append(svgNode('title', { id: `model-${identifier}-title` }, label));
-  svg.append(svgNode('desc', { id: `model-${identifier}-desc` }, 'Three-dimensional cutaway room model. Select visible components to inspect their stable identities. In the request view, drag to orbit, Shift-drag to pan and scroll to zoom.'));
-  const centre: Point = [400, 290];
-  const walls = snapshot.entities.filter(isWall);
-  const coordinates = walls.flatMap((wall) => [wall.start, wall.end]);
-  if (!coordinates.length) return svg;
-  const minX = Math.min(...coordinates.map(([x]) => x)); const maxX = Math.max(...coordinates.map(([x]) => x));
-  const minY = Math.min(...coordinates.map(([, y]) => y)); const maxY = Math.max(...coordinates.map(([, y]) => y));
-  const faces: ModelFace[] = [{
-    points: [[minX, minY, 0], [maxX, minY, 0], [maxX, maxY, 0], [minX, maxY, 0]],
-    fill: '#e9efeb', stroke: '#91a69f', object: undefined,
-  }];
-  for (const wall of walls) {
-    const midpoint: Point = [(wall.start[0] + wall.end[0]) / 2 - (minX + maxX) / 2, (wall.start[1] + wall.end[1]) / 2 - (minY + maxY) / 2];
-    const front = midpoint[0] * Math.sin(modelCamera.yaw) + midpoint[1] * Math.cos(modelCamera.yaw) > 0;
-    const height = front ? Math.min(.25, wall.height) : wall.height;
-    faces.push({
-    points: [[wall.start[0], wall.start[1], 0], [wall.end[0], wall.end[1], 0],
-      [wall.end[0], wall.end[1], height], [wall.start[0], wall.start[1], height]],
-    fill: '#cedbd6e8', stroke: '#4b6868', object: wall,
-    });
-  }
-  for (const opening of snapshot.entities.filter((entity): entity is Door | Window => entity.type === 'Door' || entity.type === 'Window')) {
-    const face = openingFace(snapshot, opening); if (face) faces.push(face);
-  }
-  for (const equipment of snapshot.entities.filter(isEquipment)) faces.push(...boxFaces(equipment));
-  for (const item of snapshot.entities) if (item.type === 'Furniture') faces.push(...furnitureFaces(item, snapshot));
-
-  const projected = faces.map((face) => ({
-    face,
-    points: face.points.map(([x, y, z]) => projectModelPoint([x - (minX + maxX) / 2, y - (minY + maxY) / 2, z], modelCamera, centre)),
-  })).sort((left, right) => {
-    const average = (values: readonly { depth: number }[]): number => values.reduce((sum, point) => sum + point.depth, 0) / values.length;
-    return average(left.points) - average(right.points);
-  });
-  const accessibleObjects = new Set<string>();
-  for (const item of projected) {
-    const object = item.face.object; const selected = object?.id === selectedObject;
-    const accessible = object && !accessibleObjects.has(object.id);
-    if (object) accessibleObjects.add(object.id);
-    svg.append(svgNode('polygon', {
-      points: item.points.map((point) => `${point.x},${point.y}`).join(' '), fill: item.face.fill, stroke: item.face.stroke,
-      'stroke-width': selected ? 4 : 1.4, class: object ? 'model-object' : '', 'data-selected': String(Boolean(selected)),
-      ...(object ? { 'data-object': object.id, ...(accessible ? { role: 'button', tabindex: 0, 'aria-label': `Select ${object.name}`, 'aria-pressed': String(selected) } : { 'aria-hidden': 'true' }) } : {}),
-    }));
-  }
-  const selected = snapshot.entities.find((entity) => entity.id === selectedObject);
-  svg.append(svgNode('text', { x: 24, y: 34, fill: '#234d4b', 'font-size': 12, 'font-weight': 700 }, selected ? selected.name : 'No object selected'));
-  svg.append(svgNode('text', { x: 24, y: 53, fill: '#5f7772', 'font-size': 9 }, `Stable ID · ${selected?.id ?? '—'}`));
-  if (identifier === 'selected') drawVisualOverlay(svg, snapshot, ([x, y], z) => {
-    const point = projectModelPoint([x - (minX + maxX) / 2, y - (minY + maxY) / 2, z], modelCamera, centre);
-    return [point.x, point.y];
-  }, '3d');
+  if (interactive) drawVisualOverlay(svg, snapshot, (point) => transform(point));
   return svg;
 }
 
@@ -1568,14 +1473,13 @@ function referencePoint(reference: SpatialReference, snapshot: ModelSnapshot): P
   const t = reference.alongWallMm / (Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000);
   return [wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t];
 }
-function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelSnapshot, project: (point: Point, z: number) => Point, view: ModelView): void {
+function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelSnapshot, project: (point: Point) => Point): void {
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
   if (!selected || writesBlocked || busy) return;
-  const scale = (view === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
-  const height = view === '3d' && (selected.type === 'Furniture' || selected.type === 'Equipment') ? selected.height + .15 : 0;
-  const centre = project(objectAnchor(selected, snapshot), height);
+  const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
+  const centre = project(objectAnchor(selected, snapshot));
   if (visualDraft) {
-    const target = project(referencePoint(visualDraft, snapshot), .02);
+    const target = project(referencePoint(visualDraft, snapshot));
     svg.append(svgNode('line', { x1: centre[0], y1: centre[1], x2: target[0], y2: target[1], stroke: '#178b79', 'stroke-width': 2 * scale, 'stroke-dasharray': '5 4', class: 'visual-marker' }));
     svg.append(svgNode('circle', { cx: target[0], cy: target[1], r: 10 * scale, fill: '#ffffffaa', stroke: '#178b79', 'stroke-width': 3 * scale, class: 'visual-marker', 'data-destination': visualDraft.kind }));
     svg.append(svgNode('text', { x: target[0], y: target[1] - 18 * scale, fill: '#11594f', 'font-size': 11 * scale, 'text-anchor': 'middle', class: 'visual-marker', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * scale }, 'Reference location'));
@@ -1590,41 +1494,25 @@ function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelSnapshot, project:
 }
 function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference | null {
   if (!preview) return null;
-  const matrix = root.getScreenCTM(); if (!matrix) return null;
+  const matrix = root.getScreenCTM(); const plan = planCameras.get(root);
+  if (!matrix || !plan) return null;
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
   const bounds = rectangleLayout(preview).boundsMm;
-  const plan = planCameras.get(root);
-  const project = ([x, y]: Point): Point => {
-    if (modelView === 'plan' && plan) return [300 + (x - (plan.minX + plan.maxX) / 2) * plan.scale, 193 - (y - (plan.minY + plan.maxY) / 2) * plan.scale];
-    const p = projectModelPoint([x - (bounds.minX + bounds.maxX) / 2000, y - (bounds.minY + bounds.maxY) / 2000, 0], modelCamera, [400, 290]);
-    return [p.x, p.y];
-  };
-  const hitId = document.elementFromPoint(event.clientX, event.clientY)?.closest<SVGElement>('[data-object]')?.dataset.object;
+  const project = ([x, y]: Point): Point => [300 + (x - (plan.minX + plan.maxX) / 2) * plan.scale, 193 - (y - (plan.minY + plan.maxY) / 2) * plan.scale];
   let best: { wallId: string; alongWallMm: number; distance: number } | null = null;
   for (const wall of preview.entities.filter(isWall)) {
     const a = project(wall.start); const b = project(wall.end); const dx = b[0] - a[0]; const dy = b[1] - a[1];
-    const hitWall = hitId === wall.id;
-    const raw = modelView === '3d' && hitWall && Math.abs(dx) > .1 ? (point.x - a[0]) / dx : ((point.x - a[0]) * dx + (point.y - a[1]) * dy) / (dx * dx + dy * dy);
-    const t = Math.max(0, Math.min(1, raw));
-    const distance = hitWall ? 0 : Math.hypot(point.x - a[0] - dx * t, point.y - a[1] - dy * t);
-    if (best && best.distance <= distance) continue;
-    best = { wallId: wall.id, alongWallMm: Math.round(t * Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000), distance };
+    const t = Math.max(0, Math.min(1, ((point.x - a[0]) * dx + (point.y - a[1]) * dy) / (dx * dx + dy * dy)));
+    const distance = Math.hypot(point.x - a[0] - dx * t, point.y - a[1] - dy * t);
+    if (!best || distance < best.distance) best = { wallId: wall.id, alongWallMm: Math.round(t * Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000), distance };
   }
-  const tolerance = 18 * (modelView === 'plan' ? 600 : 800) / Math.max(ui['proposal-drawing'].clientWidth, 200);
-  if (best && best.distance <= tolerance) return { kind: 'wall-point', wallId: best.wallId, alongWallMm: best.alongWallMm };
-  let world: Point;
-  if (modelView === 'plan' && plan) world = pointerPlan(event, root, plan);
-  else {
-    const origin = project([0, 0]); const x = project([1, 0]); const y = project([0, 1]);
-    const ax = x[0] - origin[0]; const ay = x[1] - origin[1]; const bx = y[0] - origin[0]; const by = y[1] - origin[1];
-    const det = ax * by - ay * bx; if (Math.abs(det) < .0001) return null;
-    const px = point.x - origin[0]; const py = point.y - origin[1];
-    world = [(px * by - py * bx) / det, (ax * py - ay * px) / det];
-  }
+  if (best && best.distance <= 18 * 600 / Math.max(ui['proposal-drawing'].clientWidth, 200)) return { kind: 'wall-point', wallId: best.wallId, alongWallMm: best.alongWallMm };
+  const world = pointerPlan(event, root, plan);
   const positionMm: Point = [Math.round(world[0] * 1000), Math.round(world[1] * 1000)];
   if (positionMm[0] < bounds.minX || positionMm[0] > bounds.maxX || positionMm[1] < bounds.minY || positionMm[1] > bounds.maxY) return null;
   return { kind: 'floor-point', positionMm };
 }
+
 function endVisualGesture(cancel: boolean): void {
   if (!visualGesture) return;
   const active = visualGesture; visualGesture = null;
@@ -1637,7 +1525,7 @@ function endVisualGesture(cancel: boolean): void {
 
 ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
   if (event.target instanceof Element && event.target.closest('[data-visual-handle]')) {
-    if (!repo || busy || gesture || cameraGesture || visualGesture || writesBlocked || event.button !== 0 || !event.isPrimary) return;
+    if (!repo || busy || gesture || visualGesture || writesBlocked || event.button !== 0 || !event.isPrimary) return;
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
     if (!root || !preview) return;
     event.preventDefault();
@@ -1647,20 +1535,7 @@ ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
     root.setPointerCapture(event.pointerId); updateControls();
     return;
   }
-  if (modelView === '3d') {
-    if (!repo || busy || cameraGesture || event.button !== 0 || !event.isPrimary || !(event.target instanceof Element)) return;
-    const target = event.target.closest<SVGElement>('[data-object]');
-    const objectId = target?.dataset.object ?? null;
-    const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
-    if (!root) return;
-    event.preventDefault();
-    cameraGesture = {
-      id: event.pointerId, root, origin: [event.clientX, event.clientY], camera: modelCamera,
-      mode: event.shiftKey ? 'pan' : 'orbit', objectId, moved: false,
-    };
-    root.setPointerCapture(event.pointerId);
-    return;
-  }
+  if (modelView === '3d') return;
   if (!repo || busy || gesture || event.button !== 0 || !event.isPrimary) return;
   if (!(event.target instanceof Element)) return;
   const target = event.target.closest<SVGElement>('[data-object]'); if (!target) return;
@@ -1692,16 +1567,6 @@ ui['proposal-drawing'].addEventListener('pointermove', (event) => {
     if (target) stageVisualReference(target);
     else visualDraft = active.previous;
     renderComparison(); updateControls();
-    return;
-  }
-  if (cameraGesture?.id === event.pointerId) {
-    const active = cameraGesture;
-    const delta: Point = [event.clientX - active.origin[0], event.clientY - active.origin[1]];
-    if (!active.moved && Math.hypot(...delta) < 4) return;
-    active.moved = true;
-    event.preventDefault();
-    modelCamera = active.mode === 'pan' ? panModelView(active.camera, delta) : orbitModelView(active.camera, delta);
-    renderComparison();
     return;
   }
   if (!gesture || gesture.id !== event.pointerId) return;
@@ -1738,23 +1603,8 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) ui['pro
   if (event instanceof PointerEvent && visualGesture?.id === event.pointerId) {
     endVisualGesture(type !== 'pointerup'); return;
   }
-  if (event instanceof PointerEvent && cameraGesture?.id === event.pointerId) {
-    const active = cameraGesture;
-    cameraGesture = null;
-    if (active.root.hasPointerCapture(active.id)) active.root.releasePointerCapture(active.id);
-    if (!active.moved && active.objectId) chooseObject(active.objectId);
-    renderComparison();
-    return;
-  }
   if (event instanceof PointerEvent && gesture?.id === event.pointerId) endGesture(type !== 'pointerup');
 });
-ui['proposal-drawing'].addEventListener('wheel', (event) => {
-  if (visualGesture) { event.preventDefault(); return; }
-  if (modelView !== '3d' || !repo) return;
-  event.preventDefault();
-  modelCamera = zoomModelView(modelCamera, event.deltaY);
-  renderComparison();
-}, { passive: false });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && gesture) { event.preventDefault(); endGesture(true); } });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && visualGesture) { event.preventDefault(); endVisualGesture(true); } });
 ui['proposal-drawing'].addEventListener('keydown', (event) => {
@@ -1933,6 +1783,32 @@ function renderHistory(): void {
   }));
 }
 
+function renderViewer(snapshot: ModelSnapshot): void {
+  if (currentPage !== 'request' && currentPage !== 'review') { modelViewer?.hide(); return; }
+  const host = currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
+  try {
+    if (viewerFailed) {
+      host.replaceChildren(element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty'));
+      return;
+    }
+    modelViewer ??= new ModelViewer({
+      select: chooseObject,
+      reference: (destination) => {
+        if (busy || writesBlocked || currentPage !== 'request') return;
+        stageVisualReference(destination); renderComparison(); updateControls();
+        feedback('Location marked. Describe what to create, move or copy here; no model objects have moved.');
+      },
+      keyboardReference: () => ui['visual-wall'].focus(),
+    });
+    modelViewer.show(host, { snapshot, selectedId: selectedObject, mode: renderingMode, cutaway,
+      interactive: currentPage === 'request' && !busy && !writesBlocked, reference: currentPage === 'request' ? visualDraft : null });
+  } catch {
+    modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
+    const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
+    note.setAttribute('role', 'status'); host.replaceChildren(note);
+  }
+}
+
 function renderComparison(): void {
   const project = requireRepository();
   const originalId = project.root();
@@ -1943,6 +1819,7 @@ function renderComparison(): void {
   const isOriginal = selectedRevision === originalId;
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
   if (modelView === 'plan') {
+    modelViewer?.hide();
     const next = drawPlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
     if (root && (gesture || visualGesture)) {
@@ -1954,23 +1831,24 @@ function renderComparison(): void {
       if (!camera) throw new Error('The room plan camera was not created.');
       planCameras.set(root, camera);
     } else ui['proposal-drawing'].replaceChildren(next);
-  } else {
-    const next = drawModel3d(selected, `${selectedBranch} room model`);
-    const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
-    if (root && (cameraGesture || visualGesture)) root.replaceChildren(...next.childNodes);
-    else ui['proposal-drawing'].replaceChildren(next);
-  }
+  } else renderViewer(selected);
   ui['proposal-drawing'].dataset.modelView = modelView;
   ui['view-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
   ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
   ui['model-3d-controls'].hidden = modelView !== '3d';
   ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES' : '3D · CAMERA ONLY';
   ui['model-revision'].textContent = `Revision ${selectedRevision.slice(0, 10)} · ${selected.entities.length} objects`;
-  ui['review-drawing'].replaceChildren(modelView === '3d' ? drawModel3d(selected, `${selectedBranch} proposal review model`, 'review') : drawPlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`));
+  ui['review-drawing'].dataset.modelView = modelView;
+  if (modelView === 'plan') ui['review-drawing'].replaceChildren(drawPlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`));
+  generic('review-model-3d-controls').hidden = modelView !== '3d';
+  for (const prefix of ['', 'review-']) {
+    for (const mode of ['basic', 'realistic']) button(`${prefix}render-${mode}`).setAttribute('aria-pressed', String(renderingMode === mode));
+    button(`${prefix}cutaway`).setAttribute('aria-pressed', String(cutaway));
+  }
   ui['review-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
   ui['review-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
   generic('review-view-caption').textContent = modelView === '3d' ? '3D · CUTAWAY VIEW' : 'PLAN · METRES';
-  ui['selected-title'].textContent = dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : selectedBranch;
+  ui['selected-title'].textContent = dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = 'Inspect the same revision in Plan or 3D. Select any object in either view; walls and the entry door can also carry visual change requests.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), review ? `Proposal base ${review.baseRevisionId.slice(0, 10)}` : 'Original');

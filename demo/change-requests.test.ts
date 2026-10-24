@@ -23,6 +23,28 @@ const worker: ModelWorker = { identity: { provider: 'test', model: 'backlog-agen
   assert.equal((await session.executeTool('submit_proposal', { summary: 'Widen the entry.', rationale: 'Requested width fits the host.',
     constraints: 'Keep the room shell and hosting.', uncertainty: 'Concept model, not construction approval.' })).ok, true);
 } };
+
+test('optional names derive from intent and stable identity; concurrent unnamed requests, retries and revisions remain distinct', async (t) => {
+  const queue = new ChangeRequests(':memory:', () => worker); t.after(() => queue.close());
+  const repo = await RoomRepository.create('Automatic request names');
+  const first = request(repo, 'unnamed-one', '');
+  const second = request(repo, 'unnamed-two', '   ');
+  const [a, b] = await Promise.all([queue.submit(repo.serialize(), first), queue.submit(repo.serialize(), second)]);
+  assert.match(a.request.proposalName, /^widen-the-door-to-match-[a-p]{32}$/);
+  assert.notEqual(a.request.proposalName, b.request.proposalName);
+  assert.equal((await queue.submit(repo.serialize(), first)).request.proposalName, a.request.proposalName);
+  await waitFor(queue, a.id); await waitFor(queue, b.id);
+  assert.equal(queue.get(a.id).state, 'ready');
+  const revised = request(repo, 'unnamed-revision', '');
+  const { proposalName: omitted, ...withoutName } = revised;
+  assert.equal(omitted, '');
+  const version = await queue.revise(a.id, repo.serialize(), withoutName);
+  assert.notEqual(version.request.proposalName, a.request.proposalName);
+  await waitFor(queue, a.id); assert.equal(queue.get(a.id).state, 'ready');
+  assert.ok(queue.get(a.id).history[0]?.includes(a.request.proposalName));
+  assert.equal((await queue.revise(a.id, repo.serialize(), withoutName)).request.proposalName, version.request.proposalName);
+  await assert.rejects(() => queue.submit(repo.serialize(), { ...request(repo, 'invalid-name', 'main') }), /lowercase/);
+});
 function decide(queue: ChangeRequests, id: string, input: { action: string; decisionId: string }) {
   return queue.decide(id, { ...input, expectedRequestId: queue.get(id).request.requestId });
 }
