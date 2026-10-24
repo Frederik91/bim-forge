@@ -18,7 +18,7 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator.
 import '@babylonjs/core/Rendering/outlineRenderer.js';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { furnitureFaces } from '../src/furniture-geometry.ts';
-import { rectangleLayout } from '../src/room-model.ts';
+import { floorBounds, boundsMm, spaces } from '../src/floor-plan.ts';
 import type { Entity, ModelSnapshot, Point, Wall } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 
@@ -33,6 +33,10 @@ interface RenderPart { mesh: Mesh; objectId: string | null; wallId: string | nul
 export function modelPoint(x: number, y: number, elevation = 0): Vector3 { return new Vector3(x, elevation, y); }
 
 export function entityAnchor(item: Entity, snapshot: ModelSnapshot): Vector3 {
+  if (item.type === 'Space' || item.type === 'Level') {
+    const b = item.type === 'Space' ? item.bounds : floorBounds(snapshot);
+    return modelPoint((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, .15);
+  }
   if (item.type === 'Furniture') {
     const support = snapshot.entities.find((candidate) => candidate.id === item.supportId);
     return modelPoint(...item.position, item.height + (support?.type === 'Furniture' ? support.height : 0) + .15);
@@ -65,7 +69,7 @@ export function referenceFromHit(snapshot: ModelSnapshot, point: Vector3, wallId
     const along = ((point.x - wall.start[0]) * dx + (point.z - wall.start[1]) * dy) / length;
     return { kind: 'wall-point', wallId, alongWallMm: Math.round(Math.max(0, Math.min(length, along)) * 1000) };
   }
-  const b = rectangleLayout(snapshot).boundsMm;
+  const b = boundsMm(floorBounds(snapshot));
   const positionMm: Point = [Math.round(point.x * 1000), Math.round(point.z * 1000)];
   if (positionMm[0] < b.minX || positionMm[0] > b.maxX || positionMm[1] < b.minY || positionMm[1] > b.maxY) return null;
   return { kind: 'floor-point', positionMm };
@@ -96,6 +100,7 @@ export class ModelScene {
   private readonly parts: RenderPart[] = [];
   private readonly materials = new Map<string, StandardMaterial | PBRMaterial>();
   private readonly walls = new Map<string, Wall>();
+  private focusId: string | null = null;
   private signature = '';
   private snapshot: ModelSnapshot | null = null;
   private comparison: ModelSnapshot | null = null;
@@ -199,9 +204,14 @@ export class ModelScene {
   }
 
   private addSnapshot(snapshot: ModelSnapshot): void {
-    const b = rectangleLayout(snapshot).boundsMm;
+    const b = boundsMm(floorBounds(snapshot));
     const width = (b.maxX - b.minX) / 1000; const depth = (b.maxY - b.minY) / 1000;
-    this.box('room-floor', new Vector3(width + .16, .12, depth + .16), modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, -.07), null, null, 'floor', '#d1c3a9');
+    const rooms = spaces(snapshot);
+    if (!rooms.length) this.box('room-floor', new Vector3(width + .16, .12, depth + .16), modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, -.07), null, null, 'floor', '#d1c3a9');
+    for (const room of rooms) {
+      const r = room.bounds;
+      this.box(room.id + '-floor', new Vector3(r.maxX - r.minX, .12, r.maxY - r.minY), modelPoint((r.minX + r.maxX) / 2, (r.minY + r.maxY) / 2, -.07), room.id, null, 'floor', '#d1c3a9');
+    }
     for (const item of snapshot.entities) {
       if (item.type === 'Wall') this.wall(item, snapshot);
       else if (item.type === 'Equipment') this.box(item.id, new Vector3(item.width, item.height, item.depth), modelPoint(...item.position, item.elevation + item.height / 2), item.id, null, 'metal', '#8aabb1');
@@ -220,7 +230,7 @@ export class ModelScene {
           for (let i = 0; i < positions.length; i += 3) uvs.push(positions[i] * .4, positions[i + 2] * .4);
           const data = new VertexData(); data.positions = positions; data.indices = indices; data.normals = normals; data.uvs = uvs;
           const mesh = new Mesh(`${item.id}-${color}`, this.scene); data.applyToMesh(mesh);
-          const surface: Surface = item.kind === 'plant' ? color === '#bb8165' ? 'pot' : 'leaf' : item.kind === 'chair' ? 'fabric'
+          const surface: Surface = item.kind === 'plant' ? color === '#bb8165' ? 'pot' : 'leaf' : item.kind === 'chair' || item.kind === 'bed' || item.kind === 'sofa' ? 'fabric'
             : color === '#d6b58c' || color === '#c69a73' ? 'wood' : color === '#69b7d0' || color === '#8ccbd4' ? 'screen' : 'metal';
           this.register(mesh, item.id, null, surface, color);
         }
@@ -296,11 +306,13 @@ export class ModelScene {
     for (const part of this.parts) part.mesh.renderOutline = part.objectId === id;
   }
 
-  frame(): void {
+  frame(focusId: string | null = this.focusId): void {
+    this.focusId = focusId;
     if (!this.snapshot) return;
-    const after = rectangleLayout(this.snapshot).boundsMm;
-    const before = this.comparison ? rectangleLayout(this.comparison).boundsMm : after;
-    const b = { minX: Math.min(before.minX, after.minX), minY: Math.min(before.minY, after.minY), maxX: Math.max(before.maxX, after.maxX), maxY: Math.max(before.maxY, after.maxY) };
+    const focused = spaces(this.snapshot).find((room) => room.id === focusId);
+    const after = boundsMm(floorBounds(this.snapshot));
+    const before = this.comparison ? boundsMm(floorBounds(this.comparison)) : after;
+    const b = focused ? boundsMm(focused.bounds) : { minX: Math.min(before.minX, after.minX), minY: Math.min(before.minY, after.minY), maxX: Math.max(before.maxX, after.maxX), maxY: Math.max(before.maxY, after.maxY) };
     this.camera.setTarget(modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, .6));
     this.camera.alpha = -Math.PI / 2.4; this.camera.beta = .86;
     const span = Math.max(b.maxX - b.minX, b.maxY - b.minY) / 1000;
@@ -314,7 +326,8 @@ export class ModelScene {
 
   private updateCutaway(): void {
     if (!this.snapshot) return;
-    const b = rectangleLayout(this.snapshot).boundsMm;
+    const focused = spaces(this.snapshot).find((room) => room.id === this.focusId);
+    const b = boundsMm(focused?.bounds ?? floorBounds(this.snapshot));
     const centre = modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000);
     for (const part of this.parts) {
       const wall = part.wallId ? this.walls.get(part.wallId) : null;
@@ -322,7 +335,7 @@ export class ModelScene {
       const changedWallPart = this.comparison && part.objectId && this.changes.has(part.objectId);
       if (this.cutaway && wall && !part.before && !changedWallPart) {
         const midpoint = modelPoint((wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2);
-        const outward = midpoint.subtract(centre); outward.y = 0;
+        const outward = wall.start[1] === wall.end[1] ? new Vector3(0, 0, midpoint.z - centre.z) : new Vector3(midpoint.x - centre.x, 0, 0);
         visible = Vector3.Dot(outward, this.camera.position.subtract(midpoint)) <= 0;
       }
       part.mesh.setEnabled(visible);

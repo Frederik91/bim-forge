@@ -5,6 +5,17 @@
 **Project**:
 A named building-model study and its revision history.
 
+**Level**:
+A horizontal building storey that provides a common elevation and contains spaces.
+_Avoid_: Floor project
+
+**Space**:
+A named, bounded part of a level. A residential room or hallway is a space; adjoining spaces share building walls rather than owning duplicate copies.
+_Avoid_: Room project
+
+**Room focus**:
+The space used to frame the current view and request context. It does not grant permission to change its contents or exclude impacts on adjacent spaces.
+
 **Entity**:
 A building object with a stable identity across revisions, such as a wall or door.
 

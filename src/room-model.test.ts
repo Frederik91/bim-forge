@@ -706,7 +706,7 @@ test('model-working AI receives bounded tools and saves only its validated propo
     async run(session: ModelWorkerSession) {
       const input = isRecord(session.input) ? session.input : {};
       const request = isRecord(input.request) ? input.request : {};
-      assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'preview_furnishings', 'submit_proposal', 'decline_request']);
+      assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'preview_furnishings', 'preview_room_furnishings', 'submit_proposal', 'decline_request']);
       assert.equal(request.baseRevisionId, original.head('main'));
       assert.deepEqual(request.selectedObjectIds, ['door-entry']);
       const inspected = await session.executeTool('inspect_model', {});

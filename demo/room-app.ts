@@ -1,3 +1,5 @@
+import { createResidentialProject } from '../src/residential-floor.ts';
+import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
@@ -18,6 +20,8 @@ type RequestPane = 'canvas' | 'details';
 type ModelView = 'plan' | '3d';
 type ChangesTab = '3d' | 'properties';
 type ReviewState = 'pending' | 'accepted' | 'superseded' | 'declined';
+let focusedRoomId: string | null = null;
+
 type BoundSide = 'minX' | 'maxX' | 'minY' | 'maxY';
 type GestureOperation = 'wall' | 'door-move' | 'door-width';
 
@@ -136,6 +140,7 @@ const ui = {
   'project-name': input('project-name'),
   'create-project': button('create-project'),
   'load-sample': button('load-sample'),
+  'project-template': select('project-template'), 'room-focus': select('room-focus'),
   'proposal-form': requiredElement('proposal-form', HTMLFormElement),
   'door-width': input('door-width'),
   'proposal-name': input('proposal-name'),
@@ -554,10 +559,13 @@ function updateControls() {
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
   for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture);
+  ui['project-template'].disabled = !writable;
+  ui['room-focus'].disabled = busy || dragging || !repo;
+  button('whole-floor').disabled = busy || dragging || !repo;
   ui['selected-object'].disabled = busy || !preview || dragging;
-  ui['proposal-name'].disabled = !writable || !layout || Boolean(gesture);
-  ui['request-text'].disabled = !writable || !layout || Boolean(gesture);
-  ui['save-proposal'].disabled = !writable || !layout || invalidInput || Boolean(gesture);
+  ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture);
+  ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
+  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture);
   ui['save-proposal'].textContent = busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
@@ -605,7 +613,8 @@ function resetEditor() {
   invalidInput = false; layout = null; preview = null;
   if (!repo) return;
   preview = requireRepository().view(selectedRevision).snapshot;
-  try { layout = rectangleLayout(preview); feedback('Select an object and sketch the intent. The sketch is not authoritative model geometry.'); }
+  if (spaces(preview).length) feedback('Choose a room or object and describe the change. Shared walls and connecting doors stay visible; floor shell edits are not available yet.');
+  else try { layout = rectangleLayout(preview); feedback('Select an object and sketch the intent. The sketch is not authoritative model geometry.'); }
   catch (error) { feedback(`This saved layout is view-only: ${error instanceof Error ? error.message : 'unsupported geometry'}`, true); }
   const objects = preview.entities;
   ui['selected-object'].replaceChildren(...objects.map((object) => {
@@ -629,13 +638,15 @@ function syncInspector() {
   const object = preview?.entities.find((item) => item.id === selectedObject);
   const isDoor = object?.type === 'Door';
   const isWall = object?.type === 'Wall';
-  ui['door-fields'].hidden = !isDoor;
-  ui['wall-fields'].hidden = !isWall;
+  ui['door-fields'].hidden = !isDoor || !layout;
+  ui['wall-fields'].hidden = !isWall || !layout;
   ui['editor-base'].textContent = `Request bound to ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved in history. Unsaved request sketches are lost on reload.`;
   renderKnowledge();
   if (!layout || !preview || !object || (!isDoor && !isWall)) {
     for (const dimensionInput of dimensionInputs) dimensionInput.value = '';
-    ui['selection-help'].textContent = layout && object
+    ui['selection-help'].textContent = preview && spaces(preview).length
+      ? 'Room selection frames context, not permission to change its contents. Ask for furniture changes within or between rooms. Shared shell editing is not supported in this slice.'
+      : layout && object
       ? 'Describe the change you want below. AI can reposition or replace furnishings in a separate proposal; selection never edits the model directly.'
       : 'This saved revision is view-only. Its geometry and changed properties remain available below.';
     return;
@@ -659,7 +670,11 @@ function chooseObject(id: string): void {
   if (!repo || busy || gesture || visualGesture) return;
   if (visualDraft && id !== selectedObject) visualDraft = null;
   if (invalidInput && !window.confirm('Discard the incomplete or invalid input and select another object?')) return;
-  invalidInput = false; clearError(); selectedObject = id; syncInspector(); renderComparison(); updateControls();
+  invalidInput = false; clearError(); selectedObject = id;
+  const item = preview?.entities.find((entity) => entity.id === id);
+  if (item?.type === 'Space') focusedRoomId = item.id;
+  else if (preview && focusedRoomId && item) focusedRoomId = entitySpace(preview, item)?.id ?? focusedRoomId;
+  syncInspector(); renderComparison(); updateControls();
 }
 
 ui['selected-object'].addEventListener('change', () => {
@@ -750,7 +765,8 @@ async function createProject(name: string): Promise<void> {
   writableStore();
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
-  const next = await RoomRepository.create(name);
+  const next = ui['project-template'].value === 'residential' ? await createResidentialProject(name) : await RoomRepository.create(name);
+  focusedRoomId = null;
   activeReview = null;
   housePilotFixture = null;
   await persist(next);
@@ -758,7 +774,7 @@ async function createProject(name: string): Promise<void> {
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
   showPage('project');
-  status('Original room saved locally. Select a wall or door and describe a request to begin.');
+  status('Original model saved locally. Open the floor overview, choose a room and describe a request to begin.');
 }
 
 async function createHousePilot(): Promise<void> {
@@ -798,16 +814,18 @@ for (const tab of ['3d', 'properties'] satisfies ChangesTab[]) button(`changes-$
 });
 button('review-delta').addEventListener('click', () => { reviewDelta = !reviewDelta; modelView = '3d'; renderComparison(); });
 ui['project-overview'].addEventListener('click', () => showPage('project'));
+button('explore-floor').addEventListener('click', () => { if (beginRequest()) focusRoom(null); });
 ui['open-room'].addEventListener('click', () => {
   showPage('request');
   status(`Reference room opened at revision ${selectedRevision.slice(0, 10)}. Plan and 3D share the same selection.`);
 });
-function beginRequest(): void {
-  if (!repo) return;
-  if (dirty() && !window.confirm('Discard the unsent markup and return to the accepted model?')) return;
+function beginRequest(): boolean {
+  if (!repo) return false;
+  if (dirty() && !window.confirm('Discard the unsent markup and return to the accepted model?')) return false;
   reviewRepository = null; activeTicketId = null; activeReview = null; revisionTicketId = null;
   selectedBranch = 'main'; selectedRevision = repo.head('main');
   resetEditor(); render(); showPage('request');
+  return true;
 }
 ui['nav-request'].addEventListener('click', beginRequest);
 for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
@@ -954,7 +972,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
   void perform(async () => {
     writableStore();
-    if (!repo || !layout || invalidInput) throw new Error('Open a project and fix the request input first.');
+    if (!repo || !preview || invalidInput) throw new Error('Open a project and fix the request input first.');
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
     if (name && (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main')) throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
@@ -963,7 +981,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: selectedRevision,
-      selectedObjectIds: [selectedObject], instruction, visualIntent } };
+      selectedObjectIds: focusedRoomId && selectedObject !== focusedRoomId ? [selectedObject, focusedRoomId] : [selectedObject], instruction, visualIntent } };
     const fingerprint = JSON.stringify(content);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
     const response = await fetch(revisionTicketId ? `/api/change-requests/${encodeURIComponent(revisionTicketId)}/revision` : '/api/change-requests', {
@@ -1296,7 +1314,7 @@ function svgNode<K extends keyof SVGElementTagNameMap>(tag: K, attributes: SvgAt
 
 function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, identifier: string, label: string): SVGSVGElement {
   const interactive = identifier === 'selected';
-  const editable = interactive && Boolean(layout);
+  const editable = interactive && Boolean(layout) && !spaces(snapshot).length;
   const svg = svgNode('svg', { viewBox: '0 0 600 400', role: interactive ? 'group' : 'img', 'aria-labelledby': `${identifier}-title ${identifier}-desc` });
   const door = entry(snapshot);
   svg.append(svgNode('title', { id: `${identifier}-title` }, label));
@@ -1314,7 +1332,8 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
   const allWalls = [...walls, ...(reference ? reference.entities.filter(isWall) : [])];
   const coordinates = allWalls.flatMap((wall) => [wall.start, wall.end]);
   if (!coordinates.length) return svg;
-  const camera = editable && gesture ? gesture.camera : {
+  const focused = identifier === 'selected' && currentPage === 'request' ? spaces(snapshot).find((room) => room.id === focusedRoomId) : null;
+  const camera = editable && gesture ? gesture.camera : focused ? focused.bounds : {
     minX: Math.min(...coordinates.map(([x]) => x)), maxX: Math.max(...coordinates.map(([x]) => x)),
     minY: Math.min(...coordinates.map(([, y]) => y)), maxY: Math.max(...coordinates.map(([, y]) => y)),
   };
@@ -1328,6 +1347,14 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
     return svgNode('line', { x1, y1, x2, y2, ...attributes });
   };
 
+  for (const room of spaces(snapshot)) {
+    const b = room.bounds;
+    const [x, y] = transform([b.minX, b.maxY]);
+    svg.append(svgNode('rect', { x, y, width: (b.maxX - b.minX) * scale, height: (b.maxY - b.minY) * scale,
+      fill: room.id === focusedRoomId ? '#d8eee6' : '#f5f3eb', 'data-object': room.id,
+      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${room.name}`,
+      class: interactive ? 'edit-target' : '' }));
+  }
   for (const wall of walls) {
     const dx = wall.end[0] - wall.start[0]; const dy = wall.end[1] - wall.start[1];
     const length = Math.hypot(dx, dy);
@@ -1359,6 +1386,10 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
         svg.append(line(hinge, hingeEdge, style));
         svg.append(line(jamb, jambEdge, style));
       }
+      if (!ghost && interactive && spaces(snapshot).length) svg.append(line(hinge, jamb, {
+        stroke: item.id === selectedObject ? '#e1a12e' : 'transparent', 'stroke-width': Math.max(12, wall.thickness * scale + 3),
+        'data-object': item.id, role: 'button', tabindex: 0, 'aria-label': `Select ${item.name}`, class: 'edit-target',
+      }));
       svg.append(line(hinge, leaf, style));
       const arc: Point[] = Array.from({ length: 25 }, (_, index): Point => {
         const angle = index * Math.PI / 48;
@@ -1432,6 +1463,15 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
     group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': item.supportId ? 6 : 8, 'pointer-events': 'none' }, item.kind));
     svg.append(group);
   }
+  for (const room of spaces(snapshot)) {
+    const b = room.bounds; const [x, y] = transform([(b.minX + b.maxX) / 2, b.maxY - .4]);
+    svg.append(svgNode('text', { x, y, fill: '#31564f', 'font-size': 10, 'text-anchor': 'middle',
+      'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3, 'pointer-events': 'none' },
+      room.name));
+    svg.append(svgNode('text', { x, y: y + 11, fill: '#536f66', 'font-size': 8, 'text-anchor': 'middle',
+      'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3, 'pointer-events': 'none' },
+      `${number.format((b.maxX - b.minX) * (b.maxY - b.minY))} m²`));
+  }
   svg.append(svgNode('path', { d: 'M552 350 V325 M548 333 L552 325 L556 333', stroke: '#8ba096', 'stroke-width': 1, fill: 'none' }));
   svg.append(svgNode('text', { x: 552, y: 365, 'text-anchor': 'middle', fill: '#83968c', 'font-size': 8 }, 'Y'));
   if (interactive) {
@@ -1442,6 +1482,7 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
       svg.append(line(wall.start, wall.end, { stroke: 'transparent', 'stroke-width': targetWidth, class: 'edit-target',
         'data-object': wall.id, role: 'button', tabindex: 0, 'aria-label': `Select ${wall.name}`, 'aria-pressed': String(wall.id === selectedObject) }));
     }
+    if (spaces(snapshot).length) { drawVisualOverlay(svg, snapshot, transform); return svg; }
     const doorHost = hostFor(snapshot, door);
     if (!door || !doorHost) return svg;
     const { wall, link } = doorHost;
@@ -1537,6 +1578,10 @@ ui['describe-visual-reference'].addEventListener('click', () => { showRequestPan
 
 function objectAnchor(item: Entity, snapshot: ModelSnapshot): Point {
   if (item.type === 'Furniture' || item.type === 'Equipment') return item.position;
+  if (item.type === 'Space' || item.type === 'Level') {
+    const b = item.type === 'Space' ? item.bounds : floorBounds(snapshot);
+    return [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2];
+  }
   if (item.type === 'Wall') return [(item.start[0] + item.end[0]) / 2, (item.start[1] + item.end[1]) / 2];
   const host = hostFor(snapshot, item);
   if (!host) return [0, 0];
@@ -1574,7 +1619,7 @@ function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference 
   const matrix = root.getScreenCTM(); const plan = planCameras.get(root);
   if (!matrix || !plan) return null;
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-  const bounds = rectangleLayout(preview).boundsMm;
+  const bounds = boundsMm(floorBounds(preview));
   const project = ([x, y]: Point): Point => [300 + (x - (plan.minX + plan.maxX) / 2) * plan.scale, 193 - (y - (plan.minY + plan.maxY) / 2) * plan.scale];
   let best: { wallId: string; alongWallMm: number; distance: number } | null = null;
   for (const wall of preview.entities.filter(isWall)) {
@@ -1717,7 +1762,7 @@ function modelProperties(item: ModelItem): Record<string, unknown> {
     return { id: item.id, type: item.type, name: item.name, category: item.category, position: item.position,
       elevation: item.elevation, width: item.width, depth: item.depth, height: item.height };
   }
-  if (item.type === 'Furniture') return { ...item };
+  if (item.type === 'Furniture' || item.type === 'Space' || item.type === 'Level') return { ...item };
   return { id: item.id, type: item.type, source: item.source, target: item.target, offset: item.offset };
 }
 
@@ -1865,13 +1910,38 @@ function renderDeltaSummary(host: HTMLElement, baseline: ModelSnapshot, proposed
   const list = element('ul');
   for (const change of modelChanges(baseline, proposed)) {
     const row = element('li'); row.dataset.change = change.status;
+    const from = change.before ? entitySpace(baseline, change.before)?.name : null;
+    const to = change.after ? entitySpace(proposed, change.after)?.name : null;
+    const roomContext = from && to && from !== to ? ` · ${from} → ${to}` : from || to ? ` · ${to ?? from}` : '';
     row.append(element('strong', `${change.status === 'modified' ? 'Changed' : change.status === 'added' ? 'Added' : 'Removed'} · ${change.name}`),
-      element('span', `${change.id}${change.reason === 'placement' ? ' · placement, host or support geometry' : ''}`));
+      element('span', `${change.id}${roomContext}${change.reason === 'placement' ? ' · placement, host or support geometry' : ''}`));
     list.append(row);
   }
   host.replaceChildren(legend, list);
   if (!list.childElementCount) host.append(element('p', 'No model changes against this base revision.'));
 }
+
+function focusRoom(id: string | null): void {
+  if (!preview || busy || gesture || visualGesture) return;
+  if (visualDraft) { status('Clear or submit the current location marker before changing room context.'); return; }
+  focusedRoomId = id;
+  const room = spaces(preview).find((item) => item.id === id);
+  if (room) selectedObject = room.id;
+  else selectedObject = preview.entities.find((item) => item.type === 'Level')?.id ?? selectedObject;
+  syncInspector(); renderComparison(); updateControls();
+}
+function renderRoomNavigation(snapshot: ModelSnapshot): void {
+  const rooms = spaces(snapshot);
+  if (!rooms.some((room) => room.id === focusedRoomId)) focusedRoomId = null;
+  generic('room-navigation').hidden = !rooms.length;
+  ui['room-focus'].replaceChildren(new Option('Whole ground floor', ''), ...rooms.map((room) => new Option(room.name, room.id)));
+  ui['room-focus'].value = focusedRoomId ?? '';
+  generic('room-context').textContent = focusedRoomId
+    ? 'Room focus frames the camera and accompanies your request. Adjacent rooms remain part of the shared model.'
+    : 'One connected level · shared walls and doorways · room areas use wall centre lines.';
+}
+ui['room-focus'].addEventListener('change', () => focusRoom(ui['room-focus'].value || null));
+button('whole-floor').addEventListener('click', () => focusRoom(null));
 
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
@@ -1892,7 +1962,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => ui['visual-wall'].focus(),
     });
-    modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, mode: renderingMode, cutaway,
+    modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway,
       interactive: !comparison && currentPage === 'request' && !busy && !writesBlocked, reference: currentPage === 'request' ? visualDraft : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
@@ -1909,6 +1979,7 @@ function renderComparison(): void {
   const review = project.reviews().find((item) => item.proposalRevisionId === selectedRevision);
   const comparison = review ? project.view(review.baseRevisionId).snapshot : original;
   const isOriginal = selectedRevision === originalId;
+  renderRoomNavigation(selected);
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
   if (modelView === 'plan' && !(ui['changes-dialog'].open && changesTab === '3d')) {
     modelViewer?.hide();
@@ -1949,9 +2020,9 @@ function renderComparison(): void {
   button('changes-3d-tab').setAttribute('aria-pressed', String(changesTab === '3d'));
   button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
   renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
-  ui['selected-title'].textContent = dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
+  ui['selected-title'].textContent = spaces(selected).length && currentPage === 'request' ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? 'Ground floor' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
-  ui['study-caption'].textContent = 'Inspect the same revision in Plan or 3D. Select any object in either view; walls and the entry door can also carry visual change requests.';
+  ui['study-caption'].textContent = spaces(selected).length ? 'Explore the floor or focus a room. All views share one revision; requests stay in the backlog for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), review ? `Proposal base ${review.baseRevisionId.slice(0, 10)}` : 'Original');
 }
 
@@ -1963,10 +2034,25 @@ function renderProjectOverview(): void {
   generic('overview-project-label').textContent = `${project.name} · PROJECT OVERVIEW`;
   generic('overview-model-heading').textContent = project.name;
   generic('overview-description').textContent = housePilotFixture ? 'Measurements and evidence connected to the captured building.' : 'An AI-authored concept model with versioned proposals and human review.';
-  generic('space-card-heading').textContent = housePilotFixture ? 'Reference room' : 'Room model';
+  const rooms = spaces(revision.snapshot);
+  generic('space-card-heading').textContent = rooms.length ? 'Ground floor' : housePilotFixture ? 'Reference room' : 'Room model';
   generic('space-description').textContent = `${revision.snapshot.entities.filter((item) => item.type === 'Furniture').length} furnishings · synchronized plan and 3D views of the accepted revision.`;
   generic('overview-phase').textContent = housePilotFixture ? 'Existing conditions' : 'Concept design';
-  generic('overview-scope').textContent = housePilotFixture ? 'Reference room' : 'Room model';
+  generic('overview-scope').textContent = rooms.length ? `1 level · ${rooms.length} rooms` : housePilotFixture ? 'Reference room' : 'Room model';
+  ui['open-room'].textContent = rooms.length ? 'Explore ground floor →' : 'Open room model →';
+  generic('floor-overview').hidden = !rooms.length;
+  document.querySelector('.overview-grid')?.classList.toggle('has-floor', rooms.length > 0);
+  generic('floor-overview-plan').replaceChildren(...(rooms.length ? [drawPlan(revision.snapshot, null, 'floor-overview', 'Ground floor room overview')] : []));
+  const connections = rooms.length ? doorConnections(revision.snapshot) : [];
+  generic('room-directory').replaceChildren(...rooms.map((room) => {
+    const card = element('button', undefined, 'room-card'); card.type = 'button'; card.dataset.room = room.id;
+    const b = room.bounds; const count = revision.snapshot.entities.filter((item) => entitySpace(revision.snapshot, item)?.id === room.id && item.type !== 'Space').length;
+    const links = connections.filter((link) => link.roomIds.includes(room.id));
+    card.append(element('strong', room.name), element('span', `${number.format((b.maxX - b.minX) * (b.maxY - b.minY))} m² · ${count} ${count === 1 ? 'furnishing' : 'furnishings'}`),
+      element('small', links.some((link) => link.exterior) ? 'Entrance to the house' : 'Connected through the hallway'));
+    card.addEventListener('click', () => { if (beginRequest()) focusRoom(room.id); });
+    return card;
+  }));
 }
 
 function renderConflictChoices(): void {
@@ -2010,7 +2096,7 @@ ui['check-conflicts'].addEventListener('click', () => {
           if (value.type === 'Door') return `${millimetres(value.width)} mm door`;
           if (value.type === 'Wall') return value.name;
           if (value.type === 'Window') return `${millimetres(value.width)} mm window`;
-          if (value.type === 'Equipment' || value.type === 'Furniture') return value.name;
+          if (value.type === 'Equipment' || value.type === 'Furniture' || value.type === 'Space' || value.type === 'Level') return value.name;
           return `placement on ${value.target}`;
         };
         ui['conflict-result'].append(document.createTextNode(`${conflict.id}: original ${describe(conflict.base)}; ${left}: ${describe(conflict.left)}; ${right}: ${describe(conflict.right)}. `));
