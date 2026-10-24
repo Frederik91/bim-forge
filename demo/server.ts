@@ -2,10 +2,11 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { randomUUID, createHash } from 'node:crypto';
 import QRCode from 'qrcode';
 import { RoomRepository } from '../src/room-model.ts';
 import { CodexAccountConnection, CodexAppServerError } from '../src/codex-app-server.ts';
-import { ModelWorkerError, prepareModelProposal } from '../src/model-proposal.ts';
+import { ModelWorkerError, prepareModelProposal, validateModelProposalRequest } from '../src/model-proposal.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -124,6 +125,13 @@ export function createDemoServer({
   publicOrigin = null,
 }: DemoServerOptions = {}): http.Server {
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
+  type Job = { fingerprint: string; requestId: string; createdAt: number } & (
+    { status: 'working' } | { status: 'complete'; httpStatus: number; result: unknown }
+  );
+  const jobs = new Map<string, Job>();
+  const expireJobs = (): void => {
+    for (const [id, job] of jobs) if (job.status === 'complete' && Date.now() - job.createdAt > 15 * 60_000) jobs.delete(id);
+  };
   return http.createServer(async (request, response) => {
     const allowedHost = /^127\.0\.0\.1(?::[0-9]{1,5})?$|^localhost(?::[0-9]{1,5})?$/;
     const requestHost = request.headers.host ?? '';
@@ -181,6 +189,15 @@ export function createDemoServer({
       }
       return;
     }
+    if (request.url?.startsWith('/api/proposals/')) {
+      if (request.method !== 'GET') { send(response, 405, { error: 'Proposal status requires GET.' }); return; }
+      expireJobs();
+      const job = jobs.get(request.url.slice('/api/proposals/'.length));
+      if (!job) { send(response, 404, { error: 'This proposal job expired or the server restarted. The saved model is unchanged; submit a new request.' }); return; }
+      if (job.status === 'working') send(response, 200, { status: 'working' });
+      else send(response, job.httpStatus, job.result);
+      return;
+    }
     if (request.url === '/api/proposals') {
       if (request.method !== 'POST') { response.writeHead(405, { Allow: 'POST' }); response.end('Proposal endpoint requires POST.'); return; }
       try {
@@ -193,8 +210,30 @@ export function createDemoServer({
         if (!worker) { send(response, 503, { error: 'No server-side model worker is configured.' }); return; }
         const payload = proposalPayload(await readJson(request));
         const repository = await RoomRepository.restore(payload.project);
-        const result = await prepareModelProposal(repository, payload.request, worker);
-        send(response, 200, { status: result.status, project: result.repository.serialize(), review: result.review });
+        validateModelProposalRequest(repository, payload.request);
+        if (!isRecord(payload.request) || typeof payload.request.requestId !== 'string') throw new Error('Invalid request identity.');
+        const requestId = payload.request.requestId;
+        expireJobs();
+        const fingerprint = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+        const existing = [...jobs].find(([, job]) => job.requestId === requestId);
+        if (existing) {
+          if (existing[1].fingerprint !== fingerprint) { send(response, 409, { error: 'This request identity was already used for different input.' }); return; }
+          send(response, 202, { status: 'working', jobId: existing[0] }); return;
+        }
+        if ([...jobs.values()].filter((job) => job.status === 'working').length >= 2 || jobs.size >= 8) {
+          send(response, 429, { error: 'The proposal queue is full. Try again after existing requests finish or expire.' }); return;
+        }
+        const id = randomUUID();
+        const job = { fingerprint, requestId, createdAt: Date.now() };
+        jobs.set(id, { ...job, status: 'working' });
+        send(response, 202, { status: 'working', jobId: id });
+        void prepareModelProposal(repository, payload.request, worker).then((result) => {
+          jobs.set(id, { ...job, status: 'complete', httpStatus: 200,
+            result: { status: result.status, project: result.repository.serialize(), review: result.review } });
+        }).catch((error: unknown) => {
+          jobs.set(id, { ...job, status: 'complete', httpStatus: error instanceof ModelWorkerError ? 502 : 400,
+            result: { error: error instanceof Error ? error.message : 'Proposal request failed.' } });
+        });
       } catch (error) {
         const status = error instanceof ModelWorkerError ? 502 : 400;
         send(response, status, { error: error instanceof Error ? error.message : 'Proposal request failed.' });

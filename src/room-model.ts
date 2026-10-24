@@ -61,7 +61,24 @@ export interface Equipment {
   height: number;
 }
 
-export type Entity = Wall | Door | Window | Equipment;
+export const FURNITURE_KINDS = ['desk', 'monitor', 'laptop', 'chair', 'table', 'plant'] as const;
+export type FurnitureKind = typeof FURNITURE_KINDS[number];
+export interface Furniture {
+  id: EntityId;
+  type: 'Furniture';
+  name: string;
+  kind: FurnitureKind;
+  /** Centre of the footprint in model metres; positive Y is north. */
+  position: Point;
+  width: number;
+  depth: number;
+  height: number;
+  rotationDeg: 0 | 90 | 180 | 270;
+  /** Monitor/laptop reference a desk or table; floor items use null. */
+  supportId: EntityId | null;
+}
+
+export type Entity = Wall | Door | Window | Equipment | Furniture;
 
 export interface HostingRelationship {
   id: EntityId;
@@ -93,7 +110,7 @@ export interface Branch {
   revisionId: RevisionId;
 }
 
-type ToolCallName = 'inspect_model' | 'preview_rectangle' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
+type ToolCallName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
 type ToolCallStatus = 'accepted' | 'rejected';
 
 export interface ToolCallEvidence {
@@ -350,7 +367,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     const name = call.name;
     const status = call.status;
     const error = call.error;
-    if (name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'submit_proposal'
+    if (name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'preview_furnishings' && name !== 'submit_proposal'
         && name !== 'decline_request' && name !== 'unsupported_tool') fail('Invalid model tool evidence.');
     if (status !== 'accepted' && status !== 'rejected') fail('Invalid model tool evidence.');
     if (error !== null && (typeof error !== 'string' || !error || error.length > 240)) fail('Invalid model tool evidence.');
@@ -384,7 +401,7 @@ function metres(value: unknown, min = 0.001, max = 100): number {
 }
 
 function point(value: unknown): Point {
-  if (!Array.isArray(value) || value.length !== 2) fail('Wall coordinates require two dimensions.');
+  if (!Array.isArray(value) || value.length !== 2) fail('Model coordinates require two dimensions.');
   const [x, y] = value;
   return [metres(x, -1000, 1000), metres(y, -1000, 1000)];
 }
@@ -403,6 +420,8 @@ function parseEntity(input: JsonValue): Entity {
   else if (input.type === 'Window') fields(input, ['id', 'type', 'name', 'width', 'height', 'sillHeight']);
   else if (input.type === 'Equipment') {
     fields(input, ['id', 'type', 'name', 'category', 'position', 'elevation', 'width', 'depth', 'height']);
+  } else if (input.type === 'Furniture') {
+    fields(input, ['id', 'type', 'name', 'kind', 'position', 'width', 'depth', 'height', 'rotationDeg', 'supportId']);
   } else return fail('Only supported building entities are accepted.');
   const id = identifier(input.id);
   const name = label(input.name);
@@ -423,6 +442,18 @@ function parseEntity(input: JsonValue): Entity {
     id, type: 'Window', name, width: metres(input.width), height: metres(input.height),
     sillHeight: metres(input.sillHeight, 0, 100),
   };
+  if (input.type === 'Furniture') {
+    const kind = FURNITURE_KINDS.find((kind) => kind === input.kind);
+    if (!kind) fail('Unsupported furnishing kind.');
+    const rotationDeg = input.rotationDeg;
+    if (rotationDeg !== 0 && rotationDeg !== 90 && rotationDeg !== 180 && rotationDeg !== 270) fail('Furniture rotation must be 0, 90, 180 or 270 degrees.');
+    return {
+      id, type: 'Furniture', name, kind, position: point(input.position),
+      width: metres(input.width, 0.05, 5), depth: metres(input.depth, 0.05, 5),
+      height: metres(input.height, 0.02, 3), rotationDeg,
+      supportId: input.supportId === null ? null : identifier(input.supportId),
+    };
+  }
   if (input.category !== 'mechanical' && input.category !== 'electrical') fail('Unsupported equipment category.');
   return {
     id, type: 'Equipment', name, category: input.category, position: point(input.position),
@@ -438,6 +469,92 @@ function parseRelationship(input: JsonValue): HostingRelationship {
     id: identifier(input.id), type: 'hosted-by', source: identifier(input.source),
     target: identifier(input.target), offset: metres(input.offset, 0, 1000),
   };
+}
+
+export function furnitureFootprint(item: Furniture): { minX: number; minY: number; maxX: number; maxY: number } {
+  const sideways = item.rotationDeg === 90 || item.rotationDeg === 270;
+  const width = sideways ? item.depth : item.width;
+  const depth = sideways ? item.width : item.depth;
+  return { minX: item.position[0] - width / 2, maxX: item.position[0] + width / 2,
+    minY: item.position[1] - depth / 2, maxY: item.position[1] + depth / 2 };
+}
+
+function validateFurnishings(entities: Entity[], relationships: HostingRelationship[]): void {
+  const items = entities.filter((item): item is Furniture => item.type === 'Furniture');
+  if (!items.length) return;
+  if (items.length > 32) fail('The prototype supports at most 32 furnishings.');
+  const walls = entities.filter((item): item is Wall => item.type === 'Wall');
+  if (walls.length !== 4 || walls.some((wall) => wall.start[0] !== wall.end[0] && wall.start[1] !== wall.end[1])) {
+    fail('Furnishing placement requires a rectangular room shell.');
+  }
+  const minX = Math.min(...walls.flatMap((wall) => [wall.start[0], wall.end[0]]));
+  const minY = Math.min(...walls.flatMap((wall) => [wall.start[1], wall.end[1]]));
+  const maxX = Math.max(...walls.flatMap((wall) => [wall.start[0], wall.end[0]]));
+  const maxY = Math.max(...walls.flatMap((wall) => [wall.start[1], wall.end[1]]));
+  const inset = Math.max(...walls.map((wall) => wall.thickness / 2));
+  const contains = (outer: ReturnType<typeof furnitureFootprint>, inner: ReturnType<typeof furnitureFootprint>): boolean =>
+    inner.minX >= outer.minX - 1e-9 && inner.maxX <= outer.maxX + 1e-9
+    && inner.minY >= outer.minY - 1e-9 && inner.maxY <= outer.maxY + 1e-9;
+  const overlaps = (a: ReturnType<typeof furnitureFootprint>, b: ReturnType<typeof furnitureFootprint>): boolean =>
+    a.minX < b.maxX - 1e-9 && a.maxX > b.minX + 1e-9 && a.minY < b.maxY - 1e-9 && a.maxY > b.minY + 1e-9;
+  for (const item of items) {
+    const footprint = furnitureFootprint(item);
+    const device = item.kind === 'monitor' || item.kind === 'laptop';
+    const support = entities.find((entity) => entity.id === item.supportId);
+    if (device) {
+      if (!support || support.type !== 'Furniture' || (support.kind !== 'desk' && support.kind !== 'table')
+          || support.supportId !== null || !contains(furnitureFootprint(support), footprint)) {
+        fail(`${item.name} requires a desk/table support containing its entire footprint.`);
+      }
+      if (support.height + item.height > Math.min(...walls.map((wall) => wall.height))) fail('Supported device must fit below the room ceiling.');
+    } else if (item.supportId !== null) fail('Floor furnishings cannot have a support.');
+    if (!contains({ minX: minX + inset, maxX: maxX - inset, minY: minY + inset, maxY: maxY - inset }, footprint)) {
+      fail(`${item.name} must fit inside the room, clear of wall thickness.`);
+    }
+    if (item.height > Math.min(...walls.map((wall) => wall.height))) fail('Furniture must fit below the room ceiling.');
+  }
+  for (const item of items) {
+    const footprint = furnitureFootprint(item);
+    const device = item.kind === 'monitor' || item.kind === 'laptop';
+    for (const other of items) {
+      if (item.id >= other.id || item.supportId !== other.supportId) continue;
+      if (overlaps(footprint, furnitureFootprint(other))) fail(`${item.name} and ${other.name} overlap.`);
+    }
+    if (device) continue;
+    for (const equipment of entities) {
+      if (equipment.type !== 'Equipment' || equipment.elevation >= item.height) continue;
+      const [x, y] = equipment.position;
+      if (overlaps(footprint, { minX: x - equipment.width / 2, maxX: x + equipment.width / 2,
+        minY: y - equipment.depth / 2, maxY: y + equipment.depth / 2 })) fail(`${item.name} overlaps existing equipment.`);
+    }
+    for (const relation of relationships) {
+      const opening = entities.find((entity) => entity.id === relation.source);
+      const wall = walls.find((entity) => entity.id === relation.target);
+      if (opening?.type !== 'Door' || !wall) continue;
+      const length = wallLength(wall);
+      const dx = (wall.end[0] - wall.start[0]) / length;
+      const dy = (wall.end[1] - wall.start[1]) / length;
+      const x1 = wall.start[0] + dx * relation.offset;
+      const y1 = wall.start[1] + dy * relation.offset;
+      const x2 = x1 + dx * opening.width; const y2 = y1 + dy * opening.width;
+      const clearance = Math.max(0.9, opening.width);
+      const zone = dx !== 0
+        ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: wall.start[1] === minY ? minY : maxY - clearance, maxY: wall.start[1] === minY ? minY + clearance : maxY }
+        : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: wall.start[0] === minX ? minX : maxX - clearance, maxX: wall.start[0] === minX ? minX + clearance : maxX };
+      if (overlaps(footprint, zone)) fail(`${item.name} blocks the door clearance zone.`);
+    }
+  }
+}
+
+/** Replace the complete furnishing set; building geometry and equipment remain untouched. */
+export function previewFurnishings(baseSnapshot: unknown, input: unknown): ModelSnapshot {
+  const base = rectangle(baseSnapshot).snapshot;
+  const value = copy(input);
+  fields(value, ['furnishings']);
+  if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 furnishings.');
+  const furnishings = value.furnishings.map(parseEntity);
+  if (furnishings.some((item) => item.type !== 'Furniture')) fail('Only furnishings can be changed by this tool.');
+  return graph({ units: 'm', entities: [...base.entities.filter((item) => item.type !== 'Furniture'), ...furnishings], relationships: base.relationships });
 }
 
 function graph(input: unknown): ModelSnapshot {
@@ -476,6 +593,7 @@ function graph(input: unknown): ModelSnapshot {
   if (entities.some((entity) => (entity.type === 'Door' || entity.type === 'Window') && !hosted.has(entity.id))) {
     fail('Every opening must have exactly one host.');
   }
+  validateFurnishings(entities, relationships);
   const byId = (a: ModelItem, b: ModelItem): number => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   entities.sort(byId); relationships.sort(byId);
   return freeze({ units: 'm', entities, relationships });
@@ -486,7 +604,7 @@ function cloneSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
     units: 'm',
     entities: snapshot.entities.map((entity): Entity => {
       if (entity.type === 'Wall') return { ...entity, start: [...entity.start], end: [...entity.end] };
-      if (entity.type === 'Equipment') return { ...entity, position: [...entity.position] };
+      if (entity.type === 'Equipment' || entity.type === 'Furniture') return { ...entity, position: [...entity.position] };
       return { ...entity };
     }),
     relationships: snapshot.relationships.map((relationship) => ({ ...relationship })),
@@ -516,7 +634,7 @@ function rectangle(input: unknown): RectangleModel {
   const snapshot = graph(input);
   const walls = snapshot.entities.filter((entity): entity is Wall => entity.type === 'Wall');
   const door = snapshot.entities.find((entity): entity is Door => entity.type === 'Door' && entity.id === 'door-entry');
-  if (walls.length !== 4 || snapshot.entities.length !== 5 || !door || snapshot.relationships.length !== 1) {
+  if (walls.length !== 4 || !door || snapshot.entities.filter((entity) => entity.type === 'Door').length !== 1) {
     fail('Interactive editing requires four rectangular walls and one hosted entry door.');
   }
   const millimetres = ([x, y]: Point): Point => [Math.round(x * 1000), Math.round(y * 1000)];
@@ -552,7 +670,7 @@ function integerMm(value: unknown, min: number, max: number): number {
 
 export function rectangleLayout(snapshot: unknown): RoomLayout {
   const room = rectangle(snapshot);
-  const relationship = room.snapshot.relationships[0];
+  const relationship = room.snapshot.relationships.find((item) => item.source === room.door.id);
   if (!relationship) fail('Interactive editing requires one hosted entry door.');
   return freeze({ boundsMm: room.boundsMm, door: {
     widthMm: Math.round(room.door.width * 1000),
@@ -586,7 +704,7 @@ export function previewRectangle(baseSnapshot: unknown, input: unknown): ModelSn
   if (width <= 0 || depth <= 0 || width > 1000000 || depth > 1000000) fail('Room spans must be between 1 and 1000000 millimetres.');
   const base = rectangle(baseSnapshot);
   const snapshot = cloneSnapshot(base.snapshot);
-  const host = snapshot.relationships[0];
+  const host = snapshot.relationships.find((item) => item.source === base.door.id);
   if (!host) fail('Interactive editing requires one hosted entry door.');
   const hostWall = snapshot.entities.find((entity) => entity.id === host.target);
   if (!hostWall || hostWall.type !== 'Wall') fail('Hosting references must identify a door and wall.');
@@ -600,7 +718,7 @@ export function previewRectangle(baseSnapshot: unknown, input: unknown): ModelSn
       ];
       entity.start = move(entity.start);
       entity.end = move(entity.end);
-    } else entity.width = layout.door.widthMm / 1000;
+    } else if (entity.id === base.door.id && entity.type === 'Door') entity.width = layout.door.widthMm / 1000;
   }
   host.offset = layout.door.offsetMm / 1000;
   return graph(snapshot);
@@ -862,9 +980,9 @@ export class RoomRepository {
     return this.#commit(name, base, previewRectangle(base.snapshot, layout));
   }
 
-  async proposeReviewedLayout(input: unknown): Promise<RoomRepository> {
+  async proposeReviewedModel(input: unknown): Promise<RoomRepository> {
     const proposal = copy(input);
-    fields(proposal, ['name', 'from', 'layout', 'review']);
+    fields(proposal, ['name', 'from', 'snapshot', 'review']);
     const proposalName = branchName(proposal.name);
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
@@ -872,7 +990,7 @@ export class RoomRepository {
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
       'uncertainty', 'worker', 'toolCalls', 'validator']);
     const base = this.view(from);
-    const next = await this.#commit(proposalName, base, previewRectangle(base.snapshot, proposal.layout));
+    const next = await this.#commit(proposalName, base, proposal.snapshot);
     if (next === this) fail('The reviewed proposal must change the bound revision.');
     const record = reviewRecord({
       requestId: details.requestId, proposalName, baseRevisionId: base.id,

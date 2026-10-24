@@ -215,8 +215,10 @@ test('proposal endpoint binds request to revision and returns a validated separa
   const response = await request('/api/proposals', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
-  assert.equal(response.status, 200);
-  const result = jsonObject(response.body); assert.equal(result.status, 'ready');
+  assert.equal(response.status, 202);
+  const jobId = jsonObject(response.body).jobId;
+  const complete = await pollProposal(request, jobId);
+  const result = jsonObject(complete.body); assert.equal(result.status, 'ready');
   const proposed = await RoomRepository.restore(result.project);
   assert.equal(proposed.head('main'), repo.head('main'));
   assert.equal(proposed.view(proposed.head('ai-entry-study')).parentId, repo.head('main'));
@@ -230,11 +232,53 @@ test('proposal endpoint binds request to revision and returns a validated separa
   assert.equal((await request('/api/proposals', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stale),
   })).status, 400);
-  const failed = { ...payload, request: { ...payload.request, instruction: 'provider failure' } };
-  assert.equal((await request('/api/proposals', {
+  const failed = { ...payload, request: { ...payload.request, requestId: 'http-failure', instruction: 'provider failure' } };
+  const failedStart = await request('/api/proposals', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(failed),
-  })).status, 502);
+  });
+  assert.equal((await pollProposal(request, jsonObject(failedStart.body).jobId)).status, 502);
   assert.equal((await request('/api/proposals', {
     method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}',
   })).status, 400);
+});
+
+async function pollProposal(request: TestRequester, id: unknown): Promise<TestResponse> {
+  assert.equal(typeof id, 'string');
+  for (let count = 0; count < 100; count += 1) {
+    const response = await request(`/api/proposals/${id}`);
+    if (jsonObject(response.body).status !== 'working') return response;
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error('Proposal did not finish.');
+}
+
+test('slow proposals return a job immediately, are idempotent, and expose readable failures', async (t) => {
+  let release: (() => void) | undefined;
+  let runs = 0;
+  const waiting = new Promise<void>((resolve) => { release = resolve; });
+  const request = await listen(t, {
+    identity: { provider: 'test', model: 'slow-worker' },
+    async run() { runs += 1; await waiting; throw new Error('Controlled model failure.'); },
+  });
+  const repo = await RoomRepository.create();
+  const payload = { project: repo.serialize(), request: {
+    requestId: 'slow-request', proposalName: 'slow-office', baseRevisionId: repo.head('main'),
+    selectedObjectIds: ['door-entry'], instruction: 'Build an office.',
+    visualIntent: { kind: 'rectangle-layout-sketch', layout: rectangleLayout(repo.view(repo.head('main')).snapshot) },
+  } };
+  const post = (body = payload) => request('/api/proposals', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const response = await post();
+  assert.equal(response.status, 202);
+  const job = jsonObject(response.body).jobId;
+  assert.equal(jsonObject((await request(`/api/proposals/${job}`)).body).status, 'working');
+  assert.equal(jsonObject((await post()).body).jobId, job);
+  assert.equal(runs, 1);
+  assert.equal((await post({ ...payload, request: { ...payload.request, instruction: 'Different input.' } })).status, 409);
+  release?.();
+  const failure = await pollProposal(request, job);
+  assert.equal(failure.status, 502);
+  assert.equal(jsonObject(failure.body).error, 'Controlled model failure.');
+  assert.equal((await request('/api/proposals/unknown')).status, 404);
 });
