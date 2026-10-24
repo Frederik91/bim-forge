@@ -392,10 +392,11 @@ function syncInspector() {
   for (const dimensionInput of dimensionInputs) dimensionInput.removeAttribute('aria-invalid');
   const object = preview?.entities.find((item) => item.id === selectedObject);
   const isDoor = object?.type === 'Door';
+  const isWall = object?.type === 'Wall';
   ui['door-fields'].hidden = !isDoor;
-  ui['wall-fields'].hidden = isDoor || !object;
+  ui['wall-fields'].hidden = !isWall;
   ui['editor-base'].textContent = `Request bound to ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved in history. Unsaved request sketches are lost on reload.`;
-  if (!layout || !preview || !object) {
+  if (!layout || !preview || !object || (!isDoor && !isWall)) {
     for (const dimensionInput of dimensionInputs) dimensionInput.value = '';
     ui['selection-help'].textContent = 'This saved revision is view-only. Its geometry and changed properties remain available below.';
     return;
@@ -437,7 +438,7 @@ function acceptLayout(candidate: RoomLayout): void {
 function editFields(event: Event): void {
   if (!repo || busy || writesBlocked || !layout || !preview || gesture) return;
   const object = preview.entities.find((item) => item.id === selectedObject);
-  if (!object) return;
+  if (!object || (object.type !== 'Door' && object.type !== 'Wall')) return;
   const fields = object.type === 'Door' ? [ui['door-width'], ui['door-offset']] : [ui['wall-position'], ui['wall-length']];
   try {
     const values = fields.map((field) => field.valueAsNumber);
@@ -1032,6 +1033,13 @@ function modelProperties(item: ModelItem): Record<string, unknown> {
   if (item.type === 'Door') {
     return { id: item.id, type: item.type, name: item.name, width: item.width, height: item.height };
   }
+  if (item.type === 'Window') {
+    return { id: item.id, type: item.type, name: item.name, width: item.width, height: item.height, sillHeight: item.sillHeight };
+  }
+  if (item.type === 'Equipment') {
+    return { id: item.id, type: item.type, name: item.name, category: item.category, position: item.position,
+      elevation: item.elevation, width: item.width, depth: item.depth, height: item.height };
+  }
   return { id: item.id, type: item.type, source: item.source, target: item.target, offset: item.offset };
 }
 
@@ -1234,6 +1242,8 @@ ui['check-conflicts'].addEventListener('click', () => {
           if (value === null) return 'removed';
           if (value.type === 'Door') return `${millimetres(value.width)} mm door`;
           if (value.type === 'Wall') return value.name;
+          if (value.type === 'Window') return `${millimetres(value.width)} mm window`;
+          if (value.type === 'Equipment') return value.name;
           return `placement on ${value.target}`;
         };
         ui['conflict-result'].append(document.createTextNode(`${conflict.id}: original ${describe(conflict.base)}; ${left}: ${describe(conflict.left)}; ${right}: ${describe(conflict.right)}. `));

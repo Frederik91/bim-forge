@@ -41,7 +41,14 @@ function wallEntity(value: Entity | EntityShape | undefined): Wall | WallShape {
 }
 const door = (repo: RoomRepository, branch = 'main'): Door | DoorShape => doorEntity(repo.view(repo.head(branch)).snapshot.entities.find((item) => item.id === 'door-entry'));
 const proposal = (repo: RoomRepository, name = 'wider-entry', doorWidthM: unknown = 1.2, from: unknown = repo.head('main')) => repo.propose({ name, from, doorWidthM });
-const snapshot = (repo: RoomRepository): SnapshotShape => structuredClone(repo.view(repo.head('main')).snapshot);
+const snapshot = (repo: RoomRepository): SnapshotShape => {
+  const value = structuredClone(repo.view(repo.head('main')).snapshot);
+  const entities = value.entities.map((entity): EntityShape => {
+    if (entity.type === 'Wall' || entity.type === 'Door') return entity;
+    throw new Error('Expected the default room fixture.');
+  });
+  return { units: value.units, entities, relationships: value.relationships };
+};
 
 test('sample project contains four walls, one hosted door and metre units', async () => {
   const repo = await RoomRepository.create('My first room');

@@ -40,7 +40,28 @@ export interface Door {
   height: number;
 }
 
-export type Entity = Wall | Door;
+export interface Window {
+  id: EntityId;
+  type: 'Window';
+  name: string;
+  width: number;
+  height: number;
+  sillHeight: number;
+}
+
+export interface Equipment {
+  id: EntityId;
+  type: 'Equipment';
+  name: string;
+  category: 'mechanical' | 'electrical';
+  position: Point;
+  elevation: number;
+  width: number;
+  depth: number;
+  height: number;
+}
+
+export type Entity = Wall | Door | Window | Equipment;
 
 export interface HostingRelationship {
   id: EntityId;
@@ -378,7 +399,11 @@ function wallLength(wall: Wall): number {
 function parseEntity(input: JsonValue): Entity {
   if (!input || Array.isArray(input) || typeof input !== 'object') fail('Unexpected model fields.');
   if (input.type === 'Wall') fields(input, ['id', 'type', 'name', 'start', 'end', 'thickness', 'height']);
-  else fields(input, ['id', 'type', 'name', 'width', 'height']);
+  else if (input.type === 'Door') fields(input, ['id', 'type', 'name', 'width', 'height']);
+  else if (input.type === 'Window') fields(input, ['id', 'type', 'name', 'width', 'height', 'sillHeight']);
+  else if (input.type === 'Equipment') {
+    fields(input, ['id', 'type', 'name', 'category', 'position', 'elevation', 'width', 'depth', 'height']);
+  } else return fail('Only supported building entities are accepted.');
   const id = identifier(input.id);
   const name = label(input.name);
   if (input.type === 'Wall') {
@@ -394,7 +419,16 @@ function parseEntity(input: JsonValue): Entity {
   if (input.type === 'Door') return {
     id, type: 'Door', name, width: metres(input.width), height: metres(input.height),
   };
-  return fail('Only demo walls and doors are supported.');
+  if (input.type === 'Window') return {
+    id, type: 'Window', name, width: metres(input.width), height: metres(input.height),
+    sillHeight: metres(input.sillHeight, 0, 100),
+  };
+  if (input.category !== 'mechanical' && input.category !== 'electrical') fail('Unsupported equipment category.');
+  return {
+    id, type: 'Equipment', name, category: input.category, position: point(input.position),
+    elevation: metres(input.elevation, 0, 100), width: metres(input.width),
+    depth: metres(input.depth), height: metres(input.height),
+  };
 }
 
 function parseRelationship(input: JsonValue): HostingRelationship {
@@ -428,14 +462,20 @@ function graph(input: unknown): ModelSnapshot {
   for (const item of relationshipValues) {
     const relation = parseRelationship(item);
     if (relationIds.has(relation.id) || hosted.has(relation.source)) fail('Invalid or duplicate hosting relationship.');
-    const door = byEntityId.get(relation.source); const wall = byEntityId.get(relation.target);
-    if (!door || door.type !== 'Door') fail('Hosting references must identify a door and wall.');
-    if (!wall || wall.type !== 'Wall') fail('Hosting references must identify a door and wall.');
+    const opening = byEntityId.get(relation.source); const wall = byEntityId.get(relation.target);
+    if (!opening || (opening.type !== 'Door' && opening.type !== 'Window')) {
+      fail('Hosting references must identify an opening and wall.');
+    }
+    if (!wall || wall.type !== 'Wall') fail('Hosting references must identify an opening and wall.');
     const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
-    if (relation.offset + door.width > length + 1e-9 || door.height > wall.height) fail('Door opening must fit inside its host wall.');
+    if (relation.offset + opening.width > length + 1e-9 || opening.height > wall.height) {
+      fail('Hosted opening must fit inside its wall.');
+    }
     relationIds.add(relation.id); hosted.add(relation.source); relationships.push(relation);
   }
-  if (entities.some((entity) => entity.type === 'Door' && !hosted.has(entity.id))) fail('Every door must have exactly one host.');
+  if (entities.some((entity) => (entity.type === 'Door' || entity.type === 'Window') && !hosted.has(entity.id))) {
+    fail('Every opening must have exactly one host.');
+  }
   const byId = (a: ModelItem, b: ModelItem): number => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   entities.sort(byId); relationships.sort(byId);
   return freeze({ units: 'm', entities, relationships });
@@ -444,9 +484,11 @@ function graph(input: unknown): ModelSnapshot {
 function cloneSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
   return {
     units: 'm',
-    entities: snapshot.entities.map((entity): Entity => entity.type === 'Wall'
-      ? { ...entity, start: [...entity.start], end: [...entity.end] }
-      : { ...entity }),
+    entities: snapshot.entities.map((entity): Entity => {
+      if (entity.type === 'Wall') return { ...entity, start: [...entity.start], end: [...entity.end] };
+      if (entity.type === 'Equipment') return { ...entity, position: [...entity.position] };
+      return { ...entity };
+    }),
     relationships: snapshot.relationships.map((relationship) => ({ ...relationship })),
   };
 }
@@ -633,11 +675,21 @@ export class RoomRepository {
   }
 
   static async create(name = 'Courtyard study'): Promise<RoomRepository> {
-    const validatedName = label(name);
-    const initial = await revision(null, fixture());
+    return RoomRepository.createProject({
+      projectId: globalThis.crypto.randomUUID(),
+      name,
+      snapshot: fixture(),
+    });
+  }
+
+  static async createProject(input: unknown): Promise<RoomRepository> {
+    const value = copy(input);
+    fields(value, ['projectId', 'name', 'snapshot']);
+    const validatedName = label(value.name);
+    const initial = await revision(null, graph(value.snapshot));
     const state: RepositoryStateV2 = {
       version: 2,
-      projectId: projectIdentifier(globalThis.crypto.randomUUID()),
+      projectId: projectIdentifier(value.projectId),
       name: validatedName,
       revisions: [initial],
       branches: [{ name: branchName('main'), revisionId: initial.id }],
@@ -676,7 +728,7 @@ export class RoomRepository {
     const roots = [...revisions.values()].filter((item) => item.parentId === null);
     if (roots.length !== 1) fail('The original room revision must be preserved.');
     const root = roots[0];
-    if (!root || root.id !== (await revision(null, fixture())).id) fail('The original room revision must be preserved.');
+    if (!root) fail('The original room revision must be preserved.');
     for (const item of revisions.values()) {
       const seen = new Set<RevisionId>(); let current = item;
       while (current.parentId !== null) {
@@ -723,6 +775,8 @@ export class RoomRepository {
   }
 
   get name(): string { return this.#state.name; }
+
+  get projectId(): ProjectId { return this.#state.projectId; }
 
   root(): RevisionId {
     const root = this.#state.revisions.find((item) => item.parentId === null);
