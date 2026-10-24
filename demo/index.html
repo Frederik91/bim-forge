@@ -15,6 +15,7 @@
       <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Room studies</small></span></a>
       <div class="project-identity"><span class="workspace-label"><i class="live-dot" aria-hidden="true"></i> LOCAL STUDY</span><strong id="project-title">No project open</strong></div>
       <div class="header-actions">
+        <button id="project-overview" class="button quiet" type="button" disabled>Overview</button>
         <button id="auth-menu" class="button connection-button" type="button"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
         <button id="export-project" class="button quiet" type="button" disabled>Export</button>
@@ -25,7 +26,7 @@
     </header>
 
     <main id="workbench" class="workbench" tabindex="-1">
-      <nav class="journey" aria-label="Model change process">
+      <nav id="journey" class="journey" aria-label="Model change process">
         <button id="nav-request" type="button" aria-pressed="true"><span>1</span><b>Request</b><small>Show the intent</small></button>
         <i aria-hidden="true"></i>
         <button id="nav-review" type="button" aria-pressed="false" disabled><span>2</span><b>Review</b><small>Understand the proposal</small></button>
@@ -39,6 +40,25 @@
         <button id="recover-save" type="button" class="text-button" hidden>Download unreadable saved data</button>
       </div>
 
+      <section id="project-page" class="workflow-page project-overview" aria-labelledby="project-page-heading" hidden>
+        <header class="page-heading">
+          <div><p class="eyebrow">HOUSE PILOT · PROJECT OVERVIEW</p><h1 id="project-page-heading">One building, one source of truth.</h1><p>Move from the whole project into the room and keep every view tied to the same saved revision.</p></div>
+          <span class="trust-note"><i aria-hidden="true">✓</i> Model views never mutate geometry directly.</span>
+        </header>
+        <div class="overview-grid">
+          <section class="overview-hero" aria-labelledby="overview-model-heading">
+            <div class="overview-model-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div><span class="card-kicker">CURRENT BUILDING</span><h2 id="overview-model-heading">Existing house · captured state</h2><p>The first pilot turns measurements, observations, documents and photos into a reviewable model.</p></div>
+            <dl class="overview-stats"><div><dt>Phase</dt><dd>Existing conditions</dd></div><div><dt>Scope</dt><dd>Reference room</dd></div><div><dt>Revision</dt><dd id="overview-revision">—</dd></div></dl>
+          </section>
+          <section class="space-card" aria-labelledby="space-card-heading">
+            <div class="space-preview" aria-hidden="true"><span></span><i></i><b></b></div>
+            <div class="space-card-copy"><span class="card-kicker">ARCHITECTURE · ROOM</span><h2 id="space-card-heading">Reference room</h2><p>Four walls, hosted openings and coordinated electrical and mechanical equipment.</p><div class="space-meta"><span id="overview-entity-count">8 model objects</span><span>Plan + 3D</span></div></div>
+            <button id="open-room" class="button primary" type="button">Open room model <span aria-hidden="true">→</span></button>
+          </section>
+        </div>
+      </section>
+
       <section id="request-page" class="workflow-page" data-request-pane="canvas" aria-labelledby="request-heading">
         <header class="page-heading">
           <div><p class="eyebrow">STEP 1 · REQUEST</p><h1 id="request-heading">What should change?</h1><p id="study-caption">Start a project to mark up the room and explain the outcome you need.</p></div>
@@ -50,9 +70,10 @@
             <button id="request-details-tab" type="button" aria-pressed="false"><span>2</span> Describe request</button>
           </div>
           <section id="request-canvas-pane" class="drawing-card proposal-card request-pane" data-active="true" aria-labelledby="selected-title">
-            <header class="card-heading"><div><span class="card-kicker">LIVE REQUEST CANVAS</span><h2 id="selected-title">Room awaiting a request</h2></div><span id="selected-badge" class="pill teal">Not started</span></header>
-            <div id="proposal-drawing" class="drawing-surface"><p class="canvas-empty">Create a project or load the sample to begin.</p></div>
-            <footer><span>Select an object, then drag a handle or enter an exact dimension.</span><b>PLAN · METRES</b><button id="to-request-details" class="button primary mobile-only" type="button">Continue <span aria-hidden="true">→</span></button></footer>
+            <header class="card-heading model-card-heading"><div><span class="card-kicker">SYNCHRONIZED MODEL VIEW</span><h2 id="selected-title">Room awaiting a request</h2><small id="model-revision">Revision —</small></div><div class="view-switch" role="group" aria-label="Model view"><button id="view-plan" type="button" aria-pressed="true">Plan</button><button id="view-3d" type="button" aria-pressed="false">3D</button></div><span id="selected-badge" class="pill teal">Not started</span></header>
+            <div id="proposal-drawing" class="drawing-surface" data-model-view="plan"><p class="canvas-empty">Create a project or load the sample to begin.</p></div>
+            <div id="model-3d-controls" class="model-3d-controls" hidden><span>Drag to orbit · Shift-drag to pan · Scroll to zoom</span><button id="reset-3d" class="text-button" type="button">Reset camera</button></div>
+            <footer><span>Select an object in either view. Selection follows you between Plan and 3D.</span><b id="view-caption">PLAN · METRES</b><button id="to-request-details" class="button primary mobile-only" type="button">Continue <span aria-hidden="true">→</span></button></footer>
           </section>
 
           <section id="editor-panel" class="editor-panel request-pane" data-active="false" aria-labelledby="proposal-heading">
@@ -104,7 +125,7 @@
       <div class="modal-hero"><span class="brand-mark" aria-hidden="true">▱</span><p class="eyebrow">BIM FORGE · ROOM STUDIES</p><h1 id="start-heading">Start with a room, then ask for a change.</h1><p>Mark up an object and describe the outcome. AI prepares a separate model proposal for you to review.</p></div>
       <form id="project-form" class="start-form"><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="Ground floor study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create empty study <span aria-hidden="true">→</span></button></form>
       <div class="or"><span>or</span></div>
-      <button id="load-sample" class="button outline full" type="button" disabled>Explore the 6 × 4 m sample room</button>
+      <button id="load-sample" class="button outline full" type="button" disabled>Open the House Pilot reference room</button>
       <button id="start-close" class="text-button modal-close" type="button" hidden>Return to current project</button>
       <p class="modal-footnote"><i class="live-dot" aria-hidden="true"></i> Saved only in this browser. Demo JSON, not IFC.</p>
     </dialog>
