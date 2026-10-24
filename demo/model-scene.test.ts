@@ -7,6 +7,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js'
 import { ModelScene, entityAnchor, modelPoint, referenceFromHit, referencePosition } from './model-scene.ts';
 import { RoomRepository, previewFurnishings, diffSnapshots } from '../src/room-model.ts';
 import { createHousePilotFixture } from '../src/house-pilot.ts';
+import { modelChanges } from '../src/model-delta-view.ts';
 
 const furnishings = [
   { id: 'desk-test', type: 'Furniture', name: 'Desk', kind: 'desk', position: [3, 3], width: 1.8, depth: .8, height: .75, rotationDeg: 0, supportId: null },
@@ -99,4 +100,57 @@ test('actual Babylon rays select visible desk geometry and mark floor points thr
   const reference = viewer.referenceAt(point.x, point.y);
   assert.ok(reference?.kind === 'floor-point');
   assert.ok(Math.abs(reference.positionMm[0] - 3500) <= 2); assert.ok(Math.abs(reference.positionMm[1] - 1000) <= 2);
+});
+
+test('3D delta retains before ghosts for moved and removed objects, solid additions and a stable camera without changing either revision', async (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const repo = await RoomRepository.create();
+  const before = previewFurnishings(repo.view(repo.head('main')).snapshot, { furnishings });
+  const after = previewFurnishings(before, { furnishings: [
+    ...furnishings.filter((item) => item.id !== 'plant-test').map((item) => ['desk-test', 'screen-test', 'laptop-test', 'chair-test'].includes(item.id) ? { ...item, position: [item.position[0] - 1, item.position[1]] } : item),
+    { ...furnishings[5], id: 'new-plant', position: [4.7, 1.5] },
+  ] });
+  const original = JSON.stringify([before, after]);
+  const changes = modelChanges(before, after);
+  assert.deepEqual(changes.filter((item) => item.status === 'added').map((item) => item.id), ['new-plant']);
+  assert.deepEqual(changes.filter((item) => item.status === 'removed').map((item) => item.id), ['plant-test']);
+  assert.equal(changes.filter((item) => item.status === 'modified').length, 4);
+  viewer.setModel(after, before); viewer.setCutaway(false); viewer.scene.render();
+  const ghost = viewer.scene.meshes.find((mesh) => mesh.name.startsWith('before:desk-test')); assert.ok(ghost);
+  assert.ok(ghost.material instanceof StandardMaterial && ghost.material.wireframe);
+  assert.equal(ghost.material.name, 'delta:modified-before');
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:plant-test') && mesh.material?.name === 'delta:removed-before'));
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('new-plant') && mesh.material?.name === 'delta:added'));
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('change-path:desk-test')));
+  assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:table-test')), false, 'unchanged objects do not get ghosts');
+  assert.ok(viewer.anchorOnScreen('plant-test', 800, 600), 'removed objects remain inspectable');
+  const camera = viewer.camera; camera.alpha = .45;
+  viewer.setMode('basic'); viewer.setMode('realistic');
+  assert.equal(viewer.camera.alpha, .45); assert.equal(viewer.camera, camera);
+  assert.equal(viewer.setModel(structuredClone(after), structuredClone(before)), false);
+  viewer.setModel(after); assert.ok(ghost.isDisposed());
+  assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:')), false);
+  assert.equal(JSON.stringify([before, after]), original);
+});
+
+test('3D delta includes opening placement and host geometry when only hosting relationships change', async () => {
+  const { previewRectangle, rectangleLayout } = await import('../src/room-model.ts');
+  const repo = await RoomRepository.create(); const base = repo.view(repo.head('main')).snapshot;
+  const layout = rectangleLayout(base); const after = previewRectangle(base, { ...layout, door: { ...layout.door, offsetMm: layout.door.offsetMm + 200 } });
+  const delta = diffSnapshots(base, after); assert.equal(delta.entities.modified.length, 0);
+  const changes = modelChanges(base, after);
+  assert.ok(changes.some((item) => item.id === 'door-entry' && item.reason === 'placement' && item.status === 'modified'));
+  assert.ok(changes.some((item) => item.id === 'wall-south' && item.reason === 'placement'));
+});
+
+test('derived support elevation and door-size gaps appear in the 3D delta even without changed relationship records', async () => {
+  const { previewRectangle, rectangleLayout } = await import('../src/room-model.ts');
+  const repo = await RoomRepository.create(); const shell = repo.view(repo.head('main')).snapshot;
+  const before = previewFurnishings(shell, { furnishings });
+  const after = previewFurnishings(before, { furnishings: furnishings.map((item) => item.id === 'desk-test' ? { ...item, height: .85 } : item) });
+  assert.ok(modelChanges(before, after).some((item) => item.id === 'screen-test' && item.reason === 'placement'));
+  assert.ok(modelChanges(before, after).some((item) => item.id === 'laptop-test' && item.reason === 'placement'));
+  const layout = rectangleLayout(shell);
+  const wider = previewRectangle(shell, { ...layout, door: { ...layout.door, widthMm: 1000 } });
+  assert.ok(modelChanges(shell, wider).some((item) => item.id === 'wall-south' && item.reason === 'placement'));
 });

@@ -6,6 +6,8 @@ import path from 'node:path';
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
 import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
+import { DatabaseSync } from 'node:sqlite';
+import { parseRequestActivity } from '../src/request-activity.ts';
 
 function request(repo: RoomRepository, id: string, name: string, width = 1200) {
   const layout = structuredClone(rectangleLayout(repo.view(repo.head('main')).snapshot));
@@ -189,4 +191,74 @@ test('concurrent delivery of the same submission, decision and revision converge
   await assert.rejects(() => queue.decide(second.requestId, { action: 'accept', decisionId: 'stale-review',
     expectedRequestId: second.requestId }), /newer revision/);
   assert.equal(queue.list(repo.projectId).length, 2);
+});
+
+test('working requests expose real tool progress before completion, persist it, and ignore late activity after cancellation', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-activity-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'requests.sqlite');
+  const releases: Array<() => void> = [];
+  const slow: ModelWorker = { identity: worker.identity, async run(session) {
+    await session.executeTool('inspect_model', {});
+    await session.executeTool('preview_furnishings', { furnishings: [{ secret: 'do-not-persist-tool-arguments' }] });
+    await new Promise<void>((resolve) => releases.push(resolve));
+    await worker.run(session);
+  } };
+  let queue = new ChangeRequests(file, () => slow);
+  const repo = await RoomRepository.create(); const input = request(repo, 'activity-live', 'activity-live');
+  await queue.submit(repo.serialize(), input);
+  for (let i = 0; releases.length < 1 && i < 400; i += 1) await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  const working = queue.get(input.requestId); assert.equal(working.state, 'working'); assert.equal(working.result, null);
+  assert.ok(working.activity.some((event) => event.stage === 'inspecting'));
+  assert.ok(working.activity.some((event) => event.stage === 'validation-failed'));
+  assert.equal(JSON.stringify(working.activity).includes('do-not-persist-tool-arguments'), false);
+  assert.ok(working.activity.every((event) => event.requestId === input.requestId));
+  assert.equal(Object.hasOwn(queue.list(repo.projectId)[0] ?? {}, 'activity'), false, 'backlog summaries do not repeatedly transfer full action journals');
+  await decide(queue, input.requestId, { action: 'cancel', decisionId: 'cancel-activity' });
+  const cancelled = JSON.stringify(queue.get(input.requestId).activity);
+  releases[0]?.(); await new Promise<void>((resolve) => setTimeout(resolve, 30));
+  assert.equal(JSON.stringify(queue.get(input.requestId).activity), cancelled);
+  queue.close(); queue = new ChangeRequests(file, () => null); t.after(() => queue.close());
+  assert.equal(JSON.stringify(queue.get(input.requestId).activity), cancelled);
+  assert.equal(queue.project(repo.projectId), repo.serialize());
+});
+
+test('server recovery and revisions keep attempt activity bound to the correct request version', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-activity-restart-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'requests.sqlite'); let release: (() => void) | undefined;
+  const queue = new ChangeRequests(file, () => ({ identity: worker.identity, async run(session) {
+    await session.executeTool('inspect_model', {}); await new Promise<void>((resolve) => { release = resolve; }); await worker.run(session);
+  } }));
+  const repo = await RoomRepository.create(); const first = request(repo, 'activity-recovery', 'activity-recovery');
+  await queue.submit(repo.serialize(), first);
+  for (let i = 0; !release && i < 400; i += 1) await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  queue.close();
+  const restored = new ChangeRequests(file, () => worker); t.after(() => restored.close()); release?.();
+  await waitFor(restored, first.requestId); assert.equal(restored.get(first.requestId).state, 'ready');
+  const events = restored.get(first.requestId).activity;
+  assert.ok(events.some((event) => event.stage === 'recovered'));
+  assert.ok(events.some((event) => event.stage === 'ready' && event.attempt === 2));
+  assert.ok(events.every((event, i) => i === 0 || event.sequence > events[i - 1].sequence));
+  const revision = request(repo, 'activity-revised', 'activity-revised', 1300);
+  await restored.revise(first.requestId, repo.serialize(), revision); await waitFor(restored, first.requestId);
+  const next = restored.get(first.requestId);
+  assert.ok(next.activity.every((event) => event.requestId === revision.requestId));
+  assert.ok(next.history[0]?.includes('activity-recovery'));
+  assert.equal(next.activity.filter((event) => event.stage === 'ready').length, 1);
+});
+
+test('legacy tickets without activity remain readable; malformed or mixed-version activity fails closed', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-old-activity-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'requests.sqlite'); const queue = new ChangeRequests(file, () => null);
+  const repo = await RoomRepository.create(); await queue.submit(repo.serialize(), request(repo, 'old-ticket', 'old-ticket'));
+  const { activity, ...old } = queue.get('old-ticket'); queue.close();
+  const db = new DatabaseSync(file); db.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify(old), 'old-ticket'); db.close();
+  const restored = new ChangeRequests(file, () => null); t.after(() => restored.close());
+  assert.deepEqual(restored.get('old-ticket').activity, []);
+  assert.throws(() => parseRequestActivity([{ ...activity[0], stage: 'private-reasoning' }]), /Invalid/);
+  assert.throws(() => parseRequestActivity([activity[0], activity[0]]), /Invalid/);
+  assert.throws(() => parseRequestActivity(Array.from({ length: 97 }, (_, i) => ({ ...activity[0], sequence: i + 1 }))), /Invalid/);
+  assert.throws(() => parseRequestActivity([{ ...activity[0], message: 'x'.repeat(301) }]), /Invalid/);
+  const corrupt = new DatabaseSync(file); corrupt.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify({ ...old, activity: activity.map((event) => ({ ...event, requestId: 'another-request' })) }), 'old-ticket'); corrupt.close();
+  assert.throws(() => restored.get('old-ticket'), /another request revision/);
 });

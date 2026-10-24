@@ -2,6 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { RoomRepository } from '../src/room-model.ts';
 import { prepareModelProposal, validateModelProposalRequest } from '../src/model-proposal.ts';
+import { parseRequestActivity } from '../src/request-activity.ts';
+import type { RequestActivity, ActivityUpdate } from '../src/request-activity.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
@@ -23,8 +25,9 @@ interface Ticket {
   decisionId: string | null;
   decisionAction: string | null;
   history: readonly string[];
+  activity: readonly RequestActivity[];
 }
-export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history'>;
+export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity'>;
 export class BacklogConflict extends Error {}
 
 function object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
@@ -45,6 +48,8 @@ function parseStored(text: string): Ticket {
   }
   // The payload is parsed by the model request boundary again before every run.
   const r = value.request;
+  const activity = parseRequestActivity(value.activity);
+  if (activity.some((event) => event.requestId !== r.requestId)) throw new Error('Activity belongs to another request revision.');
   if (typeof r.requestId !== 'string' || typeof r.proposalName !== 'string' || typeof r.baseRevisionId !== 'string'
       || typeof r.instruction !== 'string' || !Array.isArray(r.selectedObjectIds) || !r.selectedObjectIds.every((id) => typeof id === 'string')) {
     throw new Error('The stored request binding is invalid.');
@@ -62,10 +67,17 @@ function parseStored(text: string): Ticket {
   }
   return { id: value.id, projectId: value.projectId, state, project: value.project, fingerprint: value.fingerprint,
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
-    decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history,
+    decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history, activity,
     request: { requestId: r.requestId, proposalName: r.proposalName, baseRevisionId: r.baseRevisionId,
       selectedObjectIds: r.selectedObjectIds, instruction: r.instruction, visualIntent: storedVisual(visual) } };
 }
+function recordActivity(ticket: Ticket, update: ActivityUpdate): Ticket {
+  const at = Date.now();
+  const event: RequestActivity = { ...update, at, sequence: (ticket.activity.at(-1)?.sequence ?? 0) + 1,
+    requestId: ticket.request.requestId, attempt: ticket.attempts };
+  return { ...ticket, updatedAt: at, activity: [...ticket.activity, event].slice(-96) };
+}
+
 function storedVisual(value: Record<string, unknown>): RequestInput['visualIntent'] {
   if (value.kind === 'selection') return { kind: 'selection' };
   if (value.kind === 'spatial-reference' && object(value.destination)) {
@@ -100,8 +112,9 @@ export class ChangeRequests {
     this.#db.exec('CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), state TEXT NOT NULL, body TEXT NOT NULL); CREATE INDEX IF NOT EXISTS requests_project ON requests(project_id); CREATE INDEX IF NOT EXISTS requests_state ON requests(state);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES requests(id), fingerprint TEXT NOT NULL);');
     for (const ticket of this.#withState('working')) {
-      this.#put({ ...ticket, state: ticket.attempts < 3 ? 'queued' : 'failed',
-        error: 'The server restarted during processing. The accepted model is unchanged.', updatedAt: Date.now() });
+      this.#put(recordActivity({ ...ticket, state: ticket.attempts < 3 ? 'queued' : 'failed',
+        error: 'The server restarted during processing. The accepted model is unchanged.' },
+        { stage: 'recovered', message: ticket.attempts < 3 ? 'Server restarted. Interrupted work is queued for another bounded attempt.' : 'Server restarted during the final attempt. Human input is required.' }));
     }
     this.#timer = setInterval(() => this.#pump(), 1000);
     this.#timer.unref();
@@ -142,7 +155,7 @@ export class ChangeRequests {
     return row && typeof row.body === 'string' ? row.body : null;
   }
   list(projectId: string): TicketSummary[] {
-    return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, ...summary }) => summary);
+    return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, ...summary }) => summary);
   }
   async submit(project: unknown, input: unknown): Promise<TicketSummary> {
     const repository = await RoomRepository.restore(project);
@@ -171,8 +184,8 @@ export class ChangeRequests {
     if (this.#all(repository.projectId).some((ticket) => ticket.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket already uses this proposal name.');
     const pending = this.#db.prepare("SELECT COUNT(*) AS count FROM requests WHERE state IN ('queued','working')").get();
     if (pending && typeof pending.count === 'number' && pending.count >= 64) throw new Error('The pending request backlog is full. Finish or cancel existing work first.');
-    const ticket: Ticket = { id: request.requestId, projectId: repository.projectId, request, project: body, fingerprint,
-      state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [] };
+    const ticket: Ticket = recordActivity({ id: request.requestId, projectId: repository.projectId, request, project: body, fingerprint,
+      state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [], activity: [] }, { stage: 'queued', message: 'Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.' });
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
       const latest = this.project(repository.projectId);
@@ -210,8 +223,8 @@ export class ChangeRequests {
     }
     if (this.#all(ticket.projectId).some((other) => other.id !== ticket.id && other.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket uses that proposal name.');
     const archived = JSON.stringify({ ...ticket, history: [] });
-    const next: Ticket = { ...ticket, project: body, request, fingerprint, history: [...ticket.history, archived],
-      state: 'queued', attempts: 0, result: null, error: null, decisionId: null, decisionAction: null, updatedAt: Date.now() };
+    const next: Ticket = recordActivity({ ...ticket, project: body, request, fingerprint, history: [...ticket.history, archived], activity: [],
+      state: 'queued', attempts: 0, result: null, error: null, decisionId: null, decisionAction: null, updatedAt: Date.now() }, { stage: 'queued', message: 'New revision queued. Earlier attempts remain in request history.' });
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
       if (this.project(ticket.projectId) !== currentText || this.get(id).fingerprint !== ticket.fingerprint) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
@@ -229,26 +242,36 @@ export class ChangeRequests {
     for (const ticket of this.#withState('queued')) {
       if (this.#active >= 2) break;
       if (ticket.state !== 'queued') continue;
-      this.#put({ ...ticket, state: 'working', attempts: ticket.attempts + 1, error: null, updatedAt: Date.now() });
+      const working = recordActivity({ ...ticket, state: 'working', attempts: ticket.attempts + 1, error: null },
+        { stage: 'started', message: 'Agent started on the bound model. Waiting for its next reported tool action.' });
+      this.#put(working);
       this.#active += 1;
-      void this.#run(ticket, worker).finally(() => { this.#active -= 1; this.#pump(); });
+      void this.#run(working, worker).finally(() => { this.#active -= 1; this.#pump(); });
     }
+  }
+  #isWorking(ticket: Ticket): boolean {
+    if (this.#closed) return false;
+    const current = this.get(ticket.id);
+    return current.state === 'working' && current.request.requestId === ticket.request.requestId && current.attempts === ticket.attempts;
   }
   async #run(ticket: Ticket, worker: ModelWorker): Promise<void> {
     try {
       const repository = await RoomRepository.restore(ticket.project);
-      const result = await prepareModelProposal(repository, ticket.request, worker);
-      if (this.#closed || this.get(ticket.id).state !== 'working') return;
+      const result = await prepareModelProposal(repository, ticket.request, worker, (event) => {
+        if (this.#isWorking(ticket)) this.#put(recordActivity(this.get(ticket.id), event));
+      });
+      if (!this.#isWorking(ticket)) return;
       const currentText = this.project(ticket.projectId);
       const current = await RoomRepository.restore(currentText);
-      if (this.#closed || this.get(ticket.id).state !== 'working') return;
+      if (!this.#isWorking(ticket)) return;
       const stale = current.head('main') !== ticket.request.baseRevisionId || this.project(ticket.projectId) !== currentText;
-      this.#put({ ...this.get(ticket.id), state: result.status === 'ready' && !stale ? 'ready' : 'needs-input',
+      this.#put(recordActivity({ ...this.get(ticket.id), state: result.status === 'ready' && !stale ? 'ready' : 'needs-input',
         error: stale ? 'The accepted model changed. Revise this request against the current model before accepting.' : null, updatedAt: Date.now(),
-        result: { status: result.status, project: result.repository.serialize(), review: result.review } });
+        result: { status: result.status, project: result.repository.serialize(), review: result.review } },
+        { stage: result.status === 'ready' && !stale ? 'ready' : 'needs-input', message: stale ? 'The accepted model changed. Revise this proposal against its current revision.' : result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.' }));
     } catch (error) {
-      if (this.#closed || this.get(ticket.id).state !== 'working') return;
-      this.#put({ ...this.get(ticket.id), state: 'failed', updatedAt: Date.now(), error: error instanceof Error ? error.message.slice(0, 1000) : 'The agent could not finish this request.' });
+      if (!this.#isWorking(ticket)) return;
+      this.#put(recordActivity({ ...this.get(ticket.id), state: 'failed', error: error instanceof Error ? error.message.slice(0, 1000) : 'The agent could not finish this request.' }, { stage: 'failed', message: 'The agent could not complete this attempt. The accepted model is unchanged.' }));
     }
   }
   async decide(id: string, input: unknown): Promise<{ ticket: Ticket; project: string }> {
@@ -266,14 +289,14 @@ export class ChangeRequests {
     }
     if (action === 'retry') {
       if (ticket.state !== 'failed' || ticket.attempts >= 3) throw new BacklogConflict('Only failed work with fewer than three attempts can be retried.');
-      const next = { ...ticket, state: 'queued' as const, error: null, decisionId, decisionAction: action, updatedAt: Date.now() };
+      const next = recordActivity({ ...ticket, state: 'queued', error: null, decisionId, decisionAction: action }, { stage: 'queued', message: 'Retry queued. Earlier attempt activity is retained.' });
       this.#put(next); setImmediate(() => this.#pump()); return { ticket: next, project: text };
     }
     if (action === 'cancel' || action === 'reject') {
       const allowed = action === 'cancel' ? ticket.state === 'queued' || ticket.state === 'working'
         : ticket.state === 'ready' || ticket.state === 'needs-input' || ticket.state === 'failed';
       if (!allowed) throw new BacklogConflict('This request can no longer receive that decision.');
-      const next: Ticket = { ...ticket, state: action === 'cancel' ? 'cancelled' : 'rejected', decisionId, decisionAction: action, updatedAt: Date.now() };
+      const next: Ticket = recordActivity({ ...ticket, state: action === 'cancel' ? 'cancelled' : 'rejected', decisionId, decisionAction: action }, { stage: action === 'cancel' ? 'cancelled' : 'rejected', message: action === 'cancel' ? 'Request cancelled. Late worker activity and results will be ignored.' : 'Proposal rejected. The accepted model is unchanged.' });
       this.#put(next); return { ticket: next, project: text };
     }
     if (action === 'accept' && ticket.state === 'needs-input' && ticket.result?.status === 'ready') throw new BacklogConflict('This proposal is based on an older or unaccepted model. Revise it against the current accepted model.');
@@ -284,7 +307,7 @@ export class ChangeRequests {
     if (proposed.projectId !== current.projectId || proposed.root() !== current.root()) throw new Error('The proposal belongs to another project.');
     const accepted = proposed.accept(ticket.request.proposalName, { decisionId, actor: 'preview-human' });
     const acceptedText = accepted.serialize();
-    const next: Ticket = { ...ticket, state: 'completed', decisionId, decisionAction: action, updatedAt: Date.now() };
+    const next: Ticket = recordActivity({ ...ticket, state: 'completed', decisionId, decisionAction: action }, { stage: 'completed', message: 'Proposal explicitly accepted and saved as the current model.' });
     this.#transaction(() => {
       // Async validation above may have overlapped another decision.
       const latest = this.get(id);
@@ -293,8 +316,8 @@ export class ChangeRequests {
       this.#db.prepare('UPDATE projects SET body=? WHERE id=?').run(acceptedText, ticket.projectId);
       this.#put(next);
       for (const other of this.#withState('ready')) {
-        if (other.projectId === ticket.projectId && other.id !== ticket.id) this.#put({ ...other, state: 'needs-input',
-          error: 'The accepted model changed. Revise this request against the current model before accepting.', updatedAt: Date.now() });
+        if (other.projectId === ticket.projectId && other.id !== ticket.id) this.#put(recordActivity({ ...other, state: 'needs-input',
+          error: 'The accepted model changed. Revise this request against the current model before accepting.' }, { stage: 'needs-input', message: 'Another proposal was accepted. This proposal now needs revision against the current model.' }));
       }
     });
     return { ticket: this.get(id), project: this.project(ticket.projectId) ?? acceptedText };

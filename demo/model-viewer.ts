@@ -1,5 +1,6 @@
 import { Engine } from '@babylonjs/core/Engines/engine.js';
 import { FileToolsOptions } from '@babylonjs/core/Misc/fileTools.pure.js';
+import { modelChanges } from '../src/model-delta-view.ts';
 import { ModelScene } from './model-scene.ts';
 import type { RenderingMode } from './model-scene.ts';
 import type { ModelSnapshot, Point } from '../src/room-model.ts';
@@ -7,6 +8,7 @@ import type { SpatialReference } from '../src/visual-request.ts';
 
 interface ViewerState {
   snapshot: ModelSnapshot;
+  comparison: ModelSnapshot | null;
   selectedId: string;
   mode: RenderingMode;
   cutaway: boolean;
@@ -28,6 +30,7 @@ export class ModelViewer {
   private readonly caption = document.createElement('p');
   private readonly selection = document.createElement('select');
   private objectSignature = '';
+  private comparisonSelection: string | null = null;
   private readonly engine: Engine;
   private readonly model: ModelScene;
   private readonly observer: ResizeObserver;
@@ -56,12 +59,12 @@ export class ModelViewer {
     this.actions = actions;
     this.root.className = 'babylon-viewer'; this.root.dataset.renderer = 'babylon';
     this.canvas.className = 'model-canvas'; this.canvas.tabIndex = 0;
-    this.canvas.setAttribute('aria-label', '3D room model. Drag to orbit, right-drag to pan, scroll or pinch to zoom. Select objects with the Reference object list for keyboard access.');
+    this.canvas.setAttribute('aria-label', '3D room model. Drag to orbit, right-drag to pan, scroll or pinch to zoom. Use Select 3D object for keyboard selection.');
     this.canvas.setAttribute('role', 'img');
     this.handle.type = 'button'; this.handle.className = 'model-reference-handle'; this.handle.textContent = '+';
     this.caption.className = 'model-selection-caption'; this.caption.setAttribute('aria-live', 'polite');
     this.selection.className = 'model-object-picker'; this.selection.setAttribute('aria-label', 'Select 3D object');
-    this.selection.addEventListener('change', () => this.actions.select(this.selection.value));
+    this.selection.addEventListener('change', () => this.select(this.selection.value));
     this.root.append(this.canvas, this.handle, this.caption, this.selection);
     this.engine = new Engine(this.canvas, true, { preserveDrawingBuffer: false, stencil: true, powerPreference: 'high-performance' });
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 1.5));
@@ -79,7 +82,7 @@ export class ModelViewer {
       const start = this.pointer; this.pointer = null;
       if (!start || start.id !== event.pointerId || Math.hypot(event.clientX - start.origin[0], event.clientY - start.origin[1]) > 5) return;
       const [x, y] = this.local(event); const id = this.model.objectAt(x, y);
-      if (id) this.actions.select(id);
+      if (id) this.select(id);
     });
     this.canvas.addEventListener('pointercancel', () => { this.pointer = null; });
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -135,9 +138,18 @@ export class ModelViewer {
     if (commit && drag.moved && drag.target) this.actions.reference(drag.target);
   }
 
+  private select(id: string): void {
+    if (!this.state?.comparison) { this.actions.select(id); return; }
+    this.comparisonSelection = id;
+    this.state = { ...this.state, selectedId: id };
+    this.selection.value = id; this.model.select(id); this.updateCaption(); this.frames = 3;
+  }
+
   private updateCaption(): void {
-    const item = this.state?.snapshot.entities.find((candidate) => candidate.id === this.state?.selectedId);
-    this.caption.textContent = item ? `${item.name} · ${item.id}` : 'Select an object to inspect';
+    const item = this.state?.snapshot.entities.find((candidate) => candidate.id === this.state?.selectedId)
+      ?? this.state?.comparison?.entities.find((candidate) => candidate.id === this.state?.selectedId);
+    const change = this.state?.comparison ? modelChanges(this.state.comparison, this.state.snapshot).find((entry) => entry.id === item?.id) : null;
+    this.caption.textContent = item ? `${item.name} · ${item.id}${change ? ' · ' + (change.status === 'modified' ? 'Changed: wireframe before, solid after' : change.status === 'removed' ? 'Removed: before only' : 'Added: after only') : ''}` : 'Select an object to inspect';
     this.handle.setAttribute('aria-label', `Mark a destination using ${item?.name ?? 'selection'} as reference`);
     this.handle.title = 'Drag to mark a location; Enter for coordinates. No geometry is moved.';
     this.handle.hidden = !item || !this.state?.interactive;
@@ -163,15 +175,20 @@ export class ModelViewer {
 
   show(host: HTMLElement, state: ViewerState): void {
     if (this.drag && (!state.interactive || state.selectedId !== this.state?.selectedId)) this.endDrag(false);
+    if (!state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
+    state = { ...state, selectedId: this.comparisonSelection ?? state.selectedId };
+    const objects = [...new Map([...(state.comparison?.entities ?? []), ...state.snapshot.entities].map((item) => [item.id, item])).values()];
+    const changes = new Map((state.comparison ? modelChanges(state.comparison, state.snapshot) : []).map((item) => [item.id, item.status]));
+    if (state.comparison && !this.comparisonSelection && !changes.has(state.selectedId)) state = { ...state, selectedId: changes.keys().next().value ?? state.selectedId };
     this.state = state;
-    const objectSignature = JSON.stringify(state.snapshot.entities.map((item) => [item.id, item.name]));
+    const objectSignature = JSON.stringify(objects.map((item) => [item.id, item.name, changes.get(item.id)]));
     if (objectSignature !== this.objectSignature) {
-      this.selection.replaceChildren(...state.snapshot.entities.map((item) => new Option(item.name, item.id)));
+      this.selection.replaceChildren(...objects.map((item) => new Option(`${item.name}${changes.has(item.id) ? ' · ' + (changes.get(item.id) === 'modified' ? 'changed' : changes.get(item.id)) : ''}`, item.id)));
       this.objectSignature = objectSignature;
     }
     this.selection.value = state.selectedId;
     if (this.root.parentElement !== host) host.replaceChildren(this.root);
-    this.model.setMode(state.mode); this.model.setModel(state.snapshot); this.model.select(state.selectedId);
+    this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison); this.model.select(state.selectedId);
     this.model.setCutaway(state.cutaway);
     if (!this.drag) this.model.mark(state.reference);
     this.updateCaption(); this.frames = 3; this.engine.resize();

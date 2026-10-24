@@ -1,3 +1,5 @@
+import { modelChanges } from '../src/model-delta-view.ts';
+import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
 import type { RenderingMode } from './model-scene.ts';
@@ -11,9 +13,10 @@ import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/
 import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
 import type { RequestState } from './change-requests.ts';
 
-type PageName = 'project' | 'request' | 'backlog' | 'review' | 'history';
+type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
 type ModelView = 'plan' | '3d';
+type ChangesTab = '3d' | 'properties';
 type ReviewState = 'pending' | 'accepted' | 'superseded' | 'declined';
 type BoundSide = 'minX' | 'maxX' | 'minY' | 'maxY';
 type GestureOperation = 'wall' | 'door-move' | 'door-width';
@@ -234,6 +237,12 @@ let modelView: ModelView = '3d';
 let modelViewer: ModelViewer | null = null;
 let renderingMode: RenderingMode = 'realistic';
 let cutaway = true;
+let reviewDelta = false;
+let changesTab: ChangesTab = '3d';
+let activityTicketId: string | null = null;
+let activityRequestId: string | null = null;
+let activityRefreshing = false;
+let activitySignature = '';
 let viewerFailed = false;
 let visualDraft: VisualDraft | null = null;
 let visualGesture: VisualGesture | null = null;
@@ -386,6 +395,7 @@ function showPage(name: PageName): void {
   if (name === 'review' && !activeReview) return;
   if ((name === 'project' || name === 'history') && !repo) return;
   currentPage = name;
+  generic('activity-page').hidden = name !== 'activity';
   ui['project-page'].hidden = name !== 'project';
   ui.journey.hidden = name === 'project';
   const pages = [
@@ -396,7 +406,7 @@ function showPage(name: PageName): void {
   ];
   for (const item of pages) {
     item.page.hidden = item.name !== name;
-    item.navigation.setAttribute('aria-pressed', String(item.name === name));
+    item.navigation.setAttribute('aria-pressed', String(item.name === name || name === 'activity' && item.name === 'backlog'));
   }
   if (repo) renderComparison();
   requiredElement('workbench', HTMLElement).focus({ preventScroll: true });
@@ -538,6 +548,7 @@ function scheduleAuthPoll(): void {
 
 function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
+  for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
   const writable = Boolean(store) && !busy && !writesBlocked && !dragging;
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project']];
   for (const control of projectControls) control.disabled = !writable;
@@ -778,7 +789,14 @@ ui['new-project'].addEventListener('click', () => {
 });
 ui['start-close'].addEventListener('click', () => closeDialog(ui['start-dialog']));
 ui['view-original'].addEventListener('click', () => openDialog(ui['original-dialog']));
-ui['view-changes'].addEventListener('click', () => openDialog(ui['changes-dialog']));
+ui['view-changes'].addEventListener('click', () => {
+  changesTab = '3d'; openDialog(ui['changes-dialog']); renderComparison();
+});
+ui['changes-dialog'].addEventListener('close', () => { if (repo) renderComparison(); });
+for (const tab of ['3d', 'properties'] satisfies ChangesTab[]) button(`changes-${tab}-tab`).addEventListener('click', () => {
+  changesTab = tab; renderComparison();
+});
+button('review-delta').addEventListener('click', () => { reviewDelta = !reviewDelta; modelView = '3d'; renderComparison(); });
 ui['project-overview'].addEventListener('click', () => showPage('project'));
 ui['open-room'].addEventListener('click', () => {
   showPage('request');
@@ -820,11 +838,11 @@ ui['review-drawing'].addEventListener('keydown', (event) => {
   const id = event.target.closest<SVGElement>('[data-object]')?.dataset.object;
   if (id) { event.preventDefault(); chooseObject(id); }
 });
-for (const id of ['reset-3d', 'review-reset-3d']) button(id).addEventListener('click', () => {
+for (const id of ['reset-3d', 'review-reset-3d', 'delta-reset-3d']) button(id).addEventListener('click', () => {
   modelViewer?.frame();
   status('3D camera framed. Model geometry and revision are unchanged.');
 });
-for (const prefix of ['', 'review-']) {
+for (const prefix of ['', 'review-', 'delta-']) {
   for (const mode of ['basic', 'realistic'] satisfies RenderingMode[]) button(`${prefix}render-${mode}`).addEventListener('click', () => {
     renderingMode = mode; if (repo) renderComparison();
   });
@@ -1026,6 +1044,7 @@ function renderBacklog(): void {
     if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Based on a different revision. Revise against the current model before accepting.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
     const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
+    add(item.state === 'queued' || item.state === 'working' ? 'View progress' : 'View activity', () => { void perform(() => openActivity(item.id)); });
     if (item.state === 'ready' || item.state === 'needs-input' || item.state === 'completed' || item.state === 'rejected') add('Open request', () => { void perform(() => openTicket(item.id)); });
     if (item.state === 'queued' || item.state === 'working') add('Cancel request', () => { void perform(() => decideTicket(item.id, 'cancel')); });
     if (item.state === 'failed' && item.attempts < 3) add('Retry agent', () => { void perform(() => decideTicket(item.id, 'retry')); });
@@ -1035,6 +1054,62 @@ function renderBacklog(): void {
   if (!visible.length) ui['backlog-list'].append(element('p', items.length ? 'No requests in this view.' : 'Your requests will appear here. Send one from the model and keep working.', 'empty-note'));
 }
 ui['backlog-filter'].addEventListener('change', renderBacklog);
+async function openActivity(id: string): Promise<void> {
+  if (dirty() && !window.confirm('Discard unsent markup and open request activity?')) return;
+  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+  if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
+  const ticket = parseBacklogItem(value.ticket);
+  if (ticket.projectId !== repo?.projectId) throw new Error('Request project mismatch.');
+  resetEditor(); activityTicketId = id; activitySignature = '';
+  renderActivity(value.ticket); showPage('activity');
+}
+
+function renderActivity(value: Record<string, unknown>): void {
+  const ticket = parseBacklogItem(value);
+  const events = parseRequestActivity(value.activity);
+  activityRequestId = ticket.request.requestId;
+  if (events.some((event) => event.requestId !== ticket.request.requestId)) throw new Error('Activity belongs to another request revision.');
+  generic('activity-connection').textContent = ticket.state === 'working'
+    ? 'Live · waiting for the next reported tool action. No new event means the agent is still working.'
+    : ticket.state === 'queued' ? 'Queued · waiting for an agent and ChatGPT connection. You can keep modeling.' : 'Synced with the server · this attempt is no longer running.';
+  const signature = JSON.stringify([ticket, events]);
+  if (signature === activitySignature) return;
+  activitySignature = signature;
+  generic('activity-heading').textContent = requestLabel(ticket.request.proposalName);
+  generic('activity-instruction').textContent = ticket.request.instruction;
+  generic('activity-state').textContent = stateLabels[ticket.state];
+  generic('activity-binding').textContent = `Request ${ticket.request.requestId} · base ${ticket.request.baseRevisionId.slice(0, 10)} · attempt ${ticket.attempts} of 3`;
+  generic('activity-error').hidden = !ticket.error; generic('activity-error').textContent = ticket.error ?? '';
+  generic('activity-list').replaceChildren(...events.map((event) => {
+    const row = element('li'); row.dataset.stage = event.stage;
+    row.append(element('strong', ACTIVITY_STAGES[event.stage]), element('p', event.message),
+      element('small', `${new Date(event.at).toLocaleTimeString()} · attempt ${event.attempt}`));
+    return row;
+  }));
+  if (!events.length) generic('activity-list').append(element('li', 'This older request has no recorded activity history. Its result and model history remain available.'));
+  button('activity-open-proposal').hidden = !isRecord(value.result);
+  button('activity-open-proposal').textContent = isRecord(value.result) && value.result.status === 'ready' ? 'Open proposal in 3D' : 'Read the agent’s explanation';
+  button('activity-cancel').hidden = ticket.state !== 'queued' && ticket.state !== 'working';
+  button('activity-retry').hidden = ticket.state !== 'failed' || ticket.attempts >= 3;
+}
+
+async function refreshActivity(): Promise<void> {
+  if (currentPage !== 'activity' || !activityTicketId || !repo || activityRefreshing) return;
+  activityRefreshing = true; const id = activityTicketId; const projectId = repo.projectId;
+  try {
+    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+    if (currentPage !== 'activity' || activityTicketId !== id || repo?.projectId !== projectId) return;
+    if (!isRecord(value) || !isRecord(value.ticket) || parseBacklogItem(value.ticket).projectId !== projectId) throw new Error('Invalid request activity.');
+    renderActivity(value.ticket);
+  } catch { if (activityTicketId === id) generic('activity-connection').textContent = 'Activity connection interrupted. Last recorded actions remain visible; server work continues.'; }
+  finally { activityRefreshing = false; }
+}
+button('activity-back').addEventListener('click', () => showPage('backlog'));
+button('activity-open-proposal').addEventListener('click', () => { if (activityTicketId) void perform(() => openTicket(activityTicketId ?? '')); });
+for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventListener('click', () => {
+  if (activityTicketId) void perform(async () => { await decideTicket(activityTicketId ?? '', action, activityRequestId); });
+});
+
 async function openTicket(id: string): Promise<void> {
   if (dirty() && !window.confirm('Discard unsent markup and open this request?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
@@ -1049,10 +1124,12 @@ async function openTicket(id: string): Promise<void> {
   const proposed = await RoomRepository.restore(result.project);
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
   reviewRepository = proposed; activeTicketId = id; activeReview = result.review;
+  reviewDelta = result.status === 'ready'; modelView = '3d';
   if (ticket.state === 'completed') activeReview.decision = { status: 'accepted' };
   if (ticket.state === 'rejected') activeReview.decision = { status: 'superseded' };
   selectedBranch = result.status === 'ready' ? result.review.proposalName : 'main';
   selectedRevision = proposed.head(selectedBranch);
+  selectedObject = result.review.selectedObjectIds.find((id) => proposed.view(selectedRevision).snapshot.entities.some((item) => item.id === id)) ?? selectedObject;
   resetEditor(); render(); showPage('review');
   ui['ticket-history'].replaceChildren();
   if (Array.isArray(value.ticket.history)) for (const [index, archived] of value.ticket.history.entries()) {
@@ -1065,8 +1142,8 @@ async function openTicket(id: string): Promise<void> {
     ui['ticket-history'].append(detail);
   }
 }
-async function decideTicket(id: string, action: string): Promise<void> {
-  const expectedRequestId = activeTicketId === id && activeReview ? activeReview.requestId : backlogItems.find((item) => item.id === id)?.request.requestId;
+async function decideTicket(id: string, action: string, activityVersion: string | null = null): Promise<void> {
+  const expectedRequestId = activityVersion ?? (activeTicketId === id && activeReview ? activeReview.requestId : backlogItems.find((item) => item.id === id)?.request.requestId);
   if (!expectedRequestId) throw new Error('Refresh the ticket before deciding.');
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}/decision`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, decisionId: globalThis.crypto.randomUUID(), expectedRequestId }),
@@ -1108,7 +1185,7 @@ ui['open-current-model'].addEventListener('click', () => {
     status('Opened the current accepted server model.');
   });
 });
-window.setInterval(() => { void refreshBacklog(); }, 2000);
+window.setInterval(() => { void refreshBacklog(); void refreshActivity(); }, 2000);
 
 function renderReview() {
   const review = activeReview;
@@ -1783,9 +1860,24 @@ function renderHistory(): void {
   }));
 }
 
-function renderViewer(snapshot: ModelSnapshot): void {
-  if (currentPage !== 'request' && currentPage !== 'review') { modelViewer?.hide(); return; }
-  const host = currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
+function renderDeltaSummary(host: HTMLElement, baseline: ModelSnapshot, proposed: ModelSnapshot): void {
+  const legend = element('p', 'Green solid: added · Amber solid: changed after · Amber wireframe: before · Red wireframe: removed · Grey: unchanged context', 'delta-legend');
+  const list = element('ul');
+  for (const change of modelChanges(baseline, proposed)) {
+    const row = element('li'); row.dataset.change = change.status;
+    row.append(element('strong', `${change.status === 'modified' ? 'Changed' : change.status === 'added' ? 'Added' : 'Removed'} · ${change.name}`),
+      element('span', `${change.id}${change.reason === 'placement' ? ' · placement, host or support geometry' : ''}`));
+    list.append(row);
+  }
+  host.replaceChildren(legend, list);
+  if (!list.childElementCount) host.append(element('p', 'No model changes against this base revision.'));
+}
+
+function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
+  const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
+  if (!inDeltaDialog && currentPage !== 'request' && currentPage !== 'review') { modelViewer?.hide(); return; }
+  const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
+  const comparison = inDeltaDialog || currentPage === 'review' && reviewDelta ? baseline : null;
   try {
     if (viewerFailed) {
       host.replaceChildren(element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty'));
@@ -1800,8 +1892,8 @@ function renderViewer(snapshot: ModelSnapshot): void {
       },
       keyboardReference: () => ui['visual-wall'].focus(),
     });
-    modelViewer.show(host, { snapshot, selectedId: selectedObject, mode: renderingMode, cutaway,
-      interactive: currentPage === 'request' && !busy && !writesBlocked, reference: currentPage === 'request' ? visualDraft : null });
+    modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, mode: renderingMode, cutaway,
+      interactive: !comparison && currentPage === 'request' && !busy && !writesBlocked, reference: currentPage === 'request' ? visualDraft : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
@@ -1818,7 +1910,7 @@ function renderComparison(): void {
   const comparison = review ? project.view(review.baseRevisionId).snapshot : original;
   const isOriginal = selectedRevision === originalId;
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
-  if (modelView === 'plan') {
+  if (modelView === 'plan' && !(ui['changes-dialog'].open && changesTab === '3d')) {
     modelViewer?.hide();
     const next = drawPlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
@@ -1831,7 +1923,7 @@ function renderComparison(): void {
       if (!camera) throw new Error('The room plan camera was not created.');
       planCameras.set(root, camera);
     } else ui['proposal-drawing'].replaceChildren(next);
-  } else renderViewer(selected);
+  } else renderViewer(selected, comparison);
   ui['proposal-drawing'].dataset.modelView = modelView;
   ui['view-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
   ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
@@ -1841,13 +1933,22 @@ function renderComparison(): void {
   ui['review-drawing'].dataset.modelView = modelView;
   if (modelView === 'plan') ui['review-drawing'].replaceChildren(drawPlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`));
   generic('review-model-3d-controls').hidden = modelView !== '3d';
-  for (const prefix of ['', 'review-']) {
+  for (const prefix of ['', 'review-', 'delta-']) {
     for (const mode of ['basic', 'realistic']) button(`${prefix}render-${mode}`).setAttribute('aria-pressed', String(renderingMode === mode));
     button(`${prefix}cutaway`).setAttribute('aria-pressed', String(cutaway));
   }
   ui['review-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
   ui['review-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
   generic('review-view-caption').textContent = modelView === '3d' ? '3D · CUTAWAY VIEW' : 'PLAN · METRES';
+  button('review-delta').setAttribute('aria-pressed', String(reviewDelta));
+  button('review-delta').disabled = !review;
+  generic('review-delta-summary').hidden = modelView !== '3d' || !reviewDelta;
+  renderDeltaSummary(generic('review-delta-summary'), comparison, selected);
+  generic('changes-3d-pane').hidden = changesTab !== '3d';
+  generic('changes-properties-pane').hidden = changesTab !== 'properties';
+  button('changes-3d-tab').setAttribute('aria-pressed', String(changesTab === '3d'));
+  button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
+  renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
   ui['selected-title'].textContent = dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = 'Inspect the same revision in Plan or 3D. Select any object in either view; walls and the entry door can also carry visual change requests.';

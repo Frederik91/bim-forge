@@ -16,6 +16,7 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator.js';
 import '@babylonjs/core/Rendering/outlineRenderer.js';
+import { modelChanges } from '../src/model-delta-view.ts';
 import { furnitureFaces } from '../src/furniture-geometry.ts';
 import { rectangleLayout } from '../src/room-model.ts';
 import type { Entity, ModelSnapshot, Point, Wall } from '../src/room-model.ts';
@@ -26,7 +27,7 @@ RegisterRay();
 
 export type RenderingMode = 'basic' | 'realistic';
 type Surface = 'floor' | 'wall' | 'wood' | 'metal' | 'glass' | 'screen' | 'fabric' | 'leaf' | 'pot';
-interface RenderPart { mesh: Mesh; objectId: string | null; wallId: string | null; surface: Surface; color: string }
+interface RenderPart { mesh: Mesh; objectId: string | null; wallId: string | null; surface: Surface; color: string; before: boolean }
 
 /** Model coordinates are X east, Y north, Z elevation; Babylon uses Y up. */
 export function modelPoint(x: number, y: number, elevation = 0): Vector3 { return new Vector3(x, elevation, y); }
@@ -97,6 +98,9 @@ export class ModelScene {
   private readonly walls = new Map<string, Wall>();
   private signature = '';
   private snapshot: ModelSnapshot | null = null;
+  private comparison: ModelSnapshot | null = null;
+  private readonly changes = new Map<string, ReturnType<typeof modelChanges>[number]>();
+  private readonly comparisonLines: Mesh[] = [];
   private mode: RenderingMode = 'realistic';
   private selectedId = '';
   private cutaway = true;
@@ -154,7 +158,7 @@ export class ModelScene {
   private register(mesh: Mesh, objectId: string | null, wallId: string | null, surface: Surface, color: string): void {
     mesh.material = this.material(surface, color); mesh.receiveShadows = true;
     mesh.outlineColor = Color3.FromHexString('#007e70'); mesh.outlineWidth = .012;
-    this.parts.push({ mesh, objectId, wallId, surface, color });
+    this.parts.push({ mesh, objectId, wallId, surface, color, before: false });
     if (surface !== 'floor') this.shadow.addShadowCaster(mesh);
   }
 
@@ -194,11 +198,7 @@ export class ModelScene {
     segment(cursor, length, 0, wall.height);
   }
 
-  setModel(snapshot: ModelSnapshot): boolean {
-    const signature = JSON.stringify(snapshot);
-    if (signature === this.signature) return false;
-    const first = !this.snapshot; this.clearModel();
-    this.snapshot = snapshot; this.signature = signature;
+  private addSnapshot(snapshot: ModelSnapshot): void {
     const b = rectangleLayout(snapshot).boundsMm;
     const width = (b.maxX - b.minX) / 1000; const depth = (b.maxY - b.minY) / 1000;
     this.box('room-floor', new Vector3(width + .16, .12, depth + .16), modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, -.07), null, null, 'floor', '#d1c3a9');
@@ -226,9 +226,59 @@ export class ModelScene {
         }
       }
     }
-    this.select(this.selectedId);
+  }
+
+  setModel(snapshot: ModelSnapshot, comparison: ModelSnapshot | null = null): boolean {
+    const signature = JSON.stringify([snapshot, comparison]);
+    if (signature === this.signature) return false;
+    const first = !this.snapshot; this.clearModel();
+    this.snapshot = snapshot; this.comparison = comparison; this.signature = signature;
+    this.changes.clear();
+    if (comparison) for (const change of modelChanges(comparison, snapshot)) this.changes.set(change.id, change);
+    this.addSnapshot(snapshot);
+    if (comparison) {
+      const afterCount = this.parts.length;
+      this.addSnapshot(comparison);
+      for (let i = this.parts.length - 1; i >= afterCount; i -= 1) {
+        const part = this.parts[i]; const change = part.objectId ? this.changes.get(part.objectId) : null;
+        this.shadow.removeShadowCaster(part.mesh);
+        if (!change || change.status === 'added') { part.mesh.dispose(); this.parts.splice(i, 1); continue; }
+        part.before = true; part.mesh.name = 'before:' + part.mesh.name;
+      }
+      this.walls.clear();
+      for (const item of snapshot.entities) if (item.type === 'Wall') this.walls.set(item.id, item);
+      for (const change of this.changes.values()) {
+        if (change.status !== 'modified') continue;
+        const a = entityAnchor(change.before, comparison); const b = entityAnchor(change.after, snapshot);
+        if (Vector3.Distance(a, b) < .002) continue;
+        const line = MeshBuilder.CreateDashedLines('change-path:' + change.id, { points: [a, b], dashSize: 2, gapSize: 1, dashNb: 24 }, this.scene);
+        line.color = Color3.FromHexString('#a85a00'); line.isPickable = false; this.comparisonLines.push(line);
+      }
+    }
+    this.applyAppearance(); this.select(this.selectedId);
     if (first) this.frame();
     return true;
+  }
+
+  private applyAppearance(): void {
+    for (const part of this.parts) {
+      if (!this.comparison) { part.mesh.material = this.material(part.surface, part.color); continue; }
+      const change = part.objectId ? this.changes.get(part.objectId) : null;
+      const kind = part.before ? change?.status === 'removed' ? 'removed-before' : 'modified-before' : change?.status ?? 'context';
+      const key = 'delta:' + kind;
+      let material = this.materials.get(key);
+      if (!material) {
+        const paint = new StandardMaterial(key, this.scene);
+        paint.diffuseColor = Color3.FromHexString(kind.startsWith('removed') ? '#c63f54' : kind.startsWith('modified') ? '#df972c' : kind === 'added' ? '#149e76' : '#bcc9c7');
+        paint.specularColor = Color3.Black();
+        paint.alpha = kind === 'context' ? .22 : part.before ? .7 : 1;
+        paint.wireframe = part.before; paint.backFaceCulling = false;
+        paint.disableDepthWrite = part.before || kind === 'context';
+        if (part.before) { paint.emissiveColor = paint.diffuseColor.scale(.4); paint.zOffset = -2; }
+        this.materials.set(key, paint); material = paint;
+      }
+      part.mesh.material = material;
+    }
   }
 
   setMode(mode: RenderingMode): void {
@@ -238,7 +288,7 @@ export class ModelScene {
     this.scene.imageProcessingConfiguration.exposure = mode === 'realistic' ? 1.15 : 1;
     this.sun.intensity = mode === 'realistic' ? 2.2 : .35;
     this.ambient.intensity = mode === 'realistic' ? .85 : .8;
-    for (const part of this.parts) part.mesh.material = this.material(part.surface, part.color);
+    this.applyAppearance();
   }
 
   select(id: string): void {
@@ -248,7 +298,9 @@ export class ModelScene {
 
   frame(): void {
     if (!this.snapshot) return;
-    const b = rectangleLayout(this.snapshot).boundsMm;
+    const after = rectangleLayout(this.snapshot).boundsMm;
+    const before = this.comparison ? rectangleLayout(this.comparison).boundsMm : after;
+    const b = { minX: Math.min(before.minX, after.minX), minY: Math.min(before.minY, after.minY), maxX: Math.max(before.maxX, after.maxX), maxY: Math.max(before.maxY, after.maxY) };
     this.camera.setTarget(modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, .6));
     this.camera.alpha = -Math.PI / 2.4; this.camera.beta = .86;
     const span = Math.max(b.maxX - b.minX, b.maxY - b.minY) / 1000;
@@ -267,7 +319,8 @@ export class ModelScene {
     for (const part of this.parts) {
       const wall = part.wallId ? this.walls.get(part.wallId) : null;
       let visible = true;
-      if (this.cutaway && wall) {
+      const changedWallPart = this.comparison && part.objectId && this.changes.has(part.objectId);
+      if (this.cutaway && wall && !part.before && !changedWallPart) {
         const midpoint = modelPoint((wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2);
         const outward = midpoint.subtract(centre); outward.y = 0;
         visible = Vector3.Dot(outward, this.camera.position.subtract(midpoint)) <= 0;
@@ -303,10 +356,12 @@ export class ModelScene {
   }
 
   anchorOnScreen(id: string, width: number, height: number): Point | null {
-    const item = this.snapshot?.entities.find((candidate) => candidate.id === id);
-    if (!item || !this.snapshot) return null;
+    const after = this.snapshot?.entities.find((candidate) => candidate.id === id);
+    const item = after ?? this.comparison?.entities.find((candidate) => candidate.id === id);
+    const source = after ? this.snapshot : this.comparison;
+    if (!item || !source) return null;
     const engine = this.scene.getEngine();
-    const projected = Vector3.Project(entityAnchor(item, this.snapshot), Matrix.IdentityReadOnly, this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
+    const projected = Vector3.Project(entityAnchor(item, source), Matrix.IdentityReadOnly, this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
     if (projected.z < 0 || projected.z > 1) return null;
     return [projected.x / engine.getRenderWidth() * width, projected.y / engine.getRenderHeight() * height];
   }
@@ -315,6 +370,8 @@ export class ModelScene {
     this.mark(null);
     for (const part of this.parts) { this.shadow.removeShadowCaster(part.mesh); part.mesh.dispose(); }
     this.parts.length = 0; this.walls.clear();
+    for (const line of this.comparisonLines) line.dispose();
+    this.comparisonLines.length = 0;
   }
 
   dispose(): void { this.clearModel(); this.scene.dispose(); }
