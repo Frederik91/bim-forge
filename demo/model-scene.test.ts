@@ -154,3 +154,29 @@ test('derived support elevation and door-size gaps appear in the 3D delta even w
   const wider = previewRectangle(shell, { ...layout, door: { ...layout.door, widthMm: 1000 } });
   assert.ok(modelChanges(shell, wider).some((item) => item.id === 'wall-south' && item.reason === 'placement'));
 });
+
+test('a residential floor renders shared walls once, frames a room without editing geometry and retains whole-floor deltas', async (t) => {
+  const { residentialFloor } = await import('../src/residential-floor.ts');
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const before = residentialFloor(); const original = JSON.stringify(before);
+  viewer.setModel(before); viewer.setMode('basic'); viewer.setCutaway(false); viewer.scene.render();
+  assert.equal(viewer.scene.meshes.filter((mesh) => mesh.name.endsWith('-floor')).length, 8);
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name === 'room-office-floor'));
+  assert.deepEqual(viewer.camera.target.asArray(), [6, .6, 4.5]);
+  const wholeRadius = viewer.camera.radius;
+  viewer.frame('room-office'); viewer.scene.render();
+  assert.deepEqual(viewer.camera.target.asArray(), [10.5, .6, 2]);
+  assert.ok(viewer.camera.radius < wholeRadius);
+  viewer.setCutaway(true); viewer.scene.render();
+  assert.ok(viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('wall-south-solid-')).every((mesh) => !mesh.isEnabled()), 'a long exterior wall must not obscure an off-centre focused room');
+  viewer.setCutaway(false);
+  viewer.setMode('realistic'); viewer.scene.render();
+  assert.deepEqual(viewer.camera.target.asArray(), [10.5, .6, 2]);
+  viewer.frame(null); assert.deepEqual(viewer.camera.target.asArray(), [6, .6, 4.5]);
+  const after = previewFurnishings(before, { furnishings: before.entities.filter((item) => item.type === 'Furniture')
+    .map((item) => item.id === 'office-plant' ? { ...item, position: [11.4, 2.8] } : item) });
+  viewer.setModel(after, before); viewer.scene.render();
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:office-plant')));
+  assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:living-sofa')), false);
+  assert.equal(JSON.stringify(before), original);
+});

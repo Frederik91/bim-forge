@@ -1,3 +1,4 @@
+import { boundsMm, floorBounds } from './floor-plan.ts';
 import { previewRectangle, rectangleLayout } from './room-model.ts';
 import type { ModelSnapshot, Point, RoomLayout } from './room-model.ts';
 
@@ -37,8 +38,8 @@ export function parseVisualRequest(snapshot: ModelSnapshot, input: unknown): Vis
     if (typeof x !== 'number' || typeof y !== 'number' || !Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
       throw new Error('A floor reference requires two whole millimetre coordinates.');
     }
-    const b = rectangleLayout(snapshot).boundsMm;
-    if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) throw new Error('The floor reference must be inside the room.');
+    const b = boundsMm(floorBounds(snapshot));
+    if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) throw new Error('The floor reference must be inside the floor.');
     return { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [x, y] } };
   }
   record(target, ['kind', 'wallId', 'alongWallMm']);

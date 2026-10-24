@@ -10,6 +10,7 @@ interface ViewerState {
   snapshot: ModelSnapshot;
   comparison: ModelSnapshot | null;
   selectedId: string;
+  focusId: string | null;
   mode: RenderingMode;
   cutaway: boolean;
   interactive: boolean;
@@ -180,6 +181,7 @@ export class ModelViewer {
     const objects = [...new Map([...(state.comparison?.entities ?? []), ...state.snapshot.entities].map((item) => [item.id, item])).values()];
     const changes = new Map((state.comparison ? modelChanges(state.comparison, state.snapshot) : []).map((item) => [item.id, item.status]));
     if (state.comparison && !this.comparisonSelection && !changes.has(state.selectedId)) state = { ...state, selectedId: changes.keys().next().value ?? state.selectedId };
+    const focusChanged = this.state?.focusId !== state.focusId;
     this.state = state;
     const objectSignature = JSON.stringify(objects.map((item) => [item.id, item.name, changes.get(item.id)]));
     if (objectSignature !== this.objectSignature) {
@@ -189,6 +191,7 @@ export class ModelViewer {
     this.selection.value = state.selectedId;
     if (this.root.parentElement !== host) host.replaceChildren(this.root);
     this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison); this.model.select(state.selectedId);
+    if (focusChanged) this.model.frame(state.focusId);
     this.model.setCutaway(state.cutaway);
     if (!this.drag) this.model.mark(state.reference);
     this.updateCaption(); this.frames = 3; this.engine.resize();

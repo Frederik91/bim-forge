@@ -359,3 +359,26 @@ thead th, tbody th { font-weight: 600; }
 .ticket-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
 .ticket-warning, .ticket-error { color: #895619; background: #fff5e8; border-radius: 6px; padding: 10px; }
 @media (max-width: 650px) { .backlog-toolbar { align-items: stretch; flex-direction: column; } .visual-actions { flex-wrap: wrap; } .review-actions { flex-wrap: wrap; } }
+/* Floor navigation keeps project context separate from the request form. */
+.overview-grid.has-floor { display: block; margin-bottom: 20px; }
+.overview-grid.has-floor .space-card { display: none; }
+.overview-grid.has-floor .overview-hero { min-height: 0; }
+.floor-overview { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 22px; align-items: start; }
+.floor-overview .drawing-surface { min-height: 0; }
+.floor-overview footer { padding: 14px 22px; color: var(--muted); font-size: 12px; }
+.room-directory { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.room-card { text-align: left; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 15px; min-height: 100px; color: var(--ink); }
+.room-card:hover { border-color: var(--teal); background: #edf7f3; }
+.room-card strong, .room-card span, .room-card small { display: block; }
+.room-card span { margin-top: 6px; font-size: 12px; color: #48685f; }
+.room-card small { font-size: 10px; color: var(--muted); }
+.room-navigation { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); background: #f7faf8; }
+.room-navigation > div { flex: 1 1 180px; }
+.room-navigation label { margin-bottom: 4px; }
+.room-navigation p { flex: 1 1 230px; color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+@media (max-width: 980px) { .floor-overview { grid-template-columns: 1fr; } .room-directory { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .room-directory { grid-template-columns: repeat(2, minmax(0, 1fr)); } .room-navigation { padding: 12px; } .floor-overview .card-heading { flex-wrap: wrap; gap: 12px; } }
+
+.overview-grid.has-floor .overview-hero { padding: 24px 30px; }
+.overview-grid.has-floor .overview-model-mark { display: none; }
+.overview-grid.has-floor .overview-stats { margin-top: 22px; }

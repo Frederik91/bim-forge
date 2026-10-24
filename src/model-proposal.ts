@@ -1,6 +1,7 @@
+import { spaces, floorBounds, clearSpaceBounds, doorConnections } from './floor-plan.ts';
 import type { ActivityUpdate } from './request-activity.ts';
 import { createHash } from 'node:crypto';
-import { diffSnapshots, previewRectangle, previewFurnishings, rectangleLayout, FURNITURE_KINDS } from './room-model.ts';
+import { diffSnapshots, previewRectangle, previewFurnishings, previewRoomFurnishings, rectangleLayout, FURNITURE_KINDS } from './room-model.ts';
 import { parseVisualRequest } from './visual-request.ts';
 import type { VisualRequest } from './visual-request.ts';
 import type {
@@ -13,7 +14,7 @@ const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
 const BRANCH = /^[a-z]+(?:-[a-z]+)*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MAX_TOOL_CALLS = 12;
-type SupportedToolName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'submit_proposal' | 'decline_request';
+type SupportedToolName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_room_furnishings' | 'submit_proposal' | 'decline_request';
 type EvidenceToolName = SupportedToolName | 'unsupported_tool';
 type ToolStatus = 'accepted' | 'rejected';
 
@@ -225,6 +226,17 @@ const reviewParameters = {
   additionalProperties: false,
 };
 
+const furnishingListParameters = { type: 'array', maxItems: 32, items: {
+        type: 'object', properties: {
+          id: { type: 'string', pattern: IDENTIFIER.source }, type: { type: 'string', enum: ['Furniture'] },
+          name: { type: 'string', minLength: 1, maxLength: 80 }, kind: { type: 'string', enum: FURNITURE_KINDS },
+          position: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+          width: { type: 'number', minimum: 0.05, maximum: 5 }, depth: { type: 'number', minimum: 0.05, maximum: 5 },
+          height: { type: 'number', minimum: 0.02, maximum: 3 }, rotationDeg: { type: 'integer', enum: [0, 90, 180, 270] },
+          supportId: { type: ['string', 'null'] },
+        }, required: ['id', 'type', 'name', 'kind', 'position', 'width', 'depth', 'height', 'rotationDeg', 'supportId'], additionalProperties: false,
+      } };
+
 export const MODEL_PROPOSAL_TOOLS = Object.freeze([
   Object.freeze({
     type: 'function', name: 'inspect_model',
@@ -241,19 +253,18 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([
   Object.freeze({
     type: 'function', name: 'preview_furnishings',
     description: 'Replace the COMPLETE furnishing set in the current preview, preserving walls, openings and equipment. Include existing furnishings you wish to retain. Positions/dimensions are metres on a 1 mm grid; position is the footprint centre. Rotation 0 faces north (+Y), 90 faces west. Monitor/laptop supportId must reference a desk/table in this set; their elevation is the support height. Floor items use null. Checks room containment, overlaps and doorway clearance. Inspect first.',
-    parameters: {
-      type: 'object', properties: { furnishings: { type: 'array', maxItems: 32, items: {
-        type: 'object', properties: {
-          id: { type: 'string', pattern: IDENTIFIER.source }, type: { type: 'string', enum: ['Furniture'] },
-          name: { type: 'string', minLength: 1, maxLength: 80 }, kind: { type: 'string', enum: FURNITURE_KINDS },
-          position: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
-          width: { type: 'number', minimum: 0.05, maximum: 5 }, depth: { type: 'number', minimum: 0.05, maximum: 5 },
-          height: { type: 'number', minimum: 0.02, maximum: 3 }, rotationDeg: { type: 'integer', enum: [0, 90, 180, 270] },
-          supportId: { type: ['string', 'null'] },
-        }, required: ['id', 'type', 'name', 'kind', 'position', 'width', 'depth', 'height', 'rotationDeg', 'supportId'], additionalProperties: false,
-      } } }, required: ['furnishings'], additionalProperties: false,
-    },
+    parameters: { type: 'object', properties: { furnishings: furnishingListParameters }, required: ['furnishings'], additionalProperties: false },
     strict: true,
+  }),
+  Object.freeze({
+    type: 'function', name: 'preview_room_furnishings',
+    description: 'Replace the COMPLETE furnishing set in ONE named room only. Furniture in all other rooms is retained exactly. Use the same furnishing fields as preview_furnishings. Include existing room furnishings you wish to retain. Use preview_furnishings only for explicitly requested cross-room changes.',
+    parameters: {
+      type: 'object', properties: {
+        roomId: { type: 'string', pattern: IDENTIFIER.source },
+        furnishings: furnishingListParameters,
+      }, required: ['roomId', 'furnishings'], additionalProperties: false,
+    }, strict: true,
   }),
   Object.freeze({
     type: 'function', name: 'submit_proposal',
@@ -316,11 +327,11 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 })),
   });
 
-  const evidenceName = (name: string): EvidenceToolName => name === 'inspect_model' || name === 'preview_rectangle' || name === 'preview_furnishings'
+  const evidenceName = (name: string): EvidenceToolName => name === 'inspect_model' || name === 'preview_rectangle' || name === 'preview_furnishings' || name === 'preview_room_furnishings'
     || name === 'submit_proposal' || name === 'decline_request' ? name : 'unsupported_tool';
   const recordTool = (name: string, status: ToolStatus, error: string | null = null): void => {
     toolCalls.push(Object.freeze({ name: evidenceName(name), status, error }));
-    if (name === 'preview_rectangle' || name === 'preview_furnishings') {
+    if (name === 'preview_rectangle' || name === 'preview_furnishings' || name === 'preview_room_furnishings') {
       const changes = delta ? summarizeDelta(delta) : null;
       onActivity({ stage: status === 'accepted' ? 'validated' : 'validation-failed', message: status === 'accepted' && changes
         ? `Validation passed: ${changes.entities.added.length} added, ${changes.entities.modified.length} changed, ${changes.entities.removed.length} removed objects. Proposal only.`
@@ -334,14 +345,17 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     if (calls > MAX_TOOL_CALLS) fail('The model worker exceeded the bounded tool-call budget.');
     if (result || pending.value) return { ok: false, error: 'This proposal session has already finished.' };
     if (name === 'inspect_model') onActivity({ stage: 'inspecting', message: 'Inspecting the bound revision, selection and object relationships.' });
-    if (name === 'preview_rectangle' || name === 'preview_furnishings') onActivity({ stage: 'validating', message: name === 'preview_furnishings' ? 'Testing furnishing placement, supports, overlaps and doorway clearance.' : 'Testing the room layout and opening constraints.' });
+    if (name === 'preview_rectangle' || name === 'preview_furnishings' || name === 'preview_room_furnishings') onActivity({ stage: 'validating', message: name !== 'preview_rectangle' ? 'Testing furnishing placement, supports, overlaps and doorway clearance.' : 'Testing the room layout and opening constraints.' });
     if (name === 'submit_proposal') onActivity({ stage: 'submitting', message: 'Preparing the validated model delta and review explanation.' });
     if (name === 'decline_request') onActivity({ stage: 'declined', message: 'The agent is requesting clarification instead of changing the model.' });
     try {
       if (name === 'inspect_model') {
         fields(argumentsValue, []);
         const output = { ok: true, revisionId: bound.base.id, selectedObjectIds: bound.selectedObjectIds, model: summarizeSnapshot(candidate ?? bound.base.snapshot),
-          placement: { layout: rectangleLayout(candidate ?? bound.base.snapshot), coordinates: 'Metres. X east, Y north. Furniture centred on position; keep clear of wall thickness and entry door.',
+          placement: { layout: spaces(candidate ?? bound.base.snapshot).length ? null : rectangleLayout(candidate ?? bound.base.snapshot),
+            floorBounds: floorBounds(candidate ?? bound.base.snapshot),
+            rooms: spaces(candidate ?? bound.base.snapshot).map((room) => ({ ...room, clearBounds: clearSpaceBounds(candidate ?? bound.base.snapshot, room) })),
+            doorConnections: spaces(candidate ?? bound.base.snapshot).length ? doorConnections(candidate ?? bound.base.snapshot) : [], coordinates: 'Metres. X east, Y north. Furniture centred on position; keep clear of wall thickness and all connecting doors.',
             suggestedDimensions: { desk: [1.8, 0.8, 0.75], monitor: [0.6, 0.2, 0.45], laptop: [0.35, 0.25, 0.24], chair: [0.6, 0.6, 1], table: [0.6, 0.6, 0.55], plant: [0.5, 0.5, 1.1] } } };
         recordTool(name, 'accepted');
         return output;
@@ -354,8 +368,9 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         recordTool(name, 'accepted');
         return output;
       }
-      if (name === 'preview_furnishings') {
-        candidate = previewFurnishings(candidate ?? bound.base.snapshot, argumentsValue);
+      if (name === 'preview_furnishings' || name === 'preview_room_furnishings') {
+        const current = candidate ?? bound.base.snapshot;
+        candidate = name === 'preview_room_furnishings' ? previewRoomFurnishings(current, argumentsValue) : previewFurnishings(current, argumentsValue);
         delta = diffSnapshots(bound.base.snapshot, candidate);
         recordTool(name, 'accepted');
         return { ok: true, model: summarizeSnapshot(candidate), changes: summarizeDelta(delta) };
@@ -399,7 +414,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
 
   try {
     await worker.run({
-      instructions: 'You prepare BIM model proposals for human review. Work only on the bound revision. Inspect first. Selection and spatial references are CONTEXT, not a move command, group, or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. A request for another desk creates ONLY that desk unless companions are requested; retain existing objects and identities. A freestanding floor point does not imply wall attachment. For moving a setup, reason about supported devices and nearby furniture, but proximity is not an explicit relationship or permission. Never leave devices without valid support; if desk-only movement leaves their intended destination unclear, decline with a specific clarification question. Use preview_rectangle for explicitly requested shell changes; a spatial reference cannot authorize shell edits. Use preview_furnishings for furniture. It replaces the COMPLETE furnishing set, so preserve every unrelated item exactly. Explain the interpreted operation, changed/added objects, preserved objects, dependencies and any adjustment from the destination in the review. If intent or dependencies are ambiguous, decline and ask a specific question. Leave circulation clear. Finish with submit_proposal or decline_request. Visual references are intent, not authoritative geometry. Never claim construction, code, accessibility, or coordination approval.',
+      instructions: 'You prepare BIM model proposals for human review. Work only on the bound revision. Inspect first. Selection and spatial references are CONTEXT, not a move command, group, or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. A request for another desk creates ONLY that desk unless companions are requested; retain existing objects and identities. A freestanding floor point does not imply wall attachment. For moving a setup, reason about supported devices and nearby furniture, but proximity is not an explicit relationship or permission. Never leave devices without valid support; if desk-only movement leaves their intended destination unclear, decline with a specific clarification question. A selected Space is room context and a selected Level is whole-floor context, never permission to change all its contents. For one-room work use preview_room_furnishings and preserve unrelated rooms. Cross-room transfers require explicit intent and the whole-floor preview_furnishings tool. Multi-room shell editing is not supported yet; decline and explain instead of resizing the entire floor. Use preview_rectangle for explicitly requested single-room shell changes; a spatial reference cannot authorize shell edits. Use preview_furnishings for furniture. It replaces the COMPLETE furnishing set, so preserve every unrelated item exactly. Explain the interpreted operation, changed/added objects, preserved objects, dependencies and any adjustment from the destination in the review. If intent or dependencies are ambiguous, decline and ask a specific question. Leave circulation clear. Finish with submit_proposal or decline_request. Visual references are intent, not authoritative geometry. Never claim construction, code, accessibility, or coordination approval.',
       input: {
         request: {
           requestId: bound.requestId,

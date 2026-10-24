@@ -1,3 +1,5 @@
+import { validateFloorPlan, spaces, spaceForFootprint } from './floor-plan.ts';
+
 const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
 const idPattern = /^[a-z][a-z0-9-]{0,63}$/;
@@ -61,7 +63,7 @@ export interface Equipment {
   height: number;
 }
 
-export const FURNITURE_KINDS = ['desk', 'monitor', 'laptop', 'chair', 'table', 'plant'] as const;
+export const FURNITURE_KINDS = ['desk', 'monitor', 'laptop', 'chair', 'table', 'plant', 'bed', 'sofa', 'cabinet'] as const;
 export type FurnitureKind = typeof FURNITURE_KINDS[number];
 export interface Furniture {
   id: EntityId;
@@ -78,7 +80,11 @@ export interface Furniture {
   supportId: EntityId | null;
 }
 
-export type Entity = Wall | Door | Window | Equipment | Furniture;
+export interface Bounds { minX: number; minY: number; maxX: number; maxY: number }
+export interface Level { id: EntityId; type: 'Level'; name: string; elevation: 0 }
+export interface Space { id: EntityId; type: 'Space'; name: string; levelId: EntityId; bounds: Bounds }
+
+export type Entity = Wall | Door | Window | Equipment | Furniture | Level | Space;
 
 export interface HostingRelationship {
   id: EntityId;
@@ -110,7 +116,7 @@ export interface Branch {
   revisionId: RevisionId;
 }
 
-type ToolCallName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_workstation_move' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
+type ToolCallName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_room_furnishings' | 'preview_workstation_move' | 'submit_proposal' | 'decline_request' | 'unsupported_tool';
 type ToolCallStatus = 'accepted' | 'rejected';
 
 export interface ToolCallEvidence {
@@ -367,7 +373,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     const name = call.name;
     const status = call.status;
     const error = call.error;
-    if (name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'preview_furnishings' && name !== 'preview_workstation_move' && name !== 'submit_proposal'
+    if (name !== 'inspect_model' && name !== 'preview_rectangle' && name !== 'preview_furnishings' && name !== 'preview_room_furnishings' && name !== 'preview_workstation_move' && name !== 'submit_proposal'
         && name !== 'decline_request' && name !== 'unsupported_tool') fail('Invalid model tool evidence.');
     if (status !== 'accepted' && status !== 'rejected') fail('Invalid model tool evidence.');
     if (error !== null && (typeof error !== 'string' || !error || error.length > 240)) fail('Invalid model tool evidence.');
@@ -415,7 +421,9 @@ function wallLength(wall: Wall): number {
 
 function parseEntity(input: JsonValue): Entity {
   if (!input || Array.isArray(input) || typeof input !== 'object') fail('Unexpected model fields.');
-  if (input.type === 'Wall') fields(input, ['id', 'type', 'name', 'start', 'end', 'thickness', 'height']);
+  if (input.type === 'Level') fields(input, ['id', 'type', 'name', 'elevation']);
+  else if (input.type === 'Space') fields(input, ['id', 'type', 'name', 'levelId', 'bounds']);
+  else if (input.type === 'Wall') fields(input, ['id', 'type', 'name', 'start', 'end', 'thickness', 'height']);
   else if (input.type === 'Door') fields(input, ['id', 'type', 'name', 'width', 'height']);
   else if (input.type === 'Window') fields(input, ['id', 'type', 'name', 'width', 'height', 'sillHeight']);
   else if (input.type === 'Equipment') {
@@ -425,6 +433,17 @@ function parseEntity(input: JsonValue): Entity {
   } else return fail('Only supported building entities are accepted.');
   const id = identifier(input.id);
   const name = label(input.name);
+  if (input.type === 'Level') {
+    if (input.elevation !== 0) fail('This prototype supports one level at elevation zero.');
+    return { id, type: 'Level', name, elevation: 0 };
+  }
+  if (input.type === 'Space') {
+    fields(input.bounds, ['minX', 'minY', 'maxX', 'maxY']);
+    return { id, type: 'Space', name, levelId: identifier(input.levelId), bounds: {
+      minX: metres(input.bounds.minX, -1000, 1000), minY: metres(input.bounds.minY, -1000, 1000),
+      maxX: metres(input.bounds.maxX, -1000, 1000), maxY: metres(input.bounds.maxY, -1000, 1000),
+    } };
+  }
   if (input.type === 'Wall') {
       const entity: Wall = {
         id, type: 'Wall', name, start: point(input.start), end: point(input.end),
@@ -484,7 +503,8 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
   if (!items.length) return;
   if (items.length > 32) fail('The prototype supports at most 32 furnishings.');
   const walls = entities.filter((item): item is Wall => item.type === 'Wall');
-  if (walls.length !== 4 || walls.some((wall) => wall.start[0] !== wall.end[0] && wall.start[1] !== wall.end[1])) {
+  const rooms = spaces({ units: 'm', entities, relationships });
+  if ((!rooms.length && walls.length !== 4) || walls.some((wall) => wall.start[0] !== wall.end[0] && wall.start[1] !== wall.end[1])) {
     fail('Furnishing placement requires a rectangular room shell.');
   }
   const minX = Math.min(...walls.flatMap((wall) => [wall.start[0], wall.end[0]]));
@@ -508,7 +528,10 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
       }
       if (support.height + item.height > Math.min(...walls.map((wall) => wall.height))) fail('Supported device must fit below the room ceiling.');
     } else if (item.supportId !== null) fail('Floor furnishings cannot have a support.');
-    if (!contains({ minX: minX + inset, maxX: maxX - inset, minY: minY + inset, maxY: maxY - inset }, footprint)) {
+    if (rooms.length && !spaceForFootprint({ units: 'm', entities, relationships }, footprint)) {
+      fail(`${item.name} must fit inside one room, clear of shared wall thickness.`);
+    }
+    if (!rooms.length && !contains({ minX: minX + inset, maxX: maxX - inset, minY: minY + inset, maxY: maxY - inset }, footprint)) {
       fail(`${item.name} must fit inside the room, clear of wall thickness.`);
     }
     if (item.height > Math.min(...walls.map((wall) => wall.height))) fail('Furniture must fit below the room ceiling.');
@@ -538,7 +561,11 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
       const y1 = wall.start[1] + dy * relation.offset;
       const x2 = x1 + dx * opening.width; const y2 = y1 + dy * opening.width;
       const clearance = Math.max(0.9, opening.width);
-      const zone = dx !== 0
+      const zone = rooms.length
+        ? dx !== 0
+          ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: y1 - clearance, maxY: y1 + clearance }
+          : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: x1 - clearance, maxX: x1 + clearance }
+        : dx !== 0
         ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: wall.start[1] === minY ? minY : maxY - clearance, maxY: wall.start[1] === minY ? minY + clearance : maxY }
         : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: wall.start[0] === minX ? minX : maxX - clearance, maxX: wall.start[0] === minX ? minX + clearance : maxX };
       if (overlaps(footprint, zone)) fail(`${item.name} blocks the door clearance zone.`);
@@ -548,16 +575,33 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
 
 /** Replace the complete furnishing set; building geometry and equipment remain untouched. */
 export function previewFurnishings(baseSnapshot: unknown, input: unknown): ModelSnapshot {
-  const base = rectangle(baseSnapshot).snapshot;
+  const base = validateSnapshot(baseSnapshot);
   const value = copy(input);
   fields(value, ['furnishings']);
   if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 furnishings.');
   const furnishings = value.furnishings.map(parseEntity);
   if (furnishings.some((item) => item.type !== 'Furniture')) fail('Only furnishings can be changed by this tool.');
-  return graph({ units: 'm', entities: [...base.entities.filter((item) => item.type !== 'Furniture'), ...furnishings], relationships: base.relationships });
+  return validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type !== 'Furniture'), ...furnishings], relationships: base.relationships });
 }
 
-function graph(input: unknown): ModelSnapshot {
+/** A room-bounded replacement cannot remove or transfer furnishings in adjacent spaces. */
+export function previewRoomFurnishings(baseSnapshot: unknown, input: unknown): ModelSnapshot {
+  const base = validateSnapshot(baseSnapshot);
+  const value = copy(input);
+  fields(value, ['roomId', 'furnishings']);
+  const room = spaces(base).find((item) => item.id === value.roomId);
+  if (!room) fail('Choose a room from the bound floor.');
+  if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 room furnishings.');
+  const incoming = value.furnishings.map(parseEntity);
+  for (const item of incoming) {
+    if (item.type !== 'Furniture') fail('Only furnishings can be changed by this tool.');
+    if (spaceForFootprint(base, furnitureFootprint(item))?.id !== room.id) fail('Room furnishing changes must remain inside the selected room, clear of shared walls. Use the whole-floor tool for explicit transfers.');
+  }
+  const retained = base.entities.filter((item) => item.type === 'Furniture' && spaceForFootprint(base, furnitureFootprint(item))?.id !== room.id);
+  return previewFurnishings(base, { furnishings: [...retained, ...incoming] });
+}
+
+export function validateSnapshot(input: unknown): ModelSnapshot {
   const value = copy(input);
   fields(value, ['units', 'entities', 'relationships']);
   if (value.units !== 'm') fail('Unsupported model snapshot.');
@@ -593,6 +637,7 @@ function graph(input: unknown): ModelSnapshot {
   if (entities.some((entity) => (entity.type === 'Door' || entity.type === 'Window') && !hosted.has(entity.id))) {
     fail('Every opening must have exactly one host.');
   }
+  validateFloorPlan({ units: 'm', entities, relationships });
   validateFurnishings(entities, relationships);
   const byId = (a: ModelItem, b: ModelItem): number => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   entities.sort(byId); relationships.sort(byId);
@@ -618,7 +663,7 @@ function fixture(): ModelSnapshot {
     { side: 'north', start: [6, 4], end: [0, 4] },
     { side: 'west', start: [0, 4], end: [0, 0] },
   ];
-  return graph({ units: 'm', entities: [
+  return validateSnapshot({ units: 'm', entities: [
     ...sides.map(({ side, start, end }) => ({ id: `wall-${side}`, type: 'Wall', name: `${side.charAt(0).toUpperCase()}${side.slice(1)} wall`, start, end, thickness: 0.2, height: 3 })),
     { id: 'door-entry', type: 'Door', name: 'Entry door', width: 0.9, height: 2.1 },
   ], relationships: [{ id: 'host-entry', type: 'hosted-by', source: 'door-entry', target: 'wall-south', offset: 2.4 }] });
@@ -631,7 +676,8 @@ interface RectangleModel {
 }
 
 function rectangle(input: unknown): RectangleModel {
-  const snapshot = graph(input);
+  const snapshot = validateSnapshot(input);
+  if (spaces(snapshot).length) fail('A multi-room floor cannot be resized as one room. Request room-aware furnishing changes instead.');
   const walls = snapshot.entities.filter((entity): entity is Wall => entity.type === 'Wall');
   const door = snapshot.entities.find((entity): entity is Door => entity.type === 'Door' && entity.id === 'door-entry');
   if (walls.length !== 4 || !door || snapshot.entities.filter((entity) => entity.type === 'Door').length !== 1) {
@@ -721,7 +767,7 @@ export function previewRectangle(baseSnapshot: unknown, input: unknown): ModelSn
     } else if (entity.id === base.door.id && entity.type === 'Door') entity.width = layout.door.widthMm / 1000;
   }
   host.offset = layout.door.offsetMm / 1000;
-  return graph(snapshot);
+  return validateSnapshot(snapshot);
 }
 
 async function revision(parentId: RevisionId | null, snapshot: ModelSnapshot): Promise<Revision> {
@@ -745,7 +791,7 @@ function changes<T extends ModelItem>(before: T[], after: T[]): CollectionChange
 }
 
 export function diffSnapshots(before: unknown, after: unknown): ModelDelta {
-  const left = graph(before); const right = graph(after);
+  const left = validateSnapshot(before); const right = validateSnapshot(after);
   return freeze({ entities: changes(left.entities, right.entities), relationships: changes(left.relationships, right.relationships) });
 }
 
@@ -804,7 +850,7 @@ export class RoomRepository {
     const value = copy(input);
     fields(value, ['projectId', 'name', 'snapshot']);
     const validatedName = label(value.name);
-    const initial = await revision(null, graph(value.snapshot));
+    const initial = await revision(null, validateSnapshot(value.snapshot));
     const state: RepositoryStateV2 = {
       version: 2,
       projectId: projectIdentifier(value.projectId),
@@ -839,7 +885,7 @@ export class RoomRepository {
       const id = revisionIdentifier(item.id);
       const parentId = item.parentId === null ? null : revisionIdentifier(item.parentId);
       if (revisions.has(id)) fail('Invalid revision identity.');
-      const validated = await revision(parentId, graph(item.snapshot));
+      const validated = await revision(parentId, validateSnapshot(item.snapshot));
       if (validated.id !== id) fail('Saved revision content does not match its hash.');
       revisions.set(id, validated);
     }
@@ -1014,7 +1060,7 @@ export class RoomRepository {
 
   async #commit(name: BranchName, base: Revision, snapshot: unknown): Promise<RoomRepository> {
     if (name === 'main') fail('Choose a proposal name other than main.');
-    const updated = graph(snapshot);
+    const updated = validateSnapshot(snapshot);
     const next = canonical(updated) === canonical(base.snapshot) ? base : await revision(base.id, updated);
     const existing = this.#state.branches.find((item) => item.name === name);
     if (existing) {
