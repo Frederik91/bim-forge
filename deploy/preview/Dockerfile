@@ -2,6 +2,11 @@ FROM node@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d20
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV CODEX_CA_CERTIFICATE=/etc/ssl/certs/ca-certificates.crt
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
