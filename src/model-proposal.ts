@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { diffSnapshots, previewRectangle, previewFurnishings, rectangleLayout, FURNITURE_KINDS } from './room-model.ts';
 import { parseVisualRequest } from './visual-request.ts';
 import type { VisualRequest } from './visual-request.ts';
@@ -107,10 +108,18 @@ function text(value: unknown, name: string, maximum: number): string {
 }
 
 function request(input: unknown, repository: RoomRepository): BoundRequest {
-  fields(input, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']);
+  fields(input, isRecord(input) && Object.hasOwn(input, 'proposalName')
+    ? ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']
+    : ['requestId', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']);
   const requestId = text(input.requestId, 'Request identity', 128);
   if (!REQUEST_ID.test(requestId)) fail('Request identity contains unsupported characters.');
-  const proposalName = text(input.proposalName, 'Proposal name', 64);
+  const instruction = text(input.instruction, 'Change request', 1000);
+  if (input.proposalName !== undefined && typeof input.proposalName !== 'string') fail('Proposal name must be text when provided.');
+  if (typeof input.proposalName === 'string' && (input.proposalName.length > 64 || /[\u0000-\u001f]/.test(input.proposalName))) fail('Proposal name must contain at most 64 readable characters.');
+  // Stable across retries and revisions; 128 bits of request identity avoid timestamp/title collisions.
+  const suffix = createHash('sha256').update(requestId).digest('hex').slice(0, 32).replace(/[0-9a-f]/g, (digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)));
+  const title = instruction.toLowerCase().match(/[a-z]+/g)?.slice(0, 5).join('-').slice(0, 30).replace(/-+$/, '') || 'change';
+  const proposalName = input.proposalName?.trim() ? text(input.proposalName, 'Proposal name', 64) : `${title}-${suffix}`;
   if (!BRANCH.test(proposalName) || proposalName === 'main') fail('Proposal names require lowercase words separated by hyphens.');
   if (repository.branches().some((branch) => branch.name === proposalName)) fail('A proposal already uses that name.');
   if (typeof input.baseRevisionId !== 'string' || !REVISION.test(input.baseRevisionId)) fail('Invalid base revision identity.');
@@ -129,7 +138,6 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   }
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid selected object identity.');
   const entities = new Map(base.snapshot.entities.map((entity) => [entity.id, entity]));
-  const instruction = text(input.instruction, 'Change request', 1000);
   const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
   return Object.freeze({
     requestId,
