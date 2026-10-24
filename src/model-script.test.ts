@@ -113,6 +113,33 @@ test('caught forbidden host access poisons the attempt and cannot be followed by
   assert.equal(repo.branches().length, 1);
 });
 
+test('an ordinary guest exception cannot hide a caught forbidden call or restore proposal authority', async () => {
+  const repo = await RoomRepository.create('Sticky integrity failure');
+  await assert.rejects(() => prepareModelProposal(repo, request(repo, 'sticky-integrity'), worker(async (session) => {
+    const output = await session.executeTool('run_model_script', { language: 'javascript', source: `
+      try { await __scriptbox.hostCall('model.accept', []); } catch (_) {}
+      throw new Error('ordinary script error');
+    ` });
+    assert.equal(output.ok, false);
+    const retry = await session.executeTool('run_model_script', { language: 'javascript', source: `${widen()} ${propose}` });
+    assert.equal(retry.ok, false, 'host denial remains fatal even when the final guest error is ordinary');
+  })), /lost execution authority/);
+  assert.equal(repo.branches().length, 1);
+});
+
+test('hostile method names and diagnostic controls still produce bounded durable failure evidence', async () => {
+  for (const source of ["await __scriptbox.hostCall(' ', []);", "await __scriptbox.hostCall('\\u007f', []);", "throw new Error('\\u007f\\u0085');"]) {
+    const repo = await RoomRepository.create('Evidence normalization');
+    const records: ScriptExecutionEvidence[] = [];
+    await assert.rejects(() => prepareModelProposal(repo, request(repo, 'hostile-evidence'), worker(async (session) => {
+      assert.equal((await session.executeTool('run_model_script', { language: 'javascript', source })).ok, false);
+    }), () => {}, { onExecution: (record) => records.push(record) }));
+    assert.equal(records.length, 1, 'every terminal runtime outcome reaches the durable evidence callback');
+    assert.equal(records[0]?.disposition, 'discarded');
+    assert.ok(!/[\u0000-\u001f\u007f-\u009f]/.test(JSON.stringify(records[0])));
+  }
+});
+
 test('a resource limit after a write discards it and prevents ready publication through the proposal application', async (t) => {
   const repo = await RoomRepository.create('Hard budget rollback');
   const scripts = new ModelScripts({ hostCalls: 2 }); t.after(() => scripts.dispose());

@@ -180,12 +180,12 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       if (typeof argumentsValue.source !== 'string' || !argumentsValue.source.trim()) fail('A script source body is required.');
       const result = await scripts.run({ base: bound.base.snapshot, binding: bound, language: argumentsValue.language, source: argumentsValue.source,
         remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity });
+      options.onExecution?.(result.evidence);
       parseScriptExecutions([...executions, result.evidence]);
       executions.push(result.evidence); hostCalls += result.evidence.calls.length;
-      options.onExecution?.(result.evidence);
       signal.throwIfAborted();
       if (result.kind === 'failed') {
-        fatal = ['cancelled', 'timed-out', 'resource-limit'].includes(result.evidence.status)
+        fatal ||= ['cancelled', 'timed-out', 'resource-limit'].includes(result.evidence.status)
           || ['execution-integrity', 'internal', 'audit-failure', 'protocol-mismatch', 'host-failure', 'denied'].includes(result.diagnostic.code);
         toolCalls.push({ name: 'run_model_script', status: 'rejected', error: result.diagnostic.message });
         onActivity({ stage: 'validation-failed', message: 'Script did not produce a valid proposal. Staged changes were discarded.' });

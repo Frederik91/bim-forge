@@ -89,7 +89,12 @@ export function summarizeModelDelta(delta: ModelDelta) {
   return { entities: ids(delta.entities), relationships: ids(delta.relationships) };
 }
 
-function publicMessage(value: string): string { return value.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 240) || 'Model script failed.'; }
+function publicMessage(value: string): string { return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim().slice(0, 240) || 'Model script failed.'; }
+function auditMethod(value: string): string {
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(value)) return value.slice(0, 256);
+  // Rejected names are hostile data too. Keep their escaped identity without permitting controls or unbounded UTF-8 bytes.
+  return JSON.stringify(value).replace(/[\u007f-\uffff]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`).slice(0, 256);
+}
 function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 function fields(value: unknown, keys: readonly string[]): asserts value is Record<string, unknown> {
   if (!record(value) || Object.keys(value).length !== keys.length || !keys.every((key) => Object.hasOwn(value, key))) throw new Error('Unexpected script decision fields.');
@@ -218,17 +223,17 @@ export class ModelScripts {
       status: outcome.status, disposition, validation, contractSha256: outcome.evidence.contract.sha256,
       policyVersion: outcome.evidence.policyVersion, runtime: { packageVersion: outcome.evidence.runtime.packageVersion,
         guestAbi: outcome.evidence.runtime.guestAbi, bootstrapVersion: outcome.evidence.runtime.bootstrapVersion, artifactSha256: outcome.evidence.runtime.artifactSha256 },
-      calls: outcome.evidence.calls.map((call) => ({ sequence: call.seq, method: call.method, disposition: call.disposition })), diagnostic,
+      calls: outcome.evidence.calls.map((call) => ({ sequence: call.seq, method: auditMethod(call.method), disposition: call.disposition })), diagnostic,
     });
     const failed = (diagnostic: ScriptDiagnostic, validation: ScriptExecutionEvidence['validation'] = 'not-run'): ModelScriptResult => ({
       kind: 'failed', diagnostic, evidence: evidence('discarded', validation, diagnostic),
     });
+    const integrityFailure = outcome.evidence.calls.find((call) => call.disposition !== 'completed'
+      && !(call.disposition === 'app-error' && call.errorName === 'ModelValidationError'));
+    if (integrityFailure) return failed({ code: 'execution-integrity', message: publicMessage(`Host call ${auditMethod(integrityFailure.method)} ended as ${integrityFailure.disposition}. Staged changes discarded.`), line: null, column: null });
     if (outcome.status !== 'completed') return failed({ code: outcome.status === 'failed' ? outcome.error.code : outcome.status,
       message: publicMessage(outcome.status === 'failed' ? outcome.error.message : `Script ${outcome.status}. Staged changes discarded.`),
       line: outcome.status === 'failed' ? outcome.error.line : null, column: outcome.status === 'failed' ? outcome.error.column : null });
-    const integrityFailure = outcome.evidence.calls.find((call) => call.disposition !== 'completed'
-      && !(call.disposition === 'app-error' && call.errorName === 'ModelValidationError'));
-    if (integrityFailure) return failed({ code: 'execution-integrity', message: `Host call ${integrityFailure.method} ended as ${integrityFailure.disposition}. Staged changes discarded.`, line: null, column: null });
     if (input.signal.aborted) return failed({ code: 'cancelled', message: 'Script authority was revoked. Staged changes discarded.', line: null, column: null });
     try {
       const result = decision(outcome.value);
