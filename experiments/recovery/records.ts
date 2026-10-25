@@ -28,7 +28,8 @@ const EnvironmentSchema = Type.Object({ version: text, fsync: text, synchronous_
 const RegistrySchema = Type.Object({ experiments: Type.Array(Type.Object({ id: text, assertions: Type.Array(text) })) });
 type Input = Static<typeof InputSchema>;
 type DraftRun = Omit<Run, 'recordKind' | 'environment'> & {
-  recordKind: 'draft'; environment: Omit<Run['environment'], 'diskBudgetBytes'> & { diskBudgetBytes: number | null };
+  recordKind: 'draft'; observationsArtifact: string;
+  environment: Omit<Run['environment'], 'diskBudgetBytes'> & { diskBudgetBytes: number | null };
 };
 
 function parse<T extends TSchema>(schema: T, value: unknown): Static<T> {
@@ -151,17 +152,20 @@ export async function prepareRecoveryRecords(input: Input): Promise<void> {
       observations: executed, observationsArtifact: rawObservations, coverage: declared, evidence, errors: [],
       limitations: [...commonLimitations, ...executed.flatMap((item) => item.limitations),
         ...(input.diskBudget.kind === 'recorded' ? [`Disk-budget provenance: ${input.diskBudget.provenance}`]
-          : ['No numeric disk budget was recorded in the correctness execution lease. The required W0 environment field remains unknown; publication is blocked.'])],
+          : ['No numeric disk budget was recorded in the correctness execution lease. diskBudgetBytes is null; this inconclusive record does not establish a budgeted qualification pass.'])],
       decisionImplications: ['No registry update, architecture adoption or review approval is implied.',
         'EX-09 lacks a real geometry-engine upgrade; EX-12 does not qualify independent identity/key services or a multi-parent/network synchronization service.',
         'W7 must assess scope and limitations against the exact assertion coverage.'],
     };
     if (input.mode === 'publish') {
-      if (budget === null) throw new Error('Cannot publish W0 terminal records with an unrecorded disk budget. Draft preparation is available without database work.');
       const run = parseRun({ ...draft, recordKind: 'run', environment: { ...draft.environment, diskBudgetBytes: budget } });
-      await verifyRun(run, { repository: input.repository, evidence: input.evidence });
       await publishRun(run, { repository: input.repository, evidence: input.evidence, results: input.results });
     } else {
+      const blockers: string[] = [];
+      try {
+        const run = parseRun({ ...draft, recordKind: 'run', environment: { ...draft.environment, diskBudgetBytes: budget } });
+        await verifyRun(run, { repository: input.repository, evidence: input.evidence });
+      } catch (error) { blockers.push(error instanceof Error ? error.message : String(error)); }
       const directory = path.join(input.results, experimentId, input.runId);
       await mkdir(path.dirname(directory), { recursive: true });
       await mkdir(directory);
@@ -170,8 +174,7 @@ export async function prepareRecoveryRecords(input: Input): Promise<void> {
         experimentId, sourceCommit: runner.commit, rawObservationsSha256: evidence.find((item) => item.path === rawObservations)?.sha256,
         executedObservationCount: executed.length, exactAssertionCount: declared.length,
         allExecutedGitBindingsVerified: true, hashedArtifactCount: evidence.length,
-        observationsArtifact: rawObservations, publicationReady: budget !== null,
-        blockers: budget === null ? ['Missing recorded environment.diskBudgetBytes; no numeric value has been invented.'] : [],
+        observationsArtifact: rawObservations, publicationReady: blockers.length === 0, blockers,
         authority: 'Prepared for coordinator review; not a terminal W0 result or approval.',
       }, null, 2) + '\n', { flag: 'wx' });
     }
