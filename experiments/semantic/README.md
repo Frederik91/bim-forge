@@ -1,8 +1,8 @@
 # W1 semantic qualification
 
-This source slice belongs to [#124](https://github.com/Frederik91/bim-forge/issues/124), under [#122](https://github.com/Frederik91/bim-forge/issues/122). Its module commit is rebased onto W0 contract v1, `19118447930f41218bc732466b55442e5d83adf5`, on `feature/issue-124-qualification-semantic`. The intended draft PR base is `feature/issue-123-qualification-contracts`.
+This source slice belongs to [#124](https://github.com/Frederik91/bim-forge/issues/124), under [#122](https://github.com/Frederik91/bim-forge/issues/122). Its module commit is rebased onto W0 contract v1, `29583f735c1803872ace3fa663dcf6d7a145434a`, on `feature/issue-124-qualification-semantic`. The intended draft PR base is `feature/issue-123-qualification-contracts`.
 
-Execution status: the coordinator reported that the first baseline server run passed root validation and scoped typechecking, with 65 of 66 tests passing. CLI binding failed because W0 supplied Git's safe-directory value with a trailing slash. W0 owns that fix. The candidate source added after that run remains unexecuted. No local builds or tests have run. The coordinator allocates server containers and supplies validation evidence before a draft PR opens.
+The coordinator reported that the corrected baseline server run passed semantic tests and CLI collection: 20 observations, 11 expectations met and 9 gaps. Its retained artifacts are `/ssd1/bim-forge-qualification/qvm-20261025/artifacts/w1-baseline-20261025a`. Baseline publication is separate. Candidate-only execution reuses that observation file and does not repeat the baseline run. No local builds or tests are authorized. The coordinator allocates server containers and supplies validation evidence before a draft PR opens.
 
 The implementation exercises `src/room-model.ts` with its existing room shell and `src/asset-fixture.ts` assets. `fixture.ts` adds four deterministic furnishings and uses a fixed disposable project ID. No product code, package scripts, shared registry, or design files change. Raw cases label `baseline-room-model` and `VM-C1-semantic-prototype` separately. VM-C1 remains proposed and unqualified.
 
@@ -24,7 +24,7 @@ The implementation exercises `src/room-model.ts` with its existing room shell an
 
 The CLI emits exactly `{experimentId, caseId, expected, observed, passed, limitations}[]`. It stores input snapshots, serialized proposal/application records, exact deltas, operations, errors, and independent predicate calculations in `raw.json`. W0's `bindingFor` binds committed design, definition, fixture, schema, writer, and runner bytes. The parsed W0 tiny fixture is retained with an explicit description of how it differs from the native operation fixtures.
 
-`coverage.json` accounts for every exact assertion in each W1 definition separately for both variants. Changed definitions or unobserved baseline case references fail collection. Candidate coverage includes only cases that actually execute; missing counterparts remain partial or not covered. W0's `describeArtifact` supplies hashes for `raw.json` and `coverage.json` in `manifest.json`. Files are created exclusively. Reusing a directory fails before case execution and never replaces old evidence. An interrupted run can leave an incomplete directory; preserve it and choose a fresh run ID.
+`coverage.json` accounts for every exact assertion in each W1 definition separately for both variants. Changed definitions or unobserved baseline case references fail collection. Candidate coverage includes only cases that actually execute; missing counterparts remain partial or not covered. `observations.json` retains the actual observation array. The manifest sets `observationsArtifact` to that file and hashes it with W0's `describeArtifact`, alongside `raw.json` and `coverage.json`. Candidate-only mode also retains the exact baseline reference bytes and their hash. Files are created exclusively. Reusing a directory fails before case execution and never replaces old evidence. An interrupted run can leave an incomplete directory; preserve it and choose a fresh run ID.
 
 Successful collection exits zero even when observations fail. Qualification depends on each `passed` value and full experiment coverage. Exceptions exit nonzero. The node tests assert current baseline limitations as well as supported behavior, so passing tests do not mean every experiment passed. An unexpected baseline behavior change requires review of the observations and assertions.
 
@@ -60,31 +60,33 @@ The prototype is synchronous and in memory. It has no persistence adapter, resto
 
 ## Run in the coordinator's server slot
 
-Use the coordinator's disposable `bim-qvm-tools:20261025` container, image ID `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`. Supply the committed Git bundle clone on `/ssd1`, make the image's root dependencies available to that checkout, and mount an isolated writable `/evidence` directory. Copy source with `cp -R` when a copy is needed; the coordinator's container requires owned files rather than preserved ownership from `cp -a`. The full Git object database is required by `bindingFor`; a source-only archive is insufficient. The raw artifact includes `sourceGit` metadata. The coordinator records actual resources and slot. Run from the repository root:
+Use the coordinator's disposable `bim-qvm-tools:20261025` container, image ID `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`, capped at 0.5 CPU and 1 GiB memory with no database or network. Supply the committed Git bundle clone on `/ssd1`, then `cp -R /source/. /app` to retain image dependencies and create container-owned source files. Mount an isolated writable `/evidence` directory and the retained baseline directory at `/baseline` read-only. The full Git object database is required by `bindingFor`; a source-only archive is insufficient. The raw artifact includes `sourceGit` metadata. Run from `/app`:
 
 ```sh
 npm run validate
-npm run test:qualification-contracts
 node node_modules/typescript/bin/tsc --noEmit --project experiments/semantic/tsconfig.json
-node --test experiments/semantic/semantic.test.ts src/room-model.test.ts src/asset-family.test.ts src/asset-history.test.ts src/asset-placement.test.ts
+export W1_BASELINE_OBSERVATIONS=/baseline/observations.json
+node --test --test-name-pattern='VM-C1|candidate' experiments/semantic/semantic.test.ts
 RUN_ID="w1-124-$(node -p 'crypto.randomUUID()')"
 mkdir -p /evidence
-node experiments/semantic/cli.ts --artifacts "/evidence/$RUN_ID" > "/evidence/$RUN_ID-observations.json"
+node experiments/semantic/cli.ts --candidate-only --baseline-observations "$W1_BASELINE_OBSERVATIONS" --artifacts "/evidence/$RUN_ID" > "/evidence/$RUN_ID-observations.json"
 node experiments/contracts/cli.ts observations "/evidence/$RUN_ID-observations.json"
 ```
+
+The default collector still supports a combined comparison when explicitly requested. The candidate-only command and selected new tests use retained baseline expectations instead of invoking baseline operations.
 
 The coordinator can inspect the scoped source policy without changing shared scripts:
 
 ```sh
-git diff --name-only 19118447930f41218bc732466b55442e5d83adf5 HEAD
-git -c core.whitespace=cr-at-eol diff --check 19118447930f41218bc732466b55442e5d83adf5 HEAD
+git diff --name-only 29583f735c1803872ace3fa663dcf6d7a145434a HEAD
+git -c core.whitespace=cr-at-eol diff --check 29583f735c1803872ace3fa663dcf6d7a145434a HEAD
 ```
 
 W0 extends the root lint and TypeScript config to include `experiments` and `benchmarks`. The explicit stream typecheck is an additional focused check; `npm run validate` covers W1 too. No shared package script changes are part of this module.
 
 ## Integrate W0 and W2
 
-The collector imports W0's observation schema and type from `experiments/contracts/schema.ts` and its binding and artifact functions from `records.ts`. `authoritativeW0ContractCommit` records `19118447930f41218bc732466b55442e5d83adf5`. It does not invent a parallel terminal-result contract. Actual environment, execution times, and run IDs must come from the coordinator's server run before W0's `verifyRun` and `publishRun` can produce an authoritative result. This source slice creates no terminal result, registry update, or review record.
+The collector imports W0's observation schema and type from `experiments/contracts/schema.ts` and its binding and artifact functions from `records.ts`. `authoritativeW0ContractCommit` records `29583f735c1803872ace3fa663dcf6d7a145434a`. It does not invent a parallel terminal-result contract. Actual environment, execution times, and run IDs must come from the coordinator's server run before W0's `verifyRun` and `publishRun` can produce an authoritative result. This source slice creates no terminal result, registry update, or review record.
 
 For each experiment and variant, the coordinator binds only that variant's matching observations, `coverage.json` entry, and raw artifacts into W0's result record, with a unique `docs/experiments/results/<EX-ID>/<run-id>/` destination. Preserve raw hashes and failed observations. Missing W2 exports, partial coverage, and case limitations prevent a passed conclusion. W0 refuses a passed run with limited observations. Do not combine baseline failures with candidate results or convert process success or passing unit tests into an experiment approval.
 

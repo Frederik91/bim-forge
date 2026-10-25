@@ -16,7 +16,7 @@ import { coverageFor } from './coverage.ts';
 import { identityCases } from './identity.ts';
 import { parseObservations } from './protocol.ts';
 import type { CaseResult, Observation } from './protocol.ts';
-import { runSemanticCases } from './runner.ts';
+import { runCandidateCases, runSemanticCases } from './runner.ts';
 import { SemanticCandidate, canonical } from './candidate.ts';
 import type { Predicate } from './candidate.ts';
 import { candidateCases, candidateCommand, candidateDraft } from './candidate-cases.ts';
@@ -25,6 +25,15 @@ function caseById(cases: CaseResult[], caseId: string): CaseResult {
   const value = cases.find((item) => item.observation.caseId === caseId);
   assert.ok(value, `Missing ${caseId}`);
   return value;
+}
+
+async function baselineForComparison(): Promise<Observation[]> {
+  const filename = process.env.W1_BASELINE_OBSERVATIONS;
+  if (filename) {
+    const input: unknown = JSON.parse(await readFile(filename, 'utf8'));
+    return parseObservations(input);
+  }
+  return [...await identityCases(), ...await concurrencyCases()].map((item) => item.observation);
 }
 
 test('native identity, distinct chairs, and occurrence isolation retain exact real baseline evidence', async () => {
@@ -126,12 +135,12 @@ test('coverage accounts for exact W0 definition assertions and refuses stale def
 });
 
 test('VM-C1 compares the same expectations against independently executed native inputs', async () => {
-  const baseline = [...await identityCases(), ...await concurrencyCases()];
+  const baseline = await baselineForComparison();
   const candidate = await candidateCases(baseline);
   for (const item of candidate) {
-    const reference = baseline.find((base) => `vmc1-${base.observation.caseId}` === item.observation.caseId);
+    const reference = baseline.find((base) => `vmc1-${base.caseId}` === item.observation.caseId);
     assert.ok(reference);
-    assert.equal(item.observation.expected, reference.observation.expected);
+    assert.equal(item.observation.expected, reference.expected);
     assert.equal(item.artifact.variant, 'VM-C1-semantic-prototype');
     assert.equal(item.observation.passed, true, item.observation.caseId);
     assert.ok(item.artifact.operations.length > 0);
@@ -139,9 +148,53 @@ test('VM-C1 compares the same expectations against independently executed native
   }
   for (const id of ['native-id-churn-lineage', 'native-split-merge-lineage', 'phantom-empty-region-assumption',
     'changed-destination-wall-valid-geometry', 'acceptance-command-payload-retry', 'declared-independent-metadata-fields']) {
-    assert.equal(caseById(baseline, id).observation.passed, false);
+    assert.equal(baseline.find((item) => item.caseId === id)?.passed, false);
     assert.equal(caseById(candidate, `vmc1-${id}`).observation.passed, true);
   }
+});
+
+test('candidate-only collection retains partial coverage without executing baseline cases', async () => {
+  const baseline = await baselineForComparison();
+  const { observations } = await runCandidateCases(baseline);
+  assert.equal(observations.length, 13);
+  assert.ok(observations.every((item) => item.caseId.startsWith('vmc1-')));
+  const registry: unknown = JSON.parse(await readFile(new URL('../../docs/experiments/registry.json', import.meta.url), 'utf8'));
+  const coverage = coverageFor(registry, observations, 'VM-C1-semantic-prototype');
+  assert.equal(coverage.length, 5);
+  assert.equal(coverage.find((item) => item.experimentId === 'EX-03')?.coverage[0]?.coverage, 'not-covered');
+  await assert.rejects(runCandidateCases(observations), /requires baseline/);
+});
+
+test('candidate-only CLI binds observationsArtifact and retained baseline without rerunning it', async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), 'bim-forge-w1-candidate-'));
+  const baselinePath = path.join(parent, 'baseline.json');
+  const output = path.join(parent, 'run');
+  const { writeFile } = await import('node:fs/promises');
+  const baseline = await baselineForComparison();
+  const baselineBytes = JSON.stringify(baseline) + '\n';
+  await writeFile(baselinePath, baselineBytes);
+  const cli = fileURLToPath(new URL('./cli.ts', import.meta.url));
+  const execute = promisify(execFile);
+  const args = [cli, '--candidate-only', '--baseline-observations', baselinePath, '--artifacts', output];
+  try {
+    const executed = await execute(process.execPath, args, { maxBuffer: 4 * 1024 * 1024 });
+    const parsed: unknown = JSON.parse(executed.stdout);
+    const observations = parseObservations(parsed);
+    assert.equal(observations.length, 13);
+    assert.ok(observations.every((item) => item.caseId.startsWith('vmc1-')));
+    assert.equal(await readFile(path.join(output, 'baseline-reference.json'), 'utf8'), baselineBytes);
+    assert.deepEqual(JSON.parse(await readFile(path.join(output, 'observations.json'), 'utf8')), observations);
+    const manifest: unknown = JSON.parse(await readFile(path.join(output, 'manifest.json'), 'utf8'));
+    const ManifestSchema = Type.Object({ observationsArtifact: Type.Literal('observations.json'),
+      evidence: Type.Array(Type.Object({ path: Type.String(), bytes: Type.Integer(), sha256: Type.String() })) });
+    assert.ok(Check(ManifestSchema, manifest));
+    for (const artifact of manifest.evidence) {
+      const bytes = await readFile(path.join(output, artifact.path));
+      assert.equal(bytes.length, artifact.bytes);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), artifact.sha256);
+    }
+    await assert.rejects(execute(process.execPath, args), /EEXIST/);
+  } finally { await rm(parent, { recursive: true, force: true }); }
 });
 
 test('candidate command receipts preserve original payload and head across retries after subsequent edits', async () => {

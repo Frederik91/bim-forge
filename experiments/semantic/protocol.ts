@@ -3,7 +3,7 @@ import type { Observation } from '../contracts/schema.ts';
 export { ObservationSchema } from '../contracts/schema.ts';
 export type { Observation } from '../contracts/schema.ts';
 
-export const W0_CONTRACT_COMMIT = '19118447930f41218bc732466b55442e5d83adf5';
+export const W0_CONTRACT_COMMIT = '29583f735c1803872ace3fa663dcf6d7a145434a';
 export type ExperimentId = 'EX-01' | 'EX-03' | 'EX-04' | 'EX-05' | 'EX-06';
 export const EXPERIMENT_IDS: ExperimentId[] = ['EX-01', 'EX-03', 'EX-04', 'EX-05', 'EX-06'];
 
