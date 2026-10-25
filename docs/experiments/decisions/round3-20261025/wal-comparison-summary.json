@@ -1,0 +1,360 @@
+{
+  "samples": [
+    {
+      "runId": "r3-wal-a-1",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 101.164259,
+      "clientCpuSeconds": 45.780895,
+      "clientPeakBytes": 217079808,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 49.496300399,
+      "publicationSeconds": 29.941921969000003,
+      "analyzeSeconds": 0.29103961199999323,
+      "wal_bytes": 1007219087,
+      "wal_fpi": 25406,
+      "wal_records": 3455636,
+      "wal_sync": 1283,
+      "wal_sync_time": 11582.958,
+      "wal_write_time": 153.01000000000002,
+      "checkpoints_req": 1,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-b-1",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 97.281567,
+      "clientCpuSeconds": 45.110282,
+      "clientPeakBytes": 218394624,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 48.897743025,
+      "publicationSeconds": 26.237993666,
+      "analyzeSeconds": 0.30202070799999636,
+      "wal_bytes": 807632745,
+      "wal_fpi": 42,
+      "wal_records": 3469345,
+      "wal_sync": 1289,
+      "wal_sync_time": 12305.837,
+      "wal_write_time": 120.66299999999998,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-a-2",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 97.670752,
+      "clientCpuSeconds": 48.399657,
+      "clientPeakBytes": 213315584,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 49.419616374,
+      "publicationSeconds": 26.436200401999994,
+      "analyzeSeconds": 0.3031423630000063,
+      "wal_bytes": 897681306,
+      "wal_fpi": 11511,
+      "wal_records": 3469333,
+      "wal_sync": 1287,
+      "wal_sync_time": 8540.794000000002,
+      "wal_write_time": 165.495,
+      "checkpoints_req": 1,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-b-2",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 110.46475,
+      "clientCpuSeconds": 52.010162,
+      "clientPeakBytes": 214016000,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 59.163305225,
+      "publicationSeconds": 26.347060346999992,
+      "analyzeSeconds": 0.8138236100000067,
+      "wal_bytes": 806009522,
+      "wal_fpi": 41,
+      "wal_records": 3442149,
+      "wal_sync": 1279,
+      "wal_sync_time": 12122.495000000003,
+      "wal_write_time": 187.18299999999994,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-a-3",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 105.65944,
+      "clientCpuSeconds": 51.684758,
+      "clientPeakBytes": 227418112,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 54.244213247,
+      "publicationSeconds": 28.802683259000005,
+      "analyzeSeconds": 0.4179913689999958,
+      "wal_bytes": 884107193,
+      "wal_fpi": 9584,
+      "wal_records": 3494163,
+      "wal_sync": 1307,
+      "wal_sync_time": 7816.483,
+      "wal_write_time": 188.22900000000004,
+      "checkpoints_req": 1,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-b-3",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 92.148375,
+      "clientCpuSeconds": 44.925556,
+      "clientPeakBytes": 220491776,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 43.658008023,
+      "publicationSeconds": 26.605818235999998,
+      "analyzeSeconds": 0.30635881400000653,
+      "wal_bytes": 807555083,
+      "wal_fpi": 42,
+      "wal_records": 3468029,
+      "wal_sync": 1295,
+      "wal_sync_time": 7782.666000000005,
+      "wal_write_time": 286.26200000000006,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-a-4",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 118.942004,
+      "clientCpuSeconds": 48.099829,
+      "clientPeakBytes": 226422784,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 69.081347777,
+      "publicationSeconds": 27.792085869999994,
+      "analyzeSeconds": 0.2905042439999961,
+      "wal_bytes": 931791932,
+      "wal_fpi": 15879,
+      "wal_records": 3461624,
+      "wal_sync": 1272,
+      "wal_sync_time": 27710.777000000002,
+      "wal_write_time": 191.34800000000018,
+      "checkpoints_req": 1,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-b-4",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 93.608466,
+      "clientCpuSeconds": 44.741165,
+      "clientPeakBytes": 215207936,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 44.39652799,
+      "publicationSeconds": 26.675687719999996,
+      "analyzeSeconds": 0.584585963000005,
+      "wal_bytes": 808065672,
+      "wal_fpi": 43,
+      "wal_records": 3476697,
+      "wal_sync": 1294,
+      "wal_sync_time": 8814.029999999999,
+      "wal_write_time": 209.6099999999999,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-a-5",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 119.615634,
+      "clientCpuSeconds": 48.110476,
+      "clientPeakBytes": 221663232,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 66.041960152,
+      "publicationSeconds": 27.93248807200001,
+      "analyzeSeconds": 0.3843811790000036,
+      "wal_bytes": 937512772,
+      "wal_fpi": 16622,
+      "wal_records": 3461479,
+      "wal_sync": 1284,
+      "wal_sync_time": 25619.808999999994,
+      "wal_write_time": 236.27300000000014,
+      "checkpoints_req": 1,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-wal-b-5",
+      "passed": true,
+      "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "jobSeconds": 95.224923,
+      "clientCpuSeconds": 45.275039,
+      "clientPeakBytes": 230391808,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 44.239952471,
+      "publicationSeconds": 28.992473021000006,
+      "analyzeSeconds": 0.4461703959999868,
+      "wal_bytes": 808080342,
+      "wal_fpi": 44,
+      "wal_records": 3476841,
+      "wal_sync": 1311,
+      "wal_sync_time": 7934.633999999991,
+      "wal_write_time": 237.1389999999999,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    }
+  ],
+  "summary": {
+    "a": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 105.65944,
+        "range": [
+          97.670752,
+          119.615634
+        ]
+      },
+      "ingestSeconds": {
+        "median": 54.244213247,
+        "range": [
+          49.419616374,
+          69.081347777
+        ]
+      },
+      "publicationSeconds": {
+        "median": 27.93248807200001,
+        "range": [
+          26.436200401999994,
+          29.941921969000003
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 48.110476,
+        "range": [
+          45.780895,
+          51.684758
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 221663232,
+        "range": [
+          213315584,
+          227418112
+        ]
+      },
+      "wal_bytes": {
+        "median": 931791932,
+        "range": [
+          884107193,
+          1007219087
+        ]
+      },
+      "wal_sync": {
+        "median": 1284,
+        "range": [
+          1272,
+          1307
+        ]
+      },
+      "wal_sync_time": {
+        "median": 11582.958,
+        "range": [
+          7816.483,
+          27710.777000000002
+        ]
+      },
+      "checkpoints_req": {
+        "median": 1,
+        "range": [
+          1,
+          1
+        ]
+      }
+    },
+    "b": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 95.224923,
+        "range": [
+          92.148375,
+          110.46475
+        ]
+      },
+      "ingestSeconds": {
+        "median": 44.39652799,
+        "range": [
+          43.658008023,
+          59.163305225
+        ]
+      },
+      "publicationSeconds": {
+        "median": 26.605818235999998,
+        "range": [
+          26.237993666,
+          28.992473021000006
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 45.110282,
+        "range": [
+          44.741165,
+          52.010162
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 218394624,
+        "range": [
+          214016000,
+          230391808
+        ]
+      },
+      "wal_bytes": {
+        "median": 807632745,
+        "range": [
+          806009522,
+          808080342
+        ]
+      },
+      "wal_sync": {
+        "median": 1294,
+        "range": [
+          1279,
+          1311
+        ]
+      },
+      "wal_sync_time": {
+        "median": 8814.029999999999,
+        "range": [
+          7782.666000000005,
+          12305.837
+        ]
+      },
+      "checkpoints_req": {
+        "median": 0,
+        "range": [
+          0,
+          0
+        ]
+      }
+    }
+  }
+}

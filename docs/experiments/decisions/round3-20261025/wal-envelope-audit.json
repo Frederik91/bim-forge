@@ -1,0 +1,88 @@
+{
+  "at": "2026-10-25T18:20:19.679327+00:00",
+  "reviewedTerminalRecord": "checkpoint-comparison-20261025a",
+  "allPassed": true,
+  "scope": "Post-publication check of actual recorded boundaries; original terminal record remains unchanged. Sampled reserves are not continuous peak proof.",
+  "cases": [
+    {
+      "runId": "r3-wal-a-1",
+      "passed": true,
+      "elapsedSeconds": 101.164259,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-b-1",
+      "passed": true,
+      "elapsedSeconds": 97.281567,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-a-2",
+      "passed": true,
+      "elapsedSeconds": 97.670752,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-b-2",
+      "passed": true,
+      "elapsedSeconds": 110.46475,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-a-3",
+      "passed": true,
+      "elapsedSeconds": 105.65944,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-b-3",
+      "passed": true,
+      "elapsedSeconds": 92.148375,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-a-4",
+      "passed": true,
+      "elapsedSeconds": 118.942004,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-b-4",
+      "passed": true,
+      "elapsedSeconds": 93.608466,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-a-5",
+      "passed": true,
+      "elapsedSeconds": 119.615634,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    },
+    {
+      "runId": "r3-wal-b-5",
+      "passed": true,
+      "elapsedSeconds": 95.224923,
+      "freshBoundaryBudgetSamples": true,
+      "boundaryReservesPassed": true,
+      "stopMarkerObserved": false
+    }
+  ]
+}
