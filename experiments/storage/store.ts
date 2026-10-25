@@ -5,6 +5,7 @@ import type { Static, TSchema } from 'typebox';
 import { command, entity, hash, parse, EntitySchema, HashSchema, IdSchema, JsonSchema } from './contract.ts';
 import type { Command, Json, StoredEntity } from './contract.ts';
 import { PreparedEntity, versionBatch, versionInputSql, versionColumnsSql } from './prepared.ts';
+import { validateChangedReferences } from './reference-validation.ts';
 
 const HeadRow = Type.Object({ head: Type.Union([HashSchema, Type.Null()]) });
 const BodyRow = Type.Object({ body: EntitySchema, version_id: HashSchema });
@@ -181,7 +182,8 @@ export class Storage {
         SELECT $1,v.entity_id,v.version_id,v.kind,v.type_id,v.container_id,v.system_id,v.from_id,v.to_id
         FROM qvm_storage.changes c JOIN qvm_storage.versions v USING(version_id) WHERE c.revision_id=$2`,
         [proposal.branch, revisionId]);
-      await this.validateReferences(proposal.branch);
+      await validateChangedReferences(this.client, proposal.branch,
+        prepared.map((item) => item.entityId), proposal.deletes);
       await this.client.query(`UPDATE qvm_storage.branches SET head=$2 WHERE branch=$1`, [proposal.branch, revisionId]);
       await this.client.query(`INSERT INTO qvm_storage.receipts VALUES($1,$2,$3)`, [proposal.commandId, payloadHash, revisionId]);
       return { revisionId, replayed: false };

@@ -155,6 +155,31 @@ test('duplicate staged identities roll back every version in that batch', async 
   });
 });
 
+test('accept rejects incoming references on deletion and permits atomic retargeting', async () => {
+  await withStore(async (store, branch) => {
+    const target = object('target');
+    const source = entity({ ...object('source'), containerId: 'target' });
+    const first = await store.accept({ branch, commandId: `${branch}:seed`, expectedHead: null,
+      assumptions: [target, source].map((item) => ({ entityId: item.entityId, versionId: null })),
+      puts: [target, source], deletes: [] });
+    await assert.rejects(store.accept({ branch, commandId: `${branch}:bad-delete`, expectedHead: first.revisionId,
+      assumptions: [{ entityId: 'target', versionId: hash(target) }], puts: [], deletes: ['target'] }), /Dangling/);
+    assert.equal(await store.head(branch), first.revisionId);
+    assert.notEqual(await store.detail({ branch, entityId: 'target' }), null);
+    const receipts = await store.client.query('SELECT command_id FROM qvm_storage.receipts WHERE command_id=$1', [`${branch}:bad-delete`]);
+    assert.equal(receipts.rows.length, 0);
+    const next = object('next');
+    const moved = entity({ ...source, containerId: 'next' });
+    const accepted = await store.accept({ branch, commandId: `${branch}:retarget`, expectedHead: first.revisionId,
+      assumptions: [{ entityId: 'target', versionId: hash(target) }, { entityId: 'source', versionId: hash(source) },
+        { entityId: 'next', versionId: null }], puts: [next, moved], deletes: ['target'] });
+    assert.equal(await store.head(branch), accepted.revisionId);
+    assert.equal(await store.detail({ branch, entityId: 'target' }), null);
+    assert.deepEqual((await store.detail({ branch, entityId: 'source' }))?.entity, moved);
+    await store.validateReferences(branch);
+  });
+});
+
 test('W4 COPY decoder preserves typed properties, escaped content and independent bigint namespaces', () => {
   assert.equal(decodeCopyCell('\\N'), null);
   assert.equal(decodeCopyCell('\\\\N'), '\\N');
