@@ -83,6 +83,9 @@ A person's revision-bound request for model work, anchored to relevant entities,
 **Change session**:
 A group of related intentions and the proposals produced from them.
 
+**Request source**:
+An image or document supplied as immutable reference evidence for a change request and retained with its proposals. A source does not itself grant permission to change the model.
+
 **Review walk**:
 A time-ordered, spatial record of intentions captured while moving through a model.
 

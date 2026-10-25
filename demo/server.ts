@@ -129,6 +129,7 @@ export function createDemoServer({
 }: DemoServerOptions = {}): DemoServer {
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
   const backlog = new ChangeRequests(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
+  let sourceUploads = 0;
   const server = http.createServer(async (request, response) => {
     const allowedHost = /^127\.0\.0\.1(?::[0-9]{1,5})?$|^localhost(?::[0-9]{1,5})?$/;
     const requestHost = request.headers.host ?? '';
@@ -199,6 +200,9 @@ export function createDemoServer({
     }
     const sourceRoute = /^\/api\/projects\/([a-f0-9-]{36})\/sources\/([a-f0-9-]{36})$/.exec(request.url ?? '');
     if (sourceRoute) {
+      if (request.method === 'POST' && sourceUploads >= 2) { send(response, 429, { error: 'Two files are already uploading. Try again shortly.' }); return; }
+      const uploading = request.method === 'POST';
+      if (uploading) sourceUploads++;
       const controller = new AbortController();
       const abort = () => controller.abort();
       request.once('aborted', abort);
@@ -233,6 +237,7 @@ export function createDemoServer({
       } catch (error) {
         if (!controller.signal.aborted) send(response, request.method === 'GET' ? 404 : 400, { error: request.method === 'GET' ? 'Source file is unavailable in this project.' : error instanceof Error ? error.message : 'Source upload failed.' });
       } finally {
+        if (uploading) sourceUploads--;
         request.removeListener('aborted', abort); response.removeListener('close', disconnectedUpload);
       }
       return;
