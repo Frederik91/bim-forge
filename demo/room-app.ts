@@ -1,4 +1,6 @@
 import { createResidentialProject } from '../src/residential-floor.ts';
+import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
+import { levels, levelView, entityLevel, stairFootprint } from '../src/building-levels.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
@@ -8,7 +10,7 @@ import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 import type {
-  Door, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, Point, ProposalReview, RoomLayout, Wall, Window,
+  Door, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, ModelGraph, Point, ProposalReview, RoomLayout, Wall, Window,
 } from '../src/room-model.ts';
 import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pilot.ts';
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
@@ -25,6 +27,8 @@ type ModelView = 'plan' | '3d';
 type ChangesTab = '3d' | 'properties';
 type ReviewState = 'pending' | 'accepted' | 'superseded' | 'declined';
 let focusedRoomId: string | null = null;
+let activeLevelId: string | null = null;
+let roofVisible = false;
 
 type BoundSide = 'minX' | 'maxX' | 'minY' | 'maxY';
 type GestureOperation = 'wall' | 'door-move' | 'door-width';
@@ -146,6 +150,8 @@ const ui = {
   'create-project': button('create-project'),
   'load-sample': button('load-sample'),
   'project-template': select('project-template'), 'room-focus': select('room-focus'),
+  'level-focus': select('level-focus'), 'show-roof': input('show-roof'), 'whole-building': button('whole-building'),
+  'reconstruction-scope': select('reconstruction-scope'),
   'proposal-form': requiredElement('proposal-form', HTMLFormElement),
   'door-width': input('door-width'),
   'proposal-name': input('proposal-name'),
@@ -287,7 +293,7 @@ const sourcePicker = new RequestSourcePicker({ input: ui['request-source-files']
 ui['request-reconstruct'].addEventListener('change', updateControls);
 
 function clearRequestSources(): void {
-  ui['request-reconstruct'].checked = false; submission = null; sourcePicker.clear();
+  ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear();
 }
 
 function requestDirty(): boolean {
@@ -444,7 +450,7 @@ function showPage(name: PageName): void {
     item.page.hidden = item.name !== name;
     item.navigation.setAttribute('aria-pressed', String(item.name === name || name === 'activity' && item.name === 'backlog'));
   }
-  if (repo) renderComparison();
+  if (repo) { renderComparison(); if (name === 'project') renderProjectOverview(); }
   requiredElement('workbench', HTMLElement).focus({ preventScroll: true });
 }
 
@@ -598,6 +604,10 @@ function updateControls() {
   ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
   sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository));
   ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository);
+  ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
+  ui['level-focus'].disabled = busy || dragging || !repo;
+  ui['whole-building'].disabled = busy || dragging || !repo;
+  ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
   ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready;
   ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
   ui['auth-menu'].disabled = authBusy;
@@ -678,7 +688,7 @@ function syncInspector() {
   if (!layout || !preview || !object || (!isDoor && !isWall)) {
     for (const dimensionInput of dimensionInputs) dimensionInput.value = '';
     ui['selection-help'].textContent = preview && spaces(preview).length
-      ? 'Room selection frames context, not permission to change its contents. Ask for furniture changes within or between rooms. Shared shell editing is not supported in this slice.'
+      ? 'Selection gives the AI context. Describe changes within or between rooms and storeys. Enable layout reconstruction to propose walls, stairs or a roof.'
       : layout && object
       ? 'Describe the change you want below. AI can reposition or replace furnishings in a separate proposal; selection never edits the model directly.'
       : 'This saved revision is view-only. Its geometry and changed properties remain available below.';
@@ -776,7 +786,7 @@ async function persist(next: RoomRepository, branch = 'main'): Promise<void> {
   generation = nextGeneration;
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
-  if (projectChanged) { backlogItems = []; serverProjectText = null; revisionTicketId = null; submission = null; }
+  if (projectChanged) { backlogItems = []; serverProjectText = null; revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; }
   repo = next;
   reviewRepository = null;
   activeTicketId = null;
@@ -800,7 +810,8 @@ async function createProject(name: string): Promise<void> {
   writableStore();
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
-  const next = ui['project-template'].value === 'residential' ? await createResidentialProject(name) : await RoomRepository.create(name);
+  const next = ui['project-template'].value === 'house' ? await createMultiStoreyProject(name)
+    : ui['project-template'].value === 'residential' ? await createResidentialProject(name) : await RoomRepository.create(name);
   focusedRoomId = null;
   activeReview = null;
   housePilotFixture = null;
@@ -849,10 +860,11 @@ for (const tab of ['3d', 'properties'] satisfies ChangesTab[]) button(`changes-$
 });
 button('review-delta').addEventListener('click', () => { reviewDelta = !reviewDelta; modelView = '3d'; renderComparison(); });
 ui['project-overview'].addEventListener('click', () => showPage('project'));
-button('explore-floor').addEventListener('click', () => { void perform(async () => { if (await beginRequest()) focusRoom(null); }); });
+button('explore-floor').addEventListener('click', () => openRoomRequest(null));
 ui['open-room'].addEventListener('click', () => {
+  if (preview && levels(preview).length > 1) { activeLevelId = null; focusedRoomId = null; modelView = '3d'; }
   showPage('request');
-  status(`Reference room opened at revision ${selectedRevision.slice(0, 10)}. Plan and 3D share the same selection.`);
+  status(`Model opened at revision ${selectedRevision.slice(0, 10)}. Plan and 3D share the same selection.`);
 });
 async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
@@ -862,6 +874,17 @@ async function beginRequest(): Promise<boolean> {
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   resetEditor(); render(); showPage('request');
   return true;
+}
+function openRoomRequest(roomId: string | null): void {
+  if (busy) return;
+  void perform(async () => {
+    if (!await beginRequest()) return;
+    const room = preview ? spaces(preview).find(item => item.id === roomId) : undefined;
+    if (room) activeLevelId = room.levelId;
+    focusedRoomId = room?.id ?? null;
+    selectedObject = room?.id ?? activeLevelId ?? selectedObject;
+    renderComparison(); syncInspector();
+  });
 }
 ui['nav-request'].addEventListener('click', () => { void perform(async () => { await beginRequest(); }); });
 for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
@@ -900,7 +923,7 @@ for (const prefix of ['', 'review-', 'delta-']) {
   for (const mode of ['basic', 'realistic'] satisfies RenderingMode[]) button(`${prefix}render-${mode}`).addEventListener('click', () => {
     renderingMode = mode; if (repo) renderComparison();
   });
-  button(`${prefix}cutaway`).addEventListener('click', () => { cutaway = !cutaway; if (repo) renderComparison(); });
+  button(`${prefix}cutaway`).addEventListener('click', () => { cutaway = !cutaway; if (cutaway) roofVisible = false; if (repo) renderComparison(); });
 }
 window.addEventListener('pagehide', () => { sourcePicker.releasePreviews(); modelViewer?.dispose(); modelViewer = null; });
 window.addEventListener('pageshow', (event) => { if (event.persisted && repo) renderComparison(); });
@@ -1017,12 +1040,14 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const instruction = ui['request-text'].value.trim();
     if (!instruction || instruction.length > 1000) throw new Error('Describe the outcome in 1 to 1000 characters.');
     const sources = sourcePicker.sources;
+    const contextLevelId = activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null;
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: selectedRevision,
-      selectedObjectIds: focusedRoomId && selectedObject !== focusedRoomId ? [selectedObject, focusedRoomId] : [selectedObject], instruction, visualIntent,
+      selectedObjectIds: [...new Set([selectedObject, ...(focusedRoomId ? [focusedRoomId] : []),
+        ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
-      ...(ui['request-reconstruct'].checked ? { authoringScope: 'floor-plan-reconstruction' } : {}) } };
+      ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
     const fingerprint = JSON.stringify(content);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
     const response = await fetch(revisionTicketId ? `/api/change-requests/${encodeURIComponent(revisionTicketId)}/revision` : '/api/change-requests', {
@@ -1235,7 +1260,8 @@ async function reviseTicket(item: BacklogItem): Promise<void> {
   await persist(next);
   activeReview = null; revisionTicketId = item.id;
   sourcePicker.restore(next.projectId, originalSources.sources ?? []);
-  ui['request-reconstruct'].checked = originalSources.authoringScope === 'floor-plan-reconstruction';
+  ui['request-reconstruct'].checked = Boolean(originalSources.authoringScope);
+  ui['reconstruction-scope'].value = originalSources.authoringScope ?? 'floor-plan-reconstruction';
   const firstSelected = Array.isArray(originalRequest.selectedObjectIds) ? originalRequest.selectedObjectIds[0] : null;
   if (typeof firstSelected === 'string' && next.view(next.head('main')).snapshot.entities.some((entity) => entity.id === firstSelected)) selectedObject = firstSelected;
   resetEditor();
@@ -1357,10 +1383,10 @@ function isWall(entity: Entity): entity is Wall { return entity.type === 'Wall';
 function isDoor(entity: Entity): entity is Door { return entity.type === 'Door'; }
 function isWindow(entity: Entity): entity is Window { return entity.type === 'Window'; }
 function isEquipment(entity: Entity): entity is Equipment { return entity.type === 'Equipment'; }
-function entry(snapshot: ModelSnapshot): Door | undefined {
+function entry(snapshot: ModelGraph): Door | undefined {
   return snapshot.entities.find((entity): entity is Door => entity.type === 'Door' && entity.id === 'door-entry');
 }
-function hostFor(snapshot: ModelSnapshot, opening: Door | Window | undefined): { link: HostingRelationship; wall: Wall } | null {
+function hostFor(snapshot: ModelGraph, opening: Door | Window | undefined): { link: HostingRelationship; wall: Wall } | null {
   if (!opening) return null;
   const link = snapshot.relationships.find((relation): relation is HostingRelationship => relation.type === 'hosted-by' && relation.source === opening.id);
   const wall = link && snapshot.entities.find((entity): entity is Wall => entity.id === link.target && entity.type === 'Wall');
@@ -1376,10 +1402,18 @@ function svgNode<K extends keyof SVGElementTagNameMap>(tag: K, attributes: SvgAt
   return node;
 }
 
-function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, identifier: string, label: string): SVGSVGElement {
+function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, identifier: string, label: string): SVGSVGElement {
+  const available = levels(fullSnapshot);
+  const chosen = available.find(item => item.id === activeLevelId) ?? available.find(item => item.elevation === 0) ?? available[0];
+  const snapshot = chosen ? levelView(fullSnapshot, chosen.id) : fullSnapshot;
+  const oldLevel = fullReference && chosen ? levels(fullReference).find(item => item.id === chosen.id) : null;
+  const reference = !fullReference ? null : oldLevel ? levelView(fullReference, oldLevel.id)
+    : !chosen || chosen.elevation === 0 && levels(fullReference).length <= 1 ? fullReference
+    : { units: 'm', entities: [], relationships: [] } satisfies ModelGraph;
   const interactive = identifier === 'selected';
   const editable = interactive && Boolean(layout) && !spaces(snapshot).length;
   const svg = svgNode('svg', { viewBox: '0 0 600 400', role: interactive ? 'group' : 'img', 'aria-labelledby': `${identifier}-title ${identifier}-desc` });
+  if (chosen) svg.dataset.levelId = chosen.id;
   const door = entry(snapshot);
   svg.append(svgNode('title', { id: `${identifier}-title` }, label));
   svg.append(svgNode('desc', { id: `${identifier}-desc` }, `Top-down room plan. ${door ? `Entry door width ${millimetres(door.width)} millimetres.` : 'Entry door absent.'} ${reference ? 'Dashed grey outlines show the comparison revision. Teal shows the selected revision.' : 'The original room is preserved.'}`));
@@ -1431,7 +1465,7 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
     svg.append(line(wall.start, wall.end, { stroke: '#87979b', 'stroke-width': 1.3, 'stroke-dasharray': '5 4', class: 'selection-outline' }));
   }
 
-  function drawDoors(room: ModelSnapshot, ghost = false): void {
+  function drawDoors(room: ModelGraph, ghost = false): void {
     for (const item of room.entities.filter(isDoor)) {
       const host = hostFor(room, item);
       if (!host) continue;
@@ -1505,7 +1539,7 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
     }));
   }
 
-  const ownCoordinates = walls.flatMap((wall) => [wall.start, wall.end]);
+  const ownCoordinates = (walls.length ? walls : allWalls).flatMap((wall) => [wall.start, wall.end]);
   const ownMinX = Math.min(...ownCoordinates.map(([x]) => x)); const ownMaxX = Math.max(...ownCoordinates.map(([x]) => x));
   const ownMinY = Math.min(...ownCoordinates.map(([, y]) => y)); const ownMaxY = Math.max(...ownCoordinates.map(([, y]) => y));
   const [left, top] = transform([ownMinX, ownMaxY]);
@@ -1535,6 +1569,33 @@ function drawPlan(snapshot: ModelSnapshot, reference: ModelSnapshot | null, iden
     svg.append(svgNode('text', { x, y: y + 11, fill: '#536f66', 'font-size': 8, 'text-anchor': 'middle',
       'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3, 'pointer-events': 'none' },
       `${number.format((b.maxX - b.minX) * (b.maxY - b.minY))} m²`));
+  }
+  for (const stair of snapshot.entities.filter(item => item.type === 'Stair')) {
+    const b = stairFootprint(stair); const [x, y] = transform([b.minX, b.maxY]);
+    const group = svgNode('g', { 'data-object': stair.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
+      'aria-label': `Select ${stair.name}`, class: interactive ? 'edit-target' : '' });
+    group.append(svgNode('rect', { x, y, width: (b.maxX - b.minX) * scale, height: (b.maxY - b.minY) * scale,
+      fill: '#e2efec', stroke: stair.id === selectedObject ? '#e1a12e' : '#487e75', 'stroke-width': 1.5 }));
+    const horizontal = stair.start[0] !== stair.end[0];
+    for (let step = 1; step < stair.steps; step++) {
+      const t = step / stair.steps;
+      const at = horizontal ? stair.start[0] + (stair.end[0] - stair.start[0]) * t : stair.start[1] + (stair.end[1] - stair.start[1]) * t;
+      group.append(line(horizontal ? [at, b.minY] : [b.minX, at], horizontal ? [at, b.maxY] : [b.maxX, at], { stroke: '#8aa9a1', 'stroke-width': .65 }));
+    }
+    const targetId = chosen?.id === stair.toLevelId ? stair.fromLevelId : stair.toLevelId;
+    const target = levels(fullSnapshot).find(item => item.id === targetId);
+    const [tx, ty] = transform([(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2]);
+    group.append(svgNode('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 8, fill: '#24594f', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 2 },
+      `${chosen?.id === stair.toLevelId ? '↓' : '↑'} ${target?.name ?? 'Stairs'}`));
+    svg.append(group);
+  }
+  if (roofVisible) for (const roof of snapshot.entities.filter(item => item.type === 'Roof')) {
+    const b = roof.bounds;
+    const outline: Point[] = [[b.minX, b.minY], [b.maxX, b.minY], [b.maxX, b.maxY], [b.minX, b.maxY], [b.minX, b.minY]];
+    svg.append(svgNode('polyline', { points: points(outline), fill: 'none', stroke: '#8b6970', 'stroke-width': 1.2, 'stroke-dasharray': '5 4', 'data-object': roof.id,
+      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${roof.name}` }));
+    if (roof.profile.kind === 'gable') svg.append(line(roof.profile.ridgeAxis === 'x' ? [b.minX, (b.minY + b.maxY) / 2] : [(b.minX + b.maxX) / 2, b.minY],
+      roof.profile.ridgeAxis === 'x' ? [b.maxX, (b.minY + b.maxY) / 2] : [(b.minX + b.maxX) / 2, b.maxY], { stroke: '#8b6970', 'stroke-width': 1, 'stroke-dasharray': '6 3' }));
   }
   svg.append(svgNode('path', { d: 'M552 350 V325 M548 333 L552 325 L556 333', stroke: '#8ba096', 'stroke-width': 1, fill: 'none' }));
   svg.append(svgNode('text', { x: 552, y: 365, 'text-anchor': 'middle', fill: '#83968c', 'font-size': 8 }, 'Y'));
@@ -1606,10 +1667,12 @@ function renderVisualPanel(): void {
   ui['visual-panel'].hidden = !selected;
   if (!selected || !preview) return;
   ui['visual-context'].textContent = `Reference: ${selected.name}. A location does not imply moving this object or its neighbours. Describe what to create, move or copy.`;
-  ui['visual-wall'].replaceChildren(new Option('Optional wall reference', ''), ...preview.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
+  const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
+  ui['visual-wall'].replaceChildren(new Option('Optional wall reference', ''), ...view.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
   ui['visual-wall'].value = visualDraft?.kind === 'wall-point' ? visualDraft.wallId : '';
   const locked = busy || Boolean(visualGesture);
   for (const control of [ui['visual-wall'], ui['visual-x'], ui['visual-y'], ui['mark-visual-point']]) control.disabled = locked;
+  ui['mark-visual-point'].disabled ||= preview.version === 2 && !activeLevelId;
   ui['clear-visual-reference'].disabled = locked || !visualDraft;
   ui['describe-visual-reference'].disabled = locked || !visualDraft;
   if (visualDraft?.kind === 'floor-point') {
@@ -1625,6 +1688,11 @@ function stageVisualReference(destination: SpatialReference): void {
   const parsed = parseVisualRequest(preview, { kind: 'spatial-reference', destination });
   if (parsed.kind === 'spatial-reference') visualDraft = parsed.destination;
 }
+function floorReference(positionMm: Point): SpatialReference {
+  if (preview?.version !== 2) return { kind: 'floor-point', positionMm };
+  if (!activeLevelId) throw new Error('Choose a level before marking an XY floor location.');
+  return { kind: 'floor-point', positionMm, levelId: activeLevelId };
+}
 ui['visual-wall'].addEventListener('change', () => {
   const wall = preview?.entities.find((item) => item.id === ui['visual-wall'].value);
   if (busy || wall?.type !== 'Wall') return;
@@ -1633,33 +1701,34 @@ ui['visual-wall'].addEventListener('change', () => {
 });
 ui['mark-visual-point'].addEventListener('click', () => {
   try {
-    stageVisualReference({ kind: 'floor-point', positionMm: [ui['visual-x'].valueAsNumber, ui['visual-y'].valueAsNumber] });
+    stageVisualReference(floorReference([ui['visual-x'].valueAsNumber, ui['visual-y'].valueAsNumber]));
     renderComparison(); updateControls();
   } catch (error) { report(error); }
 });
 ui['clear-visual-reference'].addEventListener('click', () => { visualDraft = null; renderComparison(); updateControls(); });
 ui['describe-visual-reference'].addEventListener('click', () => { showRequestPane('details'); ui['request-text'].focus(); });
 
-function objectAnchor(item: Entity, snapshot: ModelSnapshot): Point {
+function objectAnchor(item: Entity, snapshot: ModelGraph): Point {
   if (item.type === 'Furniture' || item.type === 'Equipment') return item.position;
-  if (item.type === 'Space' || item.type === 'Level') {
-    const b = item.type === 'Space' ? item.bounds : floorBounds(snapshot);
+  if (item.type === 'Space' || item.type === 'Level' || item.type === 'Slab' || item.type === 'Roof') {
+    const b = item.type === 'Level' ? floorBounds(levelView(snapshot, item.id)) : item.bounds;
     return [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2];
   }
   if (item.type === 'Wall') return [(item.start[0] + item.end[0]) / 2, (item.start[1] + item.end[1]) / 2];
+  if (item.type === 'Stair') return [(item.start[0] + item.end[0]) / 2, (item.start[1] + item.end[1]) / 2];
   const host = hostFor(snapshot, item);
   if (!host) return [0, 0];
   const t = (host.link.offset + item.width / 2) / Math.hypot(host.wall.end[0] - host.wall.start[0], host.wall.end[1] - host.wall.start[1]);
   return [host.wall.start[0] + (host.wall.end[0] - host.wall.start[0]) * t, host.wall.start[1] + (host.wall.end[1] - host.wall.start[1]) * t];
 }
-function referencePoint(reference: SpatialReference, snapshot: ModelSnapshot): Point {
+function referencePoint(reference: SpatialReference, snapshot: ModelGraph): Point {
   if (reference.kind === 'floor-point') return [reference.positionMm[0] / 1000, reference.positionMm[1] / 1000];
   const wall = snapshot.entities.find((item) => item.id === reference.wallId);
   if (wall?.type !== 'Wall') throw new Error('Missing referenced wall.');
   const t = reference.alongWallMm / (Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000);
   return [wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t];
 }
-function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelSnapshot, project: (point: Point) => Point): void {
+function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (point: Point) => Point): void {
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
   if (!selected || writesBlocked || busy) return;
   const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
@@ -1683,10 +1752,11 @@ function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference 
   const matrix = root.getScreenCTM(); const plan = planCameras.get(root);
   if (!matrix || !plan) return null;
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-  const bounds = boundsMm(floorBounds(preview));
+  const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
+  const bounds = boundsMm(floorBounds(view));
   const project = ([x, y]: Point): Point => [300 + (x - (plan.minX + plan.maxX) / 2) * plan.scale, 193 - (y - (plan.minY + plan.maxY) / 2) * plan.scale];
   let best: { wallId: string; alongWallMm: number; distance: number } | null = null;
-  for (const wall of preview.entities.filter(isWall)) {
+  for (const wall of view.entities.filter(isWall)) {
     const a = project(wall.start); const b = project(wall.end); const dx = b[0] - a[0]; const dy = b[1] - a[1];
     const t = Math.max(0, Math.min(1, ((point.x - a[0]) * dx + (point.y - a[1]) * dy) / (dx * dx + dy * dy)));
     const distance = Math.hypot(point.x - a[0] - dx * t, point.y - a[1] - dy * t);
@@ -1696,7 +1766,7 @@ function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference 
   const world = pointerPlan(event, root, plan);
   const positionMm: Point = [Math.round(world[0] * 1000), Math.round(world[1] * 1000)];
   if (positionMm[0] < bounds.minX || positionMm[0] > bounds.maxX || positionMm[1] < bounds.minY || positionMm[1] > bounds.maxY) return null;
-  return { kind: 'floor-point', positionMm };
+  return floorReference(positionMm);
 }
 
 function endVisualGesture(cancel: boolean): void {
@@ -1813,21 +1883,7 @@ type ModelItem = Entity | HostingRelationship;
 type PropertyRow = [string, string, string, string];
 
 function modelProperties(item: ModelItem): Record<string, unknown> {
-  if (item.type === 'Wall') {
-    return { id: item.id, type: item.type, name: item.name, start: item.start, end: item.end, height: item.height, thickness: item.thickness };
-  }
-  if (item.type === 'Door') {
-    return { id: item.id, type: item.type, name: item.name, width: item.width, height: item.height };
-  }
-  if (item.type === 'Window') {
-    return { id: item.id, type: item.type, name: item.name, width: item.width, height: item.height, sillHeight: item.sillHeight };
-  }
-  if (item.type === 'Equipment') {
-    return { id: item.id, type: item.type, name: item.name, category: item.category, position: item.position,
-      elevation: item.elevation, width: item.width, depth: item.depth, height: item.height };
-  }
-  if (item.type === 'Furniture' || item.type === 'Space' || item.type === 'Level') return { ...item };
-  return { id: item.id, type: item.type, source: item.source, target: item.target, offset: item.offset };
+  return { ...item };
 }
 
 function renderProperties(original: ModelSnapshot, selected: ModelSnapshot, delta: ModelDelta, baseline = 'Original'): void {
@@ -1991,20 +2047,52 @@ function focusRoom(id: string | null): void {
   if (visualDraft) { status('Clear or submit the current location marker before changing room context.'); return; }
   focusedRoomId = id;
   const room = spaces(preview).find((item) => item.id === id);
-  if (room) selectedObject = room.id;
-  else selectedObject = preview.entities.find((item) => item.type === 'Level')?.id ?? selectedObject;
+  if (room) { selectedObject = room.id; activeLevelId = room.levelId; }
+  else selectedObject = activeLevelId ?? selectedObject;
   syncInspector(); renderComparison(); updateControls();
 }
 function renderRoomNavigation(snapshot: ModelSnapshot): void {
-  const rooms = spaces(snapshot);
+  const storeys = levels(snapshot);
+  const needsPlan = modelView === 'plan' || currentPage === 'project';
+  if (activeLevelId && !storeys.some(level => level.id === activeLevelId)) activeLevelId = null;
+  if (!activeLevelId && needsPlan && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
+  const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
+  const rooms = spaces(view);
+  generic('level-navigation').hidden = !storeys.length || !['project', 'request', 'review'].includes(currentPage);
+  const all = new Option('All storeys · 3D', ''); all.disabled = needsPlan;
+  ui['level-focus'].replaceChildren(all, ...storeys.map(level => new Option(`${level.name} · ${number.format(level.elevation)} m`, level.id)));
+  ui['level-focus'].value = activeLevelId ?? '';
+  ui['show-roof'].checked = roofVisible;
+  generic('level-context').textContent = activeLevelId ? `Viewing ${storeys.find(level => level.id === activeLevelId)?.name ?? 'level'}. Requests keep this level as context.`
+    : 'Whole building in 3D. Pick a level to isolate its plan and contents.';
+  const objects = view.entities;
+  ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
+  if (!objects.some(item => item.id === selectedObject)) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
+  ui['selected-object'].value = selectedObject;
   if (!rooms.some((room) => room.id === focusedRoomId)) focusedRoomId = null;
   generic('room-navigation').hidden = !rooms.length;
-  ui['room-focus'].replaceChildren(new Option('Whole ground floor', ''), ...rooms.map((room) => new Option(room.name, room.id)));
+  ui['room-focus'].replaceChildren(new Option(activeLevelId ? 'Whole level' : 'Whole building', ''), ...rooms.map((room) => new Option(
+    activeLevelId ? room.name : `${entityLevel(snapshot, room)?.name ?? ''} · ${room.name}`, room.id)));
   ui['room-focus'].value = focusedRoomId ?? '';
   generic('room-context').textContent = focusedRoomId
     ? 'Room focus frames the camera and accompanies your request. Adjacent rooms remain part of the shared model.'
-    : 'One connected level · shared walls and doorways · room areas use wall centre lines.';
+    : 'Shared model · rooms stay tied to their level · room areas use wall centre lines.';
 }
+
+ui['level-focus'].addEventListener('change', () => {
+  if (!preview || busy || gesture || visualGesture) return;
+  if (visualDraft) { status('Clear the current location marker before changing level context.'); ui['level-focus'].value = activeLevelId ?? ''; return; }
+  activeLevelId = ui['level-focus'].value || null; focusedRoomId = null;
+  if (!activeLevelId) modelView = '3d';
+  else selectedObject = activeLevelId;
+  renderComparison(); if (currentPage === 'project') renderProjectOverview(); syncInspector(); updateControls();
+});
+ui['whole-building'].addEventListener('click', () => {
+  if (!repo || busy || gesture || visualGesture) return;
+  if (visualDraft) { status('Clear the current location marker before changing level context.'); return; }
+  activeLevelId = null; focusedRoomId = null; modelView = '3d'; showPage('request'); updateControls();
+});
+ui['show-roof'].addEventListener('change', () => { roofVisible = ui['show-roof'].checked; if (roofVisible) cutaway = false; if (repo) renderComparison(); });
 ui['room-focus'].addEventListener('change', () => focusRoom(ui['room-focus'].value || null));
 button('whole-floor').addEventListener('click', () => focusRoom(null));
 
@@ -2027,7 +2115,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => ui['visual-wall'].focus(),
     });
-    modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway,
+    modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
       interactive: !comparison && currentPage === 'request' && !busy && !writesBlocked, reference: currentPage === 'request' ? visualDraft : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
@@ -2085,9 +2173,9 @@ function renderComparison(): void {
   button('changes-3d-tab').setAttribute('aria-pressed', String(changesTab === '3d'));
   button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
   renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
-  ui['selected-title'].textContent = spaces(selected).length && currentPage === 'request' ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? 'Ground floor' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
+  ui['selected-title'].textContent = spaces(selected).length && currentPage === 'request' ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
-  ui['study-caption'].textContent = spaces(selected).length ? 'Explore the floor or focus a room. All views share one revision; requests stay in the backlog for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
+  ui['study-caption'].textContent = spaces(selected).length ? 'Choose a storey for its plan, or explore the whole building in 3D. Select an object and describe a change for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), review ? `Proposal base ${review.baseRevisionId.slice(0, 10)}` : 'Original');
 }
 
@@ -2100,22 +2188,26 @@ function renderProjectOverview(): void {
   generic('overview-model-heading').textContent = project.name;
   generic('overview-description').textContent = housePilotFixture ? 'Measurements and evidence connected to the captured building.' : 'An AI-authored concept model with versioned proposals and human review.';
   const rooms = spaces(revision.snapshot);
-  generic('space-card-heading').textContent = rooms.length ? 'Ground floor' : housePilotFixture ? 'Reference room' : 'Room model';
+  const storeys = levels(revision.snapshot);
+  const selectedLevel = storeys.find(level => level.id === activeLevelId) ?? storeys.find(level => level.elevation === 0) ?? storeys[0];
+  const visibleRooms = selectedLevel ? rooms.filter(room => room.levelId === selectedLevel.id) : rooms;
+  generic('space-card-heading').textContent = storeys.length > 1 ? 'Whole building' : rooms.length ? selectedLevel?.name ?? 'Floor model' : housePilotFixture ? 'Reference room' : 'Room model';
   generic('space-description').textContent = `${revision.snapshot.entities.filter((item) => item.type === 'Furniture').length} furnishings · synchronized plan and 3D views of the accepted revision.`;
   generic('overview-phase').textContent = housePilotFixture ? 'Existing conditions' : 'Concept design';
-  generic('overview-scope').textContent = rooms.length ? `1 level · ${rooms.length} rooms` : housePilotFixture ? 'Reference room' : 'Room model';
-  ui['open-room'].textContent = rooms.length ? 'Explore ground floor →' : 'Open room model →';
+  generic('overview-scope').textContent = rooms.length ? `${storeys.length} ${storeys.length === 1 ? 'storey' : 'storeys'} · ${rooms.length} rooms` : housePilotFixture ? 'Reference room' : 'Room model';
+  ui['open-room'].textContent = storeys.length > 1 ? 'Explore building in 3D →' : 'Open model →';
+  generic('overview-level-label').textContent = `${selectedLevel?.name ?? 'Floor'} · CONCEPT PLAN`;
   generic('floor-overview').hidden = !rooms.length;
   document.querySelector('.overview-grid')?.classList.toggle('has-floor', rooms.length > 0);
-  generic('floor-overview-plan').replaceChildren(...(rooms.length ? [drawPlan(revision.snapshot, null, 'floor-overview', 'Ground floor room overview')] : []));
+  generic('floor-overview-plan').replaceChildren(...(rooms.length ? [drawPlan(revision.snapshot, null, 'floor-overview', `${selectedLevel?.name ?? 'Floor'} room overview`)] : []));
   const connections = rooms.length ? doorConnections(revision.snapshot) : [];
-  generic('room-directory').replaceChildren(...rooms.map((room) => {
+  generic('room-directory').replaceChildren(...visibleRooms.map((room) => {
     const card = element('button', undefined, 'room-card'); card.type = 'button'; card.dataset.room = room.id;
     const b = room.bounds; const count = revision.snapshot.entities.filter((item) => entitySpace(revision.snapshot, item)?.id === room.id && item.type !== 'Space').length;
     const links = connections.filter((link) => link.roomIds.includes(room.id));
     card.append(element('strong', room.name), element('span', `${number.format((b.maxX - b.minX) * (b.maxY - b.minY))} m² · ${count} ${count === 1 ? 'furnishing' : 'furnishings'}`),
-      element('small', links.some((link) => link.exterior) ? 'Entrance to the house' : 'Connected through the hallway'));
-    card.addEventListener('click', () => { void perform(async () => { if (await beginRequest()) focusRoom(room.id); }); });
+      element('small', links.some((link) => link.exterior) ? 'Entrance to the house' : `${selectedLevel?.name ?? 'Floor'} · connected room`));
+    card.addEventListener('click', () => openRoomRequest(room.id));
     return card;
   }));
 }
@@ -2161,7 +2253,7 @@ ui['check-conflicts'].addEventListener('click', () => {
           if (value.type === 'Door') return `${millimetres(value.width)} mm door`;
           if (value.type === 'Wall') return value.name;
           if (value.type === 'Window') return `${millimetres(value.width)} mm window`;
-          if (value.type === 'Equipment' || value.type === 'Furniture' || value.type === 'Space' || value.type === 'Level') return value.name;
+          if ('name' in value) return value.name;
           return `placement on ${value.target}`;
         };
         ui['conflict-result'].append(document.createTextNode(`${conflict.id}: original ${describe(conflict.base)}; ${left}: ${describe(conflict.left)}; ${right}: ${describe(conflict.right)}. `));

@@ -42,6 +42,12 @@
         <button id="recover-save" type="button" class="text-button" hidden>Download unreadable saved data</button>
       </div>
 
+      <nav id="level-navigation" class="level-navigation" aria-label="Building storeys" hidden>
+        <div><label for="level-focus">Storey</label><select id="level-focus"></select></div>
+        <button id="whole-building" class="button outline" type="button">Whole building · 3D</button>
+        <label class="roof-toggle" for="show-roof"><input id="show-roof" type="checkbox"> Show roof</label><p id="level-context"></p>
+      </nav>
+
       <section id="project-page" class="workflow-page project-overview" aria-labelledby="project-page-heading" hidden>
         <header class="page-heading">
           <div><p class="eyebrow" id="overview-project-label">PROJECT OVERVIEW</p><h1 id="project-page-heading">One building, one source of truth.</h1><p>Move from the whole project into each room and keep every view tied to the same saved revision.</p></div>
@@ -60,7 +66,7 @@
           </section>
         </div>
         <section id="floor-overview" class="floor-overview" aria-labelledby="floor-heading" hidden>
-          <div class="drawing-card"><header class="card-heading"><div><span class="card-kicker">LEVEL 00 · CONCEPT PLAN</span><h2 id="floor-heading">Find your way around</h2></div><button id="explore-floor" class="button primary" type="button">Explore whole floor →</button></header><div id="floor-overview-plan" class="drawing-surface"></div><footer>Shared walls · connected doorways · room areas measured to wall centre lines</footer></div>
+          <div class="drawing-card"><header class="card-heading"><div><span id="overview-level-label" class="card-kicker">CONCEPT PLAN</span><h2 id="floor-heading">Find your way around</h2></div><button id="explore-floor" class="button primary" type="button">Explore this storey →</button></header><div id="floor-overview-plan" class="drawing-surface"></div><footer>Shared walls · connected doorways · room areas measured to wall centre lines</footer></div>
           <div><p class="eyebrow">JUMP TO A ROOM</p><div id="room-directory" class="room-directory"></div><p class="editor-help">Starter dimensions and furnishings are illustrative. This is not a surveyed house or a construction-ready plan.</p></div>
         </section>
       </section>
@@ -77,7 +83,7 @@
           </div>
           <section id="request-canvas-pane" class="drawing-card proposal-card request-pane" data-active="true" aria-labelledby="selected-title">
             <header class="card-heading model-card-heading"><div><span class="card-kicker">SYNCHRONIZED MODEL VIEW</span><h2 id="selected-title">Room awaiting a request</h2><small id="model-revision">Revision —</small></div><div class="view-switch" role="group" aria-label="Model view"><button id="view-plan" type="button" aria-pressed="true">Plan</button><button id="view-3d" type="button" aria-pressed="false">3D</button></div><span id="selected-badge" class="pill teal">Not started</span></header>
-            <div id="room-navigation" class="room-navigation" hidden><div><label for="room-focus">Level 00 · Explore</label><select id="room-focus"><option value="">Whole ground floor</option></select></div><button id="whole-floor" class="button outline" type="button">Whole floor</button><p id="room-context"></p></div>
+            <div id="room-navigation" class="room-navigation" hidden><div><label for="room-focus">Explore rooms</label><select id="room-focus"><option value="">Whole storey</option></select></div><button id="whole-floor" class="button outline" type="button">Whole storey</button><p id="room-context"></p></div>
             <div id="proposal-drawing" class="drawing-surface" data-model-view="plan"><p class="canvas-empty">Create a project or load the sample to begin.</p></div>
             <div id="model-3d-controls" class="model-3d-controls" hidden><div class="view-switch" role="group" aria-label="Rendering quality"><button id="render-basic" type="button" aria-pressed="false">Basic</button><button id="render-realistic" type="button" aria-pressed="true">Realistic</button></div><div class="viewer-tools"><button id="cutaway" class="button quiet" type="button" aria-pressed="true">Cutaway</button><button id="reset-3d" class="button quiet" type="button">Frame model</button></div><span class="viewer-help">Drag to orbit · Right-drag / Ctrl-drag to pan · Scroll / pinch to zoom<br>Concept geometry and materials · not product-accurate visualization</span></div>
             <section id="visual-panel" class="visual-panel" aria-labelledby="visual-heading" hidden>
@@ -119,8 +125,9 @@
                 <ul id="request-source-list" class="source-list" aria-label="Attached request sources"></ul>
               </fieldset>
               <div class="reconstruction-scope">
-                <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Reconstruct floor layout (propose replacing walls, rooms and openings)</span></label>
-                <p id="reconstruction-help" class="editor-help">The original stays preserved. Existing furniture is kept unless separately requested. Supports 2–12 rectangular rooms on one floor. Check proposed scale and dimension assumptions before accepting.</p>
+                <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Allow layout reconstruction</span></label>
+                <label for="reconstruction-scope">Layout scope</label><select id="reconstruction-scope" disabled><option value="floor-plan-reconstruction">One storey · retain the other levels</option><option value="building-reconstruction">Whole building · levels, stairs and roof</option></select>
+                <p id="reconstruction-help" class="editor-help">The original stays preserved. Existing furniture is kept unless separately requested. Choose whole building to add a basement or attic. Check proposed levels, scale, dimensions and roof assumptions before accepting.</p>
               </div>
               <div class="proposal-footer"><div><label for="proposal-name">Request name <span>optional</span></label><input id="proposal-name" placeholder="Named automatically from your request" pattern="[a-z]+(-[a-z]+)*" maxlength="64" aria-describedby="proposal-help" disabled></div><button id="save-proposal" type="submit" class="button primary" disabled>Send change request <span aria-hidden="true">→</span></button></div>
               <p id="proposal-help" class="editor-help">Send this to the project backlog and keep working. Agents process requests on the server, even when you close this page. Every proposal still needs review.</p>
@@ -164,7 +171,7 @@
             </section>
             <dl class="review-list"><div><dt>What changed</dt><dd id="review-summary"></dd></div><div><dt>Why this approach</dt><dd id="review-rationale"></dd></div><div><dt>Constraints respected</dt><dd id="review-constraints"></dd></div><div><dt>Uncertainty</dt><dd id="review-uncertainty"></dd></div><div class="review-binding"><dt>Bound evidence</dt><dd id="review-binding"></dd></div></dl>
             <section id="review-sources" class="retained-sources" aria-label="Sources bound to this proposal" hidden></section>
-            <p id="review-scale-note" class="source-scope-note" hidden>Check the AI’s scale, dimensions and assumptions above against the attached sources. Reconstruction is limited to 2–12 rectangular rooms on one floor; this proposal still needs your acceptance.</p>
+            <p id="review-scale-note" class="source-scope-note" hidden>Check the AI’s levels, scale, dimensions, stair placement and roof assumptions against the attached sources. This is a concept model; the proposal still needs your acceptance.</p>
             <div id="ticket-history" class="ticket-history"></div>
             <button id="view-changes" class="button quiet full" type="button">Inspect detailed model delta</button>
             <div class="review-actions"><button id="accept-proposal" type="button" class="button primary">Accept this version</button><button id="reject-proposal" type="button" class="button quiet">Reject proposal</button><button id="request-revision" type="button" class="button outline">Request a revision</button></div>
@@ -186,7 +193,7 @@
 
     <dialog id="start-dialog" class="modal start-modal" aria-labelledby="start-heading">
       <div class="modal-hero"><span class="brand-mark" aria-hidden="true">▱</span><p class="eyebrow">BIM FORGE · BUILDING STUDIES</p><h1 id="start-heading">Start with a floor. Make it yours.</h1><p>Mark up an object and describe the outcome. AI prepares a separate model proposal for you to review.</p></div>
-      <form id="project-form" class="start-form"><label for="project-template">Starting point</label><select id="project-template"><option value="residential">Residential ground floor · 8 rooms</option><option value="room">Single empty room</option></select><p class="editor-help">A connected starter with shared walls, doors, windows and concept furnishings. Keep the reference room option for earlier single-room experiments.</p><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="Ground floor study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create project <span aria-hidden="true">→</span></button></form>
+      <form id="project-form" class="start-form"><label for="project-template">Starting point</label><select id="project-template"><option value="house">Multi-storey house · basement, ground floor and attic</option><option value="residential">Residential ground floor · 8 rooms</option><option value="room">Single empty room</option></select><p class="editor-help">Start with a connected concept model, then ask the AI to adapt it. The multi-storey house includes stairs, floor slabs and a pitched roof.</p><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="My house study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create project <span aria-hidden="true">→</span></button></form>
       <div class="or"><span>or</span></div>
       <button id="load-sample" class="button outline full" type="button" disabled>Open the House Pilot reference room</button>
       <button id="start-close" class="text-button modal-close" type="button" hidden>Return to current project</button>
