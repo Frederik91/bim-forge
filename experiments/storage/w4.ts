@@ -42,18 +42,24 @@ function properties(value: string | null): Record<string, Json> {
   return parse(JsonObjectSchema, json(value), 'W4 typed property object');
 }
 
+const copyEscapes: Readonly<Record<string, string>> = { '\\': '\\', t: '\t', r: '\r', n: '\n', b: '\b', f: '\f', v: '\v' };
 export function decodeCopyCell(value: string): string | null {
   if (value === '\\N') return null;
-  const escapes: Record<string, string> = { '\\': '\\', t: '\t', r: '\r', n: '\n', b: '\b', f: '\f', v: '\v' };
-  let decoded = '';
-  for (let index = 0; index < value.length; index += 1) {
-    const character = value[index];
-    if (character !== '\\') { decoded += character; continue; }
-    const next = value[++index];
-    if (next === undefined || escapes[next] === undefined) throw new Error('Unsupported or incomplete W4 COPY escape');
-    decoded += escapes[next];
+  let index = value.indexOf('\\');
+  if (index === -1) return value;
+  const decoded: string[] = [];
+  let start = 0;
+  while (index !== -1) {
+    decoded.push(value.slice(start, index));
+    const next = value[index + 1];
+    const escape = next === undefined ? undefined : copyEscapes[next];
+    if (escape === undefined) throw new Error('Unsupported or incomplete W4 COPY escape');
+    decoded.push(escape);
+    start = index + 2;
+    index = value.indexOf('\\', start);
   }
-  return decoded;
+  decoded.push(value.slice(start));
+  return decoded.join('');
 }
 
 export function w4Record(table: 'entities' | 'relationships' | 'parameters', cells: (string | null)[]): StoredEntity {
