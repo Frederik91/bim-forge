@@ -1,5 +1,7 @@
 # W4 admission CPU diagnostic, 2026-10-25
 
+Later [version transport byte diagnostic](../../docs/experiments/results/EX-13/w5-transport-bytes-20261025b/README.md): the actual `insertVersions` query argument duplicated the complete document outside its nested body. Explicit SQL columns remove only the unused outer copy. On 65 retained actual W4 rows, 592,443 bytes became 311,261 with identical SQL-visible columns, body hashes and version hashes. This is a byte-scope proof, without a database/throughput claim. The active full trial remains unchanged on old source `612dd75`; PostgreSQL readback on the new change awaits the coordinator lease.
+
 This is a CPU-side diagnostic, not a database benchmark or terminal EX-13 result. No database connection or hospital-branch writes were made. The coordinator's original smoke evidence remains authoritative, including its failed exploratory page budget.
 
 Server artifacts: `/ssd1/bim-forge-qualification/qvm-20261025/artifacts/w5-admission-profile-a/`. Sidecar: tools image `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`, `--network none --cpus=0.5 --memory=1g`, Node v24.22.1, TypeBox 1.4.3. The host has four CPUs and was shared with coordinator work; its initial load average was 1.66 / 1.16 / 0.94. This is not an exclusive hospital performance window.
