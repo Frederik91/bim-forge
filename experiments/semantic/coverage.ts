@@ -2,7 +2,7 @@ import { Type } from 'typebox';
 import { Check } from 'typebox/value';
 import type { Coverage, Observation } from '../contracts/schema.ts';
 import { EXPERIMENT_IDS } from './protocol.ts';
-import type { ExperimentId } from './protocol.ts';
+import type { CaseArtifact, ExperimentId } from './protocol.ts';
 
 const RegistrySchema = Type.Object({ experiments: Type.Array(Type.Object({
   id: Type.String(), assertions: Type.Array(Type.String()),
@@ -43,7 +43,8 @@ const definitions: Record<ExperimentId, Coverage[]> = {
   ],
 };
 
-export function coverageFor(input: unknown, observations: Observation[]): Array<{ experimentId: ExperimentId; coverage: Coverage[] }> {
+export function coverageFor(input: unknown, observations: Observation[], variant: CaseArtifact['variant'] = 'baseline-room-model'):
+  Array<{ experimentId: ExperimentId; variant: CaseArtifact['variant']; coverage: Coverage[] }> {
   if (!Check(RegistrySchema, input)) throw new Error('Invalid bound experiment registry.');
   return EXPERIMENT_IDS.map((experimentId) => {
     const definition = input.experiments.find((item) => item.id === experimentId);
@@ -53,7 +54,15 @@ export function coverageFor(input: unknown, observations: Observation[]): Array<
       throw new Error(`W1 coverage is stale for ${experimentId}; review every bound assertion.`);
     }
     const caseIds = new Set(observations.filter((item) => item.experimentId === experimentId).map((item) => item.caseId));
-    if (coverage.some((item) => item.caseIds.some((caseId) => !caseIds.has(caseId)))) throw new Error('Coverage references an unobserved case.');
-    return { experimentId, coverage: structuredClone(coverage) };
+    if (variant === 'baseline-room-model') {
+      if (coverage.some((item) => item.caseIds.some((caseId) => !caseIds.has(caseId)))) throw new Error('Coverage references an unobserved case.');
+      return { experimentId, variant, coverage: structuredClone(coverage) };
+    }
+    const mapped = coverage.map((item): Coverage => {
+      const available = item.caseIds.map((id) => `vmc1-${id}`).filter((id) => caseIds.has(id));
+      return { assertion: item.assertion, caseIds: available, coverage: available.length === 0 ? 'not-covered'
+        : available.length !== item.caseIds.length ? 'partial' : item.coverage };
+    });
+    return { experimentId, variant, coverage: mapped };
   });
 }
