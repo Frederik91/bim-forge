@@ -8,6 +8,10 @@ import { ModelScene, entityAnchor, modelPoint, referenceFromHit, referencePositi
 import { RoomRepository, previewFurnishings, diffSnapshots } from '../src/room-model.ts';
 import { createHousePilotFixture } from '../src/house-pilot.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
+import { Ray } from '@babylonjs/core/Culling/ray.js';
+import { viewerBuilding } from './building-viewer-fixture.ts';
+import { roofHeightAt } from '../src/building-levels.ts';
+import { validateSnapshot } from '../src/room-model.ts';
 
 const furnishings = [
   { id: 'desk-test', type: 'Furniture', name: 'Desk', kind: 'desk', position: [3, 3], width: 1.8, depth: .8, height: .75, rotationDeg: 0, supportId: null },
@@ -179,4 +183,141 @@ test('a residential floor renders shared walls once, frames a room without editi
   assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:office-plant')));
   assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:living-sofa')), false);
   assert.equal(JSON.stringify(before), original);
+});
+
+test('stacked geometry applies each floor elevation once, including supported furniture, openings and equipment', (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const snapshot = viewerBuilding(); const saved = JSON.stringify(snapshot);
+  viewer.setModel(snapshot); viewer.setMode('basic'); viewer.setCutaway(false); viewer.scene.render();
+  const minimum = (prefix: string) => Math.min(...viewer.scene.meshes.filter((mesh) => mesh.name.startsWith(prefix)).map((mesh) => mesh.getBoundingInfo().boundingBox.minimumWorld.y));
+  for (const [id, elevation] of [['basement', -3], ['ground', 0], ['attic', 3]] satisfies [string, number][]) {
+    assert.ok(Math.abs(minimum(id + '-desk') - elevation) < 1e-5);
+    assert.ok(Math.abs(minimum(id + '-screen') - elevation - .75) < 1e-5);
+    assert.ok(Math.abs(minimum(id + '-equipment') - elevation - .3) < 1e-5);
+    assert.ok(Math.abs(minimum(id + '-slab') - elevation + .2) < 1e-5);
+    const door = snapshot.entities.find((item) => item.id === id + '-door'); assert.ok(door);
+    assert.equal(entityAnchor(door, snapshot).y, elevation + .6);
+  }
+  assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.endsWith('-floor')), false, 'explicit slabs replace synthetic room floors');
+  const top = viewer.scene.meshes.find((mesh) => mesh.name === 'stairs-upper-step-12'); assert.ok(top);
+  assert.ok(Math.abs(top.getBoundingInfo().boundingBox.maximumWorld.y - 3) < 1e-5);
+  assert.equal(JSON.stringify(snapshot), saved);
+});
+
+test('incoming stair footprints are real slab voids and ray picking preserves the selected floor', (t) => {
+  const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
+  const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  viewer.setModel(viewerBuilding()); viewer.setMode('basic'); viewer.setLevel('ground'); viewer.setCutaway(false); viewer.scene.render();
+  const slab = (mesh: { name: string }) => mesh.name.startsWith('ground-slab');
+  const hole = viewer.scene.pickWithRay(new Ray(modelPoint(1.5, 1, 1), new Vector3(0, -1, 0), 1.1), slab);
+  assert.equal(hole?.hit, false, 'the whole incoming footprint must be open');
+  const solid = viewer.scene.pickWithRay(new Ray(modelPoint(4.5, 1, 1), new Vector3(0, -1, 0), 1.1), slab);
+  assert.ok(solid?.hit); assert.ok(Math.abs(solid.pickedPoint?.y ?? Infinity) < 1e-5);
+  const outgoing = viewer.scene.pickWithRay(new Ray(modelPoint(1.5, 3, 1), new Vector3(0, -1, 0), 1.1), slab);
+  assert.ok(outgoing?.hit, 'outgoing stairs do not remove the slab at their lower landing');
+  viewer.setCutaway(true); viewer.scene.render();
+  const screen = Vector3.Project(modelPoint(4.5, 1, 0), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+  const reference = viewer.referenceAt(screen.x, screen.y);
+  assert.ok(reference?.kind === 'floor-point'); assert.equal(reference.levelId, 'ground');
+  assert.ok(Math.abs(reference.positionMm[0] - 4500) <= 2); assert.ok(Math.abs(reference.positionMm[1] - 1000) <= 2);
+});
+
+test('pitched roof solids and gable wall vertices meet the shared roof underside at eaves and ridge', (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const snapshot = viewerBuilding();
+  viewer.setModel(snapshot); viewer.setMode('basic'); viewer.setCutaway(false); viewer.scene.render();
+  const walls = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('attic-west-solid-'));
+  const vertices = walls.flatMap((mesh) => {
+    const positions = mesh.getVerticesData('position') ?? []; const result: Vector3[] = [];
+    for (let i = 0; i < positions.length; i += 3) result.push(new Vector3(positions[i], positions[i + 1], positions[i + 2]));
+    return result;
+  });
+  assert.ok(vertices.some((p) => Math.abs(p.z - 2) < 1e-5 && Math.abs(p.y - 6.4) < 1e-5), 'gable ends retain the ridge vertex');
+  assert.ok(vertices.some((p) => Math.abs(p.z) < 1e-5 && Math.abs(p.y - 5.2) < 1e-5));
+  for (const p of vertices) assert.ok(p.y <= 3 + roofHeightAt(snapshot, 'attic', [0, p.z]) + 1e-5);
+  const pitches = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('house-roof-pitch-'));
+  assert.equal(pitches.length, 2);
+  assert.ok(Math.abs(Math.max(...pitches.map((mesh) => mesh.getBoundingInfo().boundingBox.maximumWorld.y)) - 6.6) < 1e-5);
+  assert.ok(Math.abs(Math.min(...pitches.map((mesh) => mesh.getBoundingInfo().boundingBox.minimumWorld.y)) - 5.2) < 1e-5);
+  viewer.setMode('realistic'); viewer.scene.render();
+  assert.ok(pitches.every((mesh) => mesh.material instanceof PBRMaterial));
+  assert.ok(walls.some((mesh) => (mesh.getVerticesData('normal') ?? []).some((value, i) => i % 3 === 1 && value > .5)), 'pitched wall tops have outward normals for realistic lighting');
+});
+
+test('level isolation and roof visibility compose with cutaway, framing and annotation visibility without rebuilding geometry', (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const snapshot = viewerBuilding(); const saved = JSON.stringify(snapshot);
+  viewer.setModel(snapshot); viewer.setMode('basic'); viewer.setCutaway(false); viewer.scene.render();
+  const camera = viewer.camera; const meshes = [...viewer.scene.meshes]; const allRadius = camera.radius;
+  assert.ok(camera.target.y > 0 && camera.target.y < 3, 'building framing includes basement and roof height');
+  viewer.setLevel('basement'); viewer.scene.render();
+  assert.ok(camera.target.y < 0); assert.ok(camera.radius < allRadius);
+  assert.ok(viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('attic-')).every((mesh) => !mesh.isEnabled()));
+  viewer.mark({ kind: 'floor-point', levelId: 'basement', positionMm: [4000, 1000] });
+  const marker = viewer.scene.meshes.find((mesh) => mesh.name === 'request-marker-not-geometry'); assert.ok(marker);
+  assert.equal(marker.position.y, -2.975);
+  viewer.setLevel('attic'); viewer.setRoofVisible(false); viewer.setCutaway(true); viewer.scene.render();
+  assert.equal(marker.isEnabled(), false);
+  assert.ok(meshes.filter((mesh) => mesh.name.startsWith('house-roof')).every((mesh) => !mesh.isEnabled()));
+  assert.ok(meshes.filter((mesh) => mesh.name.startsWith('ground-desk')).every((mesh) => !mesh.isEnabled()));
+  viewer.setCutaway(false); viewer.setRoofVisible(true); viewer.scene.render();
+  assert.ok(meshes.filter((mesh) => mesh.name.startsWith('house-roof')).every((mesh) => mesh.isEnabled()));
+  assert.equal(viewer.camera, camera); assert.deepEqual(viewer.scene.meshes.filter((mesh) => mesh !== marker), meshes);
+  assert.equal(viewer.setModel(snapshot), false); assert.equal(JSON.stringify(snapshot), saved);
+});
+
+test('building floor annotations require explicit levels and wall annotations inherit the host elevation', () => {
+  const snapshot = viewerBuilding();
+  assert.equal(referenceFromHit(snapshot, modelPoint(4, 1, 0), null), null);
+  assert.equal(referenceFromHit(snapshot, modelPoint(4, 1, 0), null, 'missing-level'), null);
+  for (const [levelId, elevation] of [['basement', -3], ['ground', 0], ['attic', 3]] satisfies [string, number][]) {
+    const reference = referenceFromHit(snapshot, modelPoint(4.1234, 1.2345, elevation), null, levelId);
+    assert.deepEqual(reference, { kind: 'floor-point', levelId, positionMm: [4123, 1235] }); assert.ok(reference);
+    assert.equal(referencePosition(reference, snapshot).y, elevation + .025);
+    assert.equal(referencePosition({ kind: 'wall-point', wallId: levelId + '-shared', alongWallMm: 1000 }, snapshot).y, elevation + .08);
+  }
+  assert.throws(() => referencePosition({ kind: 'floor-point', positionMm: [4000, 1000] }, snapshot), /level/);
+});
+
+test('level elevation and incoming stair changes produce derived object and slab-void deltas with before ghosts', (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const before = viewerBuilding();
+  const after = validateSnapshot({ ...before, entities: before.entities.map((item) => item.id === 'attic' ? { ...item, elevation: 3.5 } : item) });
+  const changes = modelChanges(before, after);
+  for (const id of ['attic-desk', 'attic-screen', 'attic-door', 'attic-equipment', 'attic-slab', 'house-roof', 'stairs-upper']) {
+    assert.ok(changes.some((item) => item.id === id && item.reason === 'placement'), `${id} follows its changed level`);
+  }
+  assert.equal(changes.some((item) => item.id === 'basement-desk' || item.id === 'ground-desk'), false);
+  viewer.setModel(after, before); viewer.setMode('basic'); viewer.setLevel('attic'); viewer.setCutaway(false); viewer.scene.render();
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:house-roof')));
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name === 'change-path:attic-desk'));
+  const moved = validateSnapshot({ ...before, entities: before.entities.map((item) => item.id === 'stairs-upper' ? { ...item, start: [.5, 2.8], end: [2.5, 2.8] } : item) });
+  assert.ok(modelChanges(before, moved).some((item) => item.id === 'attic-slab' && item.reason === 'placement'));
+  assert.equal(modelChanges(before, moved).some((item) => item.id === 'ground-slab'), false);
+});
+
+test('roof changes derive clipped-wall deltas and flat roofs have physical thickness', (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const before = viewerBuilding();
+  const after = validateSnapshot({ ...before, entities: before.entities.map((item) => item.type === 'Roof' ? { ...item, profile: { kind: 'flat', height: 3 } } : item) });
+  assert.ok(modelChanges(before, after).some((item) => item.id === 'attic-west' && item.reason === 'placement'));
+  assert.equal(modelChanges(before, after).some((item) => item.id === 'ground-west'), false);
+  viewer.setModel(after); viewer.setMode('basic'); viewer.setCutaway(false); viewer.scene.render();
+  const roof = viewer.scene.meshes.find((mesh) => mesh.name === 'house-roof-pitch-0'); assert.ok(roof);
+  assert.ok(Math.abs(roof.getBoundingInfo().boundingBox.minimumWorld.y - 5.8) < 1e-5);
+  assert.ok(Math.abs(roof.getBoundingInfo().boundingBox.maximumWorld.y - 6) < 1e-5);
+});
+
+test('before slab ghosts stay inspectable but cannot intercept a current-floor reference ray', (t) => {
+  const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
+  const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const before = viewerBuilding();
+  const after = validateSnapshot({ ...before, entities: before.entities.map((item) => item.id === 'attic' ? { ...item, elevation: 2.5 } : item) });
+  viewer.setModel(after, before); viewer.setMode('basic'); viewer.setLevel('attic'); viewer.setRoofVisible(false); viewer.setCutaway(true);
+  viewer.camera.beta = .08; viewer.scene.render();
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:attic-slab') && mesh.isEnabled()));
+  const screen = Vector3.Project(modelPoint(4.5, 1, 2.5), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+  const reference = viewer.referenceAt(screen.x, screen.y);
+  assert.ok(reference?.kind === 'floor-point'); assert.equal(reference.levelId, 'attic');
+  assert.ok(Math.abs(reference.positionMm[0] - 4500) <= 2); assert.ok(Math.abs(reference.positionMm[1] - 1000) <= 2);
 });
