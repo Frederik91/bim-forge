@@ -83,7 +83,11 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     await artifact('config.json', config);
     await artifact('execution-envelope.json', { ...config.execution, spaceBefore: await spaceSnapshot(config.execution),
       enforcement: 'Client checks reserves and cooperative load deadline; coordinator watchdog enforces total shared 200 GiB allocation and hard wall timeout.',
-      claim: 'Exploratory budgets, not product SLOs; no winner without limiter and tuning evidence.' });
+      claim: config.execution.purpose === 'extended-initial-inventory'
+        ? 'Separate extended initial inventory completion experiment; cannot pass the original two-hour acceptance target.'
+        : config.execution.purpose === 'resource-sensitivity-initial-inventory'
+        ? 'Controlled reduced/medium resource sensitivity experiment; cannot qualify the original full inventory target.'
+        : 'Exploratory budgets, not product SLOs; no winner without limiter and tuning evidence.' });
     await artifact('environment.json', {
       timestamp: new Date().toISOString(), host: hostname(), osRelease: release(), cpus: cpus().map((cpu) => cpu.model), totalmem: totalmem(),
       node: process.version, versions: process.versions, argv: process.argv, execArgv: process.execArgv,
@@ -96,9 +100,9 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     if (!lsn) throw new Error('Missing start WAL LSN');
     const loadStart = performance.now();
     const checkpoint = async (): Promise<void> => {
+      await spaceSnapshot(config.execution);
       const remaining = config.execution.loadWallTimeLimitMs - (performance.now() - loadStart);
       if (remaining <= 0) throw new Error('Predeclared load wall-time limit exceeded');
-      await spaceSnapshot(config.execution);
       await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(Math.max(1, Math.floor(Math.min(config.execution.loadStatementTimeoutMs, remaining))))]);
     };
     const LoadSummary = Type.Object({ revisionId: HashSchema,
@@ -110,9 +114,11 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     const loaded = mode.kind === 'measure-existing'
       ? parse(LoadSummary, JSON.parse(await readFile(mode.loadRecord, 'utf8')), 'preserved load artifact')
       : await load(store, await inputFor(config), config.branch, { checkpoint });
+    await checkpoint();
     if (await store.head(config.branch) !== loaded.revisionId) throw new Error('Measured branch must start at the pinned initial load revision');
     await artifact('load.json', { ...loaded, fileSha256: await fileHash(config.dataset), reused: mode.kind === 'measure-existing' });
-    const actual = await inspectBranch(store, config.branch);
+    const actual = await inspectBranch(store, config.branch, { checkpoint });
+    await checkpoint();
     const propertyValues = await store.propertyCounts(config.branch);
     await artifact('property-values.json', { expected: loaded.propertyValuesByRecordCategory, actual: propertyValues });
     await artifact('oracle.json', { expected: { fingerprint: loaded.fingerprint, countsByKind: loaded.countsByKind }, actual });
@@ -120,13 +126,21 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
       && hash(propertyValues) === hash(loaded.propertyValuesByRecordCategory);
     observe('source-query-oracle', 'All source documents, counts by kind and canonical hashes survive load', JSON.stringify(actual), oracle);
     if (!oracle) throw new Error('Load checksum/count oracle failed; refusing timings');
-    await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
+    await checkpoint();
     if (mode.kind === 'load-only') {
       await artifact('metrics-loaded.json', await store.metrics());
-      observe('initial-inventory', 'Initial inventory published at one revision before bounded updates',
-        JSON.stringify({ revisionId: loaded.revisionId, records: loaded.fingerprint.count }), true);
+      await checkpoint();
+      const extended = config.execution.purpose === 'extended-initial-inventory';
+      const sensitivity = config.execution.purpose === 'resource-sensitivity-initial-inventory';
+      observe(extended || sensitivity ? config.execution.purpose : 'initial-inventory',
+        extended || sensitivity ? 'Separate initial inventory experiment published at one revision within the declared limit'
+          : 'Initial inventory published at one revision before bounded updates',
+        JSON.stringify({ revisionId: loaded.revisionId, records: loaded.fingerprint.count }), true,
+        extended ? ['Separate completion experiment; cannot pass the original two-hour acceptance target.']
+          : sensitivity ? ['Controlled reduced/medium resource sensitivity experiment; cannot qualify the original full inventory target.'] : []);
       return observations;
     }
+    await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
     const firstPage = await store.page({ branch: config.branch, after: '', limit: config.pageSize });
     const first = firstPage[0];
     if (!first) throw new Error('No workload entity');

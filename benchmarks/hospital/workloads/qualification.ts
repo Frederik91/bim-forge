@@ -9,6 +9,8 @@ import type { Json, Observation } from '../../../experiments/storage/contract.ts
 import { Storage } from '../../../experiments/storage/store.ts';
 import { selectionOracles, verifySelections } from '../../../experiments/storage/selections.ts';
 import { W4GeneratorSchema, W4InputSchema } from '../../../experiments/storage/w4.ts';
+import { ExecutionSchema } from '../../../experiments/storage/envelope.ts';
+import type { Execution } from '../../../experiments/storage/envelope.ts';
 
 const count = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 const counts = Type.Record(Type.String(), count);
@@ -35,13 +37,35 @@ const ManifestSchema = Type.Object({ scale: Type.String(), inventoryFraction: Ty
   countsByKind: counts, relationshipCounts: counts, parameterForms: counts, logicalPropertyValues: count });
 const PriorConfigSchema = Type.Object({ branch: IdSchema, scale: Type.String(), experimentId: Type.Literal('EX-13'),
   format: Type.Union([Type.Literal('w4-copy'), Type.Literal('w4-generator')]), dataset: Type.String(),
-  execution: Type.Object({ mode: Type.Object({ kind: Type.Literal('load-only') }) }),
+  execution: Type.Object({ mode: Type.Object({ kind: Type.Literal('load-only') }),
+    purpose: Type.Optional(Type.Union([
+      ExecutionSchema.anyOf[0].properties.purpose,
+      ExecutionSchema.anyOf[1].properties.purpose,
+      ExecutionSchema.anyOf[2].properties.purpose,
+    ])) }),
   environment: Type.Object({ sourceCommit: Type.String() }) });
 const priorObservations = Type.Array(Type.Object({ caseId: Type.String(), passed: Type.Boolean() }));
 const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 const json = (bytes: Buffer): unknown => JSON.parse(bytes.toString('utf8'));
 function requireEqual(actual: Json, expected: Json, label: string): void {
   if (canonical(actual) !== canonical(expected)) throw new Error(`${label} mismatch`);
+}
+
+function inventoryObservationCase(purpose: Execution['purpose'] | undefined): string {
+  switch (purpose) {
+    case undefined:
+    case 'initial-inventory':
+    case 'bounded-updates':
+    case 'smaller-fixture-history':
+      return 'initial-inventory';
+    case 'extended-initial-inventory':
+    case 'resource-sensitivity-initial-inventory':
+      return purpose;
+    default: {
+      const exhaustive: never = purpose;
+      throw new Error(`Unsupported prior inventory purpose: ${exhaustive}`);
+    }
+  }
 }
 
 export function manifestKindCounts(manifest: Pick<Static<typeof ManifestSchema>,
@@ -103,7 +127,7 @@ export async function validatePriorAdmission(config: Config, retain: (name: stri
   requireEqual(properties.expected, loaded.propertyValuesByRecordCategory, 'Load/property oracle');
   requireEqual(properties.actual, properties.expected, 'Property fidelity');
   if (properties.actual.entities !== manifest.logicalPropertyValues) throw new Error('Manifest logical property count mismatch');
-  for (const caseId of ['source-query-oracle', 'initial-inventory']) {
+  for (const caseId of ['source-query-oracle', inventoryObservationCase(prior.execution.purpose)]) {
     const matches = observations.filter((row) => row.caseId === caseId);
     if (matches.length !== 1 || matches[0]?.passed !== true) throw new Error(`Missing successful ${caseId}`);
   }

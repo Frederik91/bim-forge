@@ -116,13 +116,14 @@ export async function load(store: Storage, input: AsyncIterable<StoredEntity>, b
   } finally { await store.client.query('DROP TABLE w5_load_stage'); }
 }
 
-export async function inspectBranch(store: Storage, branch: string): Promise<{
+export async function inspectBranch(store: Storage, branch: string, control?: { checkpoint: () => Promise<void> }): Promise<{
   fingerprint: ReturnType<Fingerprint['value']>; countsByKind: Record<string, number>;
 }> {
   const fingerprint = new Fingerprint();
   const countsByKind: Record<string, number> = Object.create(null);
   let after = '';
   while (true) {
+    await control?.checkpoint();
     const page = await store.page({ branch, after, limit: 250 });
     if (page.length === 0) break;
     for (const row of page) {

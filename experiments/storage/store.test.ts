@@ -1,17 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
+import { Type } from 'typebox';
 import { RoomRepository, previewRectangle } from '../../src/room-model.ts';
 import { Storage } from './store.ts';
-import { command, entity, hash } from './contract.ts';
+import { command, entity, hash, JsonSchema, parse } from './contract.ts';
 import type { StoredEntity } from './contract.ts';
 import { fromArray, fixtureEnvelopes } from './fixture.ts';
 import { Fingerprint, inspectBranch, load } from './load.ts';
 import { nativeDeltaIds, nativeEnvelopes, saveSnapshot, snapshotAt } from './baseline.ts';
 import { decodeCopyCell, w4Record } from './w4.ts';
 import { PreparedEntity } from './prepared.ts';
+import { runWorkload } from './workload.ts';
 
 function connection(): Client {
   if (!process.env.DATABASE_URL || !process.env.QVM_EXECUTION_LEASE) throw new Error('Integration tests require coordinator DATABASE_URL and execution lease');
@@ -111,6 +115,53 @@ test('W0 fixture load preserves all source documents/counts/checksums and type p
     const brokenBranch = `broken-${randomUUID()}`;
     await assert.rejects(load(store, fromArray([records[0], records[0]].filter((item): item is StoredEntity => item !== undefined)), brokenBranch), /duplicate/);
     await assert.rejects(store.head(brokenBranch), /Unknown branch/);
+  } finally { await client.end(); }
+});
+
+test('tiny load-only policy fixture retains its remaining load timeout through exact metrics', async () => {
+  const root = process.env.QVM152_ARTIFACT_ROOT;
+  if (!root) throw new Error('Coordinator QVM152_ARTIFACT_ROOT required for retained policy-fixture evidence');
+  await mkdir(root, { recursive: true });
+  const directory = await mkdtemp(path.join(root, 'load-phase-'));
+  const decisionPath = path.join(directory, 'decision.md');
+  await writeFile(decisionPath, 'Tiny fixture tests timeout policy only; no full-inventory or capacity claim.\n');
+  const client = connection(); await client.connect();
+  try {
+    const store = new Storage(client); await store.initialize();
+    const branch = `phase-${randomUUID()}`;
+    const output = path.join(directory, 'load-only');
+    const observations = await runWorkload(store, {
+      experimentId: 'EX-13', runId: branch, branch, dataset: fileURLToPath(new URL('../fixtures/tiny-building.json', import.meta.url)),
+      format: 'w0-fixture', scale: 'fixture', historyRevisions: 1, clients: 1, repeats: 1,
+      mixedOperationsPerClient: 2, writeEvery: 2, pageSize: 10, cacheLabel: 'tiny policy fixture',
+      leaseMode: 'shared-correctness', statementTimeoutMs: 1000, materializationDiagnostic: false,
+      execution: {
+        decisionPath, decisionSha256: createHash('sha256').update(await readFile(decisionPath)).digest('hex'),
+        mode: { kind: 'load-only' }, purpose: 'initial-inventory', measurement: 'correctness', maxBoundedUpdates: 1,
+        loadWallTimeLimitMs: 120000, loadStatementTimeoutMs: 120000,
+        space: { dataPath: process.env.QVM152_DATA_PATH ?? '/qualification', hostRootPath: process.env.QVM152_HOST_ROOT_PATH ?? '/host-root',
+          dataBudgetBytes: 214748364800, dataReserveBytes: 107374182400, rootReserveBytes: 4294967296, monitorEvidence: 'coordinator-watchdog' },
+        exploratoryP95Ms: { detail: 300, page: 1000, oneHop: 1000, boundedDelta: 2000, smallAccept: 4000 },
+      },
+      environment: { nodeImage: 'tiny-policy-fixture', postgresImage: 'tiny-policy-fixture',
+        sourceCommit: process.env.QVM152_SOURCE_COMMIT ?? '0'.repeat(40), nodeCpuLimit: 1, nodeMemoryLimitBytes: 1073741824,
+        postgresCpuLimit: 1.5, postgresMemoryLimitBytes: 3221225472, diskBudgetBytes: 214748364800,
+        storageDescription: 'Coordinator-owned disposable PG fixture; not a full dataset run' },
+    }, output);
+    assert.ok(observations.length > 0);
+    assert.ok(observations.every((row) => row.passed), JSON.stringify(observations));
+    assert.equal(observations.filter((row) => row.caseId === 'initial-inventory' && row.passed).length, 1);
+    const metrics = parse(Type.Object({ settings: Type.Object({ statement_timeout: Type.String() }),
+      counts: Type.Object({ versions: Type.Integer(), changes: Type.Integer(), visibility: Type.Integer() }) }),
+    JSON.parse(await readFile(path.join(output, 'metrics-loaded.json'), 'utf8')), 'load-only metrics');
+    const timeout = Number(metrics.settings.statement_timeout);
+    assert.ok(Number.isFinite(timeout) && timeout > 1000 && timeout <= 120000, JSON.stringify(metrics.settings));
+    assert.ok(metrics.counts.versions > 0 && metrics.counts.changes > 0 && metrics.counts.visibility > 0);
+    const oracle = parse(Type.Object({ expected: JsonSchema, actual: JsonSchema }),
+      JSON.parse(await readFile(path.join(output, 'oracle.json'), 'utf8')), 'fixture readback oracle');
+    assert.deepEqual(oracle.actual, oracle.expected);
+    assert.deepEqual(JSON.parse(await readFile(path.join(output, 'errors.json'), 'utf8')), []);
+    assert.notEqual(await store.head(branch), null);
   } finally { await client.end(); }
 });
 

@@ -65,7 +65,69 @@ For the predeclared 2026-10-25 envelope, workload configuration now **requires**
 
 Full execution is staged: first `execution.mode={"kind":"load-only"}`, `purpose="initial-inventory"`, `historyRevisions=1`; later use `mode={"kind":"measure-existing","loadRecord":".../load.json"}`, `purpose="bounded-updates"`, and a predeclared `maxBoundedUpdates` on the same branch. The branch must still match the saved initial revision. An existing-branch measurement verifies source fingerprints/property counts again. A 1,000-revision run uses `purpose="smaller-fixture-history"` at a smaller scale. No full Cartesian inventory/history claim is supported. Bare loader/API calls remain low-level integration operations; use the workload configuration and main's watchdog for admitted full runs.
 
-`loadWallTimeLimitMs` and the separate `loadStatementTimeoutMs` cannot exceed 7,200,000 ms. Batch/publication checkpoints reject an expired load deadline and cap load-phase SQL statements by the remaining time. Initial publication and admission/oracle scans use the explicit load-phase timeout, not the interactive 30-second example. The interactive `statementTimeoutMs` is restored after admission/oracle checks. Main must enforce the hard two-hour limit externally as well, for example `timeout --signal=TERM --kill-after=30s 2h docker run ...`. Cooperative checks cannot interrupt a stalled producer immediately. Failure during statistics/finalization can leave a complete published initial revision; inspect the recorded branch head before any recovery. Do not label that failure a completed run.
+For ordinary purposes, `loadWallTimeLimitMs` and the separate `loadStatementTimeoutMs` cannot exceed 7,200,000 ms. Batch/publication checkpoints reject an expired load deadline and cap load-phase SQL statements by the remaining time. Initial publication, every admission readback page, property counts and load-only exact metrics use refreshed remaining load time, not the interactive 30-second example. The interactive `statementTimeoutMs` is restored only when the interactive path begins. Every load-only completion label follows the final metrics/deadline check. Main must enforce the hard two-hour limit externally as well, for example `timeout --signal=TERM --kill-after=30s 2h docker run ...`. Cooperative checks cannot interrupt a stalled producer immediately. Failure during statistics/finalization can leave a complete published initial revision; inspect the recorded branch head before any recovery. Do not label that failure a completed run.
+
+### Opt in to a separate extended completion experiment
+
+Issue #152 adds `execution.purpose="extended-initial-inventory"`. This distinct purpose allows each load timeout up to **21,600,000 ms (six hours)**. Existing configurations and examples retain their two-hour limits. The extended schema requires `mode={"kind":"load-only"}` and `measurement="correctness"`. Admission also requires `scale="full"`, `historyRevisions=1` and `leaseMode="exclusive-measurement"`; even `detail-stress` is rejected.
+
+Main must declare a new immutable run ID, fresh branch/output directory and a separately pinned decision file before execution. Set both load timeouts explicitly; neither timeout is inferred or increased automatically. For a six-hour run, change these fields in an otherwise complete workload configuration:
+
+```json
+{
+  "scale": "full",
+  "historyRevisions": 1,
+  "leaseMode": "exclusive-measurement",
+  "execution": {
+    "purpose": "extended-initial-inventory",
+    "mode": { "kind": "load-only" },
+    "measurement": "correctness",
+    "loadWallTimeLimitMs": 21600000,
+    "loadStatementTimeoutMs": 21600000
+  }
+}
+```
+
+This fragment omits required fields. Retain `decisionPath`, `decisionSha256`, space monitoring, reserves, resource declarations and all other required fields. The runner still verifies the decision's actual bytes against its SHA-256 and requires `QVM_EXECUTION_LEASE`. Main owns exclusive scheduling, the unchanged aggregate disk watchdog and the external wall timeout. Use an external timeout matching the declared wall limit, capped at six hours (for example `timeout --signal=TERM --kill-after=30s 6h docker run ...`). The deadline includes generation, staging, publication, analyze and complete source/readback/property verification. Preserve termination and final-state inspection separately.
+
+The runner labels the completion observation `extended-initial-inventory` and records the separate experiment claim in `execution-envelope.json`. Completion **cannot pass the original two-hour acceptance target**, even if the extended run finishes sooner. Earlier failures and the original two-hour decisions remain unchanged. Bodies, hashes, source/reference/schema validators, resources and durability settings remain required. This change does not establish successful full admission; main must run and review that experiment separately.
+
+### Opt in to controlled resource sensitivity
+
+The separate `execution.purpose="resource-sensitivity-initial-inventory"` permits reduced or medium initial inventory only. It requires load-only correctness, one revision, an exclusive lease and a pinned decision. Its wall and statement limits remain at most 7,200,000 ms (two hours). Only this purpose allows up to 2 loader CPUs and 2.5 PostgreSQL CPUs with 6 GiB PostgreSQL memory. Loader memory remains at most 1 GiB. Ordinary purposes and extended full completion retain the original loader 1 CPU / 1 GiB and PostgreSQL 1.5 CPU / 3 GiB caps.
+
+For a reduced case at the resource ceilings, change these fields in an otherwise complete workload configuration. Use `"scale": "medium"` for the corresponding medium case:
+
+```json
+{
+  "scale": "reduced",
+  "historyRevisions": 1,
+  "leaseMode": "exclusive-measurement",
+  "execution": {
+    "purpose": "resource-sensitivity-initial-inventory",
+    "mode": { "kind": "load-only" },
+    "measurement": "correctness",
+    "loadWallTimeLimitMs": 7200000,
+    "loadStatementTimeoutMs": 7200000
+  },
+  "environment": {
+    "nodeCpuLimit": 2,
+    "nodeMemoryLimitBytes": 1073741824,
+    "postgresCpuLimit": 2.5,
+    "postgresMemoryLimitBytes": 6442450944
+  }
+}
+```
+
+This fragment also omits required fields. Retain all decision/hash, disk/resource and workload declarations. Use a new run ID, fresh branch/output directory and separately pinned decision for each case. Main owns actual container limits, scheduling, the two-hour external watchdog and result comparison. Full and detail-stress scales, measured modes, longer deadlines and shared leases are rejected for this purpose. The runner labels the observation `resource-sensitivity-initial-inventory` and records the controlled experiment claim in `execution-envelope.json`. The result cannot qualify the original full inventory target or establish a performance winner. Both opt-in variants check the cooperative deadline again before emitting successful completion.
+
+The PG regression `tiny load-only policy fixture retains its remaining load timeout through exact metrics` in `store.test.ts` uses only the tiny W0 fixture. It declares a 120-second load budget and a one-second interactive timeout, then checks actual `metrics-loaded.json` settings and retained exact counts/oracles. This tests phase policy, not full capacity. Main must grant a disposable database and lease before running it:
+
+```sh
+QVM152_ARTIFACT_ROOT=/evidence/phase-fixture node --test --test-name-pattern 'tiny load-only policy fixture' experiments/storage/store.test.ts
+```
+
+Run from the repository root inside the tools container with `DATABASE_URL`, `QVM_EXECUTION_LEASE` and the qualification/host-root reserve mounts. `QVM152_DATA_PATH` and `QVM152_HOST_ROOT_PATH` can select those mounted paths; `QVM152_SOURCE_COMMIT` can bind the tested source commit. Do not run this PG regression during another coordinator's lease.
 
 The runner writes `exploratory-budgets.json` and observations against predeclared warm single-client p95 limits: detail 300 ms, page/one-hop 1,000 ms, bounded delta 2,000 ms, small acceptance 4,000 ms. Detail and one-hop have separate samples; bounded-delta timing is separate from acceptance. Missing samples, errors and budget breaches cannot pass. Non-exploratory scenarios retain budgets as unqualified. These thresholds are exploratory, not product SLOs. Five alternating repetitions and an exclusive slot are required for comparative configurations only. No winner is emitted without limiter/tuning evidence.
 
