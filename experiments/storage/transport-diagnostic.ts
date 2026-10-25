@@ -5,6 +5,7 @@ import { mock } from 'node:test';
 import { Client } from 'pg';
 import { Type } from 'typebox';
 import { Storage } from './store.ts';
+import { PreparedEntity } from './prepared.ts';
 import { boundedLines } from './lines.ts';
 import { decodeCopyCell, w4Record } from './w4.ts';
 import { hash, parse, EntitySchema, HashSchema, IdSchema, JsonObjectSchema } from './contract.ts';
@@ -44,7 +45,7 @@ const capture = mock.method(client, 'query', async (sql: string, values: unknown
   queryCount += 1;
   return { rows: [] };
 });
-try { await new Storage(client).insertVersions(items); } finally { capture.mock.restore(); }
+try { await new Storage(client).insertVersions(items.map((item) => PreparedEntity.from(item))); } finally { capture.mock.restore(); }
 assert.equal(queryCount, 1);
 const nullableId = Type.Union([IdSchema, Type.Null()]);
 const columns = Type.Object({ versionId: HashSchema, entityId: IdSchema, kind: IdSchema,

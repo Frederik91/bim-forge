@@ -4,6 +4,7 @@ import { Type } from 'typebox';
 import type { Static, TSchema } from 'typebox';
 import { command, entity, hash, parse, EntitySchema, HashSchema, IdSchema, JsonSchema } from './contract.ts';
 import type { Command, Json, StoredEntity } from './contract.ts';
+import { PreparedEntity, versionBatch, versionInputSql, versionColumnsSql } from './prepared.ts';
 
 const HeadRow = Type.Object({ head: Type.Union([HashSchema, Type.Null()]) });
 const BodyRow = Type.Object({ body: EntitySchema, version_id: HashSchema });
@@ -117,16 +118,20 @@ export class Storage {
     });
   }
 
-  async insertVersions(items: StoredEntity[]): Promise<void> {
+  async insertVersions(items: readonly PreparedEntity[]): Promise<void> {
     if (items.length === 0) return;
-    const records = items.map((body) => ({ versionId: hash(body), entityId: body.entityId, kind: body.kind,
-      typeId: body.typeId, containerId: body.containerId, systemId: body.systemId,
-      fromId: body.fromId, toId: body.toId, body }));
     await this.client.query(`INSERT INTO qvm_storage.versions
-      SELECT x."versionId",x."entityId",x.kind,x."typeId",x."containerId",x."systemId",x."fromId",x."toId",x.body
-      FROM jsonb_to_recordset($1::jsonb) AS x("versionId" text,"entityId" text,kind text,"typeId" text,
-        "containerId" text,"systemId" text,"fromId" text,"toId" text,body jsonb)
-      ON CONFLICT (version_id) DO NOTHING`, [JSON.stringify(records)]);
+      SELECT ${versionColumnsSql} FROM (${versionInputSql}) input
+      ON CONFLICT (version_id) DO NOTHING`, [versionBatch(items)]);
+  }
+
+  async stageVersions(items: readonly PreparedEntity[]): Promise<void> {
+    if (items.length === 0) return;
+    // Both writes belong to one SQL statement, including duplicate-ID failure rollback.
+    await this.client.query(`WITH input AS MATERIALIZED (${versionInputSql}), inserted AS (
+      INSERT INTO qvm_storage.versions SELECT ${versionColumnsSql} FROM input
+      ON CONFLICT (version_id) DO NOTHING RETURNING version_id
+    ) INSERT INTO w5_load_stage SELECT "entityId","versionId" FROM input`, [versionBatch(items)]);
   }
 
   async validateReferences(branch: string): Promise<void> {
@@ -145,6 +150,7 @@ export class Storage {
     const proposal: Command = command(input);
     const payloadHash = hash(proposal);
     const revisionId = payloadHash;
+    const prepared = proposal.puts.map((item) => PreparedEntity.from(item));
     return this.transaction(async () => {
       const [locked] = await this.rows(HeadRow, `SELECT head FROM qvm_storage.branches WHERE branch=$1 FOR UPDATE`, [proposal.branch]);
       if (!locked) throw new Error('Unknown branch');
@@ -161,10 +167,10 @@ export class Storage {
       for (const assumption of proposal.assumptions) {
         if ((versions.get(assumption.entityId) ?? null) !== assumption.versionId) throw new Error(`Semantic CAS conflict: ${assumption.entityId}`);
       }
-      await this.insertVersions(proposal.puts);
+      await this.insertVersions(prepared);
       await this.client.query(`INSERT INTO qvm_storage.revisions(revision_id,parent_id,command_id,payload_hash,payload) VALUES($1,$2,$3,$4,$5::jsonb)`,
         [revisionId, locked.head, proposal.commandId, payloadHash, JSON.stringify(proposal)]);
-      const changes = [...proposal.puts.map((item) => ({ entityId: item.entityId, versionId: hash(item) })),
+      const changes = [...prepared.map((item) => ({ entityId: item.entityId, versionId: item.versionId })),
         ...proposal.deletes.map((entityId) => ({ entityId, versionId: null }))];
       await this.client.query(`INSERT INTO qvm_storage.changes
         SELECT $1,x."entityId",x."versionId" FROM jsonb_to_recordset($2::jsonb) x("entityId" text,"versionId" text)`,
