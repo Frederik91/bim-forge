@@ -1,0 +1,39 @@
+{
+  "accepted": true,
+  "originalRevision": "c050c7bdaebb75d7115659ee44495d8a884f7a68034ebc3f72820020e98c9b78",
+  "acceptedRevision": "e24dab0707dbaf3245387c0f232c728c48090e04d6b87f5993ff24b549096e95",
+  "added": [
+    {
+      "id": "standing-person-1870",
+      "type": "AssetInstance"
+    },
+    {
+      "id": "standing-person-proxy-v1",
+      "type": "AssetFamily"
+    }
+  ],
+  "modified": 0,
+  "removed": 0,
+  "instance": {
+    "id": "standing-person-1870",
+    "familyId": "standing-person-proxy-v1",
+    "dimensions": {
+      "width": 0.62,
+      "depth": 0.32,
+      "height": 1.87
+    },
+    "bounds": {
+      "minX": 0.69,
+      "maxX": 1.31,
+      "minY": 1.84,
+      "maxY": 2.16,
+      "minZ": 0,
+      "maxZ": 1.87
+    }
+  },
+  "familyPartCount": 9,
+  "renderedMinZ": 0,
+  "renderedMaxZ": 1.87,
+  "unchangedShell": true,
+  "legacyFormatPreserved": true
+}

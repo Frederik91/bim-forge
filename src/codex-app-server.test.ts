@@ -188,7 +188,7 @@ test('proposal worker uses one ephemeral read-only thread and only the BIM tool 
     queueMicrotask(() => {
       void rpc.serverRequest('item/tool/call', {
         threadId: 'thread-1', turnId: 'turn-1', callId: 'call-1', namespace: 'bim_model',
-        tool: 'submit_proposal', arguments: { summary: 'done' },
+        tool: 'run_model_script', arguments: { language: 'javascript', source: "return { kind: 'decline', reason: 'Clarify the destination.', uncertainty: 'No destination specified.' };" },
       }).then(() => {
         rpc.emit('thread/tokenUsage/updated', {
           threadId: 'thread-1', turnId: 'turn-1',
@@ -207,6 +207,7 @@ test('proposal worker uses one ephemeral read-only thread and only the BIM tool 
   const events: unknown[] = [];
   const session: ModelWorkerSession = {
     instructions: 'Use bounded tools.', input: { request: 'test' }, tools: MODEL_PROPOSAL_TOOLS,
+    signal: new AbortController().signal,
     executeTool: async (name, argumentsValue) => {
       calls.push([name, argumentsValue]); return { ok: true, done: true };
     },
@@ -215,7 +216,8 @@ test('proposal worker uses one ephemeral read-only thread and only the BIM tool 
   const worker = connection.modelWorker();
   await worker.run(session);
   assert.deepEqual(worker.identity, { provider: 'openai-codex-app-server', model: 'gpt-test' });
-  assert.deepEqual(calls, [['submit_proposal', { summary: 'done' }]]);
+  assert.deepEqual(calls, [['run_model_script', { language: 'javascript', source: "return { kind: 'decline', reason: 'Clarify the destination.', uncertainty: 'No destination specified.' };" }]]);
+  assert.deepEqual(MODEL_PROPOSAL_TOOLS.map((tool) => tool.name), ['run_model_script']);
   assert.deepEqual(events, [{ responseId: 'turn-1', inputTokens: 120, outputTokens: 30, totalTokens: 150 }]);
   const start = rpc.requests.find((request) => request.method === 'thread/start');
   assert.ok(start);
@@ -237,10 +239,10 @@ test('proposal worker uses one ephemeral read-only thread and only the BIM tool 
     ephemeral: true,
     historyMode: 'legacy',
     baseInstructions: 'Use bounded tools.',
-    developerInstructions: 'Use only tools in the bim_model namespace. Call exactly one tool at a time. Finish only after submit_proposal or decline_request returns done true. Do not use shell, files, web, apps, or other tools.',
+    developerInstructions: 'Use only bim_model.run_model_script. Call exactly one script at a time. Scripts return an observe, propose, or decline decision. Finish only after run_model_script returns done true. Do not use shell, files, web, apps, or other tools.',
     dynamicTools: [{
       type: 'namespace', name: 'bim_model',
-      description: 'Bounded BIM inspection, deterministic preview, and human-review proposal tools.',
+      description: 'Atomic model scripts with bounded inspection, validated previews, and human-review proposals.',
       tools: MODEL_PROPOSAL_TOOLS.map((tool) => ({
         type: 'function', name: tool.name, description: tool.description, inputSchema: tool.parameters,
       })),
@@ -263,9 +265,138 @@ test('proposal timeout interrupts the active Codex turn', async (t) => {
   const worker = connection.modelWorker();
   await assert.rejects(worker.run({
     instructions: 'Use bounded tools.', input: { request: 'test' }, tools: MODEL_PROPOSAL_TOOLS,
+    signal: new AbortController().signal,
     executeTool: async () => ({ ok: true, done: false }), recordProviderEvent: () => {},
   }), /turn timeout/);
   await tick();
   assert.equal(rpc.requests.some((request) => request.method === 'turn/interrupt'
     && JSON.stringify(request.params) === JSON.stringify({ threadId: 'thread-timeout', turnId: 'turn-timeout' })), true);
+});
+
+function proposalRpc(): FakeRpc {
+  const rpc = new FakeRpc();
+  rpc.handlers.set('account/read', () => ({ account: { type: 'chatgpt', email: null, planType: 'plus' } }));
+  rpc.handlers.set('model/list', () => ({ data: [{ model: 'gpt-test', displayName: 'GPT Test', hidden: false }] }));
+  rpc.handlers.set('thread/start', () => ({ thread: { id: 'cancel-thread' } }));
+  rpc.handlers.set('turn/start', () => ({ turn: { id: 'cancel-turn', status: 'inProgress' } }));
+  rpc.handlers.set('turn/interrupt', () => ({}));
+  return rpc;
+}
+
+function proposalSession(signal: AbortSignal, executeTool: ModelWorkerSession['executeTool'] = async () => ({ ok: true, done: false })): ModelWorkerSession {
+  return { signal, instructions: 'Use bounded scripts.', input: {}, tools: MODEL_PROPOSAL_TOOLS,
+    executeTool, recordProviderEvent: () => {} };
+}
+
+test('already cancelled proposals do not create a Codex thread', async (t) => {
+  const rpc = proposalRpc();
+  const connection = await CodexAccountConnection.open({ rpc }); t.after(() => connection.close());
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(connection.modelWorker().run(proposalSession(controller.signal)), /cancelled/);
+  assert.equal(rpc.requests.some((request) => request.method === 'thread/start'), false);
+});
+
+test('cancellation during thread creation settles immediately and never starts a turn', async (t) => {
+  const rpc = proposalRpc(); const starting = Promise.withResolvers<unknown>();
+  rpc.handlers.set('thread/start', () => starting.promise);
+  const connection = await CodexAccountConnection.open({ rpc }); t.after(() => connection.close());
+  const controller = new AbortController();
+  const cancelled = assert.rejects(connection.modelWorker().run(proposalSession(controller.signal)), /cancelled/);
+  controller.abort(); await cancelled;
+  starting.resolve({ thread: { id: 'late-thread' } }); await tick();
+  assert.equal(rpc.requests.some((request) => request.method === 'turn/start'), false);
+  await assert.rejects(rpc.serverRequest('item/tool/call', { threadId: 'late-thread', namespace: 'bim_model', tool: 'run_model_script', arguments: {} }), /outside/);
+});
+
+test('cancellation during turn startup interrupts its late identity and revokes tool dispatch', async (t) => {
+  const rpc = proposalRpc(); const starting = Promise.withResolvers<unknown>();
+  const turnRequested = Promise.withResolvers<void>();
+  rpc.handlers.set('turn/start', () => { turnRequested.resolve(); return starting.promise; });
+  const connection = await CodexAccountConnection.open({ rpc }); t.after(() => connection.close());
+  const controller = new AbortController(); let calls = 0;
+  const cancelled = assert.rejects(connection.modelWorker().run(proposalSession(controller.signal, async () => {
+    calls += 1; return { ok: true, done: true };
+  })), /cancelled/);
+  await turnRequested.promise; controller.abort(); await cancelled;
+  await assert.rejects(rpc.serverRequest('item/tool/call', {
+    threadId: 'cancel-thread', namespace: 'bim_model', tool: 'run_model_script', arguments: {},
+  }), /outside/);
+  starting.resolve({ turn: { id: 'late-turn', status: 'inProgress' } }); await tick();
+  assert.deepEqual(rpc.requests.filter((request) => request.method === 'turn/interrupt'), [
+    { method: 'turn/interrupt', params: { threadId: 'cancel-thread', turnId: 'late-turn' } },
+  ]);
+  assert.equal(calls, 0);
+});
+
+test('cancellation discards an in-flight script reply and ignores late completion', async (t) => {
+  const rpc = proposalRpc(); const script = Promise.withResolvers<Record<string, unknown>>();
+  const entered = Promise.withResolvers<void>();
+  const connection = await CodexAccountConnection.open({ rpc }); t.after(() => connection.close());
+  const controller = new AbortController();
+  const cancelled = assert.rejects(connection.modelWorker().run(proposalSession(controller.signal, async () => {
+    entered.resolve(); return script.promise;
+  })), /cancelled/);
+  await tick();
+  const reply = assert.rejects(rpc.serverRequest('item/tool/call', {
+    threadId: 'cancel-thread', turnId: 'cancel-turn', namespace: 'bim_model', tool: 'run_model_script', arguments: {},
+  }), /cancelled/);
+  await entered.promise; controller.abort(); await cancelled;
+  script.resolve({ ok: true, done: true }); await reply;
+  rpc.emit('turn/completed', { threadId: 'cancel-thread', turn: { id: 'cancel-turn', status: 'completed' } });
+  assert.equal(rpc.requests.filter((request) => request.method === 'turn/interrupt').length, 1);
+});
+
+test('timeout during turn startup settles before the RPC and interrupts a late turn', async (t) => {
+  const rpc = proposalRpc(); const starting = Promise.withResolvers<unknown>();
+  rpc.handlers.set('turn/start', () => starting.promise);
+  const connection = await CodexAccountConnection.open({ rpc, turnTimeoutMs: 10 }); t.after(() => connection.close());
+  await assert.rejects(connection.modelWorker().run(proposalSession(new AbortController().signal)), /turn timeout/);
+  starting.resolve({ turn: { id: 'late-timeout', status: 'inProgress' } }); await tick();
+  assert.deepEqual(rpc.requests.filter((request) => request.method === 'turn/interrupt'), [
+    { method: 'turn/interrupt', params: { threadId: 'cancel-thread', turnId: 'late-timeout' } },
+  ]);
+});
+
+test('only a host terminal reply completes authoring and completed runs detach cancellation', async (t) => {
+  const rpc = proposalRpc();
+  const connection = await CodexAccountConnection.open({ rpc }); t.after(() => connection.close());
+  const controller = new AbortController();
+  const session = proposalSession(controller.signal);
+  const missing = assert.rejects(connection.modelWorker().run(session), /without a completed model script/);
+  await tick();
+  await rpc.serverRequest('item/tool/call', { threadId: 'cancel-thread', namespace: 'bim_model', tool: 'run_model_script',
+    arguments: { language: 'javascript', source: 'return { done: true };' } });
+  rpc.emit('turn/completed', { threadId: 'cancel-thread', turn: { id: 'cancel-turn', status: 'completed' } });
+  await missing;
+  controller.abort(); await tick();
+  assert.equal(rpc.requests.some((request) => request.method === 'turn/interrupt'), false);
+
+  const success = new AbortController();
+  const completed = connection.modelWorker().run(proposalSession(success.signal, async () => ({ ok: true, done: true })));
+  await tick();
+  await assert.rejects(rpc.serverRequest('item/tool/call', { threadId: 'cancel-thread', namespace: 'bim_model', tool: 'unknown_tool', arguments: {} }), /unsupported/);
+  await rpc.serverRequest('item/tool/call', { threadId: 'cancel-thread', namespace: 'bim_model', tool: 'run_model_script', arguments: {} });
+  await assert.rejects(rpc.serverRequest('item/tool/call', { threadId: 'cancel-thread', namespace: 'bim_model', tool: 'run_model_script', arguments: {} }), /already finished/);
+  rpc.emit('turn/completed', { threadId: 'cancel-thread', turn: { id: 'cancel-turn', status: 'completed' } });
+  await completed; success.abort(); await tick();
+  assert.equal(rpc.requests.some((request) => request.method === 'turn/interrupt'), false);
+});
+
+test('prepared source images are sent as actual localImage inputs alongside request text', async (t) => {
+  const rpc = proposalRpc();
+  const connection = await CodexAccountConnection.open({ rpc }); t.after(() => connection.close());
+  const session = { ...proposalSession(new AbortController().signal, async () => ({ ok: true, done: true })),
+    input: { sourceDocuments: [{ sourceId: 'plan-source', text: 'Reference page 1' }] },
+    images: [{ path: '/tmp/private-attempt/plan-1.png' }, { path: '/tmp/private-attempt/plan-2.png' }] };
+  const completed = connection.modelWorker().run(session);
+  await tick();
+  const turn = rpc.requests.find((entry) => entry.method === 'turn/start');
+  assert.ok(turn && turn.params !== null && typeof turn.params === 'object' && 'input' in turn.params);
+  assert.deepEqual(turn.params.input, [
+    { type: 'text', text: JSON.stringify(session.input), text_elements: [] },
+    { type: 'localImage', path: '/tmp/private-attempt/plan-1.png' }, { type: 'localImage', path: '/tmp/private-attempt/plan-2.png' },
+  ]);
+  await rpc.serverRequest('item/tool/call', { threadId: 'cancel-thread', namespace: 'bim_model', tool: 'run_model_script', arguments: {} });
+  rpc.emit('turn/completed', { threadId: 'cancel-thread', turn: { id: 'cancel-turn', status: 'completed' } });
+  await completed;
 });

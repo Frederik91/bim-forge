@@ -1,0 +1,508 @@
+[
+  {
+    "format": "image/png",
+    "status": "ready",
+    "sourceSha256": "627c22a398baede771b594ce3bbccadbb4c3a664dba4abc4c9f077d45e8e733d",
+    "review": {
+      "requestId": "ec644c8d-8507-427c-94ea-27c4ca93359f",
+      "proposalName": "draw-the-floor-plan-from-aellghljmlbhjfopfnmacgdoomngmjhg",
+      "baseRevisionId": "c050c7bdaebb75d7115659ee44495d8a884f7a68034ebc3f72820020e98c9b78",
+      "proposalRevisionId": "1bfac3a86abb6bd2800e4c607b15e9c38d35a2fda139240ea0f06084ad486baa",
+      "selectedObjectIds": [
+        "wall-north"
+      ],
+      "instruction": "Draw the floor plan from the attached reference. Use its dimension labels and opening locations. Explain scale assumptions and any omitted details in the proposal.",
+      "summary": "Rebuild the 6 × 4 m reference with Living room west, Office east and two doors.",
+      "rationale": "Source eb3bb2ba-0273-40f7-b275-358ccb7e0768, synthetic-floor.png, image 1, unpaginated. Labels give 6 × 4 m wall-centre envelope, two 3 × 4 m rooms, walls 0.15 m thick and 2.7 m high, doors 0.9 m wide. Replace shell, add partition/internal door and reposition existing entry retaining its ID. No existing contents. Keep origin and north-up orientation.",
+      "constraints": "Wall-centre dimensions, not clear dimensions. No windows or furnishings per reference. Door swing arcs and handing omitted by opening-only API; no other depicted spaces/openings omitted. No construction approval.",
+      "uncertainty": "Estimated offsets from image proportions (~120 px/m): entry 0.600 m east of west wall; internal door 0.850 m north of south wall. Both door heights assumed 2.100 m, matching existing entry. Labelled dimensions take precedence over image proportions.",
+      "worker": {
+        "provider": "openai-codex-app-server",
+        "model": "gpt-6.1-sol",
+        "responseIds": [
+          "01a17212-e20f-7082-bf67-e6ac90431f43"
+        ],
+        "usage": {
+          "inputTokens": 17675,
+          "outputTokens": 45,
+          "totalTokens": 17720
+        }
+      },
+      "toolCalls": [
+        {
+          "name": "run_model_script",
+          "status": "accepted",
+          "error": null
+        },
+        {
+          "name": "run_model_script",
+          "status": "accepted",
+          "error": null
+        },
+        {
+          "name": "run_model_script",
+          "status": "rejected",
+          "error": "Review text requires 1 to 600 readable characters."
+        },
+        {
+          "name": "run_model_script",
+          "status": "rejected",
+          "error": "Review text requires 1 to 600 readable characters."
+        },
+        {
+          "name": "run_model_script",
+          "status": "accepted",
+          "error": null
+        }
+      ],
+      "scriptExecutions": [
+        {
+          "version": 1,
+          "executionId": "aaa640ae-f18c-4c97-b31a-e32f6cb590ed",
+          "language": "javascript",
+          "sourceSha256": "a4a27af6f8937275e7e95d46d5169e967bfdb28e7675661fbbe1b65d11d0807d",
+          "status": "completed",
+          "disposition": "observation",
+          "validation": "not-run",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": null
+        },
+        {
+          "version": 1,
+          "executionId": "f3c208ec-074f-4c1c-a6d2-73f39ed39f08",
+          "language": "javascript",
+          "sourceSha256": "4470669a2782eb297489c76723a3a5e9e9b8e15719a3e8b0e56d1576ebd7d79c",
+          "status": "completed",
+          "disposition": "observation",
+          "validation": "not-run",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "docs.search",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": null
+        },
+        {
+          "version": 1,
+          "executionId": "bec43175-d6e6-4823-8a6e-630e865e6f5f",
+          "language": "javascript",
+          "sourceSha256": "23e8da5a2317c1633fa5bc3e0fbf28e4e14e97ff6306598898c407994330a379",
+          "status": "completed",
+          "disposition": "discarded",
+          "validation": "failed",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            },
+            {
+              "sequence": 2,
+              "method": "model.previewFloor",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": {
+            "code": "invalid-proposal",
+            "message": "Review text requires 1 to 600 readable characters.",
+            "line": null,
+            "column": null
+          }
+        },
+        {
+          "version": 1,
+          "executionId": "3572a128-57a4-41fb-92c0-0e34c4e1176e",
+          "language": "javascript",
+          "sourceSha256": "4e53bab9c17e4bb1320855e7c4240db5d913a0e2d7d7a09805d1d654f40d958e",
+          "status": "completed",
+          "disposition": "discarded",
+          "validation": "failed",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            },
+            {
+              "sequence": 2,
+              "method": "model.previewFloor",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": {
+            "code": "invalid-proposal",
+            "message": "Review text requires 1 to 600 readable characters.",
+            "line": null,
+            "column": null
+          }
+        },
+        {
+          "version": 1,
+          "executionId": "ec27e661-03c0-4f15-a801-3315b47a20b2",
+          "language": "javascript",
+          "sourceSha256": "2ee491520228d05f83eba66bf5f7477cb86b5a6556edee51813c5126ec716ca6",
+          "status": "completed",
+          "disposition": "proposal",
+          "validation": "passed",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            },
+            {
+              "sequence": 2,
+              "method": "model.previewFloor",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": null
+        }
+      ],
+      "intent": {
+        "interpretation": "Reconstruct two equal rooms with southwest entry and southern partition door.",
+        "assumptions": [
+          "Retain origin and north-positive Y.",
+          "Estimate entry offset 0.600 m and internal offset 0.850 m.",
+          "Assume 2.100 m door heights."
+        ],
+        "certainty": 97,
+        "basis": "Explicit reconstruction scope and labelled drawing support whole-shell replacement despite north-wall selection. Widths and shell dimensions are labelled; opening offsets are proportional estimates."
+      },
+      "sources": [
+        {
+          "id": "eb3bb2ba-0273-40f7-b275-358ccb7e0768",
+          "name": "synthetic-floor.png",
+          "mediaType": "image/png",
+          "byteLength": 44026,
+          "sha256": "627c22a398baede771b594ce3bbccadbb4c3a664dba4abc4c9f077d45e8e733d"
+        }
+      ],
+      "authoringScope": "floor-plan-reconstruction",
+      "validator": "room-graph-v1",
+      "decision": {
+        "status": "pending",
+        "decisionId": null,
+        "actor": null
+      },
+      "changes": {
+        "entities": {
+          "added": [
+            "door-internal",
+            "floor-wall-h-p0-p0-p6000",
+            "floor-wall-h-p4000-p0-p6000",
+            "floor-wall-v-p0-p0-p4000",
+            "floor-wall-v-p3000-p0-p4000",
+            "floor-wall-v-p6000-p0-p4000",
+            "level-ground",
+            "living-room",
+            "office"
+          ],
+          "removed": [
+            "wall-east",
+            "wall-north",
+            "wall-south",
+            "wall-west"
+          ],
+          "modified": []
+        },
+        "relationships": {
+          "added": [
+            "floor-host-1b3fbnekfyh3ld9ews9aw37ucjly6k4zxs0ibyycjyql8bbziv",
+            "floor-host-5oglgdd8vgf25hdbdg7v6q32dvgqozhbwvqzfyuxf6w112mcqs"
+          ],
+          "removed": [
+            "host-entry"
+          ],
+          "modified": []
+        }
+      }
+    }
+  },
+  {
+    "format": "application/pdf",
+    "status": "ready",
+    "sourceSha256": "c02f86b5eb1476eabf3a35d7b25ad35de1fa519df4379f8d2d18fac05fda6eb1",
+    "review": {
+      "requestId": "e5addb26-0cc6-4fbe-8247-80646352014f",
+      "proposalName": "draw-the-floor-plan-from-hfemhepfcbedjmchdbmnlbccapddmjna",
+      "baseRevisionId": "c050c7bdaebb75d7115659ee44495d8a884f7a68034ebc3f72820020e98c9b78",
+      "proposalRevisionId": "82e4dd31492e2c9de1088e717b8879ee7075123c43c8795ec4ca99fe82691aff",
+      "selectedObjectIds": [
+        "wall-north"
+      ],
+      "instruction": "Draw the floor plan from the attached reference. Use its dimension labels and opening locations. Explain scale assumptions and any omitted details in the proposal.",
+      "summary": "Reconstruct reference Living room and Office, with south entry and shared-wall door.",
+      "rationale": "Source aefd976c-f4e6-46b2-b2b0-fc2dee3c7ad9, synthetic-floor.pdf page 1: west Living room and east Office each 3 × 4 m in labelled 6 × 4 m centre-line envelope. Labels control scale, north up. Walls 0.15 m thick, 2.7 m high. Replace existing shell, retain and relocate entry identity, add partition and office door. No existing contents to preserve.",
+      "constraints": "Retain southwest origin. Room sizes interpreted as centre-line dimensions. Both opening widths are labelled 0.9 m. Estimated offsets: entry 1.00 m east of southwest corner; partition door 0.83 m north of south wall. Assumed heights 2.10 m, matching existing entry. Door swing/handing and annotation graphics omitted; no windows or furnishings shown or added. No construction approval.",
+      "uncertainty": "Opening offsets estimated from image proportions; door heights assumed. Labelled dimensions take precedence over image proportions.",
+      "worker": {
+        "provider": "openai-codex-app-server",
+        "model": "gpt-6.1-sol",
+        "responseIds": [
+          "01a17213-c564-7740-bb51-60879527531e"
+        ],
+        "usage": {
+          "inputTokens": 19258,
+          "outputTokens": 46,
+          "totalTokens": 19304
+        }
+      },
+      "toolCalls": [
+        {
+          "name": "run_model_script",
+          "status": "accepted",
+          "error": null
+        },
+        {
+          "name": "run_model_script",
+          "status": "rejected",
+          "error": "Review text requires 1 to 600 readable characters."
+        },
+        {
+          "name": "run_model_script",
+          "status": "rejected",
+          "error": "Review text requires 1 to 600 readable characters."
+        },
+        {
+          "name": "run_model_script",
+          "status": "accepted",
+          "error": null
+        }
+      ],
+      "scriptExecutions": [
+        {
+          "version": 1,
+          "executionId": "36b05804-511b-4ba2-b9f7-62e2e7365743",
+          "language": "javascript",
+          "sourceSha256": "a4a27af6f8937275e7e95d46d5169e967bfdb28e7675661fbbe1b65d11d0807d",
+          "status": "completed",
+          "disposition": "observation",
+          "validation": "not-run",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": null
+        },
+        {
+          "version": 1,
+          "executionId": "c2609b27-49cf-4f7d-8475-861eb832f135",
+          "language": "javascript",
+          "sourceSha256": "26884132ec6ae1c0a87c9ac5eac8603fb998b9edfeae98e336000ddb6d699274",
+          "status": "completed",
+          "disposition": "discarded",
+          "validation": "failed",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            },
+            {
+              "sequence": 2,
+              "method": "model.previewFloor",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": {
+            "code": "invalid-proposal",
+            "message": "Review text requires 1 to 600 readable characters.",
+            "line": null,
+            "column": null
+          }
+        },
+        {
+          "version": 1,
+          "executionId": "ec6fbed8-cd41-42c0-a06b-52dd5c9f83da",
+          "language": "javascript",
+          "sourceSha256": "b2d2afec83d3dbacd61a0d2b09629b4f44ce206683a53b1a10b00c338a5bc5a7",
+          "status": "completed",
+          "disposition": "discarded",
+          "validation": "failed",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            },
+            {
+              "sequence": 2,
+              "method": "model.previewFloor",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": {
+            "code": "invalid-proposal",
+            "message": "Review text requires 1 to 600 readable characters.",
+            "line": null,
+            "column": null
+          }
+        },
+        {
+          "version": 1,
+          "executionId": "0ce3a182-e40a-4c0c-9598-a32c8a6ed287",
+          "language": "javascript",
+          "sourceSha256": "79bda539605c1922c0b047e84009befc6d2bf022d8a5a666ddac8bd3c4e476f0",
+          "status": "completed",
+          "disposition": "proposal",
+          "validation": "passed",
+          "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+          "policyVersion": "proposal-intent-v1",
+          "runtime": {
+            "packageVersion": "0.1.1",
+            "guestAbi": 2,
+            "bootstrapVersion": 3,
+            "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+          },
+          "calls": [
+            {
+              "sequence": 1,
+              "method": "model.inspect",
+              "disposition": "completed"
+            },
+            {
+              "sequence": 2,
+              "method": "model.previewFloor",
+              "disposition": "completed"
+            }
+          ],
+          "diagnostic": null
+        }
+      ],
+      "intent": {
+        "interpretation": "Reconstruct the two-room rectangular reference shell and both openings.",
+        "assumptions": [
+          "Room dimensions use wall centre lines.",
+          "Opening offsets estimated as 1.00 m for entry and 0.83 m for partition door.",
+          "Door heights assumed 2.10 m; swing graphics omitted."
+        ],
+        "certainty": 96,
+        "basis": "Explicit reconstruction request and page 1 show equal rooms, labelled envelope, wall sizes and opening widths. Offsets and door heights are unlabelled; selected wall is context only."
+      },
+      "sources": [
+        {
+          "id": "aefd976c-f4e6-46b2-b2b0-fc2dee3c7ad9",
+          "name": "synthetic-floor.pdf",
+          "mediaType": "application/pdf",
+          "byteLength": 1299,
+          "sha256": "c02f86b5eb1476eabf3a35d7b25ad35de1fa519df4379f8d2d18fac05fda6eb1"
+        }
+      ],
+      "authoringScope": "floor-plan-reconstruction",
+      "validator": "room-graph-v1",
+      "decision": {
+        "status": "pending",
+        "decisionId": null,
+        "actor": null
+      },
+      "changes": {
+        "entities": {
+          "added": [
+            "door-office",
+            "floor-wall-h-p0-p0-p6000",
+            "floor-wall-h-p4000-p0-p6000",
+            "floor-wall-v-p0-p0-p4000",
+            "floor-wall-v-p3000-p0-p4000",
+            "floor-wall-v-p6000-p0-p4000",
+            "level-ground",
+            "living-room",
+            "office"
+          ],
+          "removed": [
+            "wall-east",
+            "wall-north",
+            "wall-south",
+            "wall-west"
+          ],
+          "modified": []
+        },
+        "relationships": {
+          "added": [
+            "floor-host-1b3fbnekfyh3ld9ews9aw37ucjly6k4zxs0ibyycjyql8bbziv",
+            "floor-host-3pqqdndvk4nqa0is7xfbw236j6d7l42unqq8l90ohfuz2hjfzt"
+          ],
+          "removed": [
+            "host-entry"
+          ],
+          "modified": []
+        }
+      }
+    }
+  }
+]

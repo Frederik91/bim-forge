@@ -5,6 +5,9 @@ import { RoomRepository, diffSnapshots, rectangleLayout, previewRectangle } from
 import { MODEL_PROPOSAL_TOOLS, prepareModelProposal } from './model-proposal.ts';
 import type { Door, Entity, HostingRelationship, ModelSnapshot, Point, RoomLayout, Wall } from './room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
+import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, MAX_SCRIPT_EVIDENCE_BYTES, parseScriptExecutionEvidence, parseScriptExecutions } from './script-evidence.ts';
+import type { ScriptExecutionEvidence } from './script-evidence.ts';
+import { createResidentialProject } from './residential-floor.ts';
 
 interface DoorShape { id: string; type: 'Door'; name: string; width: number; height: number }
 interface WallShape { id: string; type: 'Wall'; name: string; start: Point; end: Point; thickness: number; height: number }
@@ -658,12 +661,18 @@ test('accepting an AI proposal advances main while preserving the original and p
   const result = await prepareModelProposal(original, visualRequest(original, layout, { proposalName: 'wider-entry' }), {
     identity: { provider: 'test', model: 'scripted-room-worker' },
     async run(session: ModelWorkerSession) {
-      await session.executeTool('preview_rectangle', layout);
-      await session.executeTool('submit_proposal', {
+      const review = {
         summary: 'The entry is widened to 1200 mm.',
         rationale: 'The requested width fits the preserved host wall.',
         constraints: 'Door height, host relationship and all wall geometry remain unchanged.',
         uncertainty: 'Concept-only geometry; no code or coordination checks were run.',
+      };
+      await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          await model.previewRectangle(${JSON.stringify(layout)});
+          return { kind: 'propose', review: ${JSON.stringify({ ...review, intent: { interpretation: 'Apply the requested room edit.', assumptions: [], certainty: 90, basis: 'The deterministic fixture specifies the layout.' } })} };
+        `,
       });
     },
   });
@@ -683,6 +692,59 @@ test('accepting an AI proposal advances main while preserving the original and p
   assert.throws(() => accepted.accept('main', decision), /proposal to accept/);
   assert.throws(() => accepted.accept('missing-proposal', decision), /Unknown proposal/);
   assert.equal(proposed.head('main'), root);
+});
+
+async function reviewedFurnitureChange(repo: RoomRepository, name: string, snapshot: unknown): Promise<RoomRepository> {
+  return repo.proposeReviewedModel({ name, from: repo.head('main'), snapshot, review: {
+    requestId: `request-${name}`, selectedObjectIds: ['office-chair'], instruction: 'Apply the selected furniture change.',
+    summary: 'Update selected furniture.', rationale: 'Requested model change.', constraints: 'Retain unrelated objects.', uncertainty: 'Concept review.',
+    worker: { provider: 'fixture', model: 'reviewed-fixture', responseIds: [], usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+    toolCalls: [{ name: 'preview_furnishings', status: 'accepted', error: null }], validator: 'room-graph-v1',
+  } });
+}
+
+test('conflict-aware acceptance preserves independent chair changes and immutable review history', async () => {
+  const repo = await createResidentialProject('Concurrent chairs');
+  const base = repo.view(repo.head('main')).snapshot;
+  const change = (id: string) => ({ ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === id ? { ...item, rotationDeg: 180 } : item) });
+  const one = await reviewedFurnitureChange(repo, 'first-chair', change('dining-chair-one'));
+  const two = await reviewedFurnitureChange(repo, 'second-chair', change('office-chair'));
+  const originalReview = two.review('second-chair'); const originalProposal = two.view(two.head('second-chair'));
+  const firstAccepted = await repo.acceptFrom(one, 'first-chair', { decisionId: 'chair-one-decision', actor: 'tester' });
+  const final = await firstAccepted.acceptFrom(two, 'second-chair', { decisionId: 'chair-two-decision', actor: 'tester' });
+  const current = final.view(final.head('main'));
+  assert.equal(current.parentId, firstAccepted.head('main'));
+  assert.deepEqual(diffSnapshots(repo.view(repo.head('main')).snapshot, current.snapshot).entities.modified.map(item => item.id), ['dining-chair-one', 'office-chair']);
+  assert.deepEqual(final.view(final.head('second-chair')), originalProposal);
+  const review = final.review('second-chair');
+  assert.deepEqual({ ...review, decision: originalReview.decision }, originalReview);
+  assert.ok(review.decision.status === 'accepted');
+  assert.equal(review.decision.appliedRevisionId, current.id);
+  assert.equal(current.parentId, firstAccepted.head('main'));
+  assert.equal(final.review('first-chair').decision.status, 'superseded');
+  assert.deepEqual(final.reviewAt(current.id), { review, comparisonBaseRevisionId: firstAccepted.head('main') });
+  assert.deepEqual(final.reviewAt(originalProposal.id), { review, comparisonBaseRevisionId: originalReview.baseRevisionId });
+  assert.deepEqual(diffSnapshots(final.view(firstAccepted.head('main')).snapshot, current.snapshot).entities.modified.map(item => item.id), ['office-chair']);
+  assert.equal((await RoomRepository.restore(final.serialize())).serialize(), final.serialize());
+  const forged = parseRecord(final.serialize());
+  const forgedReview = recordArray(forged, 'reviews').find(item => item.proposalName === 'second-chair');
+  assert.ok(forgedReview && isRecord(forgedReview.decision));
+  forgedReview.decision.appliedRevisionId = final.root();
+  await assert.rejects(RoomRepository.restore(JSON.stringify(forged)), /accepted predecessor/);
+});
+
+test('conflict-aware acceptance blocks divergent chair edits and invalid combined supports without mutation', async () => {
+  const repo = await createResidentialProject('Merge validation'); const base = repo.view(repo.head('main')).snapshot;
+  const first = await reviewedFurnitureChange(repo, 'chair-left', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-chair' ? { ...item, rotationDeg: 90 } : item) });
+  const second = await reviewedFurnitureChange(repo, 'chair-right', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-chair' ? { ...item, rotationDeg: 180 } : item) });
+  const accepted = await repo.acceptFrom(first, 'chair-left', { decisionId: 'accept-left', actor: 'tester' }); const before = accepted.serialize();
+  await assert.rejects(accepted.acceptFrom(second, 'chair-right', { decisionId: 'accept-right', actor: 'tester' }), /Conflicting changes to office-chair/);
+  assert.equal(accepted.serialize(), before);
+  const desk = await reviewedFurnitureChange(repo, 'smaller-desk', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-desk' ? { ...item, width: 1.3 } : item) });
+  const laptop = await reviewedFurnitureChange(repo, 'move-laptop', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-laptop' ? { ...item, position: [11, 1] } : item) });
+  const deskAccepted = await repo.acceptFrom(desk, 'smaller-desk', { decisionId: 'accept-desk', actor: 'tester' });
+  await assert.rejects(deskAccepted.acceptFrom(laptop, 'move-laptop', { decisionId: 'accept-laptop', actor: 'tester' }), /support|desk|table/);
+  assert.equal(deskAccepted.review('smaller-desk').decision.status, 'accepted');
 });
 
 function visualRequest(repo: RoomRepository, layout: RoomLayout, overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -706,25 +768,43 @@ test('model-working AI receives bounded tools and saves only its validated propo
     async run(session: ModelWorkerSession) {
       const input = isRecord(session.input) ? session.input : {};
       const request = isRecord(input.request) ? input.request : {};
-      assert.deepEqual(session.tools.map((tool) => tool.name), ['inspect_model', 'preview_rectangle', 'preview_furnishings', 'preview_workstation_move', 'submit_proposal', 'decline_request']);
+      assert.deepEqual(session.tools.map((tool) => tool.name), ['run_model_script']);
+      assert.deepEqual(session.tools, MODEL_PROPOSAL_TOOLS);
       assert.equal(request.baseRevisionId, original.head('main'));
       assert.deepEqual(request.selectedObjectIds, ['door-entry']);
-      const inspected = await session.executeTool('inspect_model', {});
-      const model = isRecord(inspected.model) ? inspected.model : {};
+      const inspected = await session.executeTool('run_model_script', {
+        language: 'typescript', source: "return { kind: 'observe', observation: await model.inspect() };",
+      });
+      const observation = isRecord(inspected.observation) ? inspected.observation : {};
+      const model = isRecord(observation.model) ? observation.model : {};
       assert.equal(inspected.ok, true); assert.equal(Array.isArray(model.entities) ? model.entities.length : -1, 5);
       const visualIntent = isRecord(request.visualIntent) ? request.visualIntent : {};
-      const previewed = await session.executeTool('preview_rectangle', visualIntent.layout);
+      const previewed = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          return { kind: 'observe', observation: await model.previewRectangle(${JSON.stringify(visualIntent.layout)}) };
+        `,
+      });
       assert.equal(previewed.ok, true);
-      const changes = isRecord(previewed.changes) ? previewed.changes : {};
+      const preview = isRecord(previewed.observation) ? previewed.observation : {};
+      const changes = isRecord(preview.changes) ? preview.changes : {};
       const entities = isRecord(changes.entities) ? changes.entities : {};
       assert.deepEqual(Array.isArray(entities.modified) ? [...entities.modified].sort() : [], ['door-entry', 'wall-east', 'wall-north', 'wall-south'].sort());
-      const submitted = await session.executeTool('submit_proposal', {
+      const review = {
         summary: 'The entrance is 1200 mm wide and the room extends one metre east.',
         rationale: 'This follows the selected door and the visual request while preserving connected walls and hosting.',
         constraints: 'The rectangular-room tool preserves identifiers, wall properties and the hosted-by relationship.',
         uncertainty: 'Concept geometry only; no accessibility, structural, code or coordination approval was performed.',
+      };
+      const submitted = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          await model.previewRectangle(${JSON.stringify(visualIntent.layout)});
+          return { kind: 'propose', review: ${JSON.stringify({ ...review, intent: { interpretation: 'Apply the requested room edit.', assumptions: [], certainty: 90, basis: 'The deterministic fixture specifies the layout.' } })} };
+        `,
       });
-      assert.deepEqual(submitted, { ok: true, done: true });
+      assert.equal(submitted.ok, true);
+      assert.equal(submitted.done, true);
     },
   };
   const result = await prepareModelProposal(original, visualRequest(original, layout), worker);
@@ -773,15 +853,37 @@ test('proposal requests reject stale identities before calling AI and let AI rec
     identity: { provider: 'test', model: 'retry-worker' },
     async run(session: ModelWorkerSession) {
       const invalid = structuredClone(layout); invalid.door.offsetMm = 5900; invalid.door.widthMm = 1200;
-      const rejected = await session.executeTool('preview_rectangle', invalid);
+      const rejected = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          return { kind: 'observe', observation: await model.previewRectangle(${JSON.stringify(invalid)}) };
+        `,
+      });
       assert.equal(rejected.ok, false); assert.match(String(rejected.error), /fit inside/);
       const valid = structuredClone(layout); valid.door.widthMm = 1200;
-      assert.equal((await session.executeTool('preview_rectangle', valid)).ok, true);
-      assert.equal((await session.executeTool('submit_proposal', {
+      const review = {
         summary: 'The entrance is widened to 1200 mm.', rationale: 'The valid retry fits its host wall.',
         constraints: 'The hosted door and rectangular wall topology are preserved.',
         uncertainty: 'Concept-only validation.',
-      })).done, true);
+      };
+      const submitted = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `
+          await model.inspect();
+          let rejected = false;
+          try {
+            await model.previewRectangle(${JSON.stringify(invalid)});
+          } catch (error) {
+            if (!(error instanceof Error) || error.name !== 'ModelValidationError'
+                || !error.message.includes('fit inside')) throw error;
+            rejected = true;
+          }
+          if (!rejected) throw new Error('Invalid geometry was unexpectedly accepted.');
+          await model.previewRectangle(${JSON.stringify(valid)});
+          return { kind: 'propose', review: ${JSON.stringify({ ...review, intent: { interpretation: 'Apply the requested room edit.', assumptions: [], certainty: 90, basis: 'The deterministic fixture specifies the layout.' } })} };
+        `,
+      });
+      assert.equal(submitted.ok, true);
+      assert.equal(submitted.done, true);
     },
   };
   const result = await prepareModelProposal(repo, visualRequest(repo, layout), worker);
@@ -794,13 +896,325 @@ test('model worker can decline without changing repository history', async () =>
   const result = await prepareModelProposal(repo, visualRequest(repo, layout), {
     identity: { provider: 'test', model: 'declining-worker' },
     async run(session: ModelWorkerSession) {
-      const output = await session.executeTool('decline_request', {
+      const decision = {
+        kind: 'decline',
         reason: 'The requested operation is outside the rectangular room tool.',
         uncertainty: 'No geometry was prepared.',
+      };
+      const output = await session.executeTool('run_model_script', {
+        language: 'typescript', source: `return ${JSON.stringify(decision)};`,
       });
       assert.equal(output.done, true);
     },
   });
   assert.equal(result.status, 'declined'); assert.equal(result.repository, repo);
   assert.equal(result.repository.serialize(), saved); assert.equal(result.review.proposalRevisionId, null);
+});
+
+function scriptExecution(overrides: Partial<ScriptExecutionEvidence> = {}): ScriptExecutionEvidence {
+  return {
+    version: 1, executionId: 'execution-1', language: 'typescript', sourceSha256: 'a'.repeat(64),
+    status: 'completed', disposition: 'proposal', validation: 'passed', contractSha256: 'b'.repeat(64),
+    policyVersion: 'bim-model-v1',
+    runtime: { packageVersion: '0.1.0', guestAbi: 2, bootstrapVersion: 3, artifactSha256: 'c'.repeat(64) },
+    calls: [{ sequence: 1, method: 'model.previewRectangle', disposition: 'completed' }], diagnostic: null,
+    ...overrides,
+  };
+}
+
+function discardedExecution(overrides: Partial<ScriptExecutionEvidence> = {}): ScriptExecutionEvidence {
+  return scriptExecution({ status: 'failed', disposition: 'discarded', validation: 'not-run',
+    diagnostic: { code: 'script-error', message: 'The script failed.', line: null, column: null }, ...overrides });
+}
+
+function scriptToolCalls(executions: ScriptExecutionEvidence[]) {
+  return executions.map((execution) => ({ name: 'run_model_script',
+    status: execution.disposition === 'discarded' ? 'rejected' : 'accepted', error: execution.diagnostic?.message ?? null }));
+}
+
+function scriptProposalInput(repo: RoomRepository, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const base = repo.view(repo.head('main')).snapshot;
+  const layout = rectangleLayout(base);
+  return {
+    name: 'script-study', from: repo.head('main'),
+    snapshot: previewRectangle(base, { ...layout, door: { ...layout.door, widthMm: 1200 } }),
+    review: {
+      requestId: 'script-request', selectedObjectIds: ['door-entry'], instruction: 'Widen the entry to 1200 mm.',
+      summary: 'Entry widened.', rationale: 'The opening fits its host.', constraints: 'Other objects retained.',
+      uncertainty: 'Concept validation only.', worker: { provider: 'test', model: 'script-worker', responseIds: [],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+      toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }],
+      scriptExecutions: [scriptExecution()], validator: 'room-graph-v1', ...overrides,
+    },
+  };
+}
+
+test('historical reviewed saves retain all legacy evidence names and exact bytes without script evidence', async () => {
+  const repo = await RoomRepository.create();
+  const legacyCalls = ['inspect_model', 'preview_rectangle', 'preview_furnishings', 'preview_room_furnishings',
+    'preview_workstation_move', 'submit_proposal', 'decline_request', 'unsupported_tool']
+    .map((name) => ({ name, status: 'accepted', error: null }));
+  const input = scriptProposalInput(repo, { toolCalls: legacyCalls });
+  if (!isRecord(input.review)) throw new Error('Missing review fixture.');
+  delete input.review.scriptExecutions;
+  const proposed = await repo.proposeReviewedModel(input);
+  const saved = proposed.serialize();
+  const restored = await RoomRepository.restore(saved);
+  assert.equal(restored.serialize(), saved);
+  assert.deepEqual(restored.review('script-study').toolCalls, legacyCalls);
+  assert.equal(Object.hasOwn(restored.review('script-study'), 'scriptExecutions'), false);
+  assert.equal(saved.includes('scriptExecutions'), false);
+  const next = await proposed.proposeReviewedModel({ ...scriptProposalInput(proposed, { requestId: 'script-followup-request' }), name: 'script-followup' });
+  assert.deepEqual(next.review('script-study'), proposed.review('script-study'));
+  assert.equal(Object.hasOwn(next.review('script-study'), 'scriptExecutions'), false);
+  assert.deepEqual(next.review('script-followup').scriptExecutions, [scriptExecution()]);
+  assert.equal((await RoomRepository.restore(next.serialize())).serialize(), next.serialize());
+  const accepted = restored.accept('script-study', { decisionId: 'legacy-accept', actor: 'human' });
+  assert.equal(Object.hasOwn(accepted.review('script-study'), 'scriptExecutions'), false);
+  assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
+});
+
+test('script review evidence survives proposal creation, acceptance and exact restore without legacy submit records', async () => {
+  const repo = await RoomRepository.create(); const saved = repo.serialize();
+  const evidence = [
+    scriptExecution({ executionId: 'execution-failed', status: 'failed', disposition: 'discarded', validation: 'not-run',
+      diagnostic: { code: 'script-error', message: 'The first attempt failed.', line: 3, column: null } }),
+    scriptExecution(),
+  ];
+  const input = scriptProposalInput(repo, { scriptExecutions: evidence,
+    toolCalls: [{ name: 'run_model_script', status: 'rejected', error: 'The first attempt failed.' },
+      { name: 'run_model_script', status: 'accepted', error: null }] });
+  const proposed = await repo.proposeReviewedModel(input);
+  assert.equal(repo.serialize(), saved);
+  assert.equal(proposed.head('main'), repo.head('main'));
+  assert.deepEqual(proposed.review('script-study').scriptExecutions, evidence);
+  evidence[0].runtime.packageVersion = 'caller-changed';
+  assert.equal(proposed.review('script-study').scriptExecutions?.[0].runtime.packageVersion, '0.1.0');
+  assert.deepEqual(proposed.review('script-study').toolCalls.map((call) => call.name), ['run_model_script', 'run_model_script']);
+  assertFrozen(proposed.review('script-study'));
+  assert.equal((await RoomRepository.restore(proposed.serialize())).serialize(), proposed.serialize());
+  const accepted = proposed.accept('script-study', { decisionId: 'script-accept', actor: 'human' });
+  const restored = await RoomRepository.restore(accepted.serialize());
+  assert.equal(restored.serialize(), accepted.serialize());
+  assert.equal(restored.head('main'), proposed.head('script-study'));
+  assert.deepEqual(restored.review('script-study').scriptExecutions, proposed.review('script-study').scriptExecutions);
+  assert.equal(restored.review('script-study').validator, 'room-graph-v1');
+});
+
+test('script evidence parses every upstream call disposition and returns detached data', () => {
+  const callDispositions: ScriptExecutionEvidence['calls'][number]['disposition'][] = [
+    'completed', 'replaced', 'denied', 'unknown-method', 'invalid-arguments', 'invalid-result', 'app-error',
+    'host-failure', 'host-timeout', 'response-too-large', 'revoked', 'queue-full', 'request-too-large',
+  ];
+  const input = discardedExecution({ status: 'completed',
+    diagnostic: { code: 'execution-integrity', message: 'A host call failed.', line: null, column: null },
+    calls: callDispositions.map((disposition, index) => ({ sequence: index + 1, method: 'model.inspect', disposition })) });
+  const parsed = parseScriptExecutionEvidence(input);
+  assert.deepEqual(parsed, input);
+  input.calls[0].method = 'caller-changed';
+  assert.equal(parsed.calls[0].method, 'model.inspect');
+  assert.deepEqual(parseScriptExecutions([]), []);
+  for (const status of ['completed', 'failed', 'cancelled', 'timed-out', 'resource-limit'] as const) {
+    assert.equal(parseScriptExecutionEvidence(discardedExecution({ status })).status, status);
+  }
+  for (const disposition of ['observation', 'proposal', 'declined', 'discarded'] as const) {
+    const input = disposition === 'discarded' ? discardedExecution()
+      : scriptExecution({ disposition, validation: disposition === 'proposal' ? 'passed' : 'not-run' });
+    assert.equal(parseScriptExecutionEvidence(input).disposition, disposition);
+  }
+  assert.equal(parseScriptExecutionEvidence(discardedExecution({ language: 'javascript', status: 'completed', validation: 'failed' })).language, 'javascript');
+});
+
+test('script evidence rejects unknown fields, raw payloads, malformed digests, enums and coordinates', () => {
+  const valid = scriptExecution();
+  const invalid: unknown[] = [
+    null, [], { ...valid, version: 2 }, { ...valid, executionId: '' }, { ...valid, executionId: 'wrong/id' },
+    { ...valid, executionId: 'x'.repeat(129) }, { ...valid, language: 'python' }, { ...valid, status: 'success' },
+    { ...valid, disposition: 'accepted' }, { ...valid, validation: 'skipped' },
+    { ...valid, sourceSha256: 'A'.repeat(64) }, { ...valid, contractSha256: 'a'.repeat(63) },
+    { ...valid, policyVersion: ' ' }, { ...valid, policyVersion: 'policy\nforged' },
+    { ...valid, runtime: { ...valid.runtime, artifactSha256: 'x'.repeat(64) } },
+    { ...valid, runtime: { ...valid.runtime, guestAbi: 0 } },
+    { ...valid, runtime: { ...valid.runtime, bootstrapVersion: 1.5 } },
+    { ...valid, runtime: { ...valid.runtime, guestAbi: Number.MAX_SAFE_INTEGER + 1 } },
+    { ...valid, runtime: { ...valid.runtime, packageVersion: '' } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad', line: 0, column: null } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad', line: null, column: -1 } },
+    { ...valid, diagnostic: { code: '', message: 'bad', line: null, column: null } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad\u007ftext', line: null, column: null } },
+    { ...valid, calls: [{ sequence: 1, method: 'model.inspect', disposition: 'accepted' }] },
+    { ...valid, calls: [{ sequence: 0, method: 'model.inspect', disposition: 'completed' }] },
+    { ...valid, calls: [{ sequence: 1, method: '', disposition: 'completed' }] },
+    { ...valid, calls: [{ sequence: 1, method: 'model.inspect', disposition: 'completed', args: {} }] },
+    { ...valid, runtime: { ...valid.runtime, rawError: 'not allowed' } },
+    { ...valid, diagnostic: { code: 'error', message: 'bad', line: null, column: null, stack: 'not allowed' } },
+    ...['source', 'args', 'results', 'rawErrors', 'logs'].map((key) => ({ ...valid, [key]: 'not allowed' })),
+  ];
+  for (const value of invalid) assert.throws(() => parseScriptExecutionEvidence(value), /Invalid script evidence/);
+  let accessorCalls = 0;
+  const accessor = { ...valid };
+  Object.defineProperty(accessor, 'policyVersion', { enumerable: true, get() { accessorCalls += 1; return 'policy'; } });
+  assert.throws(() => parseScriptExecutionEvidence(accessor), /accessors/);
+  const sparse = new Array<unknown>(1);
+  assert.throws(() => parseScriptExecutions(sparse), /dense|holes/);
+  const arrayAccessor: unknown[] = [valid];
+  Object.defineProperty(arrayAccessor, '0', { enumerable: true, get() { accessorCalls += 1; return valid; } });
+  assert.throws(() => parseScriptExecutions(arrayAccessor), /accessors/);
+  assert.equal(accessorCalls, 0);
+});
+
+test('execution count and aggregate host-call limits are inclusive and sequences cannot repeat or decrease', () => {
+  const six = Array.from({ length: MAX_SCRIPT_EXECUTIONS }, (_, index) => scriptExecution({ executionId: `execution-${index}` }));
+  assert.equal(parseScriptExecutions(six).length, 6);
+  assert.throws(() => parseScriptExecutions([...six, scriptExecution({ executionId: 'overflow' })]));
+  assert.throws(() => parseScriptExecutions([scriptExecution(), scriptExecution()]), /duplicate/);
+  const calls: ScriptExecutionEvidence['calls'] = Array.from({ length: MAX_SCRIPT_HOST_CALLS }, (_, index) => ({
+    sequence: index + 1, method: 'model.inspect', disposition: 'completed',
+  }));
+  assert.equal(parseScriptExecutions([scriptExecution({ calls })])[0].calls.length, 64);
+  assert.throws(() => parseScriptExecutions([scriptExecution({ calls }), scriptExecution({ executionId: 'overflow' })]), /64 host-call/);
+  assert.throws(() => parseScriptExecutionEvidence(scriptExecution({ calls: [...calls, { sequence: 65, method: 'model.inspect', disposition: 'completed' }] })));
+  assert.throws(() => parseScriptExecutionEvidence(scriptExecution({ calls: [calls[0], calls[0]] })), /sequences/);
+  assert.throws(() => parseScriptExecutionEvidence(scriptExecution({ calls: [calls[1], calls[0]] })), /sequences/);
+});
+
+test('script execution evidence enforces the exact UTF-8 byte boundary without truncation', () => {
+  const executions = Array.from({ length: MAX_SCRIPT_EXECUTIONS }, (_, index) => discardedExecution({
+    executionId: `execution-${index}`, calls: Array.from({ length: 10 }, (_, call) => ({
+      sequence: call + 1, method: 'm'.repeat(256), disposition: 'completed',
+    })), diagnostic: { code: 'script-error', message: 'a', line: null, column: null },
+  }));
+  const bytes = (): number => new TextEncoder().encode(JSON.stringify(executions)).byteLength;
+  let remaining = MAX_SCRIPT_EVIDENCE_BYTES - bytes();
+  assert.ok(remaining > 0);
+  for (const execution of executions) {
+    if (!execution.diagnostic) throw new Error('Missing diagnostic fixture.');
+    const extra = Math.min(2999, remaining);
+    const messageBytes = extra + 1;
+    execution.diagnostic.message = '界'.repeat(Math.floor(messageBytes / 3)) + (messageBytes % 3 === 2 ? 'é' : messageBytes % 3 === 1 ? 'a' : '');
+    remaining -= extra;
+  }
+  assert.equal(remaining, 0);
+  assert.equal(bytes(), 32768);
+  assert.deepEqual(parseScriptExecutions(executions), executions);
+  const last = executions.at(-1);
+  if (!last?.diagnostic) throw new Error('Missing diagnostic fixture.');
+  last.diagnostic.message += 'a';
+  assert.equal(bytes(), 32769);
+  assert.ok(JSON.stringify(executions).length < MAX_SCRIPT_EVIDENCE_BYTES);
+  assert.throws(() => parseScriptExecutions(executions), /UTF-8 byte/);
+});
+
+test('invalid script evidence fails proposal creation and saved-review restoration atomically', async () => {
+  const repo = await RoomRepository.create(); const saved = repo.serialize();
+  const proposed = await repo.proposeReviewedModel(scriptProposalInput(repo));
+  const mutations: Record<string, unknown>[] = [
+    { scriptExecutions: null }, { scriptExecutions: undefined }, { scriptExecutions: [] },
+    { scriptExecutions: [{ ...scriptExecution(), source: 'not allowed' }] },
+    { scriptExecutions: [scriptExecution({ sourceSha256: 'wrong' })] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'submit_proposal', status: 'accepted', error: null }] },
+    { toolCalls: [{ name: 'decline_request', status: 'accepted', error: null }] },
+  ];
+  for (const mutation of mutations) {
+    await assert.rejects(repo.proposeReviewedModel(scriptProposalInput(repo, mutation)));
+    if (Object.hasOwn(mutation, 'scriptExecutions') && mutation.scriptExecutions === undefined) continue;
+    const damaged = parseRecord(proposed.serialize());
+    Object.assign(first(recordArray(damaged, 'reviews'), 'review'), mutation);
+    await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)));
+  }
+  const missing = scriptProposalInput(repo);
+  if (!isRecord(missing.review)) throw new Error('Missing review fixture.');
+  delete missing.review.scriptExecutions;
+  await assert.rejects(repo.proposeReviewedModel(missing), /execution evidence/);
+  const damaged = parseRecord(proposed.serialize());
+  delete first(recordArray(damaged, 'reviews'), 'review').scriptExecutions;
+  await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)), /execution evidence/);
+  assert.equal(repo.serialize(), saved);
+});
+
+test('script evidence rejects contradictory atomic outcomes and retains genuine discarded audit records', () => {
+  const diagnostic = { code: 'script-error', message: 'The draft was discarded.', line: null, column: null };
+  for (const status of ['completed', 'failed', 'cancelled', 'timed-out', 'resource-limit'] as const) {
+    for (const disposition of ['observation', 'proposal', 'declined', 'discarded'] as const) {
+      for (const validation of ['passed', 'failed', 'not-run'] as const) {
+        for (const error of [null, diagnostic]) {
+          const input = scriptExecution({ status, disposition, validation, diagnostic: error });
+          const permitted = disposition === 'discarded' ? validation !== 'passed' && error !== null
+            : status === 'completed' && error === null && validation === (disposition === 'proposal' ? 'passed' : 'not-run');
+          const label = `${status}/${disposition}/${validation}/${error === null ? 'no diagnostic' : 'diagnostic'}`;
+          if (permitted) {
+            assert.deepEqual(parseScriptExecutionEvidence(input), input, label);
+            assert.deepEqual(parseScriptExecutions([input]), [input], label);
+          } else {
+            assert.throws(() => parseScriptExecutionEvidence(input), /Invalid script evidence/, label);
+            assert.throws(() => parseScriptExecutions([input]), /Invalid script evidence/, label);
+          }
+        }
+      }
+    }
+  }
+  const integrity = discardedExecution({ status: 'completed', validation: 'not-run',
+    diagnostic: { code: 'execution-integrity', message: 'A caught host failure revoked this draft.', line: null, column: null },
+    calls: [{ sequence: 1, method: 'model.inspect', disposition: 'host-failure' }] });
+  assert.deepEqual(parseScriptExecutionEvidence(integrity), integrity);
+});
+
+test('saved script reviews require one final successful proposal and matching actual tool evidence', async () => {
+  const repo = await RoomRepository.create(); const saved = repo.serialize();
+  const proposed = await repo.proposeReviewedModel(scriptProposalInput(repo));
+  const observation = scriptExecution({ executionId: 'earlier-observation', disposition: 'observation', validation: 'not-run' });
+  const fatalCodes = ['execution-integrity', 'internal', 'audit-failure', 'protocol-mismatch', 'host-failure', 'denied'];
+  const fatalCalls: ScriptExecutionEvidence['calls'][number]['disposition'][] = ['replaced', 'denied', 'unknown-method',
+    'invalid-arguments', 'invalid-result', 'host-failure', 'host-timeout', 'response-too-large', 'revoked', 'queue-full', 'request-too-large'];
+  const traces: ScriptExecutionEvidence[][] = [
+    [discardedExecution()], [observation],
+    [scriptExecution({ disposition: 'declined', validation: 'not-run' })],
+    [scriptExecution({ executionId: 'earlier-proposal' }), scriptExecution()],
+    [scriptExecution({ executionId: 'earlier-decline', disposition: 'declined', validation: 'not-run' }), scriptExecution()],
+    ...(['cancelled', 'timed-out', 'resource-limit'] as const).map((status) => [discardedExecution({ executionId: 'earlier-fatal', status }), scriptExecution()]),
+    ...fatalCodes.map((code) => [discardedExecution({ executionId: 'earlier-fatal',
+      diagnostic: { code, message: 'The attempt lost execution authority.', line: null, column: null } }), scriptExecution()]),
+    ...fatalCalls.map((disposition) => [discardedExecution({ executionId: 'earlier-fatal',
+      calls: [{ sequence: 1, method: 'model.inspect', disposition }] }), scriptExecution()]),
+    [scriptExecution({ calls: [{ sequence: 1, method: 'model.inspect', disposition: 'denied' }] })],
+  ];
+  const mutations: Record<string, unknown>[] = traces.map((scriptExecutions) => ({ scriptExecutions, toolCalls: scriptToolCalls(scriptExecutions) }));
+  mutations.push(
+    { toolCalls: [{ name: 'run_model_script', status: 'rejected', error: 'Rejected.' }] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: 'Not a real success.' }] },
+    { scriptExecutions: [observation, scriptExecution()] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'run_model_script', status: 'accepted', error: null }] },
+    { toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'unsupported_tool', status: 'rejected', error: 'After terminal.' }] },
+    { scriptExecutions: [discardedExecution({ executionId: 'earlier-failure' }), scriptExecution()],
+      toolCalls: [{ name: 'run_model_script', status: 'accepted', error: null }, { name: 'run_model_script', status: 'accepted', error: null }] },
+    { scriptExecutions: [discardedExecution({ executionId: 'earlier-failure' }), scriptExecution()],
+      toolCalls: [{ name: 'run_model_script', status: 'rejected', error: 'A different failure.' }, { name: 'run_model_script', status: 'accepted', error: null }] },
+  );
+  for (const mutation of mutations) {
+    const label = JSON.stringify(mutation);
+    await assert.rejects(repo.proposeReviewedModel(scriptProposalInput(repo, mutation)), /[Ss]cript/, label);
+    const damaged = parseRecord(proposed.serialize());
+    Object.assign(first(recordArray(damaged, 'reviews'), 'review'), mutation);
+    await assert.rejects(RoomRepository.restore(JSON.stringify(damaged)), /[Ss]cript/, label);
+  }
+  assert.equal(repo.serialize(), saved);
+  assert.equal((await RoomRepository.restore(proposed.serialize())).serialize(), proposed.serialize());
+});
+
+test('recoverable failures and observations retain ordered evidence through proposal acceptance and exact restore', async () => {
+  const repo = await RoomRepository.create();
+  const executions = [discardedExecution({ executionId: 'recoverable-script' }),
+    scriptExecution({ executionId: 'observation', disposition: 'observation', validation: 'not-run' }),
+    discardedExecution({ executionId: 'invalid-return', status: 'completed', validation: 'failed',
+      diagnostic: { code: 'invalid-proposal', message: 'The returned proposal was invalid.', line: null, column: null } }),
+    scriptExecution({ calls: [{ sequence: 1, method: 'model.previewRectangle', disposition: 'app-error' },
+      { sequence: 2, method: 'model.previewRectangle', disposition: 'completed' }] }),
+  ];
+  const toolCalls = [{ name: 'unsupported_tool', status: 'rejected', error: 'Unsupported model tool.' }, ...scriptToolCalls(executions)];
+  const proposed = await repo.proposeReviewedModel(scriptProposalInput(repo, { scriptExecutions: executions, toolCalls }));
+  assert.deepEqual(proposed.review('script-study').scriptExecutions, executions);
+  assert.deepEqual(proposed.review('script-study').toolCalls, toolCalls);
+  const accepted = proposed.accept('script-study', { decisionId: 'accept-recovered', actor: 'human' });
+  assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
+  assert.deepEqual(accepted.review('script-study').scriptExecutions, executions);
 });

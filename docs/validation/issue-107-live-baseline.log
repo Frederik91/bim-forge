@@ -1,0 +1,2 @@
+{"evaluation":"model-intent-v1","provider":{"provider":"openai-codex-app-server","model":"gpt-6.1-sol"},"baseline":true,"samplesPerCase":1,"note":"Live stochastic samples, not a calibrated reliability estimate."}
+{"case":"desk-wall","passed":false,"error":"Should I move the supported monitor and laptop with the desk to the nearest wall (the south wall), leaving the chair and plant in place?\n+ actual - expected\n\n+ 'declined'\n- 'ready'\n"}

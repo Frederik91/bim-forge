@@ -53,6 +53,20 @@ export function furnitureFaces(item: Furniture, snapshot: ModelSnapshot): Furnit
     box(0, 0, h * .09, w * .09, d * .09, h * .34, '#4b5961');
     box(0, 0, h * .04, w, d * .12, h * .05, '#4b5961');
     box(0, 0, h * .04, w * .12, d, h * .05, '#4b5961');
+  } else if (item.kind === 'bed') {
+    box(0, 0, 0, w, d, h * .45, '#c69a73');
+    box(0, 0, h * .45, w * .96, d * .96, h * .4, '#e7e2d4');
+    box(0, d * .08, h * .85, w * .97, d * .65, h * .05, '#6b9295');
+    for (const x of [-w * .25, w * .25]) box(x, -d * .32, h * .85, w * .42, d * .2, h * .15, '#faf5e9');
+  } else if (item.kind === 'sofa') {
+    box(0, 0, 0, w, d, h * .32, '#557a7a');
+    box(0, -d * .4, h * .32, w, d * .2, h * .68, '#557a7a');
+    for (const x of [-w * .45, w * .45]) box(x, 0, h * .32, w * .1, d, h * .4, '#557a7a');
+    for (const x of [-w * .22, w * .22]) box(x, d * .08, h * .32, w * .42, d * .68, h * .17, '#729594');
+  } else if (item.kind === 'cabinet') {
+    box(0, 0, 0, w, d, h * .95, '#c69a73');
+    box(0, 0, h * .95, w, d, h * .05, '#d6d8d0');
+    for (const x of [-w * .04, w * .04]) box(x, d * .505, h * .5, .015, .015, h * .12, '#53616a');
   } else {
     box(0, 0, 0, w * .55, d * .55, h * .28, '#bb8165');
     box(0, 0, h * .28, w * .045, d * .045, h * .55, '#547642');
