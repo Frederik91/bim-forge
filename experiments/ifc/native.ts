@@ -125,7 +125,9 @@ async function main(): Promise<void> {
     const basis = { fixture: parseFixture(input), sha256: createHash('sha256').update(source).digest('hex') };
     await mkdir(first, { recursive: false });
     await writeFile(path.join(first, 'w0-source.json'), source);
-    await writeFile(path.join(first, 'native-model.schema.json'), JSON.stringify(NativeModelSchema, null, 2));
+    await writeFile(path.join(first, 'native-model.schema.json'), JSON.stringify({
+      $schema: 'http://json-schema.org/draft-07/schema#', ...NativeModelSchema,
+    }, null, 2));
     for (const variant of ['m', 'mm', 'rotated-m', 'rotated-mm'] satisfies NativeModel['variant'][]) {
       for (const revision of [1, 2] satisfies NativeModel['revision'][]) {
         await writeFile(path.join(first, `${variant}-r${revision}.json`), JSON.stringify(fixture(variant, revision, basis), null, 2));

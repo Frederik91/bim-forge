@@ -229,7 +229,10 @@ def schema_check(path, report):
 
 
 def validate_input(model, schema):
-    jsonschema.Draft202012Validator(schema).validate(model)
+    if schema.get("$schema") != "http://json-schema.org/draft-07/schema#":
+        raise ValueError("The TypeBox export must declare its Draft 7 tuple dialect")
+    jsonschema.Draft7Validator.check_schema(schema)
+    jsonschema.Draft7Validator(schema).validate(model)
     return model
 
 
@@ -261,7 +264,7 @@ def prepare(inputs: Path, output: Path, source_commit: str):
     schema = load(inputs / "native-model.schema.json")
     write_json(output / "environment.json", {"python": sys.version, "platform": platform.platform(),
         "packages": {name: importlib.metadata.version(name) for name in ("ifcopenshell", "numpy", "jsonschema")},
-        "schema": "IFC4 ADD2 TC1", "sourceCommit": source_commit, "contractCommit": "4fb723bc29a0fced971b3f4b2069e0fa31699a68", "provenance": "controlled-generated",
+        "schema": "IFC4 ADD2 TC1", "sourceCommit": source_commit, "contractCommit": "19118447930f41218bc732466b55442e5d83adf5", "provenance": "controlled-generated",
         "tolerances": {"geometryM": GEOMETRY_TOLERANCE_M, "surveyM": SURVEY_TOLERANCE_M, "volumeM3": VOLUME_TOLERANCE_M3}, "limitations": LIMITS})
     snapshots = {}
     try:
