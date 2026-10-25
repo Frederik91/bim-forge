@@ -88,6 +88,30 @@ export function doorConnections(snapshot: ModelGraph): DoorConnection[] {
   });
 }
 
+/** The same inward/bidirectional clearance applies to furnishings and stair landings/voids. */
+export function doorClearanceBounds(snapshot: ModelGraph, door: Door): Bounds {
+  const host = snapshot.relationships.find((link) => link.source === door.id);
+  const wall = snapshot.entities.find((item) => item.id === host?.target);
+  if (!host || wall?.type !== 'Wall') throw new Error('Door requires a wall host.');
+  const owner = entityLevel(snapshot, wall);
+  const view = snapshot.version === 2 && owner ? levelView(snapshot, owner.id) : snapshot;
+  const length = Math.hypot(Math.round(wall.end[0] * 1000) - Math.round(wall.start[0] * 1000),
+    Math.round(wall.end[1] * 1000) - Math.round(wall.start[1] * 1000)) / 1000;
+  const dx = (wall.end[0] - wall.start[0]) / length; const dy = (wall.end[1] - wall.start[1]) / length;
+  const x1 = wall.start[0] + dx * host.offset; const y1 = wall.start[1] + dy * host.offset;
+  const x2 = x1 + dx * door.width; const y2 = y1 + dy * door.width;
+  const clearance = Math.max(.9, door.width);
+  if (spaces(view).length) return dx !== 0
+    ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: y1 - clearance, maxY: y1 + clearance }
+    : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: x1 - clearance, maxX: x1 + clearance };
+  const bounds = floorBounds(view);
+  return dx !== 0
+    ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: wall.start[1] === bounds.minY ? bounds.minY : bounds.maxY - clearance,
+        maxY: wall.start[1] === bounds.minY ? bounds.minY + clearance : bounds.maxY }
+    : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: wall.start[0] === bounds.minX ? bounds.minX : bounds.maxX - clearance,
+        maxX: wall.start[0] === bounds.minX ? bounds.minX + clearance : bounds.maxX };
+}
+
 /** Bounded first slice: one rectangular level tiled by non-overlapping rectangular rooms. */
 function validateSingleFloor(snapshot: ModelGraph, levelId?: string): void {
   const rooms = spaces(snapshot); const floorLevels = levels(snapshot);
@@ -204,22 +228,38 @@ export function validateFloorPlan(snapshot: ModelGraph): void {
     }
   }
   const stairs = snapshot.entities.filter((item): item is Stair => item.type === 'Stair');
-  const stairEdges = stairs.map((stair) => {
+  const flights = stairs.map((stair) => {
     const from = ordered.findIndex((level) => level.id === stair.fromLevelId);
     const to = ordered.findIndex((level) => level.id === stair.toLevelId);
-    if (from < 0 || to !== from + 1) throw new Error('Stairs must connect adjacent levels from lower to higher.');
+    const fromLevel = ordered[from]; const toLevel = ordered[to];
+    if (!fromLevel || !toLevel || to !== from + 1) throw new Error('Stairs must connect adjacent levels from lower to higher.');
     const dx = stair.end[0] - stair.start[0]; const dy = stair.end[1] - stair.start[1];
     if ((dx === 0) === (dy === 0)) throw new Error('Stairs require a positive axis-aligned run.');
     const footprint = stairFootprint(stair);
-    const lower = spaceForFootprint(levelView(snapshot, stair.fromLevelId), footprint);
-    const upper = spaceForFootprint(levelView(snapshot, stair.toLevelId), footprint);
+    const lowerView = levelView(snapshot, stair.fromLevelId); const upperView = levelView(snapshot, stair.toLevelId);
+    const lower = spaceForFootprint(lowerView, footprint);
+    const upper = spaceForFootprint(upperView, footprint);
     if (!lower || !upper) throw new Error('The complete stair footprint must fit a room at both endpoints.');
-    return [lower.id, upper.id];
+    for (const view of [lowerView, upperView]) for (const entity of view.entities) {
+      if (entity.type === 'Door' && overlapsBounds(footprint, doorClearanceBounds(view, entity))) {
+        throw new Error('Stair flights and slab voids must remain clear of door clearance zones.');
+      }
+    }
+    return { footprint, bottom: fromLevel.elevation, top: toLevel.elevation, roomIds: [lower.id, upper.id] };
   });
+  for (let index = 0; index < flights.length; index += 1) {
+    const flight = flights[index];
+    for (const other of flights.slice(index + 1)) {
+      if (overlapsBounds(flight.footprint, other.footprint)
+          && Math.max(flight.bottom, other.bottom) < Math.min(flight.top, other.top) - 1e-9) {
+        throw new Error('Stair flights must not overlap in three dimensions.');
+      }
+    }
+  }
   const connections = doorConnections(snapshot);
   // Without a terrain/landing model, only elevation-zero exterior doors establish ground exits.
   const exits = connections.filter((link) => link.exterior && entityLevel(snapshot, link.door)?.elevation === 0).flatMap((link) => link.roomIds);
-  validateReachability(spaces(snapshot), exits, [...connections.map((link) => link.roomIds), ...stairEdges]);
+  validateReachability(spaces(snapshot), exits, [...connections.map((link) => link.roomIds), ...flights.map((flight) => flight.roomIds)]);
 }
 
 /** Owned solids may touch an upper slab underside but may not extend through it. */

@@ -1,4 +1,4 @@
-import { validateFloorPlan, spaces, spaceForFootprint } from './floor-plan.ts';
+import { validateFloorPlan, spaces, spaceForFootprint, doorClearanceBounds } from './floor-plan.ts';
 import { parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { parseIntentAssessment } from './model-intent.ts';
@@ -712,20 +712,7 @@ function validateFurnishings(entities: readonly Entity[], relationships: readonl
       const opening = entities.find((entity) => entity.id === relation.source);
       const wall = walls.find((entity) => entity.id === relation.target);
       if (opening?.type !== 'Door' || !wall) continue;
-      const length = wallLength(wall);
-      const dx = (wall.end[0] - wall.start[0]) / length;
-      const dy = (wall.end[1] - wall.start[1]) / length;
-      const x1 = wall.start[0] + dx * relation.offset;
-      const y1 = wall.start[1] + dy * relation.offset;
-      const x2 = x1 + dx * opening.width; const y2 = y1 + dy * opening.width;
-      const clearance = Math.max(0.9, opening.width);
-      const zone = rooms.length
-        ? dx !== 0
-          ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: y1 - clearance, maxY: y1 + clearance }
-          : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: x1 - clearance, maxX: x1 + clearance }
-        : dx !== 0
-        ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: wall.start[1] === minY ? minY : maxY - clearance, maxY: wall.start[1] === minY ? minY + clearance : maxY }
-        : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: wall.start[0] === minX ? minX : maxX - clearance, maxX: wall.start[0] === minX ? minX + clearance : maxX };
+      const zone = doorClearanceBounds(graph ?? { units: 'm', entities, relationships }, opening);
       if (overlaps(footprint, zone)) fail(`${item.name} blocks the door clearance zone.`);
     }
   }

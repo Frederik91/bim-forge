@@ -58,6 +58,43 @@ test('stairs supply real reachability and must connect adjacent levels with cont
   assert.throws(() => validateSnapshot(noGroundExit), /path to the exterior/);
 });
 
+test('incident stairs cannot obstruct exterior or internal door clearance at either endpoint', () => {
+  const base = multiStoreySnapshot(); const before = JSON.stringify(base);
+  assert.throws(() => validateSnapshot({ ...base, entities: base.entities.map((item) => item.id === 'stair-basement-ground'
+    ? { ...item, start: [1, .5], end: [3, .5] } : item) }), /Stair.*door clearance/);
+  // The east flight ends in the attic and starts on the ground floor beside an internal door.
+  assert.throws(() => validateSnapshot({ ...base, entities: base.entities.map((item) => item.id === 'stair-ground-attic'
+    ? { ...item, start: [4.5, 3.4], end: [6.5, 3.4] } : item) }), /Stair.*door clearance/);
+  assert.equal(JSON.stringify(base), before);
+});
+
+test('stair flights with overlapping XY and positive vertical overlap are rejected', () => {
+  const base = multiStoreySnapshot();
+  const flight = base.entities.find((item) => item.id === 'stair-basement-ground'); assert.ok(flight?.type === 'Stair');
+  assert.throws(() => validateSnapshot({ ...base, entities: [...base.entities, { ...flight, id: 'duplicate-stair' }] }), /Stair flights.*overlap/);
+  // A perpendicular flight also intersects, even though it is not an identical geometry record.
+  assert.throws(() => validateSnapshot({ ...base, entities: [...base.entities,
+    { ...flight, id: 'crossing-stair', start: [2, 1], end: [2, 3] },
+  ] }), /Stair flights.*overlap/);
+  assert.doesNotThrow(() => validateSnapshot({ ...base, entities: [...base.entities,
+    { ...flight, id: 'separate-stair', start: [1, 2.6], end: [3, 2.6] },
+  ] }));
+});
+
+test('adjacent stair flights may share an elevation boundary and unrelated levels do not block doors', () => {
+  const base = multiStoreySnapshot();
+  // These flights share XY, but their vertical ranges [-3,0] and [0,3] only touch.
+  assert.doesNotThrow(() => validateSnapshot({ ...base, entities: base.entities.map((item) => item.id === 'stair-ground-attic'
+    ? { ...item, start: [1, 1.5], end: [3, 1.5] } : item) }));
+  // Only the attic door keeps its original clearance; that floor is unrelated to the lower flight.
+  assert.doesNotThrow(() => validateSnapshot({ ...base,
+    entities: base.entities.map((item) => item.id === 'stair-basement-ground'
+      ? { ...item, start: [1.5, 3.4], end: [3.5, 3.4] } : item),
+    relationships: base.relationships.map((link) => link.source === 'level-basement-door-inner' || link.source === 'level-ground-door-inner'
+      ? { ...link, offset: 4.5 } : link),
+  }));
+});
+
 test('furnishings require explicit new ownership; retained IDs stay put and transfers are explicit', () => {
   const base = multiStoreySnapshot(); const input = furnishings(base);
   const added = { ...input[0], id: 'new-plant', type: 'Furniture', name: 'New plant', kind: 'plant',
