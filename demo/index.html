@@ -25,7 +25,6 @@
         <input id="import-file" type="file" accept=".json,application/json" hidden aria-label="Choose project JSON file">
       </div>
     </header>
-
     <main id="workbench" class="workbench" tabindex="-1">
       <nav id="journey" class="journey" aria-label="Model change process">
         <button id="nav-request" type="button" aria-pressed="true"><span>1</span><b>Request</b><small>Show the intent</small></button>
@@ -228,5 +227,12 @@
 
     <dialog id="evidence-dialog" class="modal evidence-modal" aria-labelledby="evidence-title"><div class="dialog-heading"><div><p class="eyebrow">BOUND SOURCE</p><h2 id="evidence-title">Evidence</h2></div><button class="icon-button" data-close="evidence-dialog" type="button" aria-label="Close evidence">×</button></div><div class="evidence-body"><span id="evidence-kind" class="pill teal">Evidence</span><p id="evidence-description"></p><dl id="evidence-metadata" class="evidence-metadata"></dl><a id="evidence-source" class="button outline full" target="_blank" rel="noreferrer" hidden>Open source document</a></div><p class="dialog-note">This metadata is bound to the displayed model revision. Opening it does not change the model.</p></dialog>
 
+    <dialog id="discard-request-dialog" class="modal" aria-labelledby="discard-request-heading" aria-describedby="discard-request-message">
+      <form method="dialog">
+        <p class="eyebrow">UNSENT REQUEST</p><h2 id="discard-request-heading">Keep your draft?</h2>
+        <p id="discard-request-message"></p><p class="editor-help">Submitted requests, their source files and the accepted model stay preserved.</p>
+        <div class="auth-actions"><button class="button outline" value="keep" autofocus>Keep editing</button><button class="button primary" value="discard">Discard draft and continue</button></div>
+      </form>
+    </dialog>
   </body>
 </html>

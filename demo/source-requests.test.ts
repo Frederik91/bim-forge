@@ -72,11 +72,19 @@ test('real PNG/PDF/text survive queued restart, reach the worker, bind the revie
   assert.deepEqual(proposed.review(input.proposalName).sources, sources);
   assert.equal(proposed.head('main'), repository.head('main'));
   for (const file of files) assert.ok(!proposed.serialize().includes(file.bytes.toString('base64')));
+  const revisedInput = { ...input, requestId: 'source-floor-revision', proposalName: 'reference-floor-revised' };
+  await queue.revise(input.requestId, original, revisedInput);
+  await finished(queue, input.requestId);
+  const revised = queue.get(input.requestId);
+  assert.equal(revised.state, 'ready', revised.error ?? '');
+  assert.deepEqual(revised.request.sources, sources);
+  assert.equal(revised.history.length, 1);
+  assert.ok(revised.history[0]?.includes(sources[0]?.sha256 ?? 'missing'));
   await queue.close();
   for (const file of imagePaths) await assert.rejects(access(file), 'attempt files are removed after provider cleanup');
   queue = new ChangeRequests(database, () => null);
   assert.equal(queue.source(repository.projectId, sources[1]?.id ?? '').source.sha256, createHash('sha256').update(sourceFloorPdf()).digest('hex'));
-  await queue.decide(input.requestId, { action: 'accept', decisionId: 'accept-reference', expectedRequestId: input.requestId });
+  await queue.decide(input.requestId, { action: 'accept', decisionId: 'accept-reference', expectedRequestId: revisedInput.requestId });
   assert.notEqual((await RoomRepository.restore(queue.project(repository.projectId))).head('main'), repository.head('main'));
 });
 

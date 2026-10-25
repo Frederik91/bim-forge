@@ -294,6 +294,17 @@ function requestDirty(): boolean {
   return dirty() || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
+async function discardRequest(message: string): Promise<boolean> {
+  if (!requestDirty()) return true;
+  const target = dialog('discard-request-dialog');
+  generic('discard-request-message').textContent = message;
+  target.returnValue = 'keep';
+  return new Promise<boolean>((resolve) => {
+    target.addEventListener('close', () => resolve(target.returnValue === 'discard'), { once: true });
+    openDialog(target);
+  });
+}
+
 function evidenceById(id: EvidenceItem['id']): EvidenceItem | undefined {
   return housePilotFixture?.evidence.find((item) => item.id === id);
 }
@@ -838,21 +849,21 @@ for (const tab of ['3d', 'properties'] satisfies ChangesTab[]) button(`changes-$
 });
 button('review-delta').addEventListener('click', () => { reviewDelta = !reviewDelta; modelView = '3d'; renderComparison(); });
 ui['project-overview'].addEventListener('click', () => showPage('project'));
-button('explore-floor').addEventListener('click', () => { if (beginRequest()) focusRoom(null); });
+button('explore-floor').addEventListener('click', () => { void perform(async () => { if (await beginRequest()) focusRoom(null); }); });
 ui['open-room'].addEventListener('click', () => {
   showPage('request');
   status(`Reference room opened at revision ${selectedRevision.slice(0, 10)}. Plan and 3D share the same selection.`);
 });
-function beginRequest(): boolean {
+async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
-  if (requestDirty() && !window.confirm('Discard the unsent request, including attached sources, and return to the accepted model?')) return false;
+  if (!await discardRequest('Return to the accepted model and discard the unsent request?')) return false;
   reviewRepository = null; activeTicketId = null; activeReview = null; revisionTicketId = null;
   selectedBranch = 'main'; selectedRevision = repo.head('main');
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   resetEditor(); render(); showPage('request');
   return true;
 }
-ui['nav-request'].addEventListener('click', beginRequest);
+ui['nav-request'].addEventListener('click', () => { void perform(async () => { await beginRequest(); }); });
 for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
   showPage('backlog'); void refreshBacklog();
 });
@@ -1106,7 +1117,7 @@ function renderBacklog(): void {
 }
 ui['backlog-filter'].addEventListener('change', renderBacklog);
 async function openActivity(id: string): Promise<void> {
-  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and open request activity?')) return;
+  if (!await discardRequest('Open request activity and discard the unsent request?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = parseBacklogItem(value.ticket);
@@ -1163,7 +1174,7 @@ for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventL
 });
 
 async function openTicket(id: string): Promise<void> {
-  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and open this request?')) return;
+  if (!await discardRequest('Open this saved request and discard the unsent request?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = parseBacklogItem(value.ticket);
@@ -1212,7 +1223,7 @@ async function decideTicket(id: string, action: string, activityVersion: string 
   await refreshBacklog();
 }
 async function reviseTicket(item: BacklogItem): Promise<void> {
-  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and revise this ticket?')) return;
+  if (!await discardRequest('Revise this ticket and discard the unsent request?')) return;
   await refreshBacklog();
   if (!serverProjectText) throw new Error('Refresh the server model before revising.');
   const next = await RoomRepository.restore(serverProjectText);
@@ -1238,8 +1249,8 @@ async function reviseTicket(item: BacklogItem): Promise<void> {
 ui['open-current-model'].addEventListener('click', () => {
   void perform(async () => {
     await refreshBacklog();
-    if (!serverProjectText) { beginRequest(); return; }
-    if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and open the server model?')) return;
+    if (!serverProjectText) { await beginRequest(); return; }
+    if (!await discardRequest('Open the server model and discard the unsent request?')) return;
     await persist(await RoomRepository.restore(serverProjectText));
     clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
     activeReview = null; revisionTicketId = null; render(); showPage('request');
@@ -1888,10 +1899,10 @@ function renderProperties(original: ModelSnapshot, selected: ModelSnapshot, delt
   ui['comparison-note'].textContent = `${baseline} compared with ${dirty() ? 'the visual request sketch' : 'the selected revision'}. ${delta.entities.added.length} added, ${delta.entities.removed.length} removed, ${delta.entities.modified.length} modified entities; ${delta.relationships.added.length} added, ${delta.relationships.removed.length} removed, ${delta.relationships.modified.length} modified relationships. Only AI-submitted geometry is saved; no construction validation.`;
 }
 
-function selectRevision(branch: string, revisionId: string): void {
+async function selectRevision(branch: string, revisionId: string): Promise<void> {
   if (busy || gesture || !repo) return;
   const project = requireRepository();
-  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and view this saved revision?')) return;
+  if (!await discardRequest('View this saved revision and discard the unsent request?')) return;
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; revisionTicketId = null;
   selectedBranch = branch;
   selectedRevision = revisionId;
@@ -2104,7 +2115,7 @@ function renderProjectOverview(): void {
     const links = connections.filter((link) => link.roomIds.includes(room.id));
     card.append(element('strong', room.name), element('span', `${number.format((b.maxX - b.minX) * (b.maxY - b.minY))} m² · ${count} ${count === 1 ? 'furnishing' : 'furnishings'}`),
       element('small', links.some((link) => link.exterior) ? 'Entrance to the house' : 'Connected through the hallway'));
-    card.addEventListener('click', () => { if (beginRequest()) focusRoom(room.id); });
+    card.addEventListener('click', () => { void perform(async () => { if (await beginRequest()) focusRoom(room.id); }); });
     return card;
   }));
 }
