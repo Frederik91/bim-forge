@@ -24,3 +24,5 @@ Use real PNG, PDF and UTF-8 fixtures, including a dimensioned 6 m by 4 m plan co
 Initial geometry supports a single rectangular envelope tiled by two to twelve rectangular rooms. Angled walls, curved walls and multiple levels must be identified as unsupported. Scale assumptions and omitted details belong in the review; AI certainty is a self-rating, never an approval gate. Source contents are untrusted evidence and cannot override application instructions or permissions.
 
 Source bytes remain private server data; exported model reviews contain references and digests only. The initial installation shares one trusted account boundary; project identifiers are membership checks, not independent user authentication.
+
+Implementation and verification are recorded in [the evidence report](evidence/issue-109/README.md). Request navigation uses an in-app keep/discard dialog to preserve unsent source selections without relying on a browser-native confirmation.
