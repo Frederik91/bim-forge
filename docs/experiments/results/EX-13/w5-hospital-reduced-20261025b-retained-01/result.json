@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "w5-hospital-reduced-20261025b-retained-01",
+  "startedAt": "2026-10-25T12:13:05.204Z",
+  "finishedAt": "2026-10-25T12:19:11.315Z",
+  "hypothesis": "The declared bounded persistence workload preserves source/query/history behavior within its admitted fixture and exploratory limits.",
+  "variant": "w4-generator; reduced; history=2; original hospital-reduced-20261025b",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "runnerCommit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "validators": [
+      "TypeBox boundary schemas",
+      "PostgreSQL constraints/reference validation",
+      "Executed source fingerprints and property-count oracle where completed",
+      "Retained run observations without modification"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1/reduced",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca"
+  },
+  "environment": {
+    "host": "frederik@192.168.1.17; container fa9b1a5b3fe4",
+    "software": {
+      "node": "v24.22.1",
+      "postgres": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/postgres; coordinator-owned isolated PG15",
+    "cacheProcedure": "warm: explicit page and historical warmup; OS cache unchanged",
+    "measurementSlot": "shared-correctness; shared correctness, no exclusive performance claim"
+  },
+  "commands": [
+    "\"/usr/local/bin/node\" \"/app/experiments/storage/cli.ts\" \"workload\" \"/qualification/artifacts/hospital-20261025b/config-reduced.json\" \"/qualification/artifacts/hospital-20261025b/reduced\""
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "execution-failure",
+      "expected": "Admitted workload completes",
+      "observed": "canceling statement due to user request",
+      "passed": false,
+      "limitations": [
+        "Failed behavior is retained as evidence."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-entity-detail",
+      "expected": "Predeclared exploratory p95 <= 300 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"entity-detail\",\"budgetMs\":300,\"n\":0,\"errors\":0,\"p95Ms\":null,\"passed\":false}",
+      "passed": false,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-page-query",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"page-query\",\"budgetMs\":1000,\"n\":0,\"errors\":0,\"p95Ms\":null,\"passed\":false}",
+      "passed": false,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-one-hop",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"one-hop\",\"budgetMs\":1000,\"n\":0,\"errors\":0,\"p95Ms\":null,\"passed\":false}",
+      "passed": false,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-bounded-delta",
+      "expected": "Predeclared exploratory p95 <= 2000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-delta\",\"budgetMs\":2000,\"n\":0,\"errors\":0,\"p95Ms\":null,\"passed\":false}",
+      "passed": false,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-bounded-acceptance",
+      "expected": "Predeclared exploratory p95 <= 4000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-acceptance\",\"budgetMs\":4000,\"n\":0,\"errors\":0,\"p95Ms\":null,\"passed\":false}",
+      "passed": false,
+      "limitations": []
+    }
+  ],
+  "observationsArtifact": "hospital-20261025b/reduced/observations.json",
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "caseIds": [],
+      "coverage": "not-covered"
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "caseIds": [],
+      "coverage": "not-covered"
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "caseIds": [],
+      "coverage": "not-covered"
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "caseIds": [
+        "execution-failure",
+        "exploratory-p95-page-query"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "caseIds": [],
+      "coverage": "not-covered"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "hospital-20261025b/reduced/artifact-checksums.json",
+      "bytes": 618,
+      "sha256": "81204d4ddd1c16e79570ef84d660ef577d86c47800471e8dda2af5012f9be607",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/config.json",
+      "bytes": 2015,
+      "sha256": "e778dcd62e4e8d5395766d4bafa4c314216dd40c216b912089e887a310fa8047",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/environment.json",
+      "bytes": 41214,
+      "sha256": "bb18485799d998c5491efac5f5a61b84944569de566860c8438bb0e6bba47355",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/errors.json",
+      "bytes": 48,
+      "sha256": "79d293aa1cd71dd410e87d673b655c0e9a211e66524b84df68d20b586892e4b2",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/execution-envelope.json",
+      "bytes": 1260,
+      "sha256": "d443d34d08d40fa870de5849ae92103c90668a3cb1fe23884f26504b346f906c",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/exploratory-budgets.json",
+      "bytes": 873,
+      "sha256": "e00d2ed57ba57ac06bf785fb1019b02ff514d3fefc23d89c2d94215aa6500d22",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/metrics-before.json",
+      "bytes": 16483,
+      "sha256": "8c644579cdc2b4963b244fc730b5badb3a2e6cf08fe6f0e428217551a64635a7",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/observations.json",
+      "bytes": 2034,
+      "sha256": "e0dbd79cbbb25b58515cfeeefd8c4feaa9289e234862b3b59a39431ec28e5105",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/sample-summary.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/reduced/samples.ndjson",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "hospital-20261025b/manifest-reduced.json",
+      "bytes": 120622,
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/admission-reduced.json",
+      "bytes": 826,
+      "sha256": "f6050d840f30b095f61e07c94e91c8f36aaa5dba11ddc5c7c298d64fe6352488",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025b/publication-diagnostic.csv",
+      "bytes": 4103,
+      "sha256": "e4c2750620eb9b0d450ff07ca4ed258082ff2fdd3f9b261e4e19927061468d2e",
+      "mediaType": "text/plain"
+    }
+  ],
+  "errors": [
+    "canceling statement due to user request"
+  ],
+  "limitations": [
+    "Retrospective metadata publication only; the original experiments were not rerun.",
+    "Original invocation ID hospital-reduced-20261025b; record ID adds a retained-01 suffix without replacing prior attempts.",
+    "Evidence root is /ssd1/bim-forge-qualification/qvm-20261025/artifacts; paths and SHA-256 bind retained private artifacts.",
+    "Every definition assertion is conservatively partial or not-covered. Full hospital load and independent selection verification are not included in this record.",
+    "Database-only synthetic metadata does not qualify geometry, a real hospital inventory, engineering approvals or production adoption.",
+    "Global PG/WAL metrics include other correctness activity; no comparative speedup, isolated capacity result or product SLO is claimed.",
+    "Run start is the retained environment timestamp; finish is observation-file persistence time, not a fabricated benchmark clock.",
+    "Runner CPU/memory fields describe the Node container; exact PostgreSQL limits/settings are separately retained in config and metrics artifacts.",
+    "Failed behavior is retained as evidence.",
+    "Coordinator cancellation of its scoped backend interrupted reference validation; initial publication rolled back. No completed load/oracle is claimed."
+  ],
+  "decisionImplications": [
+    "Partial retained evidence only. Preserve failed/cancelled attempts; do not infer full capacity, a comparative winner, engineering correctness or adoption approval."
+  ],
+  "executionStatus": "cancelled",
+  "conclusion": "inconclusive"
+}
