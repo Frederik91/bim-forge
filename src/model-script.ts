@@ -174,12 +174,11 @@ function stage(draft: Draft, operation: () => ModelSnapshot, revoked: () => void
   return { model: candidate, changes: summarizeModelDelta(diffSnapshots(draft.base, candidate)) };
 }
 
-function selectedLevel(draft: Draft) {
-  const current = draft.snapshot;
-  const selected = current.entities.filter((item) => draft.binding.selectedObjectIds.includes(item.id));
+function selectedLevel(current: ModelSnapshot, binding: ModelScriptBinding) {
+  const selected = current.entities.filter((item) => binding.selectedObjectIds.includes(item.id));
   const explicit = selected.filter((item) => item.type === 'Level');
   if (explicit.length) return explicit.length === 1 ? explicit[0] : null;
-  const visual = draft.binding.visualIntent;
+  const visual = binding.visualIntent;
   if (visual.kind === 'spatial-reference') {
     const target = visual.destination;
     if (target.kind === 'floor-point' && 'levelId' in target && typeof target.levelId === 'string') {
@@ -202,7 +201,7 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
     handler: (_args, call) => {
       const draft = call.context; const current = draft.snapshot;
       const available = levels(current);
-      const selected = selectedLevel(draft);
+      const selected = selectedLevel(current, draft.binding);
       const plans = available.length ? available.map((level) => levelView(current, level.id)) : [current];
       const boundPlan = selected ? levelView(current, selected.id) : current;
       draft.onActivity({ stage: 'inspecting', message: 'Inspecting the bound model, selected identities and room relationships from the script.' });
@@ -231,7 +230,8 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
     effect: 'draft-write', params: { input: FloorLayoutSchema }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context, () => {
       const scope = call.context.binding.authoringScope;
       if (scope !== 'floor-plan-reconstruction' && scope !== 'building-reconstruction') throw new Error('Floor reconstruction requires explicit authoring scope.');
-      if (scope === 'floor-plan-reconstruction' && call.context.snapshot.version === 2 && selectedLevel(call.context)?.id !== input.level.id) {
+      if (scope === 'floor-plan-reconstruction' && call.context.base.version === 2
+          && selectedLevel(call.context.base, call.context.binding)?.id !== input.level.id) {
         throw new Error('Floor reconstruction must target the bound level. Select one Level for this request.');
       }
       return previewFloor(call.context.snapshot, input);
@@ -259,6 +259,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'When reusing inspected V2 Furniture, omit stored levelId from the furnishing DTO; the host retains ownership by identity. Use the separate levelAssignments only to assign new or transferred items. ' +
   'previewFloor(input:FloorLayout) requires floor-plan-reconstruction or building-reconstruction scope and replaces one level shell using its stable level ID. ' +
   'On a building it retains that level elevation, slab, roof, incident stairs, all contents and every other level. Floor-only scope must target the bound level. ' +
+  'Floor-only reconstruction authority resolves from the immutable base and request binding; transferring selected furnishings changes inspection context, never that authority. ' +
   'Supply level:{id,name}, 2..12 rooms:{id,name,boundsMm:{minX,minY,maxX,maxY}}, wallThicknessMm, heightMm and openings. ' +
   'Each opening has type:Door|Window, id,name,roomId,side:north|south|east|west,offsetMm,widthMm,heightMm; Windows also require sillHeightMm. ' +
   'All floor values are whole millimetres. Room bounds are wall centrelines; offsets run from the side minimum X for north/south or Y for east/west. ' +

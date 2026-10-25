@@ -192,6 +192,40 @@ test('typed building scripts preserve ownership, isolate coincident rooms and sa
   assert.equal((await RoomRepository.restore(result.repository.serialize())).serialize(), result.repository.serialize());
 });
 
+test('floor reconstruction authority stays on the base level after rebuilding and transferring the selected furnishing', async t => {
+  const repository = await RoomRepository.create('Immutable floor authority');
+  const legacy = repository.view(repository.head('main')).snapshot;
+  const plant = { id: 'selected-plant', type: 'Furniture', name: 'Selected plant', kind: 'plant',
+    position: [5, 3], width: .3, depth: .3, height: 1, rotationDeg: 0, supportId: null };
+  const base = previewBuilding({ ...legacy, entities: [...legacy.entities, plant] }, houseLayout());
+  const original = JSON.stringify(base);
+  const ground = { ...floorLayout('ground'), heightMm: 2600 };
+  const basement = { ...floorLayout('basement'), heightMm: 2500 };
+  const result = await execute(scriptsFor(t), base, {
+    baseRevisionId: repository.head('main'), selectedObjectIds: base.entities.filter(item => item.id === plant.id).map(item => item.id),
+    visualIntent: { kind: 'selection' }, authoringScope: 'floor-plan-reconstruction',
+  }, `
+    if ((await model.inspect()).placement.selectedLevelId !== 'ground') throw new Error('Missing base level context.');
+    await model.previewFloor(${JSON.stringify(ground)});
+    await model.previewFurnishings(${JSON.stringify({ furnishings: [plant], levelAssignments: [{ entityId: plant.id, levelId: 'basement' }] })});
+    const transferred = await model.inspect();
+    if (transferred.placement.selectedLevelId !== 'basement') throw new Error('Inspection should follow the current furnishing owner.');
+    try { await model.previewFloor(${JSON.stringify(basement)}); throw new Error('A furnishing transfer granted reconstruction authority on a second floor.'); }
+    catch (error) { if (!(error instanceof Error) || error.name !== 'ModelValidationError') throw error; }
+    if (JSON.stringify((await model.inspect()).model) !== JSON.stringify(transferred.model)) throw new Error('Rejected reconstruction changed the second floor.');
+    await model.previewFloor(${JSON.stringify(ground)});
+    ${propose}
+  `);
+  assert.equal(result.kind, 'proposal', JSON.stringify(result));
+  if (result.kind !== 'proposal') return;
+  const delta = diffSnapshots(base, result.snapshot);
+  const expected = base.entities.filter(item => item.id === plant.id || item.type === 'Wall' && item.levelId === 'ground').map(item => item.id).sort();
+  assert.deepEqual(delta.entities.modified.map(item => item.id), expected);
+  assert.deepEqual(delta.entities.added, []); assert.deepEqual(delta.entities.removed, []);
+  assert.deepEqual(result.snapshot.relationships, base.relationships);
+  assert.equal(JSON.stringify(base), original);
+});
+
 test('floor-only building edits bind one selected level and preserve other floors after rejected retargeting', async t => {
   const repository = await RoomRepository.create('Bound level');
   const base = previewBuilding(repository.view(repository.head('main')).snapshot, houseLayout());
