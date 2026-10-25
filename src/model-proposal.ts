@@ -10,6 +10,8 @@ import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, parseScriptExecutions } f
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { MODEL_INTENT_GUIDANCE } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
+import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
+import type { RequestSource, AuthoringScope } from './request-sources.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
@@ -26,6 +28,8 @@ interface BoundRequest {
   visualIntent: VisualRequest;
   base: Revision;
   selectedObjects: readonly Entity[];
+  sources?: RequestSource[];
+  authoringScope?: AuthoringScope;
 }
 interface ProviderEvent { responseId: string; inputTokens: number; outputTokens: number; totalTokens: number }
 export interface ModelWorkerSession {
@@ -35,6 +39,7 @@ export interface ModelWorkerSession {
   signal: AbortSignal;
   executeTool: (name: string, argumentsValue: unknown) => Promise<Record<string, unknown>>;
   recordProviderEvent: (event: unknown) => void;
+  images?: readonly { path: string }[];
 }
 export interface ModelWorker {
   identity: { provider: unknown; model: unknown };
@@ -59,6 +64,7 @@ export interface ModelProposalOptions {
   signal?: AbortSignal;
   scripts?: ModelScripts;
   onExecution?: (evidence: ScriptExecutionEvidence) => void;
+  sourceInput?: { images: readonly { path: string }[]; documents: readonly { sourceId: string; text: string }[] };
 }
 export class ModelWorkerError extends Error {
   constructor(message: string, options?: ErrorOptions) { super(message, options); this.name = 'ModelWorkerError'; }
@@ -74,9 +80,10 @@ function text(value: unknown, name: string, maximum: number): string {
   return value.trim();
 }
 function request(input: unknown, repository: RoomRepository): BoundRequest {
-  fields(input, isRecord(input) && Object.hasOwn(input, 'proposalName')
+  const extra = isRecord(input) ? ['sources', 'authoringScope'].filter((key) => Object.hasOwn(input, key)) : [];
+  fields(input, [...(isRecord(input) && Object.hasOwn(input, 'proposalName')
     ? ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']
-    : ['requestId', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']);
+    : ['requestId', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']), ...extra]);
   const requestId = text(input.requestId, 'Request identity', 128);
   if (!REQUEST_ID.test(requestId)) fail('Request identity contains unsupported characters.');
   const instruction = text(input.instruction, 'Change request', 1000);
@@ -101,6 +108,8 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid selected object identity.');
   const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
   return Object.freeze({ requestId, proposalName, baseRevisionId: base.id, instruction, visualIntent: Object.freeze(visualIntent), base,
+    ...(extra.includes('sources') ? { sources: parseRequestSources(input.sources) } : {}),
+    ...(extra.includes('authoringScope') ? { authoringScope: parseAuthoringScope(input.authoringScope) } : {}),
     selectedObjectIds: Object.freeze(selectedObjectIds), selectedObjects: Object.freeze(selectedObjectIds.map((id) => {
       const entity = base.snapshot.entities.find((item) => item.id === id);
       if (!entity) fail('A selected object does not exist in the bound revision.');
@@ -143,6 +152,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   fields(worker.identity, ['provider', 'model']);
   const identity = { provider: text(worker.identity.provider, 'Worker provider', 80), model: text(worker.identity.model, 'Worker model', 100) };
   const bound = request(input, repository);
+  if (bound.sources && !options.sourceInput) fail('Request sources must be loaded from the private source store before processing.');
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);
   if (options.signal?.aborted) forwardAbort();
@@ -219,8 +229,12 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     signal.throwIfAborted();
     await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
       input: { request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
-        selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent }, selectedObjects: bound.selectedObjects },
-      tools: MODEL_PROPOSAL_TOOLS, signal, executeTool, recordProviderEvent });
+        selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
+        ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) },
+        selectedObjects: bound.selectedObjects,
+        ...(options.sourceInput ? { sourceDocuments: options.sourceInput.documents } : {}) },
+      tools: MODEL_PROPOSAL_TOOLS, signal, executeTool, recordProviderEvent,
+      ...(options.sourceInput ? { images: options.sourceInput.images } : {}) });
     signal.throwIfAborted();
     finished = true;
     if (fatal || running) fail('The model proposal attempt lost execution authority. No proposal was saved.');
@@ -237,7 +251,8 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         ...result.review, worker: { ...identity, responseIds: providerEvents.map((event) => event.responseId),
           usage: providerEvents.reduce((sum, event) => ({ inputTokens: sum.inputTokens + event.inputTokens, outputTokens: sum.outputTokens + event.outputTokens,
             totalTokens: sum.totalTokens + event.totalTokens }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 }) },
-        toolCalls, scriptExecutions: executions, validator: 'room-graph-v1' },
+        toolCalls, scriptExecutions: executions, ...(bound.sources ? { sources: bound.sources } : {}),
+        ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}), validator: 'room-graph-v1' },
     });
     signal.throwIfAborted();
     return { status: 'ready', repository: next, review: { ...next.review(bound.proposalName), changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } };

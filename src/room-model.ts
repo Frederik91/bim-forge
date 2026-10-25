@@ -3,6 +3,8 @@ import { parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { parseIntentAssessment } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
+import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
+import type { RequestSource, AuthoringScope } from './request-sources.ts';
 
 const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
@@ -155,6 +157,8 @@ export interface ProposalReview {
   toolCalls: ToolCallEvidence[];
   scriptExecutions?: ScriptExecutionEvidence[];
   intent?: IntentAssessment;
+  sources?: RequestSource[];
+  authoringScope?: AuthoringScope;
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
