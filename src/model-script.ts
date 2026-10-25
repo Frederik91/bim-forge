@@ -44,7 +44,7 @@ const entity = Type.Union([
   wall,
   door,
   window, equipment,
-  furniture, space, Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Literal(0) }),
+  furniture, space, Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
 ], { title: 'ModelEntity' });
 const relationships = Type.Array(Type.Object({
   id: identifier, type: Type.Literal('hosted-by'), source: identifier, target: identifier, offset: Type.Number(),
