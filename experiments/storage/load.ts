@@ -1,17 +1,22 @@
 import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Type } from 'typebox';
-import { entity, hash, parse, IdSchema, canonical } from './contract.ts';
+import { entity, hash, parse, IdSchema } from './contract.ts';
 import type { StoredEntity } from './contract.ts';
 import type { Storage } from './store.ts';
 import { boundedLines } from './lines.ts';
+import { PreparedEntity } from './prepared.ts';
 
 export class Fingerprint {
   count = 0;
   private sum = 0n;
   private xor = 0n;
   add(value: StoredEntity): void {
-    const digest = BigInt(`0x${hash(value)}`);
+    this.addHash(hash(value));
+  }
+  addPrepared(value: PreparedEntity): void { this.addHash(value.versionId); }
+  private addHash(value: string): void {
+    const digest = BigInt(`0x${value}`);
     this.count += 1;
     this.sum = (this.sum + digest) % (1n << 256n);
     this.xor ^= digest;
@@ -54,31 +59,25 @@ export async function load(store: Storage, input: AsyncIterable<StoredEntity>, b
   let canonicalBytes = 0;
   const propertyValuesByRecordCategory: Record<string, number> = Object.create(null);
   const recordBytesHistogram: Record<string, number> = Object.create(null);
-  let batch: StoredEntity[] = [];
+  let batch: PreparedEntity[] = [];
   let batchBytes = 0;
   await store.client.query(`CREATE TEMP TABLE w5_load_stage(entity_id text PRIMARY KEY,version_id text NOT NULL) ON COMMIT PRESERVE ROWS`);
   const flush = async (): Promise<void> => {
     if (batch.length === 0) return;
     await control?.checkpoint();
-    await store.transaction(async () => {
-      await store.insertVersions(batch);
-      await store.client.query(`INSERT INTO w5_load_stage SELECT x."entityId",x."versionId"
-        FROM jsonb_to_recordset($1::jsonb) x("entityId" text,"versionId" text)`,
-        [JSON.stringify(batch.map((item) => ({ entityId: item.entityId, versionId: hash(item) })))]);
-    });
+    await store.stageVersions(batch);
     batch = []; batchBytes = 0;
   };
   try {
     for await (const value of input) {
-      const record = entity(value);
-      const bytes = Buffer.byteLength(canonical(record));
-      fingerprint.add(record);
+      const record = PreparedEntity.from(value);
+      const bytes = record.canonicalBytes;
+      fingerprint.addPrepared(record);
       countsByKind[record.kind] = (countsByKind[record.kind] ?? 0) + 1;
       canonicalBytes += bytes;
       const category = record.entityId.startsWith('entity:') ? 'entities' : record.entityId.startsWith('relationship:') ? 'relationships'
         : record.entityId.startsWith('parameter:') ? 'parameters' : 'unclassified';
-      const properties = record.document.properties;
-      const propertyCount = properties !== null && typeof properties === 'object' ? Object.keys(properties).length : 0;
+      const propertyCount = record.propertyCount;
       propertyValuesByRecordCategory[category] = (propertyValuesByRecordCategory[category] ?? 0) + propertyCount;
       const upperBound = String(2 ** Math.ceil(Math.log2(Math.max(1, bytes))));
       recordBytesHistogram[upperBound] = (recordBytesHistogram[upperBound] ?? 0) + 1;
@@ -124,9 +123,10 @@ export async function inspectBranch(store: Storage, branch: string): Promise<{
     const page = await store.page({ branch, after, limit: 250 });
     if (page.length === 0) break;
     for (const row of page) {
-      fingerprint.add(row.entity);
+      const prepared = PreparedEntity.from(row.entity);
+      fingerprint.addPrepared(prepared);
       countsByKind[row.entity.kind] = (countsByKind[row.entity.kind] ?? 0) + 1;
-      if (hash(row.entity) !== row.versionId) throw new Error('Stored body/version hash mismatch');
+      if (prepared.versionId !== row.versionId) throw new Error('Stored body/version hash mismatch');
     }
     const last = page.at(-1);
     if (!last) throw new Error('Missing page tail');

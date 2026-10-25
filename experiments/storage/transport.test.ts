@@ -4,6 +4,7 @@ import { Client } from 'pg';
 import { Type } from 'typebox';
 import { entity, hash, parse, EntitySchema, HashSchema, IdSchema } from './contract.ts';
 import { Storage } from './store.ts';
+import { PreparedEntity } from './prepared.ts';
 
 test('version transport sends complete bodies and SQL columns without an unused outer document', async (t) => {
   const client = new Client();
@@ -24,7 +25,7 @@ test('version transport sends complete bodies and SQL columns without an unused 
   const schema = Type.Array(Type.Object({ versionId: HashSchema, entityId: IdSchema, kind: IdSchema,
     typeId: nullableId, containerId: nullableId, systemId: nullableId, fromId: nullableId, toId: nullableId,
     body: EntitySchema }, { additionalProperties: false }));
-  await store.insertVersions([body, entity({ ...body, entityId: 'entity:0000000000000000002',
+  await store.insertVersions([PreparedEntity.from(body), PreparedEntity.from({ ...body, entityId: 'entity:0000000000000000002',
     typeId: null, containerId: null, systemId: null, fromId: null, toId: null })]);
   assert.equal(captured.length, 1);
   const call = captured[0];

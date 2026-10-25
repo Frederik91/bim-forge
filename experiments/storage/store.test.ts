@@ -11,6 +11,7 @@ import { fromArray, fixtureEnvelopes } from './fixture.ts';
 import { Fingerprint, inspectBranch, load } from './load.ts';
 import { nativeDeltaIds, nativeEnvelopes, saveSnapshot, snapshotAt } from './baseline.ts';
 import { decodeCopyCell, w4Record } from './w4.ts';
+import { PreparedEntity } from './prepared.ts';
 
 function connection(): Client {
   if (!process.env.DATABASE_URL || !process.env.QVM_EXECUTION_LEASE) throw new Error('Integration tests require coordinator DATABASE_URL and execution lease');
@@ -139,6 +140,19 @@ test('command boundary rejects silent overwrites, duplicate writes and malformed
     assumptions: [{ entityId: 'a', versionId: null }], puts: [object('a')], deletes: ['a'] }), /Duplicate write/);
   assert.throws(() => entity({ ...object('a'), fromId: 'x', toId: null }), /Both relationship/);
   assert.equal(hash(object('a')), hash({ ...object('a'), document: { ...object('a').document } }));
+});
+
+test('duplicate staged identities roll back every version in that batch', async () => {
+  await withStore(async (store, branch) => {
+    const record = PreparedEntity.from(object(`${branch}:duplicate`));
+    await store.client.query('CREATE TEMP TABLE w5_load_stage(entity_id text PRIMARY KEY,version_id text NOT NULL)');
+    await assert.rejects(store.stageVersions([record, record]), /duplicate/);
+    const versions = await store.client.query('SELECT version_id FROM qvm_storage.versions WHERE version_id=$1', [record.versionId]);
+    assert.equal(versions.rows.length, 0);
+    const staged = await store.client.query('SELECT entity_id FROM w5_load_stage');
+    assert.equal(staged.rows.length, 0);
+    assert.equal(await store.head(branch), null);
+  });
 });
 
 test('W4 COPY decoder preserves typed properties, escaped content and independent bigint namespaces', () => {
