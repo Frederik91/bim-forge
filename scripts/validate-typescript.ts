@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const sourceRoots = ['demo', 'factory', 'scripts', 'src'];
+const sourceRoots = ['demo', 'factory', 'scripts', 'src', 'experiments', 'benchmarks'];
 const javascriptExtensions = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 const suppressionPattern = new RegExp(`${'@'}${'ts'}-(?:ignore|expect-error|nocheck)|${'eslint'}-${'disable'}`);
 const forbiddenTypePattern = new RegExp(`\\b${'any'}\\b`, 'g');
@@ -46,6 +46,7 @@ function maskNonCode(text: string): string {
 function walk(directory: string): string[] {
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.isDirectory() && (entry.name === 'node_modules' || entry.name === '.git')) return [];
     const filename = path.join(directory, entry.name);
     return entry.isDirectory() ? walk(filename) : [filename];
   });
