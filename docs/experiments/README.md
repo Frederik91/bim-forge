@@ -66,19 +66,19 @@ Do not flush shared host caches, change preview data, or weaken validators for a
 
 | ID | Experiment | Stream | Initial result |
 | --- | --- | --- | --- |
-| EX-01 | Identity across snapshots, paired exports, and object lineage | W1 with W2 export fixtures | Not run |
-| EX-02 | Narrow IFC-native versus native-authoring comparison | W2 | Not run |
-| EX-03 | Shared properties, definitions, and occurrence isolation | W1 | Not run |
-| EX-04 | Independent changes and cross-object semantic conflicts | W1 | Not run |
-| EX-05 | Changed assumptions despite valid geometry | W1 | Not run |
-| EX-06 | Same-object property independence and incompatible edits | W1 | Not run |
-| EX-07 | Dependency evaluation and geometric references | W3 | Not run |
-| EX-08 | Coordinates, quantities, units, and exchange | W2 | Not run |
-| EX-09 | Interpretable immutable history across upgrades | W6 | Not run |
-| EX-10 | Revision storage growth and working-set queries | W5 | Not run |
-| EX-11 | Crash, retry, artifact completeness, and restore | W6 | Not run |
-| EX-12 | Disconnected branches, independent copies, and authority | W6 | Not run |
-| EX-13 | Detailed 200,000 m² hospital database workload | W5 with W4 generator | Not run |
+| EX-01 | Identity across snapshots, paired exports, and object lineage | W1 with W2 export fixtures | Baseline failed; candidate running |
+| EX-02 | Narrow IFC-native versus native-authoring comparison | W2 | Running |
+| EX-03 | Shared properties, definitions, and occurrence isolation | W1 | Baseline inconclusive; candidate running |
+| EX-04 | Independent changes and cross-object semantic conflicts | W1 | Baseline failed; candidate running |
+| EX-05 | Changed assumptions despite valid geometry | W1 | Baseline failed; candidate running |
+| EX-06 | Same-object property independence and incompatible edits | W1 | Baseline failed; candidate running |
+| EX-07 | Dependency evaluation and geometric references | W3 | Running |
+| EX-08 | Coordinates, quantities, units, and exchange | W2 | Running |
+| EX-09 | Interpretable immutable history across upgrades | W6 | Running |
+| EX-10 | Revision storage growth and working-set queries | W5 | Running |
+| EX-11 | Crash, retry, artifact completeness, and restore | W6 | Running |
+| EX-12 | Disconnected branches, independent copies, and authority | W6 | Running |
+| EX-13 | Detailed 200,000 m² hospital database workload | W5 with W4 generator | Running |
 
 ## A run and its result
 
