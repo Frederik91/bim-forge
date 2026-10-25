@@ -18,7 +18,7 @@ for await (const line of boundedLines(createReadStream(filename))) {
   const count = kinds.get(kind) ?? 0;
   if (count < 2) { selected.push(line); kinds.set(kind, count + 1); }
 }
-const stages: Record<string, number> = { copyDecodeMs: 0, wireAdmissionMs: 0, repeatEntityCheckMs: 0, canonicalMs: 0, hashMs: 0 };
+const stages = { copyDecodeMs: 0, wireAdmissionMs: 0, repeatEntityCheckMs: 0, canonicalMs: 0, hashMs: 0 };
 let bytes = 0;
 let admitted = 0;
 const outputHash = createHash('sha256');

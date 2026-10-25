@@ -17,7 +17,7 @@ const binding = Type.Object({ commit, path: text, sha256: hash }, { additionalPr
 const environment = Type.Object({
   host: text, software: Type.Record(text, text), imageDigests: Type.Array(Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }), { minItems: 1 }),
   cpuLimit: Type.Number({ exclusiveMinimum: 0 }), memoryLimitBytes: Type.Integer({ minimum: 1 }),
-  diskBudgetBytes: Type.Integer({ minimum: 1 }), storage: text, cacheProcedure: text, measurementSlot: text,
+  diskBudgetBytes: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]), storage: text, cacheProcedure: text, measurementSlot: text,
 }, { additionalProperties: false });
 export const CoverageSchema = Type.Object({
   assertion: text, caseIds: strings, coverage: Type.Union([Type.Literal('covered'), Type.Literal('partial'), Type.Literal('not-covered')]),
@@ -56,5 +56,9 @@ export function parseRun(input: unknown): Run {
       || input.observations.some(item => !item.passed) || input.coverage.some(item => item.coverage !== 'covered' || item.caseIds.length === 0)
       || input.errors.length > 0)) throw new Error('Passed requires successful observations and complete declared coverage.');
   if (input.conclusion === 'passed' && input.observations.some(item => item.limitations.length > 0)) throw new Error('Limited observations require an inconclusive result.');
+  if (input.environment.diskBudgetBytes === null) {
+    if (input.conclusion === 'passed') throw new Error('Passed requires a recorded disk budget.');
+    if (input.limitations.length === 0) throw new Error('An unrecorded disk budget requires an explicit limitation.');
+  }
   return input;
 }

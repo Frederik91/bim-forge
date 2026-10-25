@@ -7,6 +7,7 @@ import { fixtureEnvelopes, fromArray } from './fixture.ts';
 import { nativeEnvelopes } from './baseline.ts';
 import { runWorkload } from './workload.ts';
 import { w4Input, w4Generator } from './w4.ts';
+import { verifySelectionFile } from './selections.ts';
 
 function argument(index: number): string {
   const value = process.argv[index];
@@ -19,6 +20,11 @@ function limit(index: number): number {
   return value;
 }
 async function jsonFile(filename: string): Promise<unknown> { return JSON.parse(await readFile(filename, 'utf8')); }
+function boundedArgument(index: number, fallback: number, maximum: number): number {
+  const value = process.argv[index] === undefined ? fallback : Number(argument(index));
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new Error(`Argument ${index - 2} must be 1..${maximum}`);
+  return value;
+}
 
 const client = new Client({ connectionString: process.env.DATABASE_URL });
 try {
@@ -46,6 +52,14 @@ try {
     case 'fingerprint': result = await inspectBranch(store, argument(3)); break;
     case 'metrics': result = await store.metrics(); break;
     case 'property-counts': result = await store.propertyCounts(argument(3)); break;
+    case 'verify-selections': {
+      const verified = await verifySelectionFile(store, argument(3), { branch: argument(4),
+        pageSize: boundedArgument(5, 1000, 1000), maximumRows: boundedArgument(6, 1000000, 100000000),
+        statementTimeoutMs: boundedArgument(7, 30000, 3600000), wallTimeMs: boundedArgument(8, 900000, 3600000) });
+      result = verified;
+      if (!verified.passed) process.exitCode = 1;
+      break;
+    }
     case 'workload': result = await runWorkload(store, await jsonFile(argument(3)), argument(4)); break;
     default: throw new Error(`Unknown operation ${operation}`);
   }

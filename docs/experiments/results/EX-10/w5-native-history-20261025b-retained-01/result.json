@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-10",
+  "runId": "w5-native-history-20261025b-retained-01",
+  "startedAt": "2026-10-25T12:15:46.389Z",
+  "finishedAt": "2026-10-25T12:15:58.365Z",
+  "hypothesis": "The declared bounded persistence workload preserves source/query/history behavior within its admitted fixture and exploratory limits.",
+  "variant": "native-snapshot; fixture; history=1000; original native-history-20261025b",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "runnerCommit": "4db3c9f048d550ccad583cf3efd4bc3b25a2dcd2",
+    "validators": [
+      "TypeBox boundary schemas",
+      "PostgreSQL constraints/reference validation",
+      "Executed source fingerprints and property-count oracle where completed",
+      "Retained run observations without modification"
+    ]
+  },
+  "dataset": {
+    "name": "retained-native-product-fixture",
+    "seed": "not applicable: existing native fixture",
+    "manifestSha256": "adf9b6c6616853e3ea2c62fd4b67a32e5e95bcf386898cc02d0fdb13ce908205"
+  },
+  "environment": {
+    "host": "frederik@192.168.1.17; container fd71324c2e7b",
+    "software": {
+      "node": "v24.22.1",
+      "postgres": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 0.75,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/postgres; coordinator-owned isolated PG15",
+    "cacheProcedure": "warm: explicit page and historical warmup; OS cache unchanged",
+    "measurementSlot": "shared-correctness; shared correctness, no exclusive performance claim"
+  },
+  "commands": [
+    "\"/usr/local/bin/node\" \"/app/experiments/storage/cli.ts\" \"workload\" \"/qualification/artifacts/native-history-20261025b/config.json\" \"/qualification/artifacts/native-history-20261025b/run\""
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-10",
+      "caseId": "source-query-oracle",
+      "expected": "All source documents, counts by kind and canonical hashes survive load",
+      "observed": "{\"fingerprint\":{\"count\":6,\"sum\":\"0ab1bdb42851512055516f338a1eba49cca2cf7a1dc0187c7e883ab49bff54c3\",\"xor\":\"b2918eda17dca1f9ca2d8b3fa7fd81af84486edf9df88b6d90991cddf33e55bb\"},\"countsByKind\":{\"Door\":1,\"hosted-by\":1,\"Wall\":4}}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "bounded-baseline",
+      "expected": "Five or more alternating repetitions at existing validated snapshot bounds",
+      "observed": "5 alternating open-checksum samples per variant",
+      "passed": true,
+      "limitations": [
+        "Snapshot layout is a PostgreSQL reference storing product-validated full snapshots; it is not the existing runtime persistence adapter."
+      ]
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "immutable-reconstruction",
+      "expected": "Initial revision remains identical after aged bounded edits",
+      "observed": "c0559eb7264e0a9b2e3c06381fb2a47a09ef778ba4d05bb88ef799e5bd54f40b",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "workload-errors",
+      "expected": "Every executed database operation completes without unexpected errors",
+      "observed": "[]",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "capacity-scope",
+      "expected": "Full hospital capacity requires admitted full inventory and complete workload coverage",
+      "observed": "fixture: 6 records; 1000 requested history revisions",
+      "passed": false,
+      "limitations": [
+        "Partial storage workload only: no geometry, solver, predicate conflicts, artifact bytes, backup/restore, offered-rate pacing, deletion churn or engineering validity claim.",
+        "Graph and fanout queries are explicitly capped; reference validation scans the entire branch per acceptance.",
+        "Historical reconstruction scans ancestry deltas without checkpoints. Current visibility is copied per branch.",
+        "Type fanout is an indexed instance lookup, not evaluated regeneration. No independently varied 8/32-branch or 64-client matrix is implemented.",
+        "Global PG metrics can include other correctness streams. Full measurements require exclusive scheduling."
+      ]
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "exploratory-p95-entity-detail",
+      "expected": "Predeclared exploratory p95 <= 300 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"entity-detail\",\"budgetMs\":300,\"n\":5,\"errors\":0,\"p95Ms\":3.6189210000000003,\"passed\":false}",
+      "passed": false,
+      "limitations": [
+        "Run is not the warm single-client exploratory scenario; budget qualification is unavailable."
+      ]
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "exploratory-p95-page-query",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"page-query\",\"budgetMs\":1000,\"n\":5,\"errors\":0,\"p95Ms\":3.9957339999999704,\"passed\":false}",
+      "passed": false,
+      "limitations": [
+        "Run is not the warm single-client exploratory scenario; budget qualification is unavailable."
+      ]
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "exploratory-p95-one-hop",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"one-hop\",\"budgetMs\":1000,\"n\":5,\"errors\":0,\"p95Ms\":2.8146610000001147,\"passed\":false}",
+      "passed": false,
+      "limitations": [
+        "Run is not the warm single-client exploratory scenario; budget qualification is unavailable."
+      ]
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "exploratory-p95-bounded-delta",
+      "expected": "Predeclared exploratory p95 <= 2000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-delta\",\"budgetMs\":2000,\"n\":999,\"errors\":0,\"p95Ms\":0.5777090000001408,\"passed\":false}",
+      "passed": false,
+      "limitations": [
+        "Run is not the warm single-client exploratory scenario; budget qualification is unavailable."
+      ]
+    },
+    {
+      "experimentId": "EX-10",
+      "caseId": "exploratory-p95-bounded-acceptance",
+      "expected": "Predeclared exploratory p95 <= 4000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-acceptance\",\"budgetMs\":4000,\"n\":999,\"errors\":0,\"p95Ms\":10.357885000000351,\"passed\":false}",
+      "passed": false,
+      "limitations": [
+        "Run is not the warm single-client exploratory scenario; budget qualification is unavailable."
+      ]
+    }
+  ],
+  "observationsArtifact": "native-history-20261025b/run/observations.json",
+  "coverage": [
+    {
+      "assertion": "Candidate queries, reconstruction and deltas match fixture oracles.",
+      "caseIds": [
+        "source-query-oracle",
+        "immutable-reconstruction",
+        "workload-errors"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Compare the baseline only within its supported bounds and record larger-case limits.",
+      "caseIds": [
+        "bounded-baseline",
+        "capacity-scope"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Record revision membership, retained versions, indexes and artifact growth separately.",
+      "caseIds": [
+        "capacity-scope"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Publish exact resource/settings/configuration bindings and raw samples.",
+      "caseIds": [
+        "workload-errors",
+        "capacity-scope"
+      ],
+      "coverage": "partial"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "native-history-20261025b/run/artifact-checksums.json",
+      "bytes": 618,
+      "sha256": "b59b6bce4388ee488d20ef7fab490c5c3d392b144da10a623d54e0a38aae18f0",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/config.json",
+      "bytes": 2004,
+      "sha256": "022997a159a4b1d9f030f1c89918e97201260894381510013ff9ee0f5a099de8",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/environment.json",
+      "bytes": 42260,
+      "sha256": "4a2e129158e075816735b432ef4edd5ed095003c751b52413c6a1a72db15ddad",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/errors.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/execution-envelope.json",
+      "bytes": 1249,
+      "sha256": "f7f42b5a51587b3be2240a9e07fc6de2e2853d7f34b0d09f2286f8bfac3d2fa5",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/exploratory-budgets.json",
+      "bytes": 948,
+      "sha256": "b1f1c97eed140d9a6e7a5628f6d957733fbe8e4f825f2e8009f8f41fb429bbc8",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/growth.json",
+      "bytes": 980,
+      "sha256": "208f341463043e1d270faf94702205c189d688196faea8429ce4b7dcbf30dcf8",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/load.json",
+      "bytes": 723,
+      "sha256": "393313c9cbc77733996cee92cbf9678e89333f0e2b05be0e4604a375b5d52689",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/metrics-after.json",
+      "bytes": 16468,
+      "sha256": "660330bdeaa339c4fe2a4e6ebd78616fc5ea82969d82c2aba7f7518f90302d0e",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/metrics-aged.json",
+      "bytes": 16466,
+      "sha256": "35fbe5187f2012be83ecdc73c15b1d56ca8edbdce8f8ac31146438b4434a2300",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/metrics-before.json",
+      "bytes": 16384,
+      "sha256": "462e738fc432c0a68fef1ec622d48c2852edf9db987e6ad98dc6db8240b69a86",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/metrics-ready.json",
+      "bytes": 16404,
+      "sha256": "0dece2174589c7c2b01879e8c7e7483a2b844c59fb38a450ac032754dddf5958",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/observations.json",
+      "bytes": 4743,
+      "sha256": "27416f1a4f79c4153e1407c47a5277bf3b50b2e76baafe4917ffe942542bb174",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/oracle.json",
+      "bytes": 623,
+      "sha256": "b26db2fda397bfeefe6a673efe2660656d27df2f3b9450ddad4f7262fcadf38d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/property-values.json",
+      "bytes": 87,
+      "sha256": "6de11198561a707285683bac1a7864dfc6d20662959d824e80c13834febbf455",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/sample-summary.json",
+      "bytes": 2945,
+      "sha256": "edec453f8690dfb95f70fdf8cc66d05f163d32328dd242f3a18d71b36f67ee6d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/run/samples.ndjson",
+      "bytes": 2628163,
+      "sha256": "95c490193c63f544a466887fd35fc83598d3cc97acd6a0de1b3f4e5fe8ca9bca",
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "native-history-20261025b/run/traffic.json",
+      "bytes": 376,
+      "sha256": "19e18d64f6412318d323b76052b75cbf6cc64e4a24ce20e5509c4a5f2da07ea2",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w5-terminal-publication-20261025a/native-dataset-manifest.json",
+      "bytes": 384,
+      "sha256": "adf9b6c6616853e3ea2c62fd4b67a32e5e95bcf386898cc02d0fdb13ce908205",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "native-history-20261025b/native.json",
+      "bytes": 1227,
+      "sha256": "57bf7996d1e71614015b5bb0b64bd3d27f6fe6ef2222f2e685ea2953d1a99261",
+      "mediaType": "application/json"
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "Retrospective metadata publication only; the original experiments were not rerun.",
+    "Original invocation ID native-history-20261025b; record ID adds a retained-01 suffix without replacing prior attempts.",
+    "Evidence root is /ssd1/bim-forge-qualification/qvm-20261025/artifacts; paths and SHA-256 bind retained private artifacts.",
+    "Every definition assertion is conservatively partial or not-covered. Full hospital load and independent selection verification are not included in this record.",
+    "Database-only synthetic metadata does not qualify geometry, a real hospital inventory, engineering approvals or production adoption.",
+    "Global PG/WAL metrics include other correctness activity; no comparative speedup, isolated capacity result or product SLO is claimed.",
+    "Run start is the retained environment timestamp; finish is observation-file persistence time, not a fabricated benchmark clock.",
+    "Runner CPU/memory fields describe the Node container; exact PostgreSQL limits/settings are separately retained in config and metrics artifacts.",
+    "Snapshot layout is a PostgreSQL reference storing product-validated full snapshots; it is not the existing runtime persistence adapter.",
+    "Partial storage workload only: no geometry, solver, predicate conflicts, artifact bytes, backup/restore, offered-rate pacing, deletion churn or engineering validity claim.",
+    "Graph and fanout queries are explicitly capped; reference validation scans the entire branch per acceptance.",
+    "Historical reconstruction scans ancestry deltas without checkpoints. Current visibility is copied per branch.",
+    "Type fanout is an indexed instance lookup, not evaluated regeneration. No independently varied 8/32-branch or 64-client matrix is implemented.",
+    "Global PG metrics can include other correctness streams. Full measurements require exclusive scheduling.",
+    "Run is not the warm single-client exploratory scenario; budget qualification is unavailable.",
+    "Six-record native fixture only; 1,000 history revisions are not a full-inventory/history Cartesian run. Snapshot reference is not the existing runtime persistence adapter; latency budgets were ineligible in this correctness scenario."
+  ],
+  "decisionImplications": [
+    "Partial retained evidence only. Preserve failed/cancelled attempts; do not infer full capacity, a comparative winner, engineering correctness or adoption approval."
+  ],
+  "executionStatus": "completed",
+  "conclusion": "inconclusive"
+}

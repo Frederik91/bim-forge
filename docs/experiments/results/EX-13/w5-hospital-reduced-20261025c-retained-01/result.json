@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "w5-hospital-reduced-20261025c-retained-01",
+  "startedAt": "2026-10-25T12:20:04.494Z",
+  "finishedAt": "2026-10-25T12:22:17.557Z",
+  "hypothesis": "The declared bounded persistence workload preserves source/query/history behavior within its admitted fixture and exploratory limits.",
+  "variant": "w4-generator; reduced; history=2; original hospital-reduced-20261025c",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "runnerCommit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "validators": [
+      "TypeBox boundary schemas",
+      "PostgreSQL constraints/reference validation",
+      "Executed source fingerprints and property-count oracle where completed",
+      "Retained run observations without modification"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1/reduced",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca"
+  },
+  "environment": {
+    "host": "frederik@192.168.1.17; container 6d525345c887",
+    "software": {
+      "node": "v24.22.1",
+      "postgres": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/postgres; coordinator-owned isolated PG15",
+    "cacheProcedure": "warm: explicit page and historical warmup; OS cache unchanged",
+    "measurementSlot": "shared-correctness; shared correctness, no exclusive performance claim"
+  },
+  "commands": [
+    "\"/usr/local/bin/node\" \"/app/experiments/storage/cli.ts\" \"workload\" \"/qualification/artifacts/hospital-20261025c/config-reduced.json\" \"/qualification/artifacts/hospital-20261025c/reduced\""
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "source-query-oracle",
+      "expected": "All source documents, counts by kind and canonical hashes survive load",
+      "observed": "{\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"countsByKind\":{\"site\":1,\"building\":1,\"level\":1,\"space\":100,\"zone\":2,\"system\":20,\"typeDefinition\":50,\"wall\":800,\"stud\":14000,\"slab\":100,\"roof\":2,\"door\":250,\"window\":150,\"chair\":600,\"desk\":200,\"bed\":50,\"cabinet\":300,\"otherFurnishing\":350,\"electricalOutlet\":1800,\"switch\":400,\"luminaire\":1400,\"electricalPanel\":50,\"circuit\":500,\"cableSegment\":3000,\"ductSegment\":1800,\"ductFitting\":2400,\"pipeSegment\":2500,\"pipeFitting\":3000,\"pump\":50,\"valve\":1000,\"terminal\":800,\"sensor\":800,\"containmentSegment\":1000,\"equipment\":300,\"connectionPort\":30000,\"parameter:dimension\":3794,\"parameter:typeReference\":3000,\"parameter:dependencyInput\":3000,\"parameter:recipe\":3000,\"parameter:hostOffset\":2206,\"containedIn\":37776,\"instanceOf\":37602,\"hostedBy\":17450,\"supportedBy\":10200,\"memberOfSystem\":20800,\"boundsSpace\":1600,\"hasPort\":30000,\"connectedTo\":15000,\"parameterDependsOn\":15000,\"externalBinding\":1000,\"provenance\":1000}}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "bounded-baseline",
+      "expected": "Five or more alternating repetitions at existing validated snapshot bounds",
+      "observed": "No native product snapshot supplied; relative baseline comparison not executed",
+      "passed": false,
+      "limitations": [
+        "Hospital/W0 entity kinds are outside the existing product snapshot contract. Run native-snapshot separately."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "immutable-reconstruction",
+      "expected": "Initial revision remains identical after aged bounded edits",
+      "observed": "4b94a0e36c824bb6e0780eba554fdda967c112b4ccdc4957de5e2985c967f59e",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "workload-errors",
+      "expected": "Every executed database operation completes without unexpected errors",
+      "observed": "[]",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "capacity-scope",
+      "expected": "Full hospital capacity requires admitted full inventory and complete workload coverage",
+      "observed": "reduced: 270205 records; 2 requested history revisions",
+      "passed": false,
+      "limitations": [
+        "Partial storage workload only: no geometry, solver, predicate conflicts, artifact bytes, backup/restore, offered-rate pacing, deletion churn or engineering validity claim.",
+        "Graph and fanout queries are explicitly capped; reference validation scans the entire branch per acceptance.",
+        "Historical reconstruction scans ancestry deltas without checkpoints. Current visibility is copied per branch.",
+        "Type fanout is an indexed instance lookup, not evaluated regeneration. No independently varied 8/32-branch or 64-client matrix is implemented.",
+        "Global PG metrics can include other correctness streams. Full measurements require exclusive scheduling."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-entity-detail",
+      "expected": "Predeclared exploratory p95 <= 300 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"entity-detail\",\"budgetMs\":300,\"n\":5,\"errors\":0,\"p95Ms\":1.7994130000006407,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-page-query",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"page-query\",\"budgetMs\":1000,\"n\":5,\"errors\":0,\"p95Ms\":45.135702999992645,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-one-hop",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"one-hop\",\"budgetMs\":1000,\"n\":5,\"errors\":0,\"p95Ms\":0.8914159999985714,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-bounded-delta",
+      "expected": "Predeclared exploratory p95 <= 2000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-delta\",\"budgetMs\":2000,\"n\":1,\"errors\":0,\"p95Ms\":0.3796629999997094,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-bounded-acceptance",
+      "expected": "Predeclared exploratory p95 <= 4000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-acceptance\",\"budgetMs\":4000,\"n\":1,\"errors\":0,\"p95Ms\":1292.3188169999921,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    }
+  ],
+  "observationsArtifact": "hospital-20261025c/reduced/observations.json",
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "caseIds": [
+        "source-query-oracle",
+        "immutable-reconstruction"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "caseIds": [
+        "source-query-oracle",
+        "capacity-scope"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "caseIds": [
+        "workload-errors",
+        "immutable-reconstruction"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "caseIds": [
+        "workload-errors",
+        "exploratory-p95-page-query"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "caseIds": [
+        "capacity-scope"
+      ],
+      "coverage": "partial"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "hospital-20261025c/reduced/artifact-checksums.json",
+      "bytes": 618,
+      "sha256": "5db6501cfd0dac2d1fb771a7f79e31caa82dbf39c5d5c7c95bda7f2379c53155",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/config.json",
+      "bytes": 2015,
+      "sha256": "875cfef0bafa468705e05a98721f806424df7dc81636e964f9069c37cd1bec50",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/environment.json",
+      "bytes": 38549,
+      "sha256": "bc5d444e84595dc44c0ed48a0c8389967a5cc6d4733333cc2018212b53e35466",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/errors.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/execution-envelope.json",
+      "bytes": 1260,
+      "sha256": "19287f55082f17fff4a110dcff9c6c52d0a64aab166fc04a8f20e10f1bc1d94e",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/exploratory-budgets.json",
+      "bytes": 938,
+      "sha256": "73d4dcf999c1237925daee98d8574f97699972af82bd921ef9a7f98e80f85fbc",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/growth.json",
+      "bytes": 992,
+      "sha256": "1d276868454c429f870ccc72d2d09ae2701ea31d4069ef16d622cf29499c1837",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/load.json",
+      "bytes": 2064,
+      "sha256": "1badbbb85cf281fc193971d29fe3275649d16a1c769c67706ca190c0972bcb96",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/metrics-after.json",
+      "bytes": 16514,
+      "sha256": "c3021eb8449e4e6d7771de546a9b8361d6905d0a784a74c5e93bc2224bfc346f",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/metrics-aged.json",
+      "bytes": 16514,
+      "sha256": "f246c87c65f5486740bdb0a363246785fa2aea03e0a05936f6d8a81b80428e45",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/metrics-before.json",
+      "bytes": 16510,
+      "sha256": "98ac5e927a3becdddce3838e84be2fa4caf0f26e5300e448eac1740c1a36294e",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/metrics-ready.json",
+      "bytes": 16514,
+      "sha256": "75a164682ff4af5ffd14e9cf277dd431d70b6f6d96b5d05520f0170965f65eba",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/observations.json",
+      "bytes": 5162,
+      "sha256": "e8fca5de9ae4526dc504bd3efed79c04d9cea304b7032f07b1cd2e44e9871096",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/oracle.json",
+      "bytes": 3111,
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/property-values.json",
+      "bytes": 197,
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/sample-summary.json",
+      "bytes": 2106,
+      "sha256": "867e170ebda3f6e212151a8a3300bdd0716a7d87aae54f4991d11f4e0b45ef27",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/reduced/samples.ndjson",
+      "bytes": 44960,
+      "sha256": "33473900dbcb3f997b88ee6822cd871f5e533a6bf6223050da02d7d450aac6dc",
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "hospital-20261025c/reduced/traffic.json",
+      "bytes": 378,
+      "sha256": "a581929da45a0099e4719dff287234df9fe4b55a94447cc88d2f242521eb31de",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/manifest-reduced.json",
+      "bytes": 120622,
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/admission-reduced.json",
+      "bytes": 826,
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "mediaType": "application/json"
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "Retrospective metadata publication only; the original experiments were not rerun.",
+    "Original invocation ID hospital-reduced-20261025c; record ID adds a retained-01 suffix without replacing prior attempts.",
+    "Evidence root is /ssd1/bim-forge-qualification/qvm-20261025/artifacts; paths and SHA-256 bind retained private artifacts.",
+    "Every definition assertion is conservatively partial or not-covered. Full hospital load and independent selection verification are not included in this record.",
+    "Database-only synthetic metadata does not qualify geometry, a real hospital inventory, engineering approvals or production adoption.",
+    "Global PG/WAL metrics include other correctness activity; no comparative speedup, isolated capacity result or product SLO is claimed.",
+    "Run start is the retained environment timestamp; finish is observation-file persistence time, not a fabricated benchmark clock.",
+    "Runner CPU/memory fields describe the Node container; exact PostgreSQL limits/settings are separately retained in config and metrics artifacts.",
+    "Hospital/W0 entity kinds are outside the existing product snapshot contract. Run native-snapshot separately.",
+    "Partial storage workload only: no geometry, solver, predicate conflicts, artifact bytes, backup/restore, offered-rate pacing, deletion churn or engineering validity claim.",
+    "Graph and fanout queries are explicitly capped; reference validation scans the entire branch per acceptance.",
+    "Historical reconstruction scans ancestry deltas without checkpoints. Current visibility is copied per branch.",
+    "Type fanout is an indexed instance lookup, not evaluated regeneration. No independently varied 8/32-branch or 64-client matrix is implemented.",
+    "Global PG metrics can include other correctness streams. Full measurements require exclusive scheduling."
+  ],
+  "decisionImplications": [
+    "Partial retained evidence only. Preserve failed/cancelled attempts; do not infer full capacity, a comparative winner, engineering correctness or adoption approval."
+  ],
+  "executionStatus": "completed",
+  "conclusion": "inconclusive"
+}
