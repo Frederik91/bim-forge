@@ -1,10 +1,11 @@
-ifcopenshell==0.8.3
+ifcopenshell==0.9.0.post1
 numpy==2.2.6
 shapely==2.1.1
 isodate==0.7.2
 python-dateutil==2.9.0.post0
 six==1.17.0
 lark==1.2.2
+pyparsing==3.2.3
 typing_extensions==4.14.1
 jsonschema==4.24.0
 attrs==25.3.0
