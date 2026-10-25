@@ -22,7 +22,7 @@ The implementation changes these files and responsibilities:
 | `src/script-evidence.ts`, `src/room-model.ts`, `src/room-model.test.ts` | Bound application-owned execution evidence and preserve exact restoration of historical reviews. Model validators and revision hashing remain authoritative. |
 | `demo/change-requests.ts`, `src/codex-app-server.ts`, their tests and server wiring | Abort matching attempts and provider turns, retain durable execution records, preserve backlog/decision behavior and clean up on shutdown. |
 | Office, visual-request and residential-floor tests | Preserve shell edits, complete furnishing sets, supported devices, freestanding placement, room-local preservation and explicit transfers through real scripts. |
-| `vendor/`, package manifests and preview Docker build inputs | Install the pinned unpublished package reproducibly without .NET or a runtime download. |
+| Package manifests and preview Docker build inputs | Install the pinned npm package reproducibly without .NET or a runtime artifact download. |
 
 Model entity types do not change. Review evidence gains an optional field, and the queue gains execution records. Existing geometry, support, clearance, floor-plan, identity and hosting validators must not be weakened. No script receives an accepted-model write or approval API.
 
@@ -96,16 +96,16 @@ Selection and proximity still express context, not implicit group membership or 
 
 ## Dependency provenance
 
-The bundled package is built from [ScriptBox commit `9a9b327206592f191b7773303cfc68384191fbc2`](https://github.com/Frederik91/ScriptBox/tree/9a9b327206592f191b7773303cfc68384191fbc2). It is not an independently modified runtime fork.
+The application pins the published npm package from [ScriptBox commit `129f538fb28de883e7dfc1753f4c9524c8c37445`](https://github.com/Frederik91/ScriptBox/tree/129f538fb28de883e7dfc1753f4c9524c8c37445). It is not an independently modified runtime fork. The former local 0.1.0 tarball and Docker packaging path have been removed.
 
-- Package: `@frederik91/scriptbox` `0.1.0`.
-- Tracked artifact: `vendor/frederik91-scriptbox-0.1.0.tgz`.
-- Tarball SHA-256: `f931970b8ba056d457f8b36e1c4c443370bd3e67fd8e8ff975cd11377a82336d`.
+- Package: `@frederik91/scriptbox` `0.1.1`, exact version.
+- Registry artifact: `https://registry.npmjs.org/@frederik91/scriptbox/-/scriptbox-0.1.1.tgz`.
+- Lockfile integrity: `sha512-lxlttFnydcXWfH2S4CKYjG14KW540elqgDqyl/OHtKVxbHc7wU+pPW1IUI9mtViiOdnNcWKJXlxhhU/taUiJAQ==`.
 - Guest ABI: 2. Bootstrap version: 3.
 - Guest SHA-256: `a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b`.
 - Node image used for server builds/tests: `node@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205`.
 
-The package was built and packed in the server container with `npm ci`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`, `node scripts/build.ts --check` and `npm pack`. Package dependencies and tarball integrity are also pinned in the application lockfile. The bundled package retains upstream licenses and notices. A maintainer can replace the tarball with a published version later, after verifying its source and artifact digests.
+The original 0.1.0 package was built and packed in a server container. Version 0.1.1 changes publication metadata, version identity and documentation, not the runtime source or guest artifact. The npm lockfile pins its registry artifact and integrity. The application and production-image tests are rerun against the published package; see the [registry-upgrade evidence](validation/issue-104-npm-preview.md). The original validation report remains a historical record of the 0.1.0 qualification.
 
 ## Verification
 

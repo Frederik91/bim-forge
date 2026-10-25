@@ -9,7 +9,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-COPY vendor/frederik91-scriptbox-0.1.0.tgz ./vendor/
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --chown=65032:33 demo/server.ts demo/change-requests.ts ./demo/
 COPY --chown=65032:33 src ./src
