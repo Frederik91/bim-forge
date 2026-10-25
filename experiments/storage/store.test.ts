@@ -8,7 +8,7 @@ import { Client } from 'pg';
 import { Type } from 'typebox';
 import { RoomRepository, previewRectangle } from '../../src/room-model.ts';
 import { Storage } from './store.ts';
-import { command, entity, hash, JsonSchema, parse } from './contract.ts';
+import { canonical, command, entity, EntitySchema, hash, HashSchema, JsonSchema, parse } from './contract.ts';
 import type { StoredEntity } from './contract.ts';
 import { fromArray, fixtureEnvelopes } from './fixture.ts';
 import { Fingerprint, inspectBranch, load } from './load.ts';
@@ -35,6 +35,174 @@ async function withStore(work: (store: Storage, branch: string) => Promise<void>
     await work(store, branch);
   } finally { await client.end(); }
 }
+
+function importRecords(prefix: string, count: number, padding = ''): StoredEntity[] {
+  const id = (index: number) => `${prefix}:row:${String(index).padStart(5, '0')}`;
+  return Array.from({ length: count }, (_, index) => {
+    const original = object(id(index), index);
+    return entity({ ...original, kind: index === count - 1 ? 'space' : index % 2 === 0 ? 'wall' : 'equipment',
+      containerId: index === count - 1 ? null : id(count - 1),
+      document: { ...original.document, payload: { padding, text: 'æøå\t\n\\N', flags: [true, false, null] },
+        source: { fixture: 'issue156', ordinal: index } } });
+  });
+}
+
+function assertVersionedBodies(rows: Awaited<ReturnType<Storage['page']>>, records: StoredEntity[]): void {
+  const expected = new Map(records.map((record) => [record.entityId, record]));
+  assert.equal(rows.length, records.length);
+  for (const row of rows) {
+    const original = expected.get(row.entity.entityId);
+    assert.ok(original, `Unexpected or duplicate stored identity ${row.entity.entityId}`);
+    assert.equal(row.versionId, hash(original));
+    assert.equal(hash(row.entity), row.versionId);
+    assert.deepEqual(row.entity, original);
+    expected.delete(row.entity.entityId);
+  }
+  assert.equal(expected.size, 0);
+}
+
+async function assertStoredVersions(store: Storage, records: StoredEntity[]): Promise<void> {
+  const rows = await store.rows(Type.Object({ body: EntitySchema, version_id: HashSchema }),
+    'SELECT body,version_id FROM qvm_storage.versions WHERE entity_id=ANY($1::text[])', [records.map((record) => record.entityId)]);
+  assertVersionedBodies(rows.map((row) => ({ entity: row.body, versionId: row.version_id })), records);
+}
+
+async function assertAbsentVersions(store: Storage, records: StoredEntity[]): Promise<void> {
+  const rows = await store.rows(Type.Object({ version_id: HashSchema }),
+    'SELECT version_id FROM qvm_storage.versions WHERE version_id=ANY($1::text[])', [records.map(hash)]);
+  assert.deepEqual(rows, []);
+}
+
+async function assertUnpublished(store: Storage, branch: string): Promise<void> {
+  await assert.rejects(store.head(branch), /Unknown branch/);
+  assert.deepEqual(await store.page({ branch, after: '', limit: 10 }), []);
+  const revisions = await store.rows(Type.Object({ revision_id: HashSchema }),
+    "SELECT revision_id FROM qvm_storage.revisions WHERE payload->>'branch'=$1", [branch]);
+  assert.deepEqual(revisions, []);
+  const receipts = await store.rows(Type.Object({ revision_id: HashSchema }), `SELECT p.revision_id FROM qvm_storage.receipts p
+    JOIN qvm_storage.revisions r ON r.revision_id=p.revision_id WHERE r.payload->>'branch'=$1`, [branch]);
+  assert.deepEqual(receipts, []);
+}
+
+async function assertImported(store: Storage, branch: string, records: StoredEntity[], imported: Awaited<ReturnType<typeof load>>): Promise<void> {
+  const expected = new Fingerprint();
+  const countsByKind: Record<string, number> = {};
+  let canonicalBytes = 0;
+  for (const record of records) {
+    expected.add(record); canonicalBytes += Buffer.byteLength(canonical(record));
+    countsByKind[record.kind] = (countsByKind[record.kind] ?? 0) + 1;
+  }
+  assert.deepEqual(imported.fingerprint, expected.value());
+  assert.deepEqual({ ...imported.countsByKind }, countsByKind);
+  assert.equal(imported.canonicalBytes, canonicalBytes);
+  const inspected = await inspectBranch(store, branch);
+  assert.deepEqual(inspected.fingerprint, expected.value());
+  assert.deepEqual({ ...inspected.countsByKind }, countsByKind);
+  assert.equal(await store.head(branch), imported.revisionId);
+  assertVersionedBodies(await store.page({ branch, after: '', limit: 10000 }), records);
+  assertVersionedBodies(await store.historical({ revisionId: imported.revisionId, after: '', limit: 10000 }), records);
+  await assertStoredVersions(store, records);
+  const tail = records.at(-1); assert.ok(tail);
+  assert.deepEqual(await store.detail({ branch, entityId: tail.entityId }), { entity: tail, versionId: hash(tail) });
+  await store.validateReferences(branch);
+}
+
+async function withImportObserver(work: (store: Storage, observer: Storage, root: string) => Promise<void>): Promise<void> {
+  await withStore(async (store, root) => {
+    const control = object(`${root}:accepted-control`);
+    const accepted = await store.accept({ branch: root, commandId: `${root}:control`, expectedHead: null,
+      assumptions: [{ entityId: control.entityId, versionId: null }], puts: [control], deletes: [] });
+    const observerClient = connection(); await observerClient.connect();
+    try {
+      const observer = new Storage(observerClient);
+      await work(store, observer, root);
+      assert.equal(await observer.head(root), accepted.revisionId);
+      assertVersionedBodies(await observer.page({ branch: root, after: '', limit: 10 }), [control]);
+    } finally { await observerClient.end(); }
+  });
+}
+
+for (const count of [4999, 5000, 5001]) {
+  test(`bulk import preserves all ${count} compact records, kinds, immutable bodies and final tail`, async () => {
+    await withStore(async (store, root) => {
+      const branch = `${root}-bulk`;
+      const records = importRecords(branch, count);
+      assert.ok(records.reduce((bytes, record) => bytes + Buffer.byteLength(canonical(record)), 0) < 4 * 1024 ** 2);
+      const imported = await load(store, fromArray(records), branch);
+      await assertImported(store, branch, records, imported);
+    });
+  });
+}
+
+test('bulk byte-triggered staging commits bounded larger bodies before the producer tail and publishes only the complete import', async () => {
+  await withImportObserver(async (store, observer, root) => {
+    const branch = `${root}-bytes`;
+    const prefix = importRecords(branch, 4, 'x'.repeat(1024 ** 2));
+    const bytes = prefix.map((record) => Buffer.byteLength(canonical(record)));
+    assert.ok(bytes.every((size) => size < 4 * 1024 ** 2));
+    assert.ok(bytes.reduce((sum, size) => sum + size, 0) > 4 * 1024 ** 2);
+    const tail = object(`${branch}:tail`);
+    async function* source(): AsyncGenerator<StoredEntity> {
+      yield* prefix;
+      await assertStoredVersions(observer, prefix);
+      await assertUnpublished(observer, branch);
+      yield tail;
+    }
+    const imported = await load(store, source(), branch);
+    await assertImported(observer, branch, [...prefix, tail], imported);
+  });
+});
+
+test('bulk duplicate identity across a committed batch rolls back every tail version without publishing or changing earlier bodies', async () => {
+  await withImportObserver(async (store, observer, root) => {
+    const branch = `${root}-duplicate`;
+    const prefix = importRecords(branch, 5000);
+    const original = prefix[0]; assert.ok(original);
+    const duplicate = entity({ ...original, document: { replacement: 'must not replace the immutable first body' } });
+    const tail = [object(`${branch}:tail-a`), object(`${branch}:tail-b`), duplicate];
+    await assert.rejects(load(store, fromArray([...prefix, ...tail]), branch), /duplicate/i);
+    await assertUnpublished(observer, branch);
+    await assertStoredVersions(observer, prefix);
+    await assertAbsentVersions(observer, tail);
+    const recovery = [object(`${branch}:recovery`)];
+    await assertImported(observer, `${branch}-retry`, recovery, await load(store, fromArray(recovery), `${branch}-retry`));
+  });
+});
+
+test('bulk late dangling reference retains immutable staged bodies but rolls back branch publication', async () => {
+  await withImportObserver(async (store, observer, root) => {
+    const branch = `${root}-dangling`;
+    const prefix = importRecords(branch, 5000);
+    const invalid = entity({ ...object(`${branch}:late-reference`), typeId: `${branch}:missing-target` });
+    const records = [...prefix, invalid];
+    await assert.rejects(load(store, fromArray(records), branch), /Dangling reference/);
+    await assertUnpublished(observer, branch);
+    await assertStoredVersions(observer, records);
+    const recovery = [object(`${branch}:recovery`)];
+    await assertImported(observer, `${branch}-retry`, recovery, await load(store, fromArray(recovery), `${branch}-retry`));
+  });
+});
+
+test('bulk late producer failure preserves committed immutable versions, discards the unflushed tail and cannot publish a partial branch', async () => {
+  await withImportObserver(async (store, observer, root) => {
+    const branch = `${root}-producer`;
+    const prefix = importRecords(branch, 5000);
+    const tail = object(`${branch}:unflushed-tail`);
+    async function* source(): AsyncGenerator<StoredEntity> {
+      yield* prefix;
+      await assertStoredVersions(observer, prefix);
+      await assertUnpublished(observer, branch);
+      yield tail;
+      throw new Error('Fixture source failed after its unflushed tail');
+    }
+    await assert.rejects(load(store, source(), branch), /Fixture source failed/);
+    await assertUnpublished(observer, branch);
+    await assertStoredVersions(observer, prefix);
+    await assertAbsentVersions(observer, [tail]);
+    const recovery = [object(`${branch}:recovery`)];
+    await assertImported(observer, `${branch}-retry`, recovery, await load(store, fromArray(recovery), `${branch}-retry`));
+  });
+});
 
 test('full typed documents survive immutable versions, CAS, retry and branch divergence', async () => {
   await withStore(async (store, branch) => {
