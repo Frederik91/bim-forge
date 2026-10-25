@@ -1,6 +1,7 @@
 import { createResidentialProject } from '../src/residential-floor.ts';
 import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
 import { levels, levelView, entityLevel, stairFootprint } from '../src/building-levels.ts';
+import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
@@ -660,7 +661,7 @@ function resetEditor() {
   if (spaces(preview).length) feedback('Choose a room or object and describe the change. To propose a new floor layout, explicitly enable reconstruction below.');
   else try { layout = rectangleLayout(preview); feedback('Select an object and sketch the intent. The sketch is not authoritative model geometry.'); }
   catch (error) { feedback(`This saved layout is view-only: ${error instanceof Error ? error.message : 'unsupported geometry'}`, true); }
-  const objects = preview.entities;
+  const objects = preview.entities.filter(item => item.type !== 'AssetFamily');
   ui['selected-object'].replaceChildren(...objects.map((object) => {
     const option = element('option', object.name); option.value = object.id; return option;
   }));
@@ -686,6 +687,15 @@ function syncInspector() {
   ui['wall-fields'].hidden = !isWall || !layout;
   ui['editor-base'].textContent = `Request bound to ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved in history. Unsaved request sketches are lost on reload.`;
   renderKnowledge();
+  const assetPanel = generic('asset-details');
+  assetPanel.hidden = object?.type !== 'AssetInstance';
+  assetPanel.replaceChildren();
+  if (preview && object?.type === 'AssetInstance') {
+    const geometry = assetGeometry(preview, object);
+    assetPanel.append(element('h3', geometry.family.name), element('p', geometry.family.description),
+      element('p', `${number.format(geometry.dimensions.width)} × ${number.format(geometry.dimensions.depth)} × ${number.format(geometry.dimensions.height)} m · width × depth × height`),
+      element('small', 'AI-authored dimensional proxy. Ask for a different size or another instance; changes require review.'));
+  }
   if (!layout || !preview || !object || (!isDoor && !isWall)) {
     for (const dimensionInput of dimensionInputs) dimensionInput.value = '';
     ui['selection-help'].textContent = preview && spaces(preview).length
@@ -1452,6 +1462,20 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     return svgNode('line', { x1, y1, x2, y2, ...attributes });
   };
 
+  for (const item of snapshot.entities.filter(entity => entity.type === 'AssetInstance')) {
+    const geometry = assetGeometry(snapshot, item);
+    const footprint = geometry.footprint;
+    const [x, y] = transform([footprint.minX, footprint.maxY]);
+    const selected = item.id === selectedObject;
+    const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
+      'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
+    group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
+      rx: 3, fill: '#a8c1b4', stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
+    const [cx, cy] = transform(item.position);
+    group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': 7, 'pointer-events': 'none' }, item.name));
+    group.append(svgNode('title', {}, `${geometry.family.name} · ${number.format(geometry.dimensions.height)} m tall · dimensional proxy`));
+    svg.append(group);
+  }
   for (const room of spaces(snapshot)) {
     const b = room.bounds;
     const [x, y] = transform([b.minX, b.maxY]);
@@ -1716,7 +1740,8 @@ ui['clear-visual-reference'].addEventListener('click', () => { visualDraft = nul
 ui['describe-visual-reference'].addEventListener('click', () => { showRequestPane('details'); ui['request-text'].focus(); });
 
 function objectAnchor(item: Entity, snapshot: ModelGraph): Point {
-  if (item.type === 'Furniture' || item.type === 'Equipment') return item.position;
+  if (item.type === 'Furniture' || item.type === 'Equipment' || item.type === 'AssetInstance') return item.position;
+  if (item.type === 'AssetFamily') return [0, 0];
   if (item.type === 'Space' || item.type === 'Level' || item.type === 'Slab' || item.type === 'Roof') {
     const b = item.type === 'Level' ? floorBounds(levelView(snapshot, item.id)) : item.bounds;
     return [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2];
@@ -1890,6 +1915,7 @@ type ModelItem = Entity | HostingRelationship;
 type PropertyRow = [string, string, string, string];
 
 function modelProperties(item: ModelItem): Record<string, unknown> {
+  if (item.type === 'AssetFamily') return { id: item.id, type: item.type, name: item.name, description: item.description, parts: item.parts.length };
   return { ...item };
 }
 
@@ -2072,7 +2098,7 @@ function renderRoomNavigation(snapshot: ModelSnapshot): void {
   ui['show-roof'].checked = roofVisible;
   generic('level-context').textContent = activeLevelId ? `Viewing ${storeys.find(level => level.id === activeLevelId)?.name ?? 'level'}. Requests keep this level as context.`
     : 'Whole building in 3D. Pick a level to isolate its plan and contents.';
-  const objects = view.entities.filter(item => !activeLevelId || item.type !== 'Level' || item.id === activeLevelId);
+  const objects = view.entities.filter(item => item.type !== 'AssetFamily' && (!activeLevelId || item.type !== 'Level' || item.id === activeLevelId));
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
   if (!objects.some(item => item.id === selectedObject)) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
   ui['selected-object'].value = selectedObject;
