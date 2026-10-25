@@ -18,6 +18,7 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator.
 import '@babylonjs/core/Rendering/outlineRenderer.js';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { furnitureFaces } from '../src/furniture-geometry.ts';
+import { assetGeometry } from '../src/asset-family.ts';
 import { floorBounds, boundsMm, spaces } from '../src/floor-plan.ts';
 import { entityElevation, entityLevel, levels, levelView, roofHeightAt } from '../src/building-levels.ts';
 import { slabPieces, wallSections } from '../src/viewer-geometry.ts';
@@ -28,7 +29,7 @@ RegisterFileTools();
 RegisterRay();
 
 export type RenderingMode = 'basic' | 'realistic';
-type Surface = 'floor' | 'roof' | 'stair' | 'wall' | 'wood' | 'metal' | 'glass' | 'screen' | 'fabric' | 'leaf' | 'pot';
+type Surface = 'floor' | 'roof' | 'stair' | 'asset' | 'wall' | 'wood' | 'metal' | 'glass' | 'screen' | 'fabric' | 'leaf' | 'pot';
 interface RenderPart {
   mesh: Mesh; objectId: string | null; wallId: string | null; surface: Surface; color: string; before: boolean;
   levelIds: readonly string[];
@@ -38,7 +39,12 @@ interface RenderPart {
 export function modelPoint(x: number, y: number, elevation = 0): Vector3 { return new Vector3(x, elevation, y); }
 
 export function entityAnchor(item: Entity, snapshot: ModelSnapshot): Vector3 {
+  if (item.type === 'AssetFamily') throw new Error('Asset family definitions are non-spatial.');
   const base = entityElevation(snapshot, item);
+  if (item.type === 'AssetInstance') {
+    const { bounds } = assetGeometry(snapshot, item);
+    return modelPoint((bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, base + bounds.maxZ + .15);
+  }
   if (item.type === 'Space' || item.type === 'Level') {
     const b = item.type === 'Space' ? item.bounds : floorBounds(levelView(snapshot, item.id));
     return modelPoint((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, base + .15);
@@ -302,6 +308,14 @@ export class ModelScene {
       else if (item.type === 'Slab') this.slab(item, snapshot);
       else if (item.type === 'Stair') this.stair(item, snapshot);
       else if (item.type === 'Roof') this.roof(item, snapshot);
+      else if (item.type === 'AssetInstance') {
+        const geometry = assetGeometry(snapshot, item); const base = entityElevation(snapshot, item);
+        for (const color of new Set(geometry.faces.map((face) => face.fill))) {
+          const faces = geometry.faces.filter((face) => face.fill === color)
+            .map((face) => face.points.map(([x, y, z]) => modelPoint(x, y, base + z)).reverse());
+          this.solid(snapshot, `${item.id}-${color}`, faces, item, null, 'asset', color);
+        }
+      }
       else if (item.type === 'Equipment') this.box(snapshot, item.id, new Vector3(item.width, item.height, item.depth), modelPoint(...item.position, entityElevation(snapshot, item) + item.elevation + item.height / 2), item.id, null, 'metal', '#8aabb1');
       else if (item.type === 'Furniture') {
         const faces = furnitureFaces(item, snapshot);
@@ -347,6 +361,7 @@ export class ModelScene {
       for (const item of snapshot.entities) if (item.type === 'Wall') this.walls.set(item.id, item);
       for (const change of this.changes.values()) {
         if (change.status !== 'modified') continue;
+        if (change.before.type === 'AssetFamily' || change.after.type === 'AssetFamily') continue;
         const a = entityAnchor(change.before, comparison); const b = entityAnchor(change.after, snapshot);
         if (Vector3.Distance(a, b) < .002) continue;
         const line = MeshBuilder.CreateDashedLines('change-path:' + change.id, { points: [a, b], dashSize: 2, gapSize: 1, dashNb: 24 }, this.scene);
@@ -499,7 +514,7 @@ export class ModelScene {
     this.marker = MeshBuilder.CreateTorus('request-marker-not-geometry', { diameter: .34, thickness: .025, tessellation: 32 }, this.scene);
     this.marker.position.copyFrom(target); this.marker.material = this.markerMaterial; this.marker.isPickable = false;
     const source = this.snapshot.entities.find((item) => item.id === this.selectedId);
-    if (source) {
+    if (source && source.type !== 'AssetFamily') {
       const line = MeshBuilder.CreateDashedLines('request-reference-line', { points: [entityAnchor(source, this.snapshot), target], dashSize: 2, gapSize: 1, dashNb: 30 }, this.scene);
       line.color = Color3.FromHexString('#087e70'); line.isPickable = false; this.markerLine = line;
     }
@@ -510,7 +525,7 @@ export class ModelScene {
     const after = this.snapshot?.entities.find((candidate) => candidate.id === id);
     const item = after ?? this.comparison?.entities.find((candidate) => candidate.id === id);
     const source = after ? this.snapshot : this.comparison;
-    if (!item || !source || this.levelId !== null && entityLevel(source, item)?.id !== this.levelId
+    if (!item || !source || item.type === 'AssetFamily' || this.levelId !== null && entityLevel(source, item)?.id !== this.levelId
       && !(item.type === 'Stair' && item.toLevelId === this.levelId) || !this.roofVisible && item.type === 'Roof') return null;
     const engine = this.scene.getEngine();
     const projected = Vector3.Project(entityAnchor(item, source), Matrix.IdentityReadOnly, this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
