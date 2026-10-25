@@ -1,0 +1,17 @@
+{"operation":"page","repeat":0,"elapsedMs":16.759490000000028,"result":{"count":50,"checksum":"c25a9783557ea02afa8d71591b81eb23659aadfdb291acc9646991b17c4cdb88"},"error":null}
+{"operation":"detail","repeat":0,"elapsedMs":2.312791999999945,"result":{"count":1,"versionId":"8e184772f2b0f9cd9c027e4fe2c14f278a2285792a648e078070bc4d34751e8a"},"error":null}
+{"operation":"one-hop","repeat":0,"elapsedMs":1.3144600000000537,"result":{"count":1,"checksum":"7d7c84c314c0828cd700198355ebc6f547fcb1952e08223a94c2b1f51021bff4","capped":false},"error":null}
+{"operation":"page","repeat":1,"elapsedMs":23.28421199999991,"result":{"count":50,"checksum":"c25a9783557ea02afa8d71591b81eb23659aadfdb291acc9646991b17c4cdb88"},"error":null}
+{"operation":"detail","repeat":1,"elapsedMs":1.9653589999999213,"result":{"count":1,"versionId":"8e184772f2b0f9cd9c027e4fe2c14f278a2285792a648e078070bc4d34751e8a"},"error":null}
+{"operation":"one-hop","repeat":1,"elapsedMs":0.7072889999999461,"result":{"count":1,"checksum":"7d7c84c314c0828cd700198355ebc6f547fcb1952e08223a94c2b1f51021bff4","capped":false},"error":null}
+{"operation":"page","repeat":2,"elapsedMs":13.904839999999922,"result":{"count":50,"checksum":"c25a9783557ea02afa8d71591b81eb23659aadfdb291acc9646991b17c4cdb88"},"error":null}
+{"operation":"detail","repeat":2,"elapsedMs":1.9249230000000352,"result":{"count":1,"versionId":"8e184772f2b0f9cd9c027e4fe2c14f278a2285792a648e078070bc4d34751e8a"},"error":null}
+{"operation":"one-hop","repeat":2,"elapsedMs":0.6647020000000339,"result":{"count":1,"checksum":"7d7c84c314c0828cd700198355ebc6f547fcb1952e08223a94c2b1f51021bff4","capped":false},"error":null}
+{"operation":"page","repeat":3,"elapsedMs":14.883710999999948,"result":{"count":50,"checksum":"c25a9783557ea02afa8d71591b81eb23659aadfdb291acc9646991b17c4cdb88"},"error":null}
+{"operation":"detail","repeat":3,"elapsedMs":3.836459999999988,"result":{"count":1,"versionId":"8e184772f2b0f9cd9c027e4fe2c14f278a2285792a648e078070bc4d34751e8a"},"error":null}
+{"operation":"one-hop","repeat":3,"elapsedMs":1.1315539999999373,"result":{"count":1,"checksum":"7d7c84c314c0828cd700198355ebc6f547fcb1952e08223a94c2b1f51021bff4","capped":false},"error":null}
+{"operation":"page","repeat":4,"elapsedMs":17.487894000000097,"result":{"count":50,"checksum":"c25a9783557ea02afa8d71591b81eb23659aadfdb291acc9646991b17c4cdb88"},"error":null}
+{"operation":"detail","repeat":4,"elapsedMs":2.0822990000000345,"result":{"count":1,"versionId":"8e184772f2b0f9cd9c027e4fe2c14f278a2285792a648e078070bc4d34751e8a"},"error":null}
+{"operation":"one-hop","repeat":4,"elapsedMs":0.7197300000000268,"result":{"count":1,"checksum":"7d7c84c314c0828cd700198355ebc6f547fcb1952e08223a94c2b1f51021bff4","capped":false},"error":null}
+{"operation":"accepted-change","repeat":0,"elapsedMs":43.40640700000006,"result":{"revisionId":"ad074f682aa3fbed2afdfcc03e205c9fa93ac6c4dd0de2b72b0d4fb8e88ac15e","replayed":false},"error":null}
+{"operation":"accepted-change","repeat":1,"elapsedMs":11.591621000000032,"result":{"revisionId":"3127240c3a0415fe18d5138081e9f7d1428d312e1c655af463c16996d7ace716","replayed":false},"error":null}

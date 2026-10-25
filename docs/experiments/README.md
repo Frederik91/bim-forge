@@ -1,6 +1,6 @@
 # Versioned model qualification program
 
-Program: `QVM-01`. Parent tracker: [#122](https://github.com/Frederik91/bim-forge/issues/122). Status: first execution round reviewed; adoption remains unqualified. The registry records current work state and reviewed outcomes separately from implementation-test success.
+Program: `QVM-01`. Parent tracker: [#122](https://github.com/Frederik91/bim-forge/issues/122). Status: two execution rounds reviewed; full admission and adoption remain unqualified. The registry records current work state and reviewed outcomes separately from implementation-test success.
 
 Start with the [current design candidate](../design/versioned-model-candidate.md). Read the [research](../research/versioned-bim-data-model.md) for its evidence and alternatives. The [registry](registry.json) assigns stable experiment IDs, definitions, dependencies, work streams, and current reviewed results. The [hospital benchmark](../../benchmarks/hospital/README.md) specifies the confirmed 200,000 m² database workload.
 
@@ -80,7 +80,7 @@ Do not flush shared host caches, change preview data, or weaken validators for a
 | EX-12 | Disconnected branches, independent copies, and authority | W6 | inconclusive |
 | EX-13 | Detailed 200,000 m² hospital database workload | W5 with W4 generator | failed |
 
-The [design assessment](assessment-20261025.md) and [full-load review](decisions/full-hospital-review-20261025.md) explain the first round. The full trial timed out with 13,602,755 staged records and no published revision. Earlier reduced admission preserved 270,205 records. Full capacity and production adoption remain unqualified.
+The [design assessment](assessment-20261025.md) and [second full-load review](decisions/full-hospital-round2-review-20261025.md) explain the current limits. The second full trial timed out with 23,791,755 of 27,020,089 records staged and no published revision. The first failed trial remains unchanged. Five alternating reduced admissions per variant preserved complete fidelity, and a separate 270,205-record stage passed bounded query, durable-change and receipt/body checks. Full capacity, aged concurrent workloads and production adoption remain unqualified.
 
 ## A run and its result
 
