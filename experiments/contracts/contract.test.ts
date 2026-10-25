@@ -22,6 +22,11 @@ test('draft templates and missing evidence cannot become terminal qualification 
   assert.throws(() => parseObservations([{ experimentId: 'EX-04', caseId: 'missing-behavior' }]), /Invalid/);
 });
 
+test('binding a repository with a trailing separator resolves to the same committed bytes', async () => {
+  const path = 'docs/design/versioned-model-candidate.md';
+  assert.deepEqual(await bindingFor(`${repository}/`, path), await bindingFor(repository, path));
+});
+
 async function example(evidence: string): Promise<Run> {
   await writeFile(join(evidence, 'raw.json'), '{"executed":true}\n');
   const design = await bindingFor(repository, 'docs/design/versioned-model-candidate.md');

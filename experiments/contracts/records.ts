@@ -9,6 +9,7 @@ import type { Run } from './schema.ts';
 
 export const sha256 = (bytes: string | Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 export async function bindingFor(root: string, path: string): Promise<{ commit: string; path: string; sha256: string }> {
+  root = resolve(root);
   const commit = execFileSync('git', ['-c', `safe.directory=${root}`, 'rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   const bytes = await readFile(resolve(root, path));
   const committed = execFileSync('git', ['-c', `safe.directory=${root}`, 'show', `${commit}:${path}`], { cwd: root });
@@ -29,6 +30,7 @@ export async function describeArtifact(root: string, path: string, mediaType: st
 }
 
 export async function verifyRun(run: Run, roots: { repository: string; evidence: string }): Promise<void> {
+  roots = { ...roots, repository: resolve(roots.repository), evidence: resolve(roots.evidence) };
   parseRun(run);
   for (const binding of [run.design, run.definition]) {
     const bytes = execFileSync('git', ['-c', `safe.directory=${roots.repository}`, 'show', `${binding.commit}:${binding.path}`], { cwd: roots.repository });
