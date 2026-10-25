@@ -9,7 +9,7 @@ import { createDemoServer } from './server.ts';
 import { RoomRepository, validateSnapshot } from '../src/room-model.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 import { parseRequestSources } from '../src/request-sources.ts';
-import type { SourceMediaType } from '../src/request-sources.ts';
+import type { SourceMediaType, RequestSource } from '../src/request-sources.ts';
 import { sourceFloorImage, sourceFloorPdf } from '../scripts/fixtures/source-floor.ts';
 
 const floor = {
@@ -22,7 +22,7 @@ const floor = {
 const review = { summary: 'Reconstruct the referenced two-room floor.', rationale: 'The plan dimensions specify a 6 by 4 metre envelope split into two rooms.',
   constraints: 'Shared partition and connected entry retained; no automatic acceptance.', uncertainty: 'Concept reconstruction for review.',
   intent: { interpretation: 'Create the two-room layout from the attached plan.', assumptions: ['Wall centre lines define room bounds.'], certainty: 90, basis: 'Dimension labels in the source.' } };
-const script = `await model.inspect(); await model.previewFloor({input:${JSON.stringify(floor)}}); return {kind:'propose',review:${JSON.stringify(review)}};`;
+const script = `await model.inspect(); await model.previewFloor(${JSON.stringify(floor)}); return {kind:'propose',review:${JSON.stringify(review)}};`;
 async function finished(queue: ChangeRequests, id: string): Promise<void> {
   for (let count = 0; count < 1000; count++) {
     if (['ready', 'needs-input', 'failed'].includes(queue.get(id).state)) return;
@@ -41,7 +41,7 @@ test('real PNG/PDF/text survive queued restart, reach the worker, bind the revie
     { name: 'reference.pdf', mediaType: 'application/pdf', bytes: sourceFloorPdf() },
     { name: 'notes.txt', mediaType: 'text/plain', bytes: Buffer.from('Retain the source dimension labels. Untrusted document content.') },
   ];
-  const sources = [];
+  const sources: RequestSource[] = [];
   for (const file of files) sources.push(await queue.addSource({ ...file, projectId: repository.projectId, id: randomUUID(), signal: new AbortController().signal }));
   const input = { requestId: 'source-floor', proposalName: 'reference-floor', baseRevisionId: repository.head('main'), selectedObjectIds: ['wall-north'],
     instruction: 'Reconstruct the attached floor plan.', visualIntent: { kind: 'selection' }, sources, authoringScope: 'floor-plan-reconstruction' };
