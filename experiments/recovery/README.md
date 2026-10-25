@@ -17,6 +17,7 @@ The module is based on W0 foundation `cfdf363c9227c35534ad5ad9c6d507e99e627824` 
 | `exports.ts` | Query every revision of a retained copy in a fresh process; export full W0 model data, exact original bytes, ancestry, branch heads and hashes. Verify the exported query against the exported bytes. |
 | `history.ts` | Execute two experimental representation formats, owner dictionaries and serializations; retain a strict v1 reader and an upgraded reader. No geometry engine simulation. |
 | `postgres.ts` | Actual W5 API, dedicated database writer SIGKILL, fresh-connection exports, pg_dump/restore, disconnected branch exchange and governed acceptance with persisted simulated discipline evidence. |
+| `records.ts` | Prepare or publish EX-09/11/12 records from retained evidence through the latest W0 contract. No database connection or correctness rerun. Missing execution metadata stays explicit. |
 | `recovery.test.ts` | Filesystem behavior, W0 fixture retention, missing/corrupt transfer rejection, immutable retry, ancestry, simulated discipline policy and partial-result honesty. No database mocks. |
 | `tsconfig.json` | Root strict TypeScript settings plus checked indexed access. |
 
@@ -157,3 +158,30 @@ A shared PostgreSQL server and test role do not prove independent authentication
 Historical interpretation needs a pinned executable reader and original representation, not only version strings. The package cases verify retention of descriptor bytes. They do not execute an old geometry engine, migrate a real schema, prove key/authentication independence or implement semantic conflict detection. W5 currently specifies single-parent revisions. Portable exchange is sufficient for initial transport scope; no full network synchronization service is included.
 
 Only main runs validation and supplies evidence before a draft PR. The original W6 commits stack on W0. The actual PostgreSQL runner additionally requires the separately supplied W5 commit. Main integrates W6 module commits on a base containing both dependencies so the review diff stays under `experiments/recovery/**`. No preview deployment, production data change, auto-merge or shared registry edit is part of this module.
+
+## Metadata-only result preparation
+
+The actual correctness run is complete and retained in `docs/experiments/results/EX-11/w6-pg-0247bdd-02/`. No further database writes are needed for those cases. While the coordinator reserves the database for hospital work, `records.ts` can prepare the three records in a network-disabled container against a read-only mount of the retained PostgreSQL evidence. It uses W0's updated observation-artifact verification supplied at `fb61d97706f3a2cfa27bd2b74da0ab0912472f9b`.
+
+Example metadata input:
+
+```json
+{
+  "repository": "/work",
+  "evidence": "/raw",
+  "results": "/work/docs/experiments/results",
+  "mode": "prepare",
+  "runId": "w6-pg-0247bdd-02-terminal-prep-v1",
+  "diskBudget": { "kind": "unrecorded" }
+}
+```
+
+```sh
+node experiments/recovery/records.ts /metadata/record-preparation-input.json
+```
+
+The preparer uses the actual executed observation array without editing it, hashes each referenced artifact, verifies the executed historical Git bindings, and accounts for every exact assertion in the executed registry. Each experiment is conservatively inconclusive. EX-09 has partial geometry-engine coverage; EX-12 has partial authentication/key independence coverage; EX-11 retains its shared-host and process-crash scope limits.
+
+The retained correctness lease recorded CPU and memory limits but no numeric disk budget. W0 requires a positive `environment.diskBudgetBytes`. Preparation therefore writes `draft.json` with `recordKind: draft`, a null disk budget and a separate audit. These are deliberately not terminal W0 records. Disk capacity and observed bytes are not substituted for an unrecorded execution budget.
+
+Once the coordinator supplies a supported value and provenance, use `diskBudget: { "kind": "recorded", "bytes": <number>, "provenance": "<source and meaning of the value>" }`, a new unique run ID and `mode: publish`. Publication invokes W0's `parseRun`, `verifyRun` and `publishRun`, including exact observation-artifact equality and hash checks. It never edits earlier evidence, shared definitions or registry status. No database job is required for publication.
