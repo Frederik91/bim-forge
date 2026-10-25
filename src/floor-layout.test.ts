@@ -228,6 +228,23 @@ test('furniture and equipment survive exactly and an incompatible floor cannot s
     openings: layout.openings.map((item) => ({ ...item, roomId: 'plant-kept' })) }), /Duplicate entity/);
 });
 
+test('named FloorOpening declarations accept a mixed Door and Window array in a real TypeScript invocation', async (t) => {
+  const scripts = new ModelScripts(); t.after(() => scripts.dispose());
+  const declarations = await scripts.declarations();
+  assert.ok(declarations.includes('openings: FloorOpening[]'), declarations);
+  const layout = twoRooms();
+  layout.openings.push({
+    id: 'window-north', type: 'Window', name: 'North window', roomId: 'room-west', side: 'north',
+    offsetMm: 500, widthMm: 1000, heightMm: 1000, sillHeightMm: 900,
+  });
+  const result = await run(t, await original(), floorScript(layout) + propose);
+  assert.equal(result.kind, 'proposal', JSON.stringify(result));
+  if (result.kind !== 'proposal') assert.fail('Expected a typed floor proposal with doors and a window.');
+  assert.equal(result.snapshot.entities.filter((item) => item.type === 'Door').length, 2);
+  assert.equal(result.snapshot.entities.filter((item) => item.type === 'Window').length, 1);
+  assert.equal(result.evidence.validation, 'passed');
+});
+
 test('only an explicitly scoped script can author a floor, with real execution evidence and unchanged base', async (t) => {
   const base = await original(); const saved = JSON.stringify(base);
   const denied = await run(t, base, floorScript() + propose, false);

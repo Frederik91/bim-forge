@@ -25,7 +25,7 @@ export const FloorLayoutSchema = Type.Object({
   openings: Type.Array(Type.Union([
     Type.Object({ ...opening, type: Type.Literal('Door') }, { additionalProperties: false }),
     Type.Object({ ...opening, type: Type.Literal('Window'), sillHeightMm: Type.Integer({ minimum: 0, maximum: 100000 }) }, { additionalProperties: false }),
-  ]), { maxItems: 100 }),
+  ], { title: 'FloorOpening' }), { maxItems: 100 }),
 }, { title: 'FloorLayout', additionalProperties: false });
 
 export type FloorLayout = Static<typeof FloorLayoutSchema>;
