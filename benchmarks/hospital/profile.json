@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "id": "hospital-200k-v1",
+  "status": "proposed",
+  "executionStatus": "not-run",
+  "programId": "QVM-01",
+  "designCandidateId": "VM-C1",
+  "experimentId": "EX-13",
+  "generatorIssue": "https://github.com/Frederik91/bim-forge/issues/127",
+  "executionIssue": "https://github.com/Frederik91/bim-forge/issues/128",
+  "seed": "bim-forge-hospital-200k-v1",
+  "scope": {
+    "areaSquareMetres": 200000,
+    "areaMeaning": "synthetic gross floor area",
+    "buildings": 4,
+    "levelsPerBuilding": 10,
+    "spaces": 10000,
+    "drawnBuildingRequired": false,
+    "claim": "Synthetic database stress scenario; entity densities are engineering assumptions, not measured hospital inventory."
+  },
+  "inventory": {
+    "countsByKind": {
+      "site": 1,
+      "building": 4,
+      "level": 40,
+      "space": 10000,
+      "zone": 200,
+      "system": 2000,
+      "typeDefinition": 5000,
+      "wall": 80000,
+      "stud": 1400000,
+      "slab": 10000,
+      "roof": 200,
+      "door": 25000,
+      "window": 15000,
+      "chair": 60000,
+      "desk": 20000,
+      "bed": 5000,
+      "cabinet": 30000,
+      "otherFurnishing": 35000,
+      "electricalOutlet": 180000,
+      "switch": 40000,
+      "luminaire": 140000,
+      "electricalPanel": 5000,
+      "circuit": 50000,
+      "cableSegment": 300000,
+      "ductSegment": 180000,
+      "ductFitting": 240000,
+      "pipeSegment": 250000,
+      "pipeFitting": 300000,
+      "pump": 5000,
+      "valve": 100000,
+      "terminal": 80000,
+      "sensor": 80000,
+      "containmentSegment": 100000,
+      "equipment": 30000,
+      "connectionPort": 3000000
+    },
+    "targetEntityCount": 6777445,
+    "connectionPortsAreEntities": true,
+    "sharedDefinitionsAndOccurrencesHaveDistinctIdentities": true
+  },
+  "relationships": {
+    "targetCount": 18000000,
+    "targetToleranceFraction": 0.15,
+    "kinds": [
+      "containedIn",
+      "instanceOf",
+      "hostedBy",
+      "supportedBy",
+      "hasPort",
+      "connectedTo",
+      "memberOfSystem",
+      "boundsSpace",
+      "parameterDependsOn",
+      "correspondsTo",
+      "externalBinding",
+      "provenance"
+    ],
+    "rules": [
+      "Generate valid typed endpoints, direction and cardinality.",
+      "Ports connect within their compatible system graph.",
+      "Rooms, departments, types and systems form deliberate high-degree hubs.",
+      "Do not add invalid or duplicate edges to reach a target.",
+      "Record exact per-kind counts and degree distributions in the generated manifest."
+    ]
+  },
+  "properties": {
+    "connectionPortCountPerEntity": 8,
+    "typeDefinitionCountPerEntity": 80,
+    "otherEntitiesTargetMean": 32,
+    "otherEntityCohorts": [
+      {
+        "fraction": 0.7,
+        "valueCount": 16
+      },
+      {
+        "fraction": 0.25,
+        "valueCount": 48
+      },
+      {
+        "fraction": 0.05,
+        "valueCount": 176
+      }
+    ],
+    "estimatedFullPropertyValueCount": 145118240,
+    "estimateIsMeasured": false,
+    "distributionRequirements": [
+      "Typed quantities with units, booleans, sparse fields, repeated classifications, unique identifiers and bounded text.",
+      "Class-correlated property values and explicit occurrence overrides.",
+      "Missing, unknown and not-applicable states remain distinguishable.",
+      "Report exact counts and serialized byte percentiles before timing."
+    ]
+  },
+  "parametricData": {
+    "targetConstraintRecordCount": 1500000,
+    "forms": [
+      "dimensional parameters",
+      "type-driven parameter references",
+      "host offsets",
+      "dependency input references",
+      "small formula or recipe descriptors"
+    ],
+    "executeGeometrySolver": false,
+    "recordConstraintEndpointsAndVersionBindings": true
+  },
+  "geometryAndArtifacts": {
+    "mode": "synthetic metadata and parametric payloads",
+    "renderableGeometry": false,
+    "bounds": "seeded non-degenerate spatial proxies grouped into buildings, levels, rooms and corridors",
+    "payloadCohorts": [
+      {
+        "fraction": 0.8,
+        "bytes": 256
+      },
+      {
+        "fraction": 0.18,
+        "bytes": 2048
+      },
+      {
+        "fraction": 0.02,
+        "bytes": 32768
+      }
+    ],
+    "externalArtifactReferences": 100000,
+    "materializedArtifactByteBudget": null,
+    "requirements": [
+      "Separate database-resident proxy payloads from external artifact bytes.",
+      "Use varied seeded values; record compressibility and deduplication.",
+      "Materialized dummy artifacts use a declared byte budget and synthetic media type.",
+      "No claim about rendering, clash correctness, real topology or regeneration."
+    ]
+  },
+  "scales": [
+    {
+      "id": "smoke",
+      "inventoryFraction": 0.001,
+      "purpose": "generator and query correctness"
+    },
+    {
+      "id": "reduced",
+      "inventoryFraction": 0.01,
+      "purpose": "integration and capacity estimation"
+    },
+    {
+      "id": "medium",
+      "inventoryFraction": 0.1,
+      "purpose": "working-set and resource behavior"
+    },
+    {
+      "id": "full",
+      "inventoryFraction": 1,
+      "purpose": "declared hospital database workload"
+    },
+    {
+      "id": "detail-stress",
+      "inventoryFraction": 2,
+      "purpose": "optional greater detail at the same nominal area"
+    }
+  ],
+  "scaleRules": [
+    "Keep at least one valid spatial/system skeleton and report rounding.",
+    "Recompute valid cardinalities and history after scaling; never truncate edges blindly.",
+    "A reduced run qualifies only its exact admitted inventory.",
+    "Full and detail-stress runs need measured preflight capacity and declared limits."
+  ],
+  "history": {
+    "acceptedRevisionCounts": [
+      1,
+      10,
+      100,
+      1000
+    ],
+    "ordinaryChangeFraction": 0.001,
+    "churnProfiles": [
+      "local room edits",
+      "disjoint departmental edits",
+      "shared-type fan-out",
+      "MEP system rerouting metadata",
+      "delete/recreate with explicit lineage",
+      "conflicting and rejected proposals"
+    ],
+    "branchCounts": [
+      1,
+      8,
+      32
+    ],
+    "includeRelationshipsAndProposalEvidence": true,
+    "compareFullSnapshotAndSharedVersionMembershipCosts": true
+  },
+  "traffic": {
+    "clientCounts": [
+      1,
+      8,
+      32,
+      64
+    ],
+    "readHeavyWeights": {
+      "reads": 90,
+      "writes": 10
+    },
+    "writeHeavyWeights": {
+      "reads": 60,
+      "writes": 40
+    },
+    "offeredRate": null,
+    "latencyBudgets": null,
+    "errorBudgets": null,
+    "status": "Weights and counts are synthetic scenario controls. W0/W5 must pin rate and budgets before measurement."
+  },
+  "measurement": {
+    "phases": [
+      "generation",
+      "transfer",
+      "load",
+      "index-and-constraint-readiness",
+      "statistics",
+      "warmup",
+      "isolated-operations",
+      "aged-mixed",
+      "burst-contention",
+      "backup-restore"
+    ],
+    "minimumIndependentMeasuredRepetitions": 3,
+    "cacheModes": [
+      "warm",
+      "documented restart or partially cold",
+      "verified isolated cold only when feasible"
+    ],
+    "resourceEnvelope": null,
+    "resourceEnvelopeRequiredBeforeRun": true,
+    "fullScaleMeasurementExclusive": true,
+    "outputs": [
+      "actual dataset manifest and checksum",
+      "raw latency samples and error outcomes",
+      "offered and achieved operation rates",
+      "query and delta oracle results",
+      "CPU and container memory peaks",
+      "database, index, TOAST and external artifact bytes",
+      "WAL generated and retained",
+      "temporary and peak disk bytes",
+      "wait events, retries, locks and maintenance",
+      "schema, indexes, versions, settings and reproduction commands"
+    ]
+  }
+}
