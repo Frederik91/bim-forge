@@ -5,7 +5,7 @@ import { SemanticCandidate, canonical } from './candidate.ts';
 import type { Draft, Lineage, Predicate } from './candidate.ts';
 import { attempt, change, current, entity, fixture, furniture, move } from './fixture.ts';
 import type { Attempt } from './fixture.ts';
-import type { CaseResult } from './protocol.ts';
+import type { CaseResult, Observation } from './protocol.ts';
 
 export function candidateDraft(state: SemanticCandidate, id: string, snapshot: ModelSnapshot,
   options: { predicates?: Predicate[]; lineage?: Lineage[]; fieldRule?: Draft['fieldRule'] } = {}): Draft {
@@ -25,13 +25,13 @@ const candidateLimitations = [
   'Fixture decisions are not human approvals. W0 multilevel operations, shared property dictionaries, and real exports remain unqualified.',
 ];
 
-export async function candidateCases(baseline: CaseResult[]): Promise<CaseResult[]> {
+export async function candidateCases(baseline: Observation[]): Promise<CaseResult[]> {
   const results: CaseResult[] = [];
   const record = (baselineId: string, passed: boolean, raw: unknown, operations: string[]): void => {
-    const reference = baseline.find((item) => item.observation.caseId === baselineId);
+    const reference = baseline.find((item) => item.caseId === baselineId);
     if (!reference) throw new Error(`Candidate case has no baseline comparison: ${baselineId}`);
     const caseId = `vmc1-${baselineId}`;
-    results.push({ observation: { ...reference.observation, caseId, passed, observed: JSON.stringify(raw), limitations: candidateLimitations },
+    results.push({ observation: { ...reference, caseId, passed, observed: JSON.stringify(raw), limitations: candidateLimitations },
       artifact: { caseId, variant: 'VM-C1-semantic-prototype', operations, raw: { baselineCaseId: baselineId, evidence: raw } } });
   };
   const source = await fixture(); const snapshot = current(source); const root = SemanticCandidate.create(snapshot);
