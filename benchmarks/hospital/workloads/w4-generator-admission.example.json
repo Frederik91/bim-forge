@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "sourceManifest": { "file": "manifest.json", "sha256": "REPLACE_WITH_EXACT_MANIFEST_SHA256" },
+  "generator": {
+    "cli": "REPLACE_WITH_PATH_TO_SOURCE/benchmarks/hospital/generator/cli.ts",
+    "profile": "REPLACE_WITH_PATH_TO_SOURCE/benchmarks/hospital/profile.json",
+    "scale": "smoke",
+    "seed": "bim-forge-hospital-200k-v1"
+  },
+  "tables": {
+    "entities": { "sha256": "REPLACE_WITH_W4_ENTITIES_EXACT_BYTE_SHA256", "rows": 0 },
+    "relationships": { "sha256": "REPLACE_WITH_W4_RELATIONSHIPS_EXACT_BYTE_SHA256", "rows": 0 },
+    "parameters": { "sha256": "REPLACE_WITH_W4_PARAMETERS_EXACT_BYTE_SHA256", "rows": 0 }
+  }
+}
