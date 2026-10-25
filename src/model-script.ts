@@ -12,6 +12,8 @@ import { parseScriptExecutionEvidence, MAX_SCRIPT_HOST_CALLS } from './script-ev
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { MODEL_INTENT_GUIDANCE, parseIntentAssessment } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
+import { FloorLayoutSchema, previewFloor } from './floor-layout.ts';
+import type { AuthoringScope } from './request-sources.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -58,6 +60,7 @@ export interface ModelScriptBinding {
   baseRevisionId: string;
   selectedObjectIds: readonly EntityId[];
   visualIntent: VisualRequest;
+  authoringScope?: AuthoringScope;
 }
 export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment }
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
@@ -174,6 +177,12 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
     description: 'Metres on a 1 mm grid. Retain unrelated items and their identities. Supported devices require a desk/table supportId. Use only for explicit whole-model or cross-room work.',
     effect: 'draft-write', params: { input: furnishingSet }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context,
       () => previewFurnishings(call.context.snapshot, input), () => call.throwIfRevoked()) }),
+  previewFloor: api.method({ summary: 'Compile a rectangular multi-room floor shell from rooms and hosted openings, in whole millimetres.',
+    description: 'Requires explicit floor-plan-reconstruction scope. Replaces the prior shell; retains current draft furniture/equipment exactly and fails if they no longer fit. Rooms tile one rectangle; shared walls are generated once. Door/Window offsets run from each room side minimum X (north/south) or Y (east/west).',
+    effect: 'draft-write', params: { input: FloorLayoutSchema }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context, () => {
+      if (call.context.binding.authoringScope !== 'floor-plan-reconstruction') throw new Error('Floor reconstruction requires explicit authoring scope.');
+      return previewFloor(call.context.snapshot, input);
+    }, () => call.throwIfRevoked()) }),
   previewRoomFurnishings: api.method({ summary: 'Replace the complete furnishing set in one named room, preserving all other rooms exactly.',
     description: 'Include existing room furnishings to retain. No cross-room transfers. Metres, same placement and support rules as previewFurnishings.',
     effect: 'draft-write', params: { input: roomFurnishingSet }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context,
@@ -184,6 +193,12 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base. ' +
   'previewRectangle uses millimetres; furnishing positions and sizes use metres on a 1 mm grid. ' +
   'previewRoomFurnishings retains all other rooms. previewFurnishings replaces the complete whole-model furniture set. ' +
+  'previewFloor({input:FloorLayout}) requires floor-plan-reconstruction scope and replaces only the shell. ' +
+  'Supply level:{id,name}, 2..12 rooms:{id,name,boundsMm:{minX,minY,maxX,maxY}}, wallThicknessMm, heightMm and openings. ' +
+  'Each opening has type:Door|Window, id,name,roomId,side:north|south|east|west,offsetMm,widthMm,heightMm; Windows also require sillHeightMm. ' +
+  'All floor values are whole millimetres. Room bounds are wall centrelines; offsets run from the side minimum X for north/south or Y for east/west. ' +
+  'Rooms must tile one rectangle with a doorway path outside. Shared walls and opening hosts are compiled automatically. ' +
+  'Current draft Furniture/Equipment are retained exactly. If they do not fit, reconstruction fails; explicitly move/remove requested furnishings with previewFurnishings in the same script before rebuilding. Equipment cannot be removed by furnishing tools. ' +
   'Monitor/laptop supportId must refer to a desk/table. No implicit workstation or proximity group exists. ' +
   'Return {kind:"observe",observation:value}, {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}}, ' +
   'or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
@@ -214,7 +229,8 @@ export class ModelScripts {
     const runtime = await this.#get();
     const draft: Draft = { base: input.base, snapshot: input.base, binding: input.binding, signal: input.signal, onActivity: input.onActivity };
     const session = runtime.createSession({ context: draft,
-      capabilities: ['model.inspect', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings'],
+      capabilities: ['model.inspect', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings',
+        ...(input.binding.authoringScope === 'floor-plan-reconstruction' ? ['model.previewFloor'] : [])],
       limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },
       // Awaited audit callbacks fail closed. Never forward guest logs or raw handler errors to product activity.
       audit: (event: ExecutionEvent) => {
