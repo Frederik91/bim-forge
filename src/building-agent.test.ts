@@ -4,12 +4,14 @@ import type { TestContext } from 'node:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { ModelScripts } from './model-script.ts';
 import type { ModelScriptBinding } from './model-script.ts';
 import { prepareModelProposal, validateModelProposalRequest } from './model-proposal.ts';
 import type { ModelWorker } from './model-proposal.ts';
 import { parseAuthoringScope } from './request-sources.ts';
-import { RoomRepository, diffSnapshots } from './room-model.ts';
+import type { RequestSource } from './request-sources.ts';
+import { RoomRepository, diffSnapshots, previewFurnishings } from './room-model.ts';
 import type { ModelSnapshot } from './room-model.ts';
 import { previewBuilding } from './building-layout.ts';
 import type { BuildingLayout, FloorLayout } from './building-schema.ts';
@@ -72,11 +74,40 @@ function execute(scripts: ModelScripts, base: ModelSnapshot, binding: ModelScrip
     signal: new AbortController().signal, onActivity: () => {} });
 }
 
+async function finished(queue: ChangeRequests, id: string): Promise<void> {
+  for (let count = 0; count < 2000; count++) {
+    if (['ready', 'needs-input', 'failed'].includes(queue.get(id).state)) return;
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error('The building agent request did not finish.');
+}
+
+function object(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 test('building reconstruction scope parses explicitly and rejects inferred or unknown authority', () => {
   for (const scope of ['floor-plan-reconstruction', 'building-reconstruction']) assert.equal(parseAuthoringScope(scope), scope);
   for (const invalid of [undefined, null, '', 'selection', 'whole-building', { building: true }]) {
     assert.throws(() => parseAuthoringScope(invalid), /authoring scope/);
   }
+});
+
+test('the registered agent contract inspects legacy and V2 snapshots without adding or losing stored fields', async t => {
+  const repository = await RoomRepository.create('Read contract preservation');
+  const original = repository.serialize();
+  const legacy = repository.view(repository.head('main')).snapshot;
+  const scripts = scriptsFor(t);
+  for (const base of [legacy, previewBuilding(legacy, houseLayout())]) {
+    const result = await execute(scripts, base, {
+      baseRevisionId: repository.head('main'), selectedObjectIds: base.entities.filter(item => item.type === 'Wall').slice(0, 1).map(item => item.id),
+      visualIntent: { kind: 'selection' },
+    }, "return {kind:'observe',observation:(await model.inspect()).model};");
+    assert.equal(result.kind, 'observation', JSON.stringify(result));
+    if (result.kind !== 'observation') continue;
+    assert.deepEqual(result.observation, base, 'the read schema must expose actual fields without normalizing historical data');
+  }
+  assert.equal(repository.serialize(), original);
 });
 
 test('selected levels and attached references cannot grant the building capability', async t => {
@@ -185,7 +216,57 @@ test('floor-only building edits bind one selected level and preserve other floor
   assert.deepEqual(result.snapshot.relationships, base.relationships);
 });
 
-test('queued V2 floor references retain their level and reconstruction scope across restart', async t => {
+test('cross-level furnishing transfers require explicit ownership assignments and preserve supported groups atomically', async t => {
+  const repository = await RoomRepository.create('Explicit level transfer');
+  const building = previewBuilding(repository.view(repository.head('main')).snapshot, houseLayout());
+  const desk = { id: 'move-desk', type: 'Furniture', name: 'Desk to transfer', kind: 'desk',
+    position: [6, 3], width: 1, depth: .6, height: .75, rotationDeg: 0, supportId: null };
+  const monitor = { id: 'move-monitor', type: 'Furniture', name: 'Supported monitor', kind: 'monitor',
+    position: [6, 3], width: .6, depth: .2, height: .45, rotationDeg: 0, supportId: desk.id };
+  const plant = { id: 'kept-plant', type: 'Furniture', name: 'Retained ground plant', kind: 'plant',
+    position: [7, 5], width: .3, depth: .3, height: 1, rotationDeg: 0, supportId: null };
+  const furnishings = [desk, monitor, plant];
+  const base = previewFurnishings(building, { furnishings, levelAssignments: [
+    { entityId: desk.id, levelId: 'basement' }, { entityId: monitor.id, levelId: 'basement' }, { entityId: plant.id, levelId: 'ground' },
+  ] });
+  const original = JSON.stringify(base);
+  const transferReview = { ...review, summary: 'Move the desk and supported monitor from basement to attic.',
+    rationale: 'Explicit assignments transfer both identities together while retaining the ground-floor plant.',
+    intent: { ...review.intent, interpretation: 'Move the supported furnishing group to the selected attic level.' } };
+  const result = await execute(scriptsFor(t), base, {
+    baseRevisionId: repository.head('main'), selectedObjectIds: base.entities.filter(item => item.id === 'attic').map(item => item.id),
+    visualIntent: { kind: 'selection' },
+  }, `
+    await model.previewFurnishings(${JSON.stringify({ furnishings })});
+    const before = await model.inspect();
+    if (before.placement.selectedLevelId !== 'attic') throw new Error('Missing destination context.');
+    if (before.placement.entities.find(item => item.entityId === 'move-desk')?.levelId !== 'basement') throw new Error('Selection silently transferred ownership.');
+    try { await model.previewRoomFurnishings(${JSON.stringify({ roomId: 'attic-east', furnishings: [desk, monitor] })}); throw new Error('Room tool transferred floors.'); }
+    catch (error) { if (!(error instanceof Error) || error.name !== 'ModelValidationError') throw error; }
+    try { await model.previewFurnishings(${JSON.stringify({ furnishings, levelAssignments: [{ entityId: desk.id, levelId: 'attic' }] })}); throw new Error('Cross-level support was allowed.'); }
+    catch (error) { if (!(error instanceof Error) || error.name !== 'ModelValidationError') throw error; }
+    if (JSON.stringify((await model.inspect()).model) !== JSON.stringify(before.model)) throw new Error('Rejected transfer partially changed ownership.');
+    await model.previewFurnishings(${JSON.stringify({ furnishings, levelAssignments: [
+      { entityId: desk.id, levelId: 'attic' }, { entityId: monitor.id, levelId: 'attic' },
+    ] })});
+    const after = await model.inspect();
+    const attic = after.placement.rooms.find(room => room.id === 'attic-east');
+    const basement = after.placement.rooms.find(room => room.id === 'basement-east');
+    if (!attic?.entityIds.includes('move-desk') || !attic.entityIds.includes('move-monitor')) throw new Error('Destination room lost the supported group.');
+    if (basement?.entityIds.includes('move-desk') || basement?.entityIds.includes('move-monitor')) throw new Error('Source room kept stale ownership.');
+    if (after.placement.entities.find(item => item.entityId === 'kept-plant')?.levelId !== 'ground') throw new Error('Unrelated ownership changed.');
+    return {kind:'propose',review:${JSON.stringify(transferReview)}};
+  `);
+  assert.equal(result.kind, 'proposal', JSON.stringify(result));
+  if (result.kind !== 'proposal') return;
+  const delta = diffSnapshots(base, result.snapshot);
+  assert.deepEqual(delta.entities.modified.map(item => item.id), ['move-desk', 'move-monitor']);
+  assert.deepEqual(delta.entities.added, []); assert.deepEqual(delta.entities.removed, []);
+  assert.deepEqual(result.snapshot.relationships, base.relationships);
+  assert.equal(JSON.stringify(base), original);
+});
+
+test('queued building sources, scope and level references survive processing, review, explicit acceptance and restart', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'bim-building-agent-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const repository = await RoomRepository.create('Queued building context');
@@ -198,13 +279,20 @@ test('queued V2 floor references retain their level and reconstruction scope acr
       source: `await model.previewBuilding(${JSON.stringify(houseLayout())}); ${propose}` });
     assert.equal(output.ok, true, JSON.stringify(output));
   } } satisfies ModelWorker);
-  const project = result.repository.serialize();
+  const acceptedFixture = result.repository.accept('queued-house', { decisionId: 'accept-fixture-house', actor: 'Fixture reviewer' });
+  const project = acceptedFixture.serialize();
   const database = path.join(directory, 'queue.sqlite');
   let queue = new ChangeRequests(database, () => null);
   t.after(() => queue.close());
-  const input = { requestId: 'attic-context', proposalName: 'attic-context',
-    baseRevisionId: result.repository.head('queued-house'), selectedObjectIds: ['attic'],
-    instruction: 'Review the attic point on its own level.', authoringScope: 'building-reconstruction',
+  const sourceText = ['Basement plan: retain the existing basement level.', 'Attic plan: retain the existing gabled roof and stair.'];
+  const sources: RequestSource[] = [];
+  for (const [index, content] of sourceText.entries()) sources.push(await queue.addSource({
+    projectId: repository.projectId, id: randomUUID(), name: index === 0 ? 'basement.txt' : 'attic.txt',
+    mediaType: 'text/plain', bytes: Buffer.from(content), signal: new AbortController().signal,
+  }));
+  const input = { requestId: 'attic-context', proposalName: 'attic-context', sources,
+    baseRevisionId: acceptedFixture.head('main'), selectedObjectIds: ['attic'],
+    instruction: 'Reconstruct the same house from the basement and attic notes; name the attic Reviewed attic.', authoringScope: 'building-reconstruction',
     visualIntent: { kind: 'spatial-reference', destination: { kind: 'floor-point', levelId: 'attic', positionMm: [3500, 3000] } } };
   await queue.submit(project, input);
   assert.deepEqual(queue.get(input.requestId).request.visualIntent, input.visualIntent);
@@ -213,7 +301,83 @@ test('queued V2 floor references retain their level and reconstruction scope acr
   const restored = queue.get(input.requestId);
   assert.deepEqual(restored.request.visualIntent, input.visualIntent);
   assert.equal(restored.request.authoringScope, 'building-reconstruction');
+  assert.deepEqual(restored.request.sources, sources);
   assert.equal(restored.state, 'queued');
-  assert.deepEqual(validateModelProposalRequest(result.repository, restored.request).visualIntent, input.visualIntent);
+  assert.deepEqual(validateModelProposalRequest(acceptedFixture, restored.request).visualIntent, input.visualIntent);
   assert.equal(queue.project(repository.projectId), project);
+  await queue.close();
+
+  const layout = houseLayout(); const attic = layout.levels.find(level => level.level.id === 'attic'); assert.ok(attic);
+  attic.level.name = 'Reviewed attic';
+  const sourceReview = { ...review, summary: 'Reconstruct the same house with a reviewed attic name.',
+    rationale: `Retain separate basement and attic levels from sources ${sources.map(source => source.id).join(', ')}.`,
+    intent: { ...review.intent, interpretation: input.instruction } };
+  const worker: ModelWorker = { identity: { provider: 'test', model: 'building-queue-contract' }, run: async session => {
+    assert.ok(object(session.input) && object(session.input.request));
+    assert.equal(session.input.request.authoringScope, 'building-reconstruction');
+    assert.deepEqual(session.input.request.visualIntent, input.visualIntent);
+    assert.deepEqual(session.input.request.sources, sources);
+    assert.ok(Array.isArray(session.input.sourceDocuments));
+    assert.equal(session.input.sourceDocuments.length, sources.length);
+    for (const [index, source] of sources.entries()) {
+      const document: unknown = session.input.sourceDocuments[index];
+      assert.ok(object(document)); assert.equal(document.sourceId, source.id);
+      assert.equal(typeof document.text, 'string');
+      assert.ok(typeof document.text === 'string' && document.text.endsWith(sourceText[index] ?? ''), 'private source delivery keeps the source/page mapping prefix and original text');
+    }
+    const output = await session.executeTool('run_model_script', { language: 'typescript', source: `
+      const before = await model.inspect();
+      if (before.placement.selectedLevelId !== 'attic') throw new Error('Queued level binding changed.');
+      const layout: BuildingLayout = ${JSON.stringify(layout)};
+      await model.previewBuilding(layout);
+      return {kind:'propose',review:${JSON.stringify(sourceReview)}};
+    ` });
+    assert.equal(output.ok, true, JSON.stringify(output)); assert.equal(output.done, true);
+  } };
+  queue = new ChangeRequests(database, () => worker);
+  await finished(queue, input.requestId);
+  const ready = queue.get(input.requestId);
+  assert.equal(ready.state, 'ready', ready.error ?? ''); assert.ok(ready.result);
+  assert.equal(queue.project(repository.projectId), project, 'worker completion must leave acceptance to a human decision');
+  const proposed = await RoomRepository.restore(ready.result.project);
+  const reviewed = proposed.review(input.proposalName);
+  assert.equal(reviewed.decision.status, 'pending');
+  assert.equal(reviewed.authoringScope, 'building-reconstruction'); assert.deepEqual(reviewed.sources, sources);
+  assert.equal(reviewed.baseRevisionId, acceptedFixture.head('main'));
+  assert.equal(proposed.head('main'), acceptedFixture.head('main'));
+  assert.equal(proposed.serialize(), ready.result.project);
+  assert.deepEqual(proposed.view(proposed.root()).snapshot, repository.view(repository.root()).snapshot);
+  const journal = queue.executions(input.requestId);
+  assert.equal(journal.length, 1);
+  assert.ok(journal[0]?.evidence.calls.some(call => call.method === 'model.previewBuilding' && call.disposition === 'completed'));
+  assert.equal(journal[0]?.evidence.validation, 'passed');
+
+  const tampered: unknown = JSON.parse(ready.result.project);
+  assert.ok(object(tampered) && Array.isArray(tampered.reviews));
+  const changed = tampered.reviews.find((value: unknown) => object(value) && value.proposalName === input.proposalName);
+  assert.ok(object(changed)); changed.authoringScope = 'implicit-building';
+  await assert.rejects(RoomRepository.restore(JSON.stringify(tampered)), /authoring scope/);
+
+  await queue.close(); queue = new ChangeRequests(database, () => null);
+  assert.equal(queue.get(input.requestId).state, 'ready');
+  assert.deepEqual(queue.get(input.requestId).request.sources, sources);
+  assert.deepEqual(queue.executions(input.requestId), journal);
+  const decision = { action: 'accept', decisionId: 'accept-attic-context', expectedRequestId: input.requestId };
+  const accepted = await queue.decide(input.requestId, decision);
+  assert.equal(accepted.ticket.state, 'completed');
+  const current = await RoomRepository.restore(accepted.project);
+  assert.equal(current.head('main'), proposed.head(input.proposalName));
+  assert.equal(current.review(input.proposalName).decision.status, 'accepted');
+  assert.equal(current.review(input.proposalName).authoringScope, 'building-reconstruction');
+  assert.deepEqual(current.review(input.proposalName).sources, sources);
+  assert.equal(current.serialize(), accepted.project);
+  assert.equal(current.view(current.head('main')).snapshot.version, 2);
+
+  await queue.close(); queue = new ChangeRequests(database, () => null);
+  assert.equal(queue.get(input.requestId).state, 'completed');
+  assert.deepEqual(queue.get(input.requestId).request.visualIntent, input.visualIntent);
+  assert.equal(queue.project(repository.projectId), accepted.project);
+  assert.equal((await queue.decide(input.requestId, decision)).project, accepted.project, 'replayed acceptance must be idempotent');
+  assert.deepEqual(queue.executions(input.requestId), journal);
+  for (const [index, source] of sources.entries()) assert.deepEqual(queue.source(repository.projectId, source.id).bytes, Buffer.from(sourceText[index] ?? ''));
 });
