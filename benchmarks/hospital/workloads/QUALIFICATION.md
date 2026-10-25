@@ -46,8 +46,16 @@ bytes supplied here. Relocated mount paths are supported: content hashes bind
 the admission and its source manifest; its SQL is never executed. All table
 counts/hashes must match the manifest. Prior expected/actual fingerprint, kind
 counts and property counts must agree with the load and manifest. Both successful
-`source-query-oracle` and `initial-inventory` observations and empty errors are
-required. Full requires exactly 6,777,445 entities, 18,742,644 relationships and
+`source-query-oracle` and inventory-completion observations and empty errors are
+required. The completion label must match the parsed prior `execution.purpose`:
+`extended-initial-inventory` requires that exact label, and
+`resource-sensitivity-initial-inventory` requires its own exact label. Ordinary
+purposes, including legacy configs with no purpose, retain `initial-inventory`.
+Unknown or malformed purposes are rejected. Each required observation must be
+unique and successful; a different successful case cannot substitute for it.
+This continuation check preserves the distinct experiment label and cannot
+reclassify an extended completion as passing the original two-hour target.
+Full requires exactly 6,777,445 entities, 18,742,644 relationships and
 1,500,000 parameters at inventory fraction 1. `smoke` and `reduced` retain their actual manifest scale. Empty declared catalog categories represent no rows and are omitted when comparing observed counts; every positive count remains required. The full inventory gate is unchanged.
 
 The published head, initial-load revision payload and its hash must still match.
