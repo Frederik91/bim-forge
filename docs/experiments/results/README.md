@@ -1,6 +1,6 @@
 # Experiment results
 
-No qualification experiments have run yet. No measured result records exist in this directory.
+Qualification execution is in progress. Terminal records are added here only after the corresponding server evidence has been collected and checked. Running work and reviewed results are recorded separately in the registry.
 
 Each terminal run adds a unique `<experiment-id>/<run-id>/result.json` and a concise `summary.md`. Run IDs must be collision-resistant and assigned before execution. Files in a completed run directory are immutable.
 

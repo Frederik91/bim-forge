@@ -18,7 +18,7 @@
       "definitionVersion": 1,
       "stream": "W1",
       "issue": "https://github.com/Frederik91/bim-forge/issues/124",
-      "owner": null,
+      "owner": "Peirce / issue-124",
       "decisions": [
         "D-01"
       ],
@@ -28,7 +28,7 @@
         "Duplicate/churned source IDs and split/merge lineage are explicit."
       ],
       "preparationNote": "Native cases can execute before W2 supplies paired exports.",
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -56,7 +56,7 @@
       "definitionVersion": 1,
       "stream": "W2",
       "issue": "https://github.com/Frederik91/bim-forge/issues/125",
-      "owner": null,
+      "owner": "Kepler / issue-125",
       "decisions": [
         "D-01",
         "D-05"
@@ -67,7 +67,7 @@
         "Every unsupported transformation appears in an explicit loss report."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -93,7 +93,7 @@
       "definitionVersion": 1,
       "stream": "W1",
       "issue": "https://github.com/Frederik91/bim-forge/issues/124",
-      "owner": null,
+      "owner": "Peirce / issue-124",
       "decisions": [
         "D-02"
       ],
@@ -103,7 +103,7 @@
         "Content deduplication does not couple future edits."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -124,7 +124,7 @@
       "definitionVersion": 1,
       "stream": "W1",
       "issue": "https://github.com/Frederik91/bim-forge/issues/124",
-      "owner": null,
+      "owner": "Peirce / issue-124",
       "decisions": [
         "D-03",
         "D-04"
@@ -136,7 +136,7 @@
         "Acceptance retries preserve command/payload identity and exact decision records."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -157,7 +157,7 @@
       "definitionVersion": 1,
       "stream": "W1",
       "issue": "https://github.com/Frederik91/bim-forge/issues/124",
-      "owner": null,
+      "owner": "Peirce / issue-124",
       "decisions": [
         "D-03",
         "D-04"
@@ -168,7 +168,7 @@
         "Unrelated accepted changes retain approval only under declared equivalence rules."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -191,7 +191,7 @@
       "definitionVersion": 1,
       "stream": "W1",
       "issue": "https://github.com/Frederik91/bim-forge/issues/124",
-      "owner": null,
+      "owner": "Peirce / issue-124",
       "decisions": [
         "D-03"
       ],
@@ -201,7 +201,7 @@
         "Units, authored inputs and dependent derived values cannot merge as independent text fields."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -224,7 +224,7 @@
       "definitionVersion": 1,
       "stream": "W3",
       "issue": "https://github.com/Frederik91/bim-forge/issues/126",
-      "owner": null,
+      "owner": "Russell / issue-126",
       "decisions": [
         "D-02",
         "D-04",
@@ -237,7 +237,7 @@
         "A bounded real-kernel case is required for any claim about B-rep reference stability."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -258,7 +258,7 @@
       "definitionVersion": 1,
       "stream": "W2",
       "issue": "https://github.com/Frederik91/bim-forge/issues/125",
-      "owner": null,
+      "owner": "Kepler / issue-125",
       "decisions": [
         "D-05",
         "D-07"
@@ -269,7 +269,7 @@
         "Exchange does not rewrite authoritative coordinates to match a viewer origin."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -297,7 +297,7 @@
       "definitionVersion": 1,
       "stream": "W6",
       "issue": "https://github.com/Frederik91/bim-forge/issues/129",
-      "owner": null,
+      "owner": "Bernoulli / issue-129",
       "decisions": [
         "D-06",
         "D-07",
@@ -309,7 +309,7 @@
         "An upgraded reader does not silently replace a historical accepted representation."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -338,7 +338,7 @@
       "definitionVersion": 1,
       "stream": "W5",
       "issue": "https://github.com/Frederik91/bim-forge/issues/128",
-      "owner": null,
+      "owner": "Lagrange / issue-128",
       "decisions": [
         "D-08",
         "D-10"
@@ -350,7 +350,7 @@
         "Publish exact resource/settings/configuration bindings and raw samples."
       ],
       "preparationNote": "Performance qualification also requires the relevant W1 correctness contracts.",
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -382,7 +382,7 @@
       "definitionVersion": 1,
       "stream": "W6",
       "issue": "https://github.com/Frederik91/bim-forge/issues/129",
-      "owner": null,
+      "owner": "Bernoulli / issue-129",
       "decisions": [
         "D-09"
       ],
@@ -393,7 +393,7 @@
         "Missing artifacts preserve the last complete usable revision."
       ],
       "preparationNote": null,
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -422,7 +422,7 @@
       "definitionVersion": 1,
       "stream": "W6",
       "issue": "https://github.com/Frederik91/bim-forge/issues/129",
-      "owner": null,
+      "owner": "Bernoulli / issue-129",
       "decisions": [
         "D-04",
         "D-09"
@@ -433,7 +433,7 @@
         "Reconciliation checks semantic conflicts and all required discipline decisions."
       ],
       "preparationNote": "Portable package exchange is sufficient for this experiment; a full network sync service is outside scope.",
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
@@ -462,7 +462,7 @@
       "definitionVersion": 1,
       "stream": "W5",
       "issue": "https://github.com/Frederik91/bim-forge/issues/128",
-      "owner": null,
+      "owner": "Lagrange / issue-128",
       "decisions": [
         "D-08",
         "D-10"
@@ -475,7 +475,7 @@
         "State that database-only synthetic results do not qualify geometry or a real hospital inventory."
       ],
       "preparationNote": "Profile hospital-200k-v1; W4/#127 owns generation. Full measurements require exclusive resource scheduling.",
-      "status": "not-run",
+      "status": "running",
       "latestReviewedRun": null,
       "latestReview": null,
       "producerStreams": [
