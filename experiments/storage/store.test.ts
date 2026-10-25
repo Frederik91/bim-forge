@@ -202,6 +202,25 @@ test('accept owns the validated command while waiting for the branch lock', asyn
   });
 });
 
+test('initial imports validate all five reference columns before publishing any branch', async () => {
+  await withStore(async (store, root) => {
+    const cases = [{ typeId: 'target' }, { containerId: 'target' }, { systemId: 'target' },
+      { fromId: 'target', toId: 'peer' }, { fromId: 'peer', toId: 'target' }];
+    for (const [index, references] of cases.entries()) {
+      const source = entity({ ...object(`source-${index}`), ...references });
+      const branch = `${root}-missing-${index}`;
+      await assert.rejects(load(store, fromArray([object('peer'), source]), branch), /Dangling reference/);
+      await assert.rejects(store.head(branch), /Unknown branch/);
+      const valid = await load(store, fromArray([object('peer'), object('target'), source]), `${root}-valid-${index}`);
+      assert.equal(valid.fingerprint.count, 3);
+      await store.validateReferences(`${root}-valid-${index}`);
+    }
+    const self = entity({ ...object('self'), typeId: 'self' });
+    await load(store, fromArray([self]), `${root}-self`);
+    await store.validateReferences(`${root}-self`);
+  });
+});
+
 test('W4 COPY decoder preserves typed properties, escaped content and independent bigint namespaces', () => {
   assert.equal(decodeCopyCell('\\N'), null);
   assert.equal(decodeCopyCell('\\\\N'), '\\N');
