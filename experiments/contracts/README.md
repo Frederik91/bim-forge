@@ -25,4 +25,6 @@ npm run test:qualification-contracts
 
 Run from the repository root with its Git object database available, inside the server container. Source and evidence must be retained independently of the container. The tiny fixture is `experiments/fixtures/tiny-building.json`; `parseFixture` checks its shape, identities, endpoints, opening hosts, and instance types. It is a semantic fixture, not a solved or construction-qualified model.
 
+The qualification Dockerfile extends the cached preview build image with Git, PostgreSQL client tools, and Python virtual-environment support. Record the resulting image ID per run. Experimental Python packages live in a separately pinned environment on the test data volume. The first container check exposed missing Git in the preview build image; this explicit tools image supplies the required Git-object verification dependency.
+
 The root strict-TypeScript checker and tsconfig include `experiments` and `benchmarks`. Stream-specific dependencies belong in isolated experimental packages. W0 does not add experimental database drivers to production dependencies.
