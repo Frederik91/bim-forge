@@ -11,8 +11,10 @@ export class Fingerprint {
   count = 0;
   private sum = 0n;
   private xor = 0n;
-  add(value: StoredEntity): void {
-    this.addHash(hash(value));
+  add(value: StoredEntity): string {
+    const versionId = hash(value);
+    this.addHash(versionId);
+    return versionId;
   }
   addPrepared(value: PreparedEntity): void { this.addHash(value.versionId); }
   private addHash(value: string): void {
@@ -88,6 +90,7 @@ export async function load(store: Storage, input: AsyncIterable<StoredEntity>, b
     await control?.checkpoint();
     if (fingerprint.count === 0) throw new Error('Cannot publish empty imported dataset');
     const ingestDone = performance.now();
+    await store.client.query('ANALYZE w5_load_stage');
     const payload = { operation: 'initial-load', branch, fingerprint: fingerprint.value(), countsByKind };
     const revisionId = hash(payload);
     await store.transaction(async () => {
@@ -123,10 +126,9 @@ export async function inspectBranch(store: Storage, branch: string): Promise<{
     const page = await store.page({ branch, after, limit: 250 });
     if (page.length === 0) break;
     for (const row of page) {
-      const prepared = PreparedEntity.from(row.entity);
-      fingerprint.addPrepared(prepared);
+      const versionId = fingerprint.add(row.entity);
       countsByKind[row.entity.kind] = (countsByKind[row.entity.kind] ?? 0) + 1;
-      if (prepared.versionId !== row.versionId) throw new Error('Stored body/version hash mismatch');
+      if (versionId !== row.versionId) throw new Error('Stored body/version hash mismatch');
     }
     const last = page.at(-1);
     if (!last) throw new Error('Missing page tail');
