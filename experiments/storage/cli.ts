@@ -32,6 +32,7 @@ try {
     case 'init': await store.initialize(); result = { initialized: true }; break;
     case 'branch': await store.createBranch({ branch: argument(3), revisionId: argument(4) === 'empty' ? null : parse(HashSchema, argument(4), 'revision') }); result = { created: true }; break;
     case 'head': result = { head: await store.head(argument(3)) }; break;
+    case 'open': result = await store.projectOpen({ branch: argument(3), limit: limit(4) }); break;
     case 'accept': result = await store.accept(command(await jsonFile(argument(3)))); break;
     case 'load': result = { ...await load(store, envelopes(argument(3)), argument(4)), fileSha256: await fileHash(argument(3)) }; break;
     case 'load-fixture': result = await load(store, fromArray(fixtureEnvelopes(await jsonFile(argument(3)))), argument(4)); break;

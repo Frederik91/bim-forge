@@ -22,6 +22,7 @@ export const ConfigSchema = Type.Object({
   writeEvery: Type.Integer({ minimum: 2, maximum: 10 }), pageSize: Type.Integer({ minimum: 1, maximum: 1000 }),
   cacheLabel: Type.String({ minLength: 1 }), leaseMode: Type.Union([Type.Literal('shared-correctness'), Type.Literal('exclusive-measurement')]),
   statementTimeoutMs: Type.Integer({ minimum: 1000, maximum: 3600000 }),
+  materializationDiagnostic: Type.Boolean(),
   execution: ExecutionSchema,
   environment: Type.Object({
     nodeImage: Type.String({ minLength: 1 }), postgresImage: Type.String({ minLength: 1 }), sourceCommit: Type.String({ pattern: '^[a-f0-9]{40}$' }),
@@ -78,7 +79,7 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     await samples.write(`${JSON.stringify(row)}\n`);
   };
   try {
-    await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
+    await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.execution.loadStatementTimeoutMs)]);
     await artifact('config.json', config);
     await artifact('execution-envelope.json', { ...config.execution, spaceBefore: await spaceSnapshot(config.execution),
       enforcement: 'Client checks reserves and cooperative load deadline; coordinator watchdog enforces total shared 200 GiB allocation and hard wall timeout.',
@@ -98,7 +99,7 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
       const remaining = config.execution.loadWallTimeLimitMs - (performance.now() - loadStart);
       if (remaining <= 0) throw new Error('Predeclared load wall-time limit exceeded');
       await spaceSnapshot(config.execution);
-      await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(Math.max(1, Math.floor(Math.min(config.statementTimeoutMs, remaining))))]);
+      await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(Math.max(1, Math.floor(Math.min(config.execution.loadStatementTimeoutMs, remaining))))]);
     };
     const LoadSummary = Type.Object({ revisionId: HashSchema,
       fingerprint: Type.Object({ count: Type.Integer({ minimum: 1 }), sum: HashSchema, xor: HashSchema }),
@@ -110,7 +111,6 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
       ? parse(LoadSummary, JSON.parse(await readFile(mode.loadRecord, 'utf8')), 'preserved load artifact')
       : await load(store, await inputFor(config), config.branch, { checkpoint });
     if (await store.head(config.branch) !== loaded.revisionId) throw new Error('Measured branch must start at the pinned initial load revision');
-    await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
     await artifact('load.json', { ...loaded, fileSha256: await fileHash(config.dataset), reused: mode.kind === 'measure-existing' });
     const actual = await inspectBranch(store, config.branch);
     const propertyValues = await store.propertyCounts(config.branch);
@@ -120,6 +120,7 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
       && hash(propertyValues) === hash(loaded.propertyValuesByRecordCategory);
     observe('source-query-oracle', 'All source documents, counts by kind and canonical hashes survive load', JSON.stringify(actual), oracle);
     if (!oracle) throw new Error('Load checksum/count oracle failed; refusing timings');
+    await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
     if (mode.kind === 'load-only') {
       await artifact('metrics-loaded.json', await store.metrics());
       observe('initial-inventory', 'Initial inventory published at one revision before bounded updates',
@@ -141,14 +142,24 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     await artifact('metrics-ready.json', await store.metrics());
     // Explicit warmup; neither OS page cache nor PostgreSQL shared buffers are flushed.
     await store.page({ branch: config.branch, after: '', limit: config.pageSize });
-    await store.historical({ revisionId: loaded.revisionId, after: '', limit: config.pageSize });
+    await sample('warmup-historical-page', -1, 'warmup', async () => {
+      const page = await store.historical({ revisionId: loaded.revisionId, after: '', limit: config.pageSize });
+      return { count: page.length, checksum: hash(page.map((row) => row.entity)) };
+    });
     await store.detail({ branch: config.branch, entityId: first.entity.entityId });
     await store.projection({ branch: config.branch, field: 'from_id', id: graphSeed?.id ?? first.entity.entityId, limit: config.pageSize });
+    if (config.materializationDiagnostic && nativeSnapshot === null) {
+      await sample('full-materialization-diagnostic', 0, 'candidate', async () => {
+        const result = (await inspectBranch(store, config.branch)).fingerprint;
+        if (hash(result) !== hash(loaded.fingerprint)) throw new Error('Diagnostic source checksum mismatch');
+        return result;
+      });
+    }
     for (let repeat = 0; repeat < config.repeats; repeat += 1) {
       const variants = repeat % 2 === 0 ? ['candidate', 'snapshot'] : ['snapshot', 'candidate'];
       for (const variant of variants) {
-        if (variant === 'snapshot' && nativeSnapshot === null) continue;
-        await sample('open-checksum', repeat, variant, async () => {
+        if (nativeSnapshot === null) continue;
+        await sample('bounded-native-materialization', repeat, variant, async () => {
           if (variant === 'snapshot') {
             const native = nativeEnvelopes(await snapshotAt(store, loaded.revisionId));
             const digest = new Fingerprint(); native.entities.forEach((item) => digest.add(item));
@@ -161,6 +172,12 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
           return result;
         });
       }
+      await sample('project-open', repeat, 'candidate', async () => {
+        const opened = await store.projectOpen({ branch: config.branch, limit: config.pageSize });
+        const checksum = hash(opened.page.map((row) => row.entity));
+        if (opened.head !== loaded.revisionId || checksum !== workingSetHash) throw new Error('Project-open head/page oracle mismatch');
+        return { head: opened.head, manifest: opened.manifest, count: opened.page.length, checksum };
+      });
       await sample('page-query', repeat, 'candidate', async () => {
         const page = await store.page({ branch: config.branch, after: '', limit: config.pageSize });
         const checksum = hash(page.map((row) => row.entity));

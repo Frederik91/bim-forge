@@ -16,6 +16,7 @@ export const ExecutionSchema = Type.Object({
   measurement: Type.Union([Type.Literal('correctness'), Type.Literal('warm-single-client-exploratory'), Type.Literal('comparative')]),
   maxBoundedUpdates: Type.Integer({ minimum: 1, maximum: 100 }),
   loadWallTimeLimitMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
+  loadStatementTimeoutMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
   space: Type.Object({
     dataPath: Type.String({ minLength: 1 }), hostRootPath: Type.String({ minLength: 1 }),
     dataBudgetBytes: Type.Integer({ minimum: 1, maximum: 200 * GiB }),

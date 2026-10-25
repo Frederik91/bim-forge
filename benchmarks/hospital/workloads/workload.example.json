@@ -14,6 +14,7 @@
   "cacheLabel": "warm: explicit page and historical warmup; OS cache unchanged",
   "leaseMode": "shared-correctness",
   "statementTimeoutMs": 30000,
+  "materializationDiagnostic": false,
   "execution": {
     "decisionPath": "docs/experiments/decisions/execution-envelope-20261025.md",
     "decisionSha256": "REPLACE_WITH_PREDECLARED_DECISION_SHA256",
@@ -22,6 +23,7 @@
     "measurement": "warm-single-client-exploratory",
     "maxBoundedUpdates": 10,
     "loadWallTimeLimitMs": 7200000,
+    "loadStatementTimeoutMs": 7200000,
     "space": {
       "dataPath": "/qualification",
       "hostRootPath": "/host-root",

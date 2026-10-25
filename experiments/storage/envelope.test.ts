@@ -11,7 +11,8 @@ function config() {
       postgresMemoryLimitBytes: 3 * 1024 ** 3, diskBudgetBytes: 200 * 1024 ** 3 },
     execution: parse(ExecutionSchema, {
       decisionPath: 'decision.md', decisionSha256: 'a'.repeat(64), mode: { kind: 'load-and-measure' },
-      purpose: 'bounded-updates', measurement: 'warm-single-client-exploratory', maxBoundedUpdates: 10, loadWallTimeLimitMs: 7200000,
+      purpose: 'bounded-updates', measurement: 'warm-single-client-exploratory', maxBoundedUpdates: 10,
+      loadWallTimeLimitMs: 7200000, loadStatementTimeoutMs: 7200000,
       space: { dataPath: '/qualification', hostRootPath: '/host-root', dataBudgetBytes: 200 * 1024 ** 3,
         dataReserveBytes: 100 * 1024 ** 3, rootReserveBytes: 4 * 1024 ** 3, monitorEvidence: 'coordinator-watchdog.json' },
       exploratoryP95Ms: { detail: 300, page: 1000, oneHop: 1000, boundedDelta: 2000, smallAccept: 4000 },

@@ -38,6 +38,9 @@ test('full typed documents survive immutable versions, CAS, retry and branch div
       assumptions: [{ entityId: 'wall', versionId: null }], puts: [original], deletes: [] };
     const first = await store.accept(firstCommand);
     assert.deepEqual((await store.page({ branch, after: '', limit: 10 }))[0]?.entity, original);
+    const opened = await store.projectOpen({ branch, limit: 1 });
+    assert.equal(opened.head, first.revisionId);
+    assert.deepEqual(opened.page.map((row) => row.entity), [original]);
     assert.deepEqual(await store.accept(firstCommand), { revisionId: first.revisionId, replayed: true });
     await assert.rejects(store.accept({ ...firstCommand, puts: [object('wall', 2)] }), /different payload/);
     const fork = `${branch}-fork`;

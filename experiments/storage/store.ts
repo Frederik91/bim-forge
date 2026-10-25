@@ -16,9 +16,9 @@ const ancestry = `WITH RECURSIVE ancestry AS (
   UNION ALL SELECT r.revision_id,r.parent_id,a.depth+1
   FROM qvm_storage.revisions r JOIN ancestry a ON r.revision_id=a.parent_id
 ), resolved AS (
-  SELECT DISTINCT ON (c.entity_id COLLATE "C") c.entity_id,c.version_id
+  SELECT DISTINCT ON (c.entity_id) c.entity_id,c.version_id
   FROM ancestry a JOIN qvm_storage.changes c USING(revision_id)
-  ORDER BY c.entity_id COLLATE "C", a.depth
+  ORDER BY c.entity_id, a.depth
 )`;
 
 export class Storage {
@@ -80,6 +80,27 @@ export class Storage {
     const [row] = await this.rows(BodyRow, `SELECT v.body,v.version_id FROM qvm_storage.visibility c
       JOIN qvm_storage.versions v USING(version_id) WHERE c.branch=$1 AND c.entity_id=$2`, [input.branch, input.entityId]);
     return row ? { entity: entity(row.body), versionId: row.version_id } : null;
+  }
+
+  async projectOpen(input: { branch: string; limit: number }) {
+    parse(IdSchema, input.branch, 'branch');
+    if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 1000) throw new Error('Open page bound must be 1..1000');
+    const nullableHash = Type.Union([HashSchema, Type.Null()]);
+    const schema = Type.Object({ head: nullableHash, parent_id: nullableHash,
+      command_id: Type.Union([IdSchema, Type.Null()]), created_at: Type.Union([Type.String(), Type.Null()]),
+      manifest: JsonSchema, page: Type.Array(Type.Object({ entity: EntitySchema, versionId: HashSchema })) });
+    // One SQL statement gives metadata and bounded visible bodies from the same MVCC snapshot.
+    const [row] = await this.rows(schema, `SELECT b.head,r.parent_id,r.command_id,r.created_at::text,
+      jsonb_build_object('operation',r.payload->'operation','initialFingerprint',r.payload->'fingerprint',
+        'initialCountsByKind',r.payload->'countsByKind',
+        'putCount',jsonb_array_length(COALESCE(r.payload->'puts','[]'::jsonb)),
+        'deleteCount',jsonb_array_length(COALESCE(r.payload->'deletes','[]'::jsonb))) AS manifest,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('entity',p.body,'versionId',p.version_id) ORDER BY p.entity_id)
+        FROM (SELECT c.entity_id,v.body,v.version_id FROM qvm_storage.visibility c
+          JOIN qvm_storage.versions v USING(version_id) WHERE c.branch=b.branch ORDER BY c.entity_id LIMIT $2) p), '[]'::jsonb) AS page
+      FROM qvm_storage.branches b LEFT JOIN qvm_storage.revisions r ON r.revision_id=b.head WHERE b.branch=$1`, [input.branch, input.limit]);
+    if (!row) throw new Error('Unknown branch');
+    return row;
   }
 
   async createBranch(input: { branch: string; revisionId: string | null }): Promise<void> {
@@ -159,8 +180,8 @@ export class Storage {
   async page(input: { branch: string; after: string; limit: number; kind?: string }): Promise<VersionedEntity[]> {
     if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 10000) throw new Error('Page limit must be 1..10000');
     const rows = await this.rows(BodyRow, `SELECT v.body,v.version_id FROM qvm_storage.visibility c
-      JOIN qvm_storage.versions v USING(version_id) WHERE c.branch=$1 AND c.entity_id COLLATE "C">$2
-      AND ($4::text IS NULL OR c.kind=$4) ORDER BY c.entity_id COLLATE "C" LIMIT $3`,
+      JOIN qvm_storage.versions v USING(version_id) WHERE c.branch=$1 AND c.entity_id>$2
+      AND ($4::text IS NULL OR c.kind=$4) ORDER BY c.entity_id LIMIT $3`,
       [input.branch, input.after, input.limit, input.kind ?? null]);
     return rows.map((row) => ({ entity: entity(row.body), versionId: row.version_id }));
   }
@@ -169,7 +190,7 @@ export class Storage {
     parse(HashSchema, input.revisionId, 'revision');
     if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 10000) throw new Error('Page limit must be 1..10000');
     const rows = await this.rows(BodyRow, `${ancestry} SELECT v.body,v.version_id FROM resolved r
-      JOIN qvm_storage.versions v USING(version_id) WHERE r.entity_id COLLATE "C">$2 ORDER BY r.entity_id COLLATE "C" LIMIT $3`,
+      JOIN qvm_storage.versions v USING(version_id) WHERE r.entity_id>$2 ORDER BY r.entity_id LIMIT $3`,
       [input.revisionId, input.after, input.limit]);
     return rows.map((row) => ({ entity: entity(row.body), versionId: row.version_id }));
   }
@@ -182,7 +203,7 @@ export class Storage {
   }
 
   async delta(revisionId: string): Promise<Static<typeof ChangeRow>[]> {
-    return this.rows(ChangeRow, `SELECT entity_id,version_id FROM qvm_storage.changes WHERE revision_id=$1 ORDER BY entity_id COLLATE "C"`, [revisionId]);
+    return this.rows(ChangeRow, `SELECT entity_id,version_id FROM qvm_storage.changes WHERE revision_id=$1 ORDER BY entity_id`, [revisionId]);
   }
 
   async projection(input: { branch: string; field: 'type_id' | 'container_id' | 'system_id' | 'from_id'; id: string; limit: number }): Promise<VersionedEntity[]> {
@@ -190,7 +211,7 @@ export class Storage {
     if (input.limit < 1 || input.limit > 10000) throw new Error('Projection bound must be 1..10000');
     const rows = await this.rows(BodyRow, `SELECT v.body,v.version_id FROM qvm_storage.visibility c
       JOIN qvm_storage.versions v USING(version_id) WHERE c.branch=$1 AND c.${columns[input.field]}=$2
-      ORDER BY c.entity_id COLLATE "C" LIMIT $3`, [input.branch, input.id, input.limit]);
+      ORDER BY c.entity_id LIMIT $3`, [input.branch, input.id, input.limit]);
     return rows.map((row) => ({ entity: entity(row.body), versionId: row.version_id }));
   }
 
@@ -199,6 +220,7 @@ export class Storage {
       'version',version(),'settings',(SELECT jsonb_object_agg(name,setting) FROM pg_settings
         WHERE name IN ('shared_buffers','work_mem','maintenance_work_mem','max_connections','max_parallel_workers_per_gather',
           'fsync','synchronous_commit','full_page_writes','wal_level','checkpoint_timeout','data_directory','statement_timeout')),
+      'collation',(SELECT jsonb_build_object('collate',datcollate,'ctype',datctype) FROM pg_database WHERE datname=current_database()),
       'databaseBytes',pg_database_size(current_database()),'walLsn',pg_current_wal_lsn()::text,
       'retainedWalBytes',CASE WHEN has_function_privilege('pg_ls_waldir()','EXECUTE')
         THEN (SELECT sum(size) FROM pg_ls_waldir()) ELSE NULL END,
