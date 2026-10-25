@@ -56,6 +56,14 @@ The first implementation can be a modular monolith with clear interfaces. Split 
 - Presentation rules cannot suppress mandatory findings, connected impacts, or required approvals.
 - Workspace profiles preserve a cross-discipline proposal path even when the suggested change falls outside the user's normal tools or approval authority.
 
+## Independent project operation
+
+One logical model can span installations controlled by different companies. Each participant must be able to retain a usable copy of the agreed shared data and continue on a local branch if the main host becomes unavailable or revokes future access.
+
+Deliver verified mirrors before collaboration between installations. Preserve stable entity identities, revision ancestry, artifacts, and review evidence across copies. Project governance defines acceptance authority independently of server ownership. Disconnected work can diverge and requires semantic reconciliation and applicable human review before shared acceptance.
+
+See [Independent project mirrors](project-mirrors.md) for the replication boundaries, delivery order, and two-installation acceptance scenarios. These are architecture requirements for future implementation.
+
 ## First vertical slice
 
 The first feature should be read-only: import a small IFC fixture, expose entities and relationships, create an issue-linked branch, compute a semantic diff, run a validator, and open a draft PR containing the evidence. Model mutation follows only after this slice is reviewable.
