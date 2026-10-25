@@ -56,7 +56,7 @@ oracles before writes. It records page/detail/one-hop checksums and counts, edit
 one document with `qualificationRun`, reconnects to verify the accepted receipt,
 delta, current body and pinned history rows, then restores the original document
 through a second accepted commit and reconnects again. **The branch head advances
-twice.** Its initial revision and all three entity versions remain reviewable.
+twice.** Its initial revision and both subsequent deltas remain reviewable. Restoring the document reuses its original content hash.
 An interrupted run can leave the marker committed; retain its outputs and let
 main choose recovery. The runner refuses to restart from an advanced head.
 
@@ -68,9 +68,7 @@ the configurable total may be at most 10,000,000. Reaching that cap before
 exhaustion fails. Interactive pages cap at 100, repeats
 at 5. A conservative SQL query upper bound is recorded (including transaction,
 configuration and receipt statements); concurrency is 1. Each statement has a
-timeout and an overall timer closes the connection at the deadline. Existing
-`Storage.accept` reference validation still runs; it can scan the admitted branch
-and can time out. The driver does not weaken it.
+timeout and an overall timer closes the connection at the deadline. The integrated `Storage.accept` validates scoped outgoing and incoming references inside its locked transaction. Initial imports retain the full graph validator. The driver preserves both contracts.
 
 Output retains exact admission, manifest and six prior artifact bytes with hashes,
 raw `samples.ndjson` including failed samples, independent `selections.json`,
