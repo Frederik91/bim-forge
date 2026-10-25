@@ -1,0 +1,31 @@
+{
+  "publisherCommit": "939c4b2df009bac9819a113d624904baf62c0a59",
+  "recordedAt": "2026-10-25T12:09:02.680Z",
+  "retentionBudgetBytes": 67108864,
+  "retainedBytes": 581735,
+  "timingMethod": "Retained successful kernel stdout log birthtime through final observation-contract log mtime; retrospective envelope, not measured latency.",
+  "originalDiskBudget": "Not captured; the numeric record budget applies only to this bounded evidence finalization.",
+  "evidenceRoot": "docs/experiments/results/EX-07/w3-915138a-20261025-terminal01-evidence",
+  "originalArtifacts": [
+    {
+      "from": "w3-debug-final-915138a",
+      "to": "successful-node"
+    },
+    {
+      "from": "w3-debug-attempt-3",
+      "to": "successful-kernel"
+    },
+    {
+      "from": "w3-first",
+      "to": "failed-kernel-attempt-1"
+    },
+    {
+      "from": "w3-debug-attempt-2",
+      "to": "failed-kernel-attempt-2"
+    },
+    {
+      "from": "w3-debug-bindings-20261025",
+      "to": "binding-inspection"
+    }
+  ]
+}

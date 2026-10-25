@@ -1,0 +1,37 @@
+[
+  {
+    "assertion": "Level/host edits record the complete evaluated dependent delta.",
+    "caseIds": [
+      "level-full-dependent-delta",
+      "host-full-dependent-delta"
+    ],
+    "coverage": "covered"
+  },
+  {
+    "assertion": "Failed or unresolved evaluation leaves accepted state unchanged.",
+    "caseIds": [
+      "fatal-atomic-rollback",
+      "pending-atomic-rollback",
+      "dependency-cycle-rejected"
+    ],
+    "coverage": "covered"
+  },
+  {
+    "assertion": "Face split and reordering do not silently reattach dependants.",
+    "caseIds": [
+      "occt-raw-index-reference",
+      "occt-datum-ambiguity",
+      "occt-semantic-anchor",
+      "occt-boundary-anchor-pending",
+      "occt-reordered-traversal"
+    ],
+    "coverage": "partial"
+  },
+  {
+    "assertion": "A bounded real-kernel case is required for any claim about B-rep reference stability.",
+    "caseIds": [
+      "occt-real-face-split"
+    ],
+    "coverage": "covered"
+  }
+]

@@ -1,0 +1,4 @@
+{
+  "CornerMin": "CornerMin(self: OCP.OCP.Bnd.Bnd_Box) -> OCP.OCP.gp.gp_Pnt\n\nReturns the lower corner of this bounding box. The gap is included. If this bounding box is infinite (i.e. \"open\"), returned values may be equal to +/- Precision::Infinite(). Standard_ConstructionError exception will be thrown if the box is void. if IsVoid()\n",
+  "CornerMax": "CornerMax(self: OCP.OCP.Bnd.Bnd_Box) -> OCP.OCP.gp.gp_Pnt\n\nReturns the upper corner of this bounding box. The gap is included. If this bounding box is infinite (i.e. \"open\"), returned values may be equal to +/- Precision::Infinite(). Standard_ConstructionError exception will be thrown if the box is void. if IsVoid()\n"
+}

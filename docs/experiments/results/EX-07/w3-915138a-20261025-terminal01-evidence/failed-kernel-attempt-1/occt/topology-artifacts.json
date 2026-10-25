@@ -1,0 +1,9 @@
+{
+  "artifacts": [],
+  "checks": {},
+  "environment": {
+    "platform": "Linux-6.8.0-111-generic-x86_64-with-glibc2.36",
+    "python": "3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]"
+  },
+  "error": "Traceback (most recent call last):\n  File \"/app/experiments/regeneration/topology.py\", line 205, in main\n    run_kernel(args.out, raw)\n  File \"/app/experiments/regeneration/topology.py\", line 52, in run_kernel\n    from OCP.TopTools import TopTools_IndexedMapOfShape, TopTools_ListOfShape\nImportError: cannot import name 'TopTools_IndexedMapOfShape' from 'OCP.TopTools' (/qualification/python/lib/python3.11/site-packages/OCP/TopTools/__init__.py)\n"
+}
