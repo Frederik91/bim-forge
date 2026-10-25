@@ -476,8 +476,8 @@
       ],
       "preparationNote": "Profile hospital-200k-v1; W4/#127 owns generation. Full measurements require exclusive resource scheduling.",
       "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "latestReviewedRun": "docs/experiments/results/EX-13/hospital-reduced-20261025c/result.json",
+      "latestReview": "docs/experiments/decisions/exchange-storage-review-20261025.md",
       "producerStreams": [
         "W0",
         "W4"
