@@ -67,9 +67,9 @@
         "Every unsupported transformation appears in an explicit loss report."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "status": "failed",
+      "latestReviewedRun": "docs/experiments/results/EX-02/w2-partial-exchange-20261025-01/result.json",
+      "latestReview": "docs/experiments/decisions/exchange-storage-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -269,9 +269,9 @@
         "Exchange does not rewrite authoritative coordinates to match a viewer origin."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-08/w2-partial-coordinates-20261025-01/result.json",
+      "latestReview": "docs/experiments/decisions/exchange-storage-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -350,9 +350,9 @@
         "Publish exact resource/settings/configuration bindings and raw samples."
       ],
       "preparationNote": "Performance qualification also requires the relevant W1 correctness contracts.",
-      "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-10/native-history-20261025b/result.json",
+      "latestReview": "docs/experiments/decisions/exchange-storage-review-20261025.md",
       "producerStreams": [
         "W0",
         "W4"
