@@ -5,6 +5,7 @@ import type { Static, TSchema } from 'typebox';
 import { command, entity, hash, parse, EntitySchema, HashSchema, IdSchema, JsonSchema } from './contract.ts';
 import type { Command, Json, StoredEntity } from './contract.ts';
 import { PreparedEntity, versionBatch, versionInputSql, versionColumnsSql } from './prepared.ts';
+import { fullReferencesSql, validateChangedReferences } from './reference-validation.ts';
 
 const HeadRow = Type.Object({ head: Type.Union([HashSchema, Type.Null()]) });
 const BodyRow = Type.Object({ body: EntitySchema, version_id: HashSchema });
@@ -135,19 +136,12 @@ export class Storage {
   }
 
   async validateReferences(branch: string): Promise<void> {
-    const [row] = await this.rows(Type.Object({ entity_id: IdSchema, missing: IdSchema }), `
-      SELECT v.entity_id,refs.id AS missing FROM qvm_storage.visibility v
-      CROSS JOIN LATERAL (VALUES(v.type_id),(v.container_id),(v.system_id),(v.from_id),(v.to_id)) refs(id)
-      LEFT JOIN LATERAL (
-        SELECT target.entity_id FROM qvm_storage.visibility target
-        WHERE target.branch=$1 AND target.entity_id=refs.id LIMIT 1
-      ) target ON true
-      WHERE v.branch=$1 AND refs.id IS NOT NULL AND target.entity_id IS NULL LIMIT 1`, [branch]);
+    const [row] = await this.rows(Type.Object({ entity_id: IdSchema, missing: IdSchema }), fullReferencesSql, [branch]);
     if (row) throw new Error(`Dangling reference ${row.entity_id} -> ${row.missing}`);
   }
 
   async accept(input: unknown): Promise<{ revisionId: string; replayed: boolean }> {
-    const proposal: Command = command(input);
+    const proposal: Command = structuredClone(command(input));
     const payloadHash = hash(proposal);
     const revisionId = payloadHash;
     const prepared = proposal.puts.map((item) => PreparedEntity.from(item));
@@ -181,7 +175,8 @@ export class Storage {
         SELECT $1,v.entity_id,v.version_id,v.kind,v.type_id,v.container_id,v.system_id,v.from_id,v.to_id
         FROM qvm_storage.changes c JOIN qvm_storage.versions v USING(version_id) WHERE c.revision_id=$2`,
         [proposal.branch, revisionId]);
-      await this.validateReferences(proposal.branch);
+      await validateChangedReferences(this.client, proposal.branch,
+        prepared.map((item) => item.entityId), proposal.deletes);
       await this.client.query(`UPDATE qvm_storage.branches SET head=$2 WHERE branch=$1`, [proposal.branch, revisionId]);
       await this.client.query(`INSERT INTO qvm_storage.receipts VALUES($1,$2,$3)`, [proposal.commandId, payloadHash, revisionId]);
       return { revisionId, replayed: false };
