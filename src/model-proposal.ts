@@ -1,22 +1,19 @@
-import { spaces, floorBounds, clearSpaceBounds, doorConnections } from './floor-plan.ts';
-import type { ActivityUpdate } from './request-activity.ts';
 import { createHash } from 'node:crypto';
-import { diffSnapshots, previewRectangle, previewFurnishings, previewRoomFurnishings, rectangleLayout, FURNITURE_KINDS } from './room-model.ts';
+import { diffSnapshots } from './room-model.ts';
+import type { Entity, EntityId, ProposalReview, Revision, RoomRepository, ToolCallEvidence } from './room-model.ts';
 import { parseVisualRequest } from './visual-request.ts';
 import type { VisualRequest } from './visual-request.ts';
-import type {
-  CollectionChanges, Entity, EntityId, HostingRelationship, ModelDelta, ModelSnapshot,
-  ProposalReview, Revision, RoomRepository,
-} from './room-model.ts';
+import type { ActivityUpdate } from './request-activity.ts';
+import { ModelScripts, summarizeModelDelta } from './model-script.ts';
+import type { ModelScriptResult } from './model-script.ts';
+import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, parseScriptExecutions } from './script-evidence.ts';
+import type { ScriptExecutionEvidence } from './script-evidence.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
 const BRANCH = /^[a-z]+(?:-[a-z]+)*$/;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MAX_TOOL_CALLS = 12;
-type SupportedToolName = 'inspect_model' | 'preview_rectangle' | 'preview_furnishings' | 'preview_room_furnishings' | 'submit_proposal' | 'decline_request';
-type EvidenceToolName = SupportedToolName | 'unsupported_tool';
-type ToolStatus = 'accepted' | 'rejected';
 
 interface BoundRequest {
   requestId: string;
@@ -28,87 +25,52 @@ interface BoundRequest {
   base: Revision;
   selectedObjects: readonly Entity[];
 }
-
-interface ProviderEvent {
-  responseId: string;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-}
-
-interface ToolEvidence {
-  name: EvidenceToolName;
-  status: ToolStatus;
-  error: string | null;
-}
-
+interface ProviderEvent { responseId: string; inputTokens: number; outputTokens: number; totalTokens: number }
 export interface ModelWorkerSession {
   instructions: string;
   input: unknown;
   tools: typeof MODEL_PROPOSAL_TOOLS;
+  signal: AbortSignal;
   executeTool: (name: string, argumentsValue: unknown) => Promise<Record<string, unknown>>;
   recordProviderEvent: (event: unknown) => void;
 }
-
 export interface ModelWorker {
   identity: { provider: unknown; model: unknown };
   run: (session: ModelWorkerSession) => Promise<void>;
 }
-
 interface ReadyResult {
   status: 'ready';
   repository: RoomRepository;
-  review: Readonly<ProposalReview & { changes: ReturnType<typeof summarizeDelta> }>;
+  review: Readonly<ProposalReview & { changes: ReturnType<typeof summarizeModelDelta> }>;
 }
-
 interface DeclinedResult {
   status: 'declined';
   repository: RoomRepository;
   review: Readonly<{
-    requestId: string;
-    proposalName: string;
-    baseRevisionId: string;
-    proposalRevisionId: null;
-    selectedObjectIds: readonly EntityId[];
-    instruction: string;
-    summary: string;
-    rationale: string;
-    constraints: string;
-    uncertainty: string;
-    changes: null;
+    requestId: string; proposalName: string; baseRevisionId: string; proposalRevisionId: null;
+    selectedObjectIds: readonly EntityId[]; instruction: string; summary: string; rationale: string;
+    constraints: string; uncertainty: string; changes: null;
   }>;
 }
-
 export type ModelProposalResult = Readonly<ReadyResult | DeclinedResult>;
-
-function fail(message: string): never { throw new Error(message); }
-
+export interface ModelProposalOptions {
+  signal?: AbortSignal;
+  scripts?: ModelScripts;
+  onExecution?: (evidence: ScriptExecutionEvidence) => void;
+}
 export class ModelWorkerError extends Error {
   constructor(message: string, options?: ErrorOptions) { super(message, options); this.name = 'ModelWorkerError'; }
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isModelWorker(value: unknown): value is ModelWorker {
-  return isRecord(value) && typeof value.run === 'function' && isRecord(value.identity);
-}
-
+function fail(message: string): never { throw new Error(message); }
+function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function isModelWorker(value: unknown): value is ModelWorker { return isRecord(value) && typeof value.run === 'function' && isRecord(value.identity); }
 function fields(value: unknown, expected: readonly string[]): asserts value is Record<string, unknown> {
-  if (!value || Array.isArray(value) || typeof value !== 'object'
-      || Object.keys(value).length !== expected.length
-      || !expected.every((key) => Object.hasOwn(value, key))) fail('Unexpected proposal request fields.');
+  if (!isRecord(value) || Object.keys(value).length !== expected.length || !expected.every((key) => Object.hasOwn(value, key))) fail('Unexpected proposal request fields.');
 }
-
 function text(value: unknown, name: string, maximum: number): string {
-  if (typeof value !== 'string') fail(`${name} must contain readable text no longer than ${maximum} characters.`);
-  if (!value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) {
-    fail(`${name} must contain readable text no longer than ${maximum} characters.`);
-  }
+  if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) fail(`${name} must contain readable text no longer than ${maximum} characters.`);
   return value.trim();
 }
-
 function request(input: unknown, repository: RoomRepository): BoundRequest {
   fields(input, isRecord(input) && Object.hasOwn(input, 'proposalName')
     ? ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']
@@ -118,7 +80,6 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   const instruction = text(input.instruction, 'Change request', 1000);
   if (input.proposalName !== undefined && typeof input.proposalName !== 'string') fail('Proposal name must be text when provided.');
   if (typeof input.proposalName === 'string' && (input.proposalName.length > 64 || /[\u0000-\u001f]/.test(input.proposalName))) fail('Proposal name must contain at most 64 readable characters.');
-  // Stable across retries and revisions; 128 bits of request identity avoid timestamp/title collisions.
   const suffix = createHash('sha256').update(requestId).digest('hex').slice(0, 32).replace(/[0-9a-f]/g, (digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)));
   const title = instruction.toLowerCase().match(/[a-z]+/g)?.slice(0, 5).join('-').slice(0, 30).replace(/-+$/, '') || 'change';
   const proposalName = input.proposalName?.trim() ? text(input.proposalName, 'Proposal name', 64) : `${title}-${suffix}`;
@@ -126,326 +87,161 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   if (repository.branches().some((branch) => branch.name === proposalName)) fail('A proposal already uses that name.');
   if (typeof input.baseRevisionId !== 'string' || !REVISION.test(input.baseRevisionId)) fail('Invalid base revision identity.');
   const base = repository.view(input.baseRevisionId);
-  if (!Array.isArray(input.selectedObjectIds) || input.selectedObjectIds.length < 1 || input.selectedObjectIds.length > 16) {
-    fail('Select between one and sixteen stable model objects.');
-  }
-  const selectedValues: unknown[] = input.selectedObjectIds;
-  if (selectedValues.some((id) => typeof id !== 'string' || !IDENTIFIER.test(id))) fail('Invalid selected object identity.');
+  if (!Array.isArray(input.selectedObjectIds) || input.selectedObjectIds.length < 1 || input.selectedObjectIds.length > 16) fail('Select between one and sixteen stable model objects.');
   const selectedObjectIds: EntityId[] = [];
+  const selectedValues: unknown[] = input.selectedObjectIds;
   for (const id of selectedValues) {
-    if (typeof id !== 'string') fail('Invalid selected object identity.');
+    if (typeof id !== 'string' || !IDENTIFIER.test(id)) fail('Invalid selected object identity.');
     const entity = base.snapshot.entities.find((item) => item.id === id);
     if (!entity) fail('A selected object does not exist in the bound revision.');
     selectedObjectIds.push(entity.id);
   }
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid selected object identity.');
-  const entities = new Map(base.snapshot.entities.map((entity) => [entity.id, entity]));
   const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
-  return Object.freeze({
-    requestId,
-    proposalName,
-    baseRevisionId: base.id,
-    selectedObjectIds: Object.freeze(selectedObjectIds),
-    instruction,
-    visualIntent: Object.freeze(visualIntent),
-    base,
-    selectedObjects: Object.freeze(selectedObjectIds.map((id) => {
-      const entity = entities.get(id);
+  return Object.freeze({ requestId, proposalName, baseRevisionId: base.id, instruction, visualIntent: Object.freeze(visualIntent), base,
+    selectedObjectIds: Object.freeze(selectedObjectIds), selectedObjects: Object.freeze(selectedObjectIds.map((id) => {
+      const entity = base.snapshot.entities.find((item) => item.id === id);
       if (!entity) fail('A selected object does not exist in the bound revision.');
       return entity;
-    })),
+    })) });
+}
+export function validateModelProposalRequest(repository: RoomRepository, input: unknown): BoundRequest { return request(input, repository); }
+
+export const MODEL_PROPOSAL_TOOLS = Object.freeze([Object.freeze({
+  type: 'function', name: 'run_model_script', strict: true,
+  description: 'Execute bounded JavaScript/TypeScript against the declared model API in an isolated draft. Return an observe, propose or decline decision. Only the host validates and prepares proposals; scripts cannot accept changes.',
+  parameters: { type: 'object', properties: {
+    language: { type: 'string', enum: ['javascript', 'typescript'] }, source: { type: 'string', minLength: 1, maxLength: 32768 },
+  }, required: ['language', 'source'], additionalProperties: false },
+})]);
+
+const instructions = `You prepare BIM model proposals for human review using run_model_script only. The source is an async function body with await and return, with no imports, shell, network, filesystem or credentials. Call the typed model API directly, never other tool names.
+Each execution starts from the same bound base revision with a fresh private draft. Changes do NOT persist between scripts. Inspect and compose all changes for a proposal in ONE script. You can return {kind:"observe",observation:await model.inspect()} to inspect without proposing; replay the needed operations in the final script.
+Return {kind:"propose",review:{summary,rationale,constraints,uncertainty}} only after model operations succeed. The host independently validates the draft and computes its delta. Return {kind:"decline",reason,uncertainty} for a specific clarification. Never return a replacement snapshot, fabricated evidence or approval. Finish only after the tool returns done:true.
+Inspect first. Selection and spatial references are context, not a move command, group or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. Another desk creates ONLY that desk unless companions are requested. Retain unrelated objects and identities. A freestanding point does not imply wall attachment. For moving a setup, reason about supported devices and nearby furniture; proximity is not an explicit relationship or permission. Never leave devices without valid support. If desk-only movement leaves device destinations unclear, decline with a specific question.
+A selected Space is room context and a selected Level is whole-floor context, never permission to change all contents. Use model.previewRoomFurnishings for one-room work, retaining existing room furnishings and every other room. model.inspect().placement.rooms includes entityIds for room membership. Use model.previewFurnishings only for explicitly requested whole-floor or cross-room work; it replaces the COMPLETE furnishing set, so preserve every unrelated item. Positions/dimensions are metres on a 1 mm grid. Rotation 0 faces north, 90 west. Monitor/laptop supportId references a desk/table; floor items use null. Keep circulation and doors clear.
+model.previewRectangle is only for explicitly requested single-room shell changes. Spatial references cannot authorize shell edits. Multi-room shell editing is unsupported: explain the limitation rather than resizing the whole floor.
+Catch ModelValidationError if you can correct invalid geometry in the same script. Failed scripts discard every staged write. Runtime, integrity and resource failures cannot be used to submit partial changes. Read API docs with docs.ls/read/search when needed. Explain the interpreted operation, changed/added objects, preserved objects, dependencies and destination adjustments. Never claim construction, code, accessibility or coordination approval.`;
+
+async function runWorker(worker: ModelWorker, session: ModelWorkerSession): Promise<void> {
+  session.signal.throwIfAborted();
+  let abort: () => void = () => {};
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(new Error('The model proposal attempt was cancelled.'));
+    session.signal.addEventListener('abort', abort, { once: true });
   });
+  try { await Promise.race([Promise.resolve().then(() => worker.run(session)), cancelled]); }
+  finally { session.signal.removeEventListener('abort', abort); }
 }
 
-export function validateModelProposalRequest(repository: RoomRepository, input: unknown): BoundRequest {
-  return request(input, repository);
-}
-
-function summarizeSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
-  return {
-    units: snapshot.units,
-    entities: snapshot.entities,
-    relationships: snapshot.relationships,
-  };
-}
-
-function summarizeDelta(delta: ModelDelta): {
-  entities: { added: EntityId[]; removed: EntityId[]; modified: EntityId[] };
-  relationships: { added: EntityId[]; removed: EntityId[]; modified: EntityId[] };
-} {
-  const map = <T extends Entity | HostingRelationship>(collection: CollectionChanges<T>) => ({
-    added: collection.added.map((item) => item.id),
-    removed: collection.removed.map((item) => item.id),
-    modified: collection.modified.map((item) => item.id),
-  });
-  return { entities: map(delta.entities), relationships: map(delta.relationships) };
-}
-
-function hasChanges(delta: ModelDelta): boolean {
-  return delta.entities.added.length > 0 || delta.entities.removed.length > 0 || delta.entities.modified.length > 0
-    || delta.relationships.added.length > 0 || delta.relationships.removed.length > 0 || delta.relationships.modified.length > 0;
-}
-
-const rectangleParameters = {
-  type: 'object',
-  properties: {
-    boundsMm: {
-      type: 'object',
-      properties: {
-        minX: { type: 'integer', minimum: -1000000, maximum: 1000000 },
-        minY: { type: 'integer', minimum: -1000000, maximum: 1000000 },
-        maxX: { type: 'integer', minimum: -1000000, maximum: 1000000 },
-        maxY: { type: 'integer', minimum: -1000000, maximum: 1000000 },
-      },
-      required: ['minX', 'minY', 'maxX', 'maxY'],
-      additionalProperties: false,
-    },
-    door: {
-      type: 'object',
-      properties: {
-        widthMm: { type: 'integer', minimum: 1, maximum: 100000 },
-        offsetMm: { type: 'integer', minimum: 0, maximum: 1000000 },
-      },
-      required: ['widthMm', 'offsetMm'],
-      additionalProperties: false,
-    },
-  },
-  required: ['boundsMm', 'door'],
-  additionalProperties: false,
-};
-
-const reviewParameters = {
-  type: 'object',
-  properties: {
-    summary: { type: 'string', minLength: 1, maxLength: 240 },
-    rationale: { type: 'string', minLength: 1, maxLength: 800 },
-    constraints: { type: 'string', minLength: 1, maxLength: 600 },
-    uncertainty: { type: 'string', minLength: 1, maxLength: 400 },
-  },
-  required: ['summary', 'rationale', 'constraints', 'uncertainty'],
-  additionalProperties: false,
-};
-
-const furnishingListParameters = { type: 'array', maxItems: 32, items: {
-        type: 'object', properties: {
-          id: { type: 'string', pattern: IDENTIFIER.source }, type: { type: 'string', enum: ['Furniture'] },
-          name: { type: 'string', minLength: 1, maxLength: 80 }, kind: { type: 'string', enum: FURNITURE_KINDS },
-          position: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
-          width: { type: 'number', minimum: 0.05, maximum: 5 }, depth: { type: 'number', minimum: 0.05, maximum: 5 },
-          height: { type: 'number', minimum: 0.02, maximum: 3 }, rotationDeg: { type: 'integer', enum: [0, 90, 180, 270] },
-          supportId: { type: ['string', 'null'] },
-        }, required: ['id', 'type', 'name', 'kind', 'position', 'width', 'depth', 'height', 'rotationDeg', 'supportId'], additionalProperties: false,
-      } };
-
-export const MODEL_PROPOSAL_TOOLS = Object.freeze([
-  Object.freeze({
-    type: 'function', name: 'inspect_model',
-    description: 'Inspect the exact model revision and selected stable objects bound to this request.',
-    parameters: Object.freeze({ type: 'object', properties: Object.freeze({}), required: Object.freeze([]), additionalProperties: false }),
-    strict: true,
-  }),
-  Object.freeze({
-    type: 'function', name: 'preview_rectangle',
-    description: 'Prepare and deterministically validate a complete rectangular room layout in millimetres. This changes only the proposal preview.',
-    parameters: rectangleParameters,
-    strict: true,
-  }),
-  Object.freeze({
-    type: 'function', name: 'preview_furnishings',
-    description: 'Replace the COMPLETE furnishing set in the current preview, preserving walls, openings and equipment. Include existing furnishings you wish to retain. Positions/dimensions are metres on a 1 mm grid; position is the footprint centre. Rotation 0 faces north (+Y), 90 faces west. Monitor/laptop supportId must reference a desk/table in this set; their elevation is the support height. Floor items use null. Checks room containment, overlaps and doorway clearance. Inspect first.',
-    parameters: { type: 'object', properties: { furnishings: furnishingListParameters }, required: ['furnishings'], additionalProperties: false },
-    strict: true,
-  }),
-  Object.freeze({
-    type: 'function', name: 'preview_room_furnishings',
-    description: 'Replace the COMPLETE furnishing set in ONE named room only. Furniture in all other rooms is retained exactly. Use the same furnishing fields as preview_furnishings. Include existing room furnishings you wish to retain. Use preview_furnishings only for explicitly requested cross-room changes.',
-    parameters: {
-      type: 'object', properties: {
-        roomId: { type: 'string', pattern: IDENTIFIER.source },
-        furnishings: furnishingListParameters,
-      }, required: ['roomId', 'furnishings'], additionalProperties: false,
-    }, strict: true,
-  }),
-  Object.freeze({
-    type: 'function', name: 'submit_proposal',
-    description: 'Submit the latest validated preview as a separate proposal with a concise human review. Call only after a preview tool succeeds.',
-    parameters: reviewParameters,
-    strict: true,
-  }),
-  Object.freeze({
-    type: 'function', name: 'decline_request',
-    description: 'Decline when the bounded room tools cannot safely satisfy the request. Explain the exact limitation and uncertainty.',
-    parameters: Object.freeze({
-      type: 'object',
-      properties: Object.freeze({
-        reason: Object.freeze({ type: 'string', minLength: 1, maxLength: 800 }),
-        uncertainty: Object.freeze({ type: 'string', minLength: 1, maxLength: 400 }),
-      }),
-      required: Object.freeze(['reason', 'uncertainty']),
-      additionalProperties: false,
-    }),
-    strict: true,
-  }),
-]);
-
-export async function prepareModelProposal(repository: RoomRepository, input: unknown, worker: unknown, onActivity: (event: ActivityUpdate) => void = () => {}): Promise<ModelProposalResult> {
-  if (!repository || typeof repository.view !== 'function' || typeof repository.proposeReviewedModel !== 'function') fail('A validated room repository is required.');
+export async function prepareModelProposal(repository: RoomRepository, input: unknown, worker: unknown,
+  onActivity: (event: ActivityUpdate) => void = () => {}, options: ModelProposalOptions = {}): Promise<ModelProposalResult> {
   if (!isModelWorker(worker)) fail('A model worker with an auditable identity is required.');
   fields(worker.identity, ['provider', 'model']);
-  const workerIdentity = Object.freeze({
-    provider: text(worker.identity.provider, 'Worker provider', 80),
-    model: text(worker.identity.model, 'Worker model', 100),
-  });
+  const identity = { provider: text(worker.identity.provider, 'Worker provider', 80), model: text(worker.identity.model, 'Worker model', 100) };
   const bound = request(input, repository);
-  let candidate: ModelSnapshot | null = null;
-  let delta: ModelDelta | null = null;
-  let result: ModelProposalResult | null = null;
-  const pending: { value: { snapshot: ModelSnapshot; delta: ModelDelta; summary: string; rationale: string; constraints: string; uncertainty: string } | null } = { value: null };
-  let calls = 0;
-  const toolCalls: ToolEvidence[] = [];
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort(options.signal?.reason);
+  if (options.signal?.aborted) forwardAbort();
+  options.signal?.addEventListener('abort', forwardAbort, { once: true });
+  const signal = controller.signal;
+  const scripts = options.scripts ?? new ModelScripts();
+  const terminal: { value: Extract<ModelScriptResult, { kind: 'proposal' | 'declined' }> | null } = { value: null };
+  const toolCalls: ToolCallEvidence[] = [];
+  const executions: ScriptExecutionEvidence[] = [];
+  const activeTools = new Set<Promise<Record<string, unknown>>>();
   const providerEvents: ProviderEvent[] = [];
-
+  let calls = 0; let hostCalls = 0; let running = false; let finished = false; let fatal = false;
   const recordProviderEvent = (event: unknown): void => {
     fields(event, ['responseId', 'inputTokens', 'outputTokens', 'totalTokens']);
+    if (providerEvents.length >= 12) fail('Too many model response identities.');
     const responseId = text(event.responseId, 'Model response identity', 128);
     if (!REQUEST_ID.test(responseId)) fail('Model response identity contains unsupported characters.');
-    for (const [name, value] of [['input token count', event.inputTokens], ['output token count', event.outputTokens], ['total token count', event.totalTokens]]) {
-      if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 1000000000) fail(`Invalid ${name}.`);
-    }
-    if (typeof event.inputTokens !== 'number' || typeof event.outputTokens !== 'number' || typeof event.totalTokens !== 'number') fail('Invalid total token count.');
-    if (event.totalTokens < event.inputTokens + event.outputTokens) fail('Invalid total token count.');
-    providerEvents.push(Object.freeze({ responseId, inputTokens: event.inputTokens, outputTokens: event.outputTokens, totalTokens: event.totalTokens }));
+    for (const value of [event.inputTokens, event.outputTokens, event.totalTokens]) if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 1000000000) fail('Invalid model token count.');
+    if (typeof event.inputTokens !== 'number' || typeof event.outputTokens !== 'number' || typeof event.totalTokens !== 'number'
+      || event.totalTokens < event.inputTokens + event.outputTokens) fail('Invalid total token count.');
+    providerEvents.push({ responseId, inputTokens: event.inputTokens, outputTokens: event.outputTokens, totalTokens: event.totalTokens });
   };
-
-  const workerEvidence = () => Object.freeze({
-    ...workerIdentity,
-    responseIds: Object.freeze(providerEvents.map((event) => event.responseId)),
-    usage: Object.freeze(providerEvents.reduce((usage, event) => ({
-      inputTokens: usage.inputTokens + event.inputTokens,
-      outputTokens: usage.outputTokens + event.outputTokens,
-      totalTokens: usage.totalTokens + event.totalTokens,
-    }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 })),
-  });
-
-  const evidenceName = (name: string): EvidenceToolName => name === 'inspect_model' || name === 'preview_rectangle' || name === 'preview_furnishings' || name === 'preview_room_furnishings'
-    || name === 'submit_proposal' || name === 'decline_request' ? name : 'unsupported_tool';
-  const recordTool = (name: string, status: ToolStatus, error: string | null = null): void => {
-    toolCalls.push(Object.freeze({ name: evidenceName(name), status, error }));
-    if (name === 'preview_rectangle' || name === 'preview_furnishings' || name === 'preview_room_furnishings') {
-      const changes = delta ? summarizeDelta(delta) : null;
-      onActivity({ stage: status === 'accepted' ? 'validated' : 'validation-failed', message: status === 'accepted' && changes
-        ? `Validation passed: ${changes.entities.added.length} added, ${changes.entities.modified.length} changed, ${changes.entities.removed.length} removed objects. Proposal only.`
-        : 'The proposed input did not pass validation. The agent can try another approach; the accepted model is unchanged.' });
-    } else if (name === 'inspect_model' && status === 'accepted') onActivity({ stage: 'inspecting', message: 'Bound model and selected objects inspected.' });
-    else if (status === 'rejected') onActivity({ stage: 'validation-failed', message: 'A tool call was rejected. The accepted model is unchanged.' });
-  };
-
-  const executeTool = async (name: string, argumentsValue: unknown): Promise<Record<string, unknown>> => {
+  const dispatchTool = async (name: string, argumentsValue: unknown): Promise<Record<string, unknown>> => {
+    signal.throwIfAborted();
     calls += 1;
-    if (calls > MAX_TOOL_CALLS) fail('The model worker exceeded the bounded tool-call budget.');
-    if (result || pending.value) return { ok: false, error: 'This proposal session has already finished.' };
-    if (name === 'inspect_model') onActivity({ stage: 'inspecting', message: 'Inspecting the bound revision, selection and object relationships.' });
-    if (name === 'preview_rectangle' || name === 'preview_furnishings' || name === 'preview_room_furnishings') onActivity({ stage: 'validating', message: name !== 'preview_rectangle' ? 'Testing furnishing placement, supports, overlaps and doorway clearance.' : 'Testing the room layout and opening constraints.' });
-    if (name === 'submit_proposal') onActivity({ stage: 'submitting', message: 'Preparing the validated model delta and review explanation.' });
-    if (name === 'decline_request') onActivity({ stage: 'declined', message: 'The agent is requesting clarification instead of changing the model.' });
-    try {
-      if (name === 'inspect_model') {
-        fields(argumentsValue, []);
-        const output = { ok: true, revisionId: bound.base.id, selectedObjectIds: bound.selectedObjectIds, model: summarizeSnapshot(candidate ?? bound.base.snapshot),
-          placement: { layout: spaces(candidate ?? bound.base.snapshot).length ? null : rectangleLayout(candidate ?? bound.base.snapshot),
-            floorBounds: floorBounds(candidate ?? bound.base.snapshot),
-            rooms: spaces(candidate ?? bound.base.snapshot).map((room) => ({ ...room, clearBounds: clearSpaceBounds(candidate ?? bound.base.snapshot, room) })),
-            doorConnections: spaces(candidate ?? bound.base.snapshot).length ? doorConnections(candidate ?? bound.base.snapshot) : [], coordinates: 'Metres. X east, Y north. Furniture centred on position; keep clear of wall thickness and all connecting doors.',
-            suggestedDimensions: { desk: [1.8, 0.8, 0.75], monitor: [0.6, 0.2, 0.45], laptop: [0.35, 0.25, 0.24], chair: [0.6, 0.6, 1], table: [0.6, 0.6, 0.55], plant: [0.5, 0.5, 1.1] } } };
-        recordTool(name, 'accepted');
-        return output;
-      }
-      if (name === 'preview_rectangle') {
-        if (bound.visualIntent.kind === 'spatial-reference') fail('A spatial reference does not authorize changing the building shell. Use furnishing tools or request clarification.');
-        candidate = previewRectangle(candidate ?? bound.base.snapshot, argumentsValue);
-        delta = diffSnapshots(bound.base.snapshot, candidate);
-        const output = { ok: true, layout: rectangleLayout(candidate), changes: summarizeDelta(delta) };
-        recordTool(name, 'accepted');
-        return output;
-      }
-      if (name === 'preview_furnishings' || name === 'preview_room_furnishings') {
-        const current = candidate ?? bound.base.snapshot;
-        candidate = name === 'preview_room_furnishings' ? previewRoomFurnishings(current, argumentsValue) : previewFurnishings(current, argumentsValue);
-        delta = diffSnapshots(bound.base.snapshot, candidate);
-        recordTool(name, 'accepted');
-        return { ok: true, model: summarizeSnapshot(candidate), changes: summarizeDelta(delta) };
-      }
-      if (name === 'submit_proposal') {
-        fields(argumentsValue, ['summary', 'rationale', 'constraints', 'uncertainty']);
-        if (!candidate || !delta) fail('Prepare a validated preview before submitting a proposal.');
-        if (!hasChanges(delta)) fail('The proposed model is identical to the bound revision.');
-        const summary = text(argumentsValue.summary, 'Summary', 240);
-        const rationale = text(argumentsValue.rationale, 'Rationale', 800);
-        const constraints = text(argumentsValue.constraints, 'Constraints', 600);
-        const uncertainty = text(argumentsValue.uncertainty, 'Uncertainty', 400);
-        recordTool(name, 'accepted');
-        pending.value = { snapshot: candidate, delta, summary, rationale, constraints, uncertainty };
-        return { ok: true, done: true };
-      }
-      if (name === 'decline_request') {
-        fields(argumentsValue, ['reason', 'uncertainty']);
-        const declined: DeclinedResult = Object.freeze({
-          status: 'declined', repository,
-          review: Object.freeze({
-            requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
-            proposalRevisionId: null, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
-            summary: 'No model proposal was prepared.', rationale: text(argumentsValue.reason, 'Reason', 800),
-            constraints: 'The bounded model tools could not safely represent this request.',
-            uncertainty: text(argumentsValue.uncertainty, 'Uncertainty', 400), changes: null,
-          }),
-        });
-        result = declined;
-        recordTool(name, 'accepted');
-        return { ok: true, done: true };
-      }
-      recordTool(name, 'rejected', 'Unsupported model tool.');
-      return { ok: false, error: 'Unsupported model tool.' };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'The model tool failed.';
-      recordTool(name, 'rejected', message.slice(0, 240));
-      return { ok: false, error: message };
+    if (calls > MAX_TOOL_CALLS) { fatal = true; fail('The model worker exceeded the bounded tool-call budget.'); }
+    if (finished || terminal.value || fatal) return { ok: false, error: 'This proposal attempt has finished or lost execution authority.' };
+    if (running) { fatal = true; return { ok: false, error: 'Concurrent model script calls are not allowed.' }; }
+    if (name !== 'run_model_script') {
+      toolCalls.push({ name: 'unsupported_tool', status: 'rejected', error: 'Unsupported model tool.' });
+      return { ok: false, error: 'Unsupported model tool. Use run_model_script.' };
     }
+    if (executions.length >= MAX_SCRIPT_EXECUTIONS || hostCalls >= MAX_SCRIPT_HOST_CALLS) { fatal = true; fail('The model worker exceeded the aggregate script budget.'); }
+    running = true;
+    try {
+      fields(argumentsValue, ['language', 'source']);
+      if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
+      if (typeof argumentsValue.source !== 'string' || !argumentsValue.source.trim()) fail('A script source body is required.');
+      const result = await scripts.run({ base: bound.base.snapshot, binding: bound, language: argumentsValue.language, source: argumentsValue.source,
+        remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity });
+      options.onExecution?.(result.evidence);
+      parseScriptExecutions([...executions, result.evidence]);
+      executions.push(result.evidence); hostCalls += result.evidence.calls.length;
+      signal.throwIfAborted();
+      if (result.kind === 'failed') {
+        fatal ||= ['cancelled', 'timed-out', 'resource-limit'].includes(result.evidence.status)
+          || ['execution-integrity', 'internal', 'audit-failure', 'protocol-mismatch', 'host-failure', 'denied'].includes(result.diagnostic.code);
+        toolCalls.push({ name: 'run_model_script', status: 'rejected', error: result.diagnostic.message });
+        onActivity({ stage: 'validation-failed', message: 'Script did not produce a valid proposal. Staged changes were discarded.' });
+        return { ok: false, error: result.diagnostic.message, diagnostic: result.diagnostic, execution: result.evidence };
+      }
+      toolCalls.push({ name: 'run_model_script', status: 'accepted', error: null });
+      if (result.kind === 'observation') return { ok: true, done: false, observation: result.observation, execution: result.evidence };
+      terminal.value = result;
+      onActivity({ stage: result.kind === 'proposal' ? 'submitting' : 'declined', message: result.kind === 'proposal'
+        ? 'Preparing the host-validated scripted model delta and human review.' : 'The agent is requesting clarification. No model changes will be retained.' });
+      return { ok: true, done: true, status: result.kind === 'proposal' ? 'ready' : 'declined',
+        ...(result.kind === 'proposal' ? { changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } : {}), execution: result.evidence };
+    } catch (error) {
+      fatal = true;
+      const message = (error instanceof Error ? error.message : 'Model script execution failed.').replace(/[\u0000-\u001f]/g, ' ').slice(0, 240);
+      toolCalls.push({ name: 'run_model_script', status: 'rejected', error: message || 'Model script execution failed.' });
+      return { ok: false, error: message };
+    } finally { running = false; }
   };
-
+  const executeTool = (name: string, argumentsValue: unknown): Promise<Record<string, unknown>> => {
+    const pending = dispatchTool(name, argumentsValue);
+    activeTools.add(pending);
+    void pending.then(() => activeTools.delete(pending), () => activeTools.delete(pending));
+    return pending;
+  };
   try {
-    await worker.run({
-      instructions: 'You prepare BIM model proposals for human review. Work only on the bound revision. Inspect first. Selection and spatial references are CONTEXT, not a move command, group, or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. A request for another desk creates ONLY that desk unless companions are requested; retain existing objects and identities. A freestanding floor point does not imply wall attachment. For moving a setup, reason about supported devices and nearby furniture, but proximity is not an explicit relationship or permission. Never leave devices without valid support; if desk-only movement leaves their intended destination unclear, decline with a specific clarification question. A selected Space is room context and a selected Level is whole-floor context, never permission to change all its contents. For one-room work use preview_room_furnishings and preserve unrelated rooms. Cross-room transfers require explicit intent and the whole-floor preview_furnishings tool. Multi-room shell editing is not supported yet; decline and explain instead of resizing the entire floor. Use preview_rectangle for explicitly requested single-room shell changes; a spatial reference cannot authorize shell edits. Use preview_furnishings for furniture. It replaces the COMPLETE furnishing set, so preserve every unrelated item exactly. Explain the interpreted operation, changed/added objects, preserved objects, dependencies and any adjustment from the destination in the review. If intent or dependencies are ambiguous, decline and ask a specific question. Leave circulation clear. Finish with submit_proposal or decline_request. Visual references are intent, not authoritative geometry. Never claim construction, code, accessibility, or coordination approval.',
-      input: {
-        request: {
-          requestId: bound.requestId,
-          proposalName: bound.proposalName,
-          baseRevisionId: bound.base.id,
-          selectedObjectIds: bound.selectedObjectIds,
-          instruction: bound.instruction,
-          visualIntent: bound.visualIntent,
-        },
-        selectedObjects: bound.selectedObjects,
-      },
-      tools: MODEL_PROPOSAL_TOOLS,
-      executeTool,
-      recordProviderEvent,
+    const declarations = await scripts.declarations();
+    signal.throwIfAborted();
+    await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
+      input: { request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
+        selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent }, selectedObjects: bound.selectedObjects },
+      tools: MODEL_PROPOSAL_TOOLS, signal, executeTool, recordProviderEvent });
+    signal.throwIfAborted();
+    finished = true;
+    if (fatal || running) fail('The model proposal attempt lost execution authority. No proposal was saved.');
+    const result = terminal.value;
+    if (!result) fail('The model worker ended without proposing or declining the request.');
+    if (result.kind === 'declined') return { status: 'declined', repository, review: {
+      requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id, proposalRevisionId: null,
+      selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, summary: 'No model proposal was prepared.',
+      rationale: result.reason, constraints: 'The bounded model API could not safely represent this request.', uncertainty: result.uncertainty, changes: null,
+    } };
+    const next = await repository.proposeReviewedModel({ name: bound.proposalName, from: bound.base.id, snapshot: result.snapshot,
+      review: { requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
+        ...result.review, worker: { ...identity, responseIds: providerEvents.map((event) => event.responseId),
+          usage: providerEvents.reduce((sum, event) => ({ inputTokens: sum.inputTokens + event.inputTokens, outputTokens: sum.outputTokens + event.outputTokens,
+            totalTokens: sum.totalTokens + event.totalTokens }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 }) },
+        toolCalls, scriptExecutions: executions, validator: 'room-graph-v1' },
     });
-  } catch (error) {
-    throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error });
+    signal.throwIfAborted();
+    return { status: 'ready', repository: next, review: { ...next.review(bound.proposalName), changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } };
+  } catch (error) { throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error }); }
+  finally {
+    finished = true; controller.abort();
+    await Promise.allSettled([...activeTools]);
+    options.signal?.removeEventListener('abort', forwardAbort);
+    if (!options.scripts) await scripts.dispose();
   }
-  if (pending.value) {
-    const { snapshot, delta: submittedDelta, summary, rationale, constraints, uncertainty } = pending.value;
-    const next = await repository.proposeReviewedModel({
-      name: bound.proposalName, from: bound.base.id, snapshot,
-      review: {
-        requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
-        summary, rationale, constraints, uncertainty, worker: workerEvidence(), toolCalls, validator: 'room-graph-v1',
-      },
-    });
-    return Object.freeze({ status: 'ready', repository: next,
-      review: Object.freeze({ ...next.review(bound.proposalName), changes: summarizeDelta(submittedDelta) }) });
-  }
-  const finalResult = result;
-  if (!finalResult) throw new ModelWorkerError('The model worker ended without submitting or declining the request.');
-  return finalResult;
 }

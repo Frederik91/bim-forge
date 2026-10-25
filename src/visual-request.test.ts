@@ -42,12 +42,17 @@ test('another desk adds only a desk while the original devices and chair remain 
     visualIntent: { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [1500, 1500] } },
   }, { identity: { provider: 'test', model: 'generic-worker' }, async run(session: ModelWorkerSession) {
     assert.ok(!session.tools.map((tool): string => tool.name).includes('preview_workstation_move'));
-    assert.equal((await session.executeTool('inspect_model', {})).ok, true);
-    assert.equal((await session.executeTool('preview_rectangle', rectangleLayout(before))).ok, false, 'a location alone cannot authorize shell changes');
+    assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: "return {kind:'observe',observation:await model.inspect()};" })).ok, true);
+    assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
+      await model.previewRectangle(${JSON.stringify(rectangleLayout(before))});
+      return {kind:'observe',observation:null};
+    ` })).ok, false, 'a location alone cannot authorize shell changes');
     const next = { ...newDesk, id: 'new-desk' };
-    assert.equal((await session.executeTool('preview_furnishings', { furnishings: [...furnishings, next] })).ok, true);
-    await session.executeTool('submit_proposal', { summary: 'Create one freestanding desk.', rationale: 'Selection is a reference, not a move command.',
-      constraints: 'All original objects retained exactly.', uncertainty: 'Concept-only placement.' });
+    assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
+      await model.previewFurnishings(${JSON.stringify({ furnishings: [...furnishings, next] })});
+      return {kind:'propose',review:{summary:'Create one freestanding desk.',rationale:'Selection is a reference, not a move command.',
+        constraints:'All original objects retained exactly.',uncertainty:'Concept-only placement.'}};
+    ` })).ok, true);
   } });
   assert.equal(result.status, 'ready'); assert.equal(result.repository.head('main'), repo.head('main'));
   const after = result.repository.view(result.repository.head('another-desk')).snapshot;
@@ -65,10 +70,12 @@ test('freestanding setup relocation resolves explicit supports without requiring
     selectedObjectIds: ['desk'], instruction: 'Move this desk setup, including the devices and chair, to the floor reference. Keep it freestanding.',
     visualIntent: { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [3000, 2600] } },
   }, { identity: { provider: 'test', model: 'generic-worker' }, async run(session: ModelWorkerSession) {
-    await session.executeTool('inspect_model', {});
-    assert.equal((await session.executeTool('preview_furnishings', { furnishings: moved })).ok, true);
-    await session.executeTool('submit_proposal', { summary: 'Relocate desk, screen, laptop and chair.', rationale: 'Explicitly requested setup companions; no assembly is required.',
-      constraints: 'Shell, corner table, plant and supports preserved.', uncertainty: 'Circulation requires design review.' });
+    assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
+      await model.inspect();
+      await model.previewFurnishings(${JSON.stringify({ furnishings: moved })});
+      return {kind:'propose',review:{summary:'Relocate desk, screen, laptop and chair.',rationale:'Explicitly requested setup companions; no assembly is required.',
+        constraints:'Shell, corner table, plant and supports preserved.',uncertainty:'Circulation requires design review.'}};
+    ` })).ok, true);
   } });
   const after = result.repository.view(result.repository.head('freestanding-setup')).snapshot;
   assert.deepEqual(diffSnapshots(before, after).entities.modified.map((item) => item.id), ['chair', 'desk', 'laptop', 'monitor']);

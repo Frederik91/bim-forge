@@ -70,12 +70,18 @@ test('room-scoped AI proposal preserves every other room and remains separate un
     selectedObjectIds: ['room-office'], instruction: 'Move the office plant slightly south. Leave the rest of the house unchanged.',
     visualIntent: { kind: 'selection' },
   }, { identity: { provider: 'test', model: 'floor-worker' }, async run(session: ModelWorkerSession) {
-    const inspection = await session.executeTool('inspect_model', {});
+    const inspection = await session.executeTool('run_model_script', { language: 'typescript', source: "return {kind:'observe',observation:await model.inspect()};" });
     assert.equal(inspection.ok, true);
-    const error = await session.executeTool('preview_room_furnishings', { roomId: 'room-office', furnishings: [{ ...changed[0], position: [1, 3] }] });
-    assert.equal(error.ok, false, 'room tool cannot place items into another room');
-    assert.equal((await session.executeTool('preview_room_furnishings', { roomId: 'room-office', furnishings: changed })).ok, true);
-    assert.equal((await session.executeTool('submit_proposal', { summary: 'Office plant moved south.', rationale: 'Only the requested plant changes.', constraints: 'Other rooms and shared walls preserved.', uncertainty: 'Concept clearance only.' })).ok, true);
+    const error = await session.executeTool('run_model_script', { language: 'typescript', source: `
+      await model.previewRoomFurnishings(${JSON.stringify({ roomId: 'room-office', furnishings: [{ ...changed[0], position: [1, 3] }] })});
+      return {kind:'observe',observation:null};
+    ` });
+    assert.equal(error.ok, false, 'script cannot place room furnishings into another room');
+    assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
+      await model.previewRoomFurnishings(${JSON.stringify({ roomId: 'room-office', furnishings: changed })});
+      return {kind:'propose',review:{summary:'Office plant moved south.',rationale:'Only the requested plant changes.',
+        constraints:'Other rooms and shared walls preserved.',uncertainty:'Concept clearance only.'}};
+    ` })).ok, true);
   } });
   assert.equal(result.status, 'ready');
   assert.equal(result.repository.head('main'), root);

@@ -3,6 +3,7 @@
 !package-lock.json
 !demo/
 !demo/server.ts
+!demo/change-requests.ts
 !src/
 !src/**
 !scripts/
