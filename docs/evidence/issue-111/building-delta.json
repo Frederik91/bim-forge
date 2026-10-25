@@ -1,0 +1,554 @@
+{
+  "entities": {
+    "added": [
+      {
+        "id": "attic",
+        "type": "Level",
+        "name": "Attic",
+        "elevation": 3
+      },
+      {
+        "id": "attic-connecting-door",
+        "type": "Door",
+        "name": "Attic connecting door",
+        "width": 0.9,
+        "height": 2.1
+      },
+      {
+        "id": "attic-east",
+        "type": "Space",
+        "name": "Attic east",
+        "levelId": "attic",
+        "bounds": {
+          "minX": 4,
+          "minY": 0,
+          "maxX": 8,
+          "maxY": 6
+        }
+      },
+      {
+        "id": "attic-west",
+        "type": "Space",
+        "name": "Attic west",
+        "levelId": "attic",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 4,
+          "maxY": 6
+        }
+      },
+      {
+        "id": "basement",
+        "type": "Level",
+        "name": "Basement",
+        "elevation": -3
+      },
+      {
+        "id": "basement-connecting-door",
+        "type": "Door",
+        "name": "Basement connecting door",
+        "width": 0.9,
+        "height": 2.1
+      },
+      {
+        "id": "basement-east",
+        "type": "Space",
+        "name": "Basement east",
+        "levelId": "basement",
+        "bounds": {
+          "minX": 4,
+          "minY": 0,
+          "maxX": 8,
+          "maxY": 6
+        }
+      },
+      {
+        "id": "basement-west",
+        "type": "Space",
+        "name": "Basement west",
+        "levelId": "basement",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 4,
+          "maxY": 6
+        }
+      },
+      {
+        "id": "building-roof-3dsanj588svis2n36bvnj162ygie6p6p2zc4uc0izl06ca2jbo",
+        "type": "Roof",
+        "name": "Attic roof",
+        "levelId": "attic",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 8,
+          "maxY": 6
+        },
+        "thickness": 0.2,
+        "profile": {
+          "kind": "gable",
+          "eaveHeight": 2.7,
+          "ridgeHeight": 4.2,
+          "ridgeAxis": "x"
+        }
+      },
+      {
+        "id": "building-slab-3dsanj588svis2n36bvnj162ygie6p6p2zc4uc0izl06ca2jbo",
+        "type": "Slab",
+        "name": "Attic slab",
+        "levelId": "attic",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 8,
+          "maxY": 6
+        },
+        "thickness": 0.2
+      },
+      {
+        "id": "building-slab-45tgrrnyf0bsb8tw8hwcvvq9x9utk4qnz7ig5e6iup1jkptd4d",
+        "type": "Slab",
+        "name": "Basement slab",
+        "levelId": "basement",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 8,
+          "maxY": 6
+        },
+        "thickness": 0.2
+      },
+      {
+        "id": "building-slab-5h4ok8kgkotoubqqrvg9kvvxpvl5fnma0cuao35ywdlg4z6pb6",
+        "type": "Slab",
+        "name": "Ground floor slab",
+        "levelId": "ground",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 8,
+          "maxY": 6
+        },
+        "thickness": 0.2
+      },
+      {
+        "id": "building-wall-1j6zmkg7zbeajvuw1bez2pv5pbskp66jzptlxaosl8vsdi9f0l",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p8000-p0-p6000",
+        "start": [
+          8,
+          0
+        ],
+        "end": [
+          8,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "basement"
+      },
+      {
+        "id": "building-wall-20en3p4lzjj5a57qlspq6w8ijlq37hk51lu3q75zsftpdadiff",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p4000-p0-p6000",
+        "start": [
+          4,
+          0
+        ],
+        "end": [
+          4,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "ground"
+      },
+      {
+        "id": "building-wall-2c7lz3fuhh2eqx7lfhifnhrvd1uxla6297tw5weo1ttu5khzqz",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p8000-p0-p6000",
+        "start": [
+          8,
+          0
+        ],
+        "end": [
+          8,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "ground"
+      },
+      {
+        "id": "building-wall-2dnjres13fcibxrywgztylfbp4uzozkkqjg9m7aak0vcjfvw8t",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p0-p0-p8000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          8,
+          0
+        ],
+        "thickness": 0.15,
+        "height": 4.2,
+        "levelId": "attic"
+      },
+      {
+        "id": "building-wall-2p8dfzegd7ohg49n461qn5uwc0xa7mvmjjfpohbtr2q0k6sjt4",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p0-p0-p6000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          0,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 4.2,
+        "levelId": "attic"
+      },
+      {
+        "id": "building-wall-2uxxkn5hd1der4h6ofq6f8shn6byd53jumzkzazmvbkovlxc73",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p0-p0-p6000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          0,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "ground"
+      },
+      {
+        "id": "building-wall-2vtv5vugloijespar487b2iaediyd0lezii6pkqqie6yk3uaxc",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p6000-p0-p8000",
+        "start": [
+          0,
+          6
+        ],
+        "end": [
+          8,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 4.2,
+        "levelId": "attic"
+      },
+      {
+        "id": "building-wall-3j457h8l55e59w4vkih4izc4pm6kvd3vqvlc9jazzox77ixwg",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p0-p0-p8000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          8,
+          0
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "basement"
+      },
+      {
+        "id": "building-wall-3jnphgk47sgduytas7106edtlfpuc40u84ijl1j8iqmnaqxyzw",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p4000-p0-p6000",
+        "start": [
+          4,
+          0
+        ],
+        "end": [
+          4,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "basement"
+      },
+      {
+        "id": "building-wall-3s4i4qofpqplusn75shzucox8ws4un0zssezj7xc9ayiv24fne",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p6000-p0-p8000",
+        "start": [
+          0,
+          6
+        ],
+        "end": [
+          8,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "basement"
+      },
+      {
+        "id": "building-wall-45mhq1xoa32ynmkcq5s6wa5m53a4idlx22uzs3k3t9iye0c7f1",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p8000-p0-p6000",
+        "start": [
+          8,
+          0
+        ],
+        "end": [
+          8,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 4.2,
+        "levelId": "attic"
+      },
+      {
+        "id": "building-wall-5wwil5wnylldpm9lafr1678wmubpbdlp0h3xxh0gkkoea6f5qe",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p6000-p0-p8000",
+        "start": [
+          0,
+          6
+        ],
+        "end": [
+          8,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "ground"
+      },
+      {
+        "id": "building-wall-5zruus0chd532ifwzutk889rxwc3ed2jj0ehkk5bg30zaqcb5t",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p4000-p0-p6000",
+        "start": [
+          4,
+          0
+        ],
+        "end": [
+          4,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 4.2,
+        "levelId": "attic"
+      },
+      {
+        "id": "building-wall-62pdqpfqu0vjx0ovua17nnwfgabzgfqwljhuggc7mul2oix5at",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p0-p0-p8000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          8,
+          0
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "ground"
+      },
+      {
+        "id": "building-wall-9mnutunp7r8twbjfy52na37xtv6sxuwealj2qvqdgh5v0cw8s",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p0-p0-p6000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          0,
+          6
+        ],
+        "thickness": 0.15,
+        "height": 2.7,
+        "levelId": "basement"
+      },
+      {
+        "id": "ground",
+        "type": "Level",
+        "name": "Ground floor",
+        "elevation": 0
+      },
+      {
+        "id": "ground-connecting-door",
+        "type": "Door",
+        "name": "Ground floor connecting door",
+        "width": 0.9,
+        "height": 2.1
+      },
+      {
+        "id": "ground-east",
+        "type": "Space",
+        "name": "Ground floor east",
+        "levelId": "ground",
+        "bounds": {
+          "minX": 4,
+          "minY": 0,
+          "maxX": 8,
+          "maxY": 6
+        }
+      },
+      {
+        "id": "ground-west",
+        "type": "Space",
+        "name": "Ground floor west",
+        "levelId": "ground",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 4,
+          "maxY": 6
+        }
+      },
+      {
+        "id": "stair-basement-ground",
+        "type": "Stair",
+        "name": "Basement west to ground west",
+        "fromLevelId": "basement",
+        "toLevelId": "ground",
+        "start": [
+          1.6,
+          1
+        ],
+        "end": [
+          1.6,
+          5
+        ],
+        "width": 0.8,
+        "steps": 15
+      },
+      {
+        "id": "stair-ground-attic",
+        "type": "Stair",
+        "name": "Ground east to attic east",
+        "fromLevelId": "ground",
+        "toLevelId": "attic",
+        "start": [
+          6,
+          1
+        ],
+        "end": [
+          6,
+          5
+        ],
+        "width": 0.8,
+        "steps": 15
+      }
+    ],
+    "removed": [
+      {
+        "id": "wall-east",
+        "type": "Wall",
+        "name": "East wall",
+        "start": [
+          6,
+          0
+        ],
+        "end": [
+          6,
+          4
+        ],
+        "thickness": 0.2,
+        "height": 3
+      },
+      {
+        "id": "wall-north",
+        "type": "Wall",
+        "name": "North wall",
+        "start": [
+          6,
+          4
+        ],
+        "end": [
+          0,
+          4
+        ],
+        "thickness": 0.2,
+        "height": 3
+      },
+      {
+        "id": "wall-south",
+        "type": "Wall",
+        "name": "South wall",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          6,
+          0
+        ],
+        "thickness": 0.2,
+        "height": 3
+      },
+      {
+        "id": "wall-west",
+        "type": "Wall",
+        "name": "West wall",
+        "start": [
+          0,
+          4
+        ],
+        "end": [
+          0,
+          0
+        ],
+        "thickness": 0.2,
+        "height": 3
+      }
+    ],
+    "modified": []
+  },
+  "relationships": {
+    "added": [
+      {
+        "id": "floor-host-1b3fbnekfyh3ld9ews9aw37ucjly6k4zxs0ibyycjyql8bbziv",
+        "type": "hosted-by",
+        "source": "door-entry",
+        "target": "building-wall-62pdqpfqu0vjx0ovua17nnwfgabzgfqwljhuggc7mul2oix5at",
+        "offset": 2.4
+      },
+      {
+        "id": "floor-host-21rkvxw4gll7i0mc1lr4lskqhool7l79i5z2zrvo3soybu2c9t",
+        "type": "hosted-by",
+        "source": "attic-connecting-door",
+        "target": "building-wall-5zruus0chd532ifwzutk889rxwc3ed2jj0ehkk5bg30zaqcb5t",
+        "offset": 2.55
+      },
+      {
+        "id": "floor-host-393jkoi5zt5dys6zfm5ahxeo0lgip69ra4v7mdm2c9j5t8juh7",
+        "type": "hosted-by",
+        "source": "basement-connecting-door",
+        "target": "building-wall-3jnphgk47sgduytas7106edtlfpuc40u84ijl1j8iqmnaqxyzw",
+        "offset": 2.55
+      },
+      {
+        "id": "floor-host-6a3zmykp8ey1fju19ve31a8dtjieiro6lh8it0m1925trk4kaz",
+        "type": "hosted-by",
+        "source": "ground-connecting-door",
+        "target": "building-wall-20en3p4lzjj5a57qlspq6w8ijlq37hk51lu3q75zsftpdadiff",
+        "offset": 2.55
+      }
+    ],
+    "removed": [
+      {
+        "id": "host-entry",
+        "type": "hosted-by",
+        "source": "door-entry",
+        "target": "wall-south",
+        "offset": 2.4
+      }
+    ],
+    "modified": []
+  }
+}

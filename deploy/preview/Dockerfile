@@ -5,12 +5,12 @@ ENV NODE_ENV=production
 ENV CODEX_CA_CERTIFICATE=/etc/ssl/certs/ca-certificates.crt
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates \
+    && apt-get install --yes --no-install-recommends ca-certificates poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
-COPY --chown=65032:33 demo/server.ts ./demo/server.ts
+COPY --chown=65032:33 demo/server.ts demo/change-requests.ts demo/request-source-store.ts ./demo/
 COPY --chown=65032:33 src ./src
 COPY --chown=65032:33 scripts/container-healthcheck.ts ./scripts/
 

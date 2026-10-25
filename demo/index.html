@@ -15,6 +15,7 @@
       <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Room studies</small></span></a>
       <div class="project-identity"><span class="workspace-label"><i class="live-dot" aria-hidden="true"></i> LOCAL STUDY</span><strong id="project-title">No project open</strong></div>
       <div class="header-actions">
+        <button id="open-backlog" class="button quiet" type="button" disabled>Change requests</button>
         <button id="project-overview" class="button quiet" type="button" disabled>Overview</button>
         <button id="auth-menu" class="button connection-button" type="button"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
@@ -29,9 +30,10 @@
       <nav id="journey" class="journey" aria-label="Model change process">
         <button id="nav-request" type="button" aria-pressed="true"><span>1</span><b>Request</b><small>Show the intent</small></button>
         <i aria-hidden="true"></i>
-        <button id="nav-review" type="button" aria-pressed="false" disabled><span>2</span><b>Review</b><small>Understand the proposal</small></button>
+        <button id="nav-backlog" type="button" aria-pressed="false" disabled>Backlog · 0 ready</button>
+        <button id="nav-review" type="button" aria-pressed="false" disabled><span>3</span><b>Review</b><small>Understand the proposal</small></button>
         <i aria-hidden="true"></i>
-        <button id="nav-history" type="button" aria-pressed="false" disabled><span>3</span><b>History</b><small>Trace every outcome</small></button>
+        <button id="nav-history" type="button" aria-pressed="false" disabled><span>4</span><b>History</b><small>Trace every outcome</small></button>
       </nav>
 
       <div class="message-area">
@@ -40,23 +42,33 @@
         <button id="recover-save" type="button" class="text-button" hidden>Download unreadable saved data</button>
       </div>
 
+      <nav id="level-navigation" class="level-navigation" aria-label="Building storeys" hidden>
+        <div><label for="level-focus">Storey</label><select id="level-focus"></select></div>
+        <button id="whole-building" class="button outline" type="button">Whole building · 3D</button>
+        <label class="roof-toggle" for="show-roof"><input id="show-roof" type="checkbox"> Show roof</label><p id="level-context"></p>
+      </nav>
+
       <section id="project-page" class="workflow-page project-overview" aria-labelledby="project-page-heading" hidden>
         <header class="page-heading">
-          <div><p class="eyebrow">HOUSE PILOT · PROJECT OVERVIEW</p><h1 id="project-page-heading">One building, one source of truth.</h1><p>Move from the whole project into the room and keep every view tied to the same saved revision.</p></div>
+          <div><p class="eyebrow" id="overview-project-label">PROJECT OVERVIEW</p><h1 id="project-page-heading">One building, one source of truth.</h1><p>Move from the whole project into each room and keep every view tied to the same saved revision.</p></div>
           <span class="trust-note"><i aria-hidden="true">✓</i> Model views never mutate geometry directly.</span>
         </header>
         <div class="overview-grid">
           <section class="overview-hero" aria-labelledby="overview-model-heading">
             <div class="overview-model-mark" aria-hidden="true"><span></span><span></span><span></span></div>
-            <div><span class="card-kicker">CURRENT BUILDING</span><h2 id="overview-model-heading">Existing house · captured state</h2><p>The first pilot turns measurements, observations, documents and photos into a reviewable model.</p></div>
-            <dl class="overview-stats"><div><dt>Phase</dt><dd>Existing conditions</dd></div><div><dt>Scope</dt><dd>Reference room</dd></div><div><dt>Revision</dt><dd id="overview-revision">—</dd></div></dl>
+            <div><span class="card-kicker">CURRENT MODEL</span><h2 id="overview-model-heading">Project model</h2><p id="overview-description">A reviewable, versioned model.</p></div>
+            <dl class="overview-stats"><div><dt>Phase</dt><dd id="overview-phase">Concept design</dd></div><div><dt>Scope</dt><dd id="overview-scope">Room model</dd></div><div><dt>Revision</dt><dd id="overview-revision">—</dd></div></dl>
           </section>
           <section class="space-card" aria-labelledby="space-card-heading">
             <div class="space-preview" aria-hidden="true"><span></span><i></i><b></b></div>
-            <div class="space-card-copy"><span class="card-kicker">ARCHITECTURE · ROOM</span><h2 id="space-card-heading">Reference room</h2><p>Four walls, hosted openings and coordinated electrical and mechanical equipment.</p><div class="space-meta"><span id="overview-entity-count">8 model objects</span><span>Plan + 3D</span></div></div>
+            <div class="space-card-copy"><span class="card-kicker">ARCHITECTURE · ROOM</span><h2 id="space-card-heading">Room model</h2><p id="space-description">Synchronized model views.</p><div class="space-meta"><span id="overview-entity-count">—</span><span>Plan + 3D</span></div></div>
             <button id="open-room" class="button primary" type="button">Open room model <span aria-hidden="true">→</span></button>
           </section>
         </div>
+        <section id="floor-overview" class="floor-overview" aria-labelledby="floor-heading" hidden>
+          <div class="drawing-card"><header class="card-heading"><div><span id="overview-level-label" class="card-kicker">CONCEPT PLAN</span><h2 id="floor-heading">Find your way around</h2></div><button id="explore-floor" class="button primary" type="button">Explore this storey →</button></header><div id="floor-overview-plan" class="drawing-surface"></div><footer>Shared walls · connected doorways · room areas measured to wall centre lines</footer></div>
+          <div><p class="eyebrow">JUMP TO A ROOM</p><div id="room-directory" class="room-directory"></div><p class="editor-help">Starter dimensions and furnishings are illustrative. This is not a surveyed house or a construction-ready plan.</p></div>
+        </section>
       </section>
 
       <section id="request-page" class="workflow-page" data-request-pane="canvas" aria-labelledby="request-heading">
@@ -71,8 +83,16 @@
           </div>
           <section id="request-canvas-pane" class="drawing-card proposal-card request-pane" data-active="true" aria-labelledby="selected-title">
             <header class="card-heading model-card-heading"><div><span class="card-kicker">SYNCHRONIZED MODEL VIEW</span><h2 id="selected-title">Room awaiting a request</h2><small id="model-revision">Revision —</small></div><div class="view-switch" role="group" aria-label="Model view"><button id="view-plan" type="button" aria-pressed="true">Plan</button><button id="view-3d" type="button" aria-pressed="false">3D</button></div><span id="selected-badge" class="pill teal">Not started</span></header>
+            <div id="room-navigation" class="room-navigation" hidden><div><label for="room-focus">Explore rooms</label><select id="room-focus"><option value="">Whole storey</option></select></div><button id="whole-floor" class="button outline" type="button">Whole storey</button><p id="room-context"></p></div>
             <div id="proposal-drawing" class="drawing-surface" data-model-view="plan"><p class="canvas-empty">Create a project or load the sample to begin.</p></div>
-            <div id="model-3d-controls" class="model-3d-controls" hidden><span>Drag to orbit · Shift-drag to pan · Scroll to zoom</span><button id="reset-3d" class="text-button" type="button">Reset camera</button></div>
+            <div id="model-3d-controls" class="model-3d-controls" hidden><div class="view-switch" role="group" aria-label="Rendering quality"><button id="render-basic" type="button" aria-pressed="false">Basic</button><button id="render-realistic" type="button" aria-pressed="true">Realistic</button></div><div class="viewer-tools"><button id="cutaway" class="button quiet" type="button" aria-pressed="true">Cutaway</button><button id="reset-3d" class="button quiet" type="button">Frame model</button></div><span class="viewer-help">Drag to orbit · Right-drag / Ctrl-drag to pan · Scroll / pinch to zoom<br>Concept geometry and materials · not product-accurate visualization</span></div>
+            <section id="visual-panel" class="visual-panel" aria-labelledby="visual-heading" hidden>
+              <div><p class="eyebrow">SPATIAL CONTEXT</p><h3 id="visual-heading">Point to a location</h3><p id="visual-context"></p></div>
+              <p id="visual-feedback" role="status" aria-live="polite"></p>
+              <div class="visual-actions"><label for="visual-wall">Wall reference (optional)<select id="visual-wall"><option value="">Optional wall reference</option></select></label><button id="clear-visual-reference" type="button" class="button outline">Clear marker</button></div>
+              <div class="dimension-grid"><div><label for="visual-x">Floor X · mm</label><input id="visual-x" type="number" step="1" value="3000"></div><div><label for="visual-y">Floor Y · mm</label><input id="visual-y" type="number" step="1" value="2000"></div></div>
+              <div class="visual-actions"><button id="mark-visual-point" type="button" class="button outline">Mark floor location</button><button id="describe-visual-reference" type="button" class="button primary">Describe the request →</button></div>
+            </section>
             <footer><span>Select an object in either view. Selection follows you between Plan and 3D.</span><b id="view-caption">PLAN · METRES</b><button id="to-request-details" class="button primary mobile-only" type="button">Continue <span aria-hidden="true">→</span></button></footer>
           </section>
 
@@ -80,11 +100,12 @@
             <div class="panel-heading"><div><p class="eyebrow">INTENT DETAILS</p><h2 id="proposal-heading">Describe the outcome</h2></div><div class="panel-links"><button id="back-to-canvas" class="text-button mobile-only" type="button">← Plan</button><button id="discard-preview" class="text-button" type="button" disabled>Reset markup</button></div></div>
             <p id="editor-base" class="editor-help">Load a room to begin.</p>
             <div class="editor-fields">
-              <div><label for="selected-object">Object to change</label><select id="selected-object" disabled><option value="door-entry">Entry door</option></select></div>
+              <div><label for="selected-object">Reference object</label><select id="selected-object" disabled><option value="door-entry">Entry door</option></select></div>
               <div id="door-fields" class="dimension-grid"><div><label for="door-width">Door width <span>mm</span></label><input id="door-width" type="number" min="1" max="100000" step="1" inputmode="numeric" aria-describedby="edit-feedback" disabled></div><div><label for="door-offset">Offset from host start <span>mm</span></label><input id="door-offset" type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-describedby="edit-feedback" disabled></div></div>
               <div id="wall-fields" class="dimension-grid" hidden><div><label id="wall-position-label" for="wall-position">Wall position <span>mm</span></label><input id="wall-position" type="number" min="-1000000" max="1000000" step="1" aria-describedby="edit-feedback" disabled></div><div><label for="wall-length">Wall length <span>mm</span></label><input id="wall-length" type="number" min="1" max="1000000" step="1" inputmode="numeric" aria-describedby="edit-feedback" disabled></div></div>
               <p id="selection-help" class="editor-help">Choose an object on the plan. Numeric fields are available if you prefer not to drag.</p>
             </div>
+            <section id="asset-details" class="knowledge-panel asset-details" aria-label="Generated asset family" hidden></section>
             <section id="knowledge-panel" class="knowledge-panel" aria-labelledby="knowledge-heading">
               <header><div><p class="eyebrow">MODEL KNOWLEDGE</p><h3 id="knowledge-heading">What do we know?</h3></div><span id="knowledge-summary" class="pill">No evidence</span></header>
               <p id="knowledge-empty" class="empty-note">Select an object with linked House Pilot evidence.</p>
@@ -94,23 +115,71 @@
             <p id="edit-feedback" class="editor-feedback" role="status" aria-live="polite">The markup communicates intent. It is never committed directly.</p>
             <form id="proposal-form" class="proposal-form">
               <div class="proposal-connection"><div><span class="connection-dot" aria-hidden="true"></span><p><strong id="proposal-auth-copy">Connect ChatGPT to prepare this proposal</strong><small>Uses your eligible ChatGPT plan. No API key is required.</small></p></div><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
-              <div><label for="request-text">What do you want the AI to achieve?</label><textarea id="request-text" maxlength="1000" rows="3" aria-describedby="proposal-help" required disabled>Prepare the shown layout while preserving stable object identities and the hosted door relationship.</textarea></div>
-              <div class="proposal-footer"><div><label for="proposal-name">Proposal name</label><input id="proposal-name" value="room-study" pattern="[a-z]+(-[a-z]+)*" maxlength="64" aria-describedby="proposal-help" required disabled></div><button id="save-proposal" type="submit" class="button primary" disabled>Prepare proposal <span aria-hidden="true">→</span></button></div>
-              <p id="proposal-help" class="editor-help">AI receives the exact revision, selected object, markup and request. It can only return a separately validated proposal.</p>
+              <div><label for="request-text">What do you want the AI to achieve?</label><textarea id="request-text" maxlength="1000" rows="3" aria-describedby="proposal-help" required disabled></textarea></div>
+              <fieldset class="request-sources">
+                <legend>Source files <span>optional</span></legend>
+                <label for="request-source-files">Attach a sketch or document</label>
+                <input id="request-source-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown" aria-describedby="request-source-help request-source-status" disabled>
+                <p id="request-source-help" class="editor-help">PNG, JPEG, WebP, PDF, text or Markdown. Up to 4 files · 6 MiB each · 12 MiB total. Sources stay with the submitted request.</p>
+                <p id="request-source-status" class="editor-help" role="status" aria-live="polite" aria-atomic="true">No sources attached.</p>
+                <p id="request-source-error" class="source-error" role="alert" hidden></p>
+                <ul id="request-source-list" class="source-list" aria-label="Attached request sources"></ul>
+              </fieldset>
+              <div class="reconstruction-scope">
+                <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Allow layout reconstruction</span></label>
+                <label for="reconstruction-scope">Layout scope</label><select id="reconstruction-scope" disabled><option value="floor-plan-reconstruction">One storey · retain the other levels</option><option value="building-reconstruction">Whole building · levels, stairs and roof</option></select>
+                <p id="reconstruction-help" class="editor-help">The original stays preserved. Existing furniture is kept unless separately requested. Choose whole building to add a basement or attic. Check proposed levels, scale, dimensions and roof assumptions before accepting.</p>
+              </div>
+              <div class="proposal-footer"><div><label for="proposal-name">Request name <span>optional</span></label><input id="proposal-name" placeholder="Named automatically from your request" pattern="[a-z]+(-[a-z]+)*" maxlength="64" aria-describedby="proposal-help" disabled></div><button id="save-proposal" type="submit" class="button primary" disabled>Send change request <span aria-hidden="true">→</span></button></div>
+              <p id="proposal-help" class="editor-help">Send this to the project backlog and keep working. Agents process requests on the server, even when you close this page. Every proposal still needs review.</p>
             </form>
           </section>
         </div>
       </section>
 
+      <section id="backlog-page" class="workflow-page" aria-labelledby="backlog-heading" hidden>
+        <header class="page-heading"><div><p class="eyebrow">PROJECT CHANGE REQUESTS</p><h1 id="backlog-heading">Keep the ideas moving.</h1><p>Send requests, continue exploring, and review proposals when they are ready.</p></div><button id="open-current-model" class="button outline" type="button">Open current model</button></header>
+        <div class="backlog-toolbar"><div><strong id="backlog-summary">0 requests</strong><p id="backlog-connection" role="status">Connecting to the server backlog…</p></div></div>
+        <div id="backlog-tabs" class="backlog-tabs" role="tablist" aria-label="Change request status"></div>
+        <section id="backlog-panel" role="tabpanel" tabindex="0" aria-labelledby="backlog-tab-review" aria-describedby="backlog-tab-description">
+          <p id="backlog-tab-description" class="backlog-tab-description"></p>
+          <div id="backlog-list" class="backlog-list"></div>
+        </section>
+      </section>
+
+      <section id="activity-page" class="workflow-page" aria-labelledby="activity-heading" hidden>
+        <header class="page-heading"><div><p class="eyebrow">CHANGE REQUEST ACTIVITY</p><h1 id="activity-heading">Agent activity</h1><p id="activity-instruction"></p></div><button id="activity-back" class="button outline" type="button">Back to backlog</button></header>
+        <section class="activity-card">
+          <header><span id="activity-state" class="pill teal"></span><p id="activity-binding"></p></header>
+          <section id="activity-sources" class="retained-sources" aria-label="Sources bound to this request" hidden></section>
+          <p id="activity-connection" role="status" aria-live="polite">Connecting to request activity…</p>
+          <p class="editor-help">Actual tool actions and validation outcomes. Private reasoning is not shown. Work continues on the server while you explore.</p>
+          <p id="activity-error" class="ticket-warning" hidden></p>
+          <ol id="activity-list" class="activity-list" aria-label="Agent action timeline"></ol>
+          <div class="activity-actions"><button id="activity-open-proposal" class="button primary" type="button" hidden>Open proposal in 3D</button><button id="activity-cancel" class="button outline" type="button" hidden>Cancel request</button><button id="activity-retry" class="button outline" type="button" hidden>Retry attempt</button></div>
+        </section>
+      </section>
+
       <section id="review-page" class="workflow-page" aria-labelledby="review-page-heading" hidden>
         <header class="page-heading"><div><p class="eyebrow">STEP 2 · REVIEW</p><h1 id="review-page-heading">Decide with the model in view.</h1><p>Nothing becomes current until you accept it. Requesting a revision preserves this proposal.</p></div><span class="trust-note"><i aria-hidden="true">✓</i> Original and proposal remain versioned.</span></header>
         <div class="review-layout">
-          <section class="drawing-card review-canvas" aria-labelledby="review-drawing-title"><header class="card-heading"><div><span class="card-kicker">AI-PREPARED MODEL</span><h2 id="review-drawing-title">Proposed room</h2></div><span class="pill teal">Compared with original</span></header><div id="review-drawing" class="drawing-surface"><p class="canvas-empty">A proposal will appear here.</p></div><footer><span>Dashed grey shows the preserved original.</span><b>PLAN · METRES</b></footer></section>
+          <section class="drawing-card review-canvas" aria-labelledby="review-drawing-title"><header class="card-heading"><div><span class="card-kicker">AI-PREPARED MODEL</span><h2 id="review-drawing-title">Proposed model</h2></div><div class="view-switch" role="group" aria-label="Proposal review view"><button id="review-plan" type="button" aria-pressed="true">Plan</button><button id="review-3d" type="button" aria-pressed="false">3D</button></div></header><div class="comparison-toolbar"><button id="review-delta" class="button outline" type="button" aria-pressed="false">Show 3D changes</button><span>Compare with this proposal’s bound base</span></div><div id="review-drawing" class="drawing-surface"><p class="canvas-empty">A proposal will appear here.</p></div><div id="review-model-3d-controls" class="model-3d-controls" hidden><div class="view-switch" role="group" aria-label="Review rendering quality"><button id="review-render-basic" type="button" aria-pressed="false">Basic</button><button id="review-render-realistic" type="button" aria-pressed="true">Realistic</button></div><div class="viewer-tools"><button id="review-cutaway" class="button quiet" type="button" aria-pressed="true">Cutaway</button><button id="review-reset-3d" class="button quiet" type="button">Frame model</button></div><span class="viewer-help">Drag to orbit · Right-drag / Ctrl-drag to pan · Scroll / pinch to zoom<br>Concept geometry and materials · not product-accurate visualization</span></div><div id="review-delta-summary" class="delta-summary" hidden></div><footer><span>Concept model · inspect all changes before accepting.</span><b id="review-view-caption">PLAN · METRES</b></footer></section>
           <section id="review-panel" class="review-panel" aria-labelledby="review-heading" hidden>
             <div class="panel-heading"><div><p class="eyebrow">HUMAN CHANGE REVIEW</p><h2 id="review-heading">AI-prepared proposal</h2></div><span id="review-status" class="pill teal">Ready for review</span></div>
+            <section id="review-intent" class="knowledge-panel" aria-labelledby="review-intent-heading" hidden>
+              <h3 id="review-intent-heading">AI interpretation</h3>
+              <p id="review-interpretation"></p>
+              <p id="review-certainty"></p>
+              <p id="review-intent-basis"></p>
+              <h4>Assumptions for your review</h4>
+              <ul id="review-assumptions"></ul>
+            </section>
             <dl class="review-list"><div><dt>What changed</dt><dd id="review-summary"></dd></div><div><dt>Why this approach</dt><dd id="review-rationale"></dd></div><div><dt>Constraints respected</dt><dd id="review-constraints"></dd></div><div><dt>Uncertainty</dt><dd id="review-uncertainty"></dd></div><div class="review-binding"><dt>Bound evidence</dt><dd id="review-binding"></dd></div></dl>
+            <section id="review-sources" class="retained-sources" aria-label="Sources bound to this proposal" hidden></section>
+            <p id="review-scale-note" class="source-scope-note" hidden>Check the AI’s levels, scale, dimensions, stair placement and roof assumptions against the attached sources. This is a concept model; the proposal still needs your acceptance.</p>
+            <div id="ticket-history" class="ticket-history"></div>
             <button id="view-changes" class="button quiet full" type="button">Inspect detailed model delta</button>
-            <div class="review-actions"><button id="accept-proposal" type="button" class="button primary">Accept this version</button><button id="request-revision" type="button" class="button outline">Request a revision</button></div>
+            <div class="review-actions"><button id="accept-proposal" type="button" class="button primary">Accept this version</button><button id="reject-proposal" type="button" class="button quiet">Reject proposal</button><button id="request-revision" type="button" class="button outline">Request a revision</button></div>
           </section>
         </div>
       </section>
@@ -119,21 +188,21 @@
         <header class="page-heading"><div><p class="eyebrow">STEP 3 · HISTORY</p><h1 id="history-page-heading">Every outcome stays explainable.</h1><p>Open any accepted model, proposal or ancestor. Comparing alternatives never merges them.</p></div></header>
         <div class="history-layout">
           <section class="history-panel" aria-labelledby="history-heading"><div class="panel-heading"><div><p class="eyebrow">VERSIONED OUTCOMES</p><h2 id="history-heading">Accepted model & proposals</h2></div><span id="branch-count" class="subtle">0 branches</span></div><div id="history-list" class="history-list"><p class="empty-note">The original, accepted model and AI proposals will be listed here.</p></div></section>
-          <section class="conflict-panel" aria-labelledby="conflict-heading"><p class="eyebrow">COMPARE ALTERNATIVES</p><h2 id="conflict-heading">Two ideas, one room.</h2><p>Choose two separate proposals to see where a human decision is needed.</p><div class="conflict-selects"><div><label for="conflict-left">First alternative</label><select id="conflict-left" disabled><option value="">Prepare two proposals first</option></select></div><div><label for="conflict-right">Second alternative</label><select id="conflict-right" disabled><option value="">Prepare two proposals first</option></select></div></div><button id="check-conflicts" class="button outline" type="button" disabled>Compare alternatives</button><p id="conflict-result" role="status" aria-live="polite">Comparison only. Nothing is merged or applied.</p></section>
+          <section class="conflict-panel" aria-labelledby="conflict-heading"><p class="eyebrow">COMPARE ALTERNATIVES</p><h2 id="conflict-heading">Two ideas, one model.</h2><p>Choose two separate proposals to see where a human decision is needed.</p><div class="conflict-selects"><div><label for="conflict-left">First alternative</label><select id="conflict-left" disabled><option value="">Prepare two proposals first</option></select></div><div><label for="conflict-right">Second alternative</label><select id="conflict-right" disabled><option value="">Prepare two proposals first</option></select></div></div><button id="check-conflicts" class="button outline" type="button" disabled>Compare alternatives</button><p id="conflict-result" role="status" aria-live="polite">Comparison only. Nothing is merged or applied.</p></section>
         </div>
       </section>
 
-      <footer class="disclaimer"><span class="pill">Concept demo</span><p>Local project storage and explicit ChatGPT plan connection. No IFC support, construction checks, production model access or automatic merge.</p></footer>
+      <footer class="disclaimer"><span class="pill">Concept demo</span><p>Browser model cache, durable server request backlog and explicit ChatGPT plan connection. No IFC support, construction checks, production model access or automatic merge.</p></footer>
       <noscript>This workbench requires JavaScript and IndexedDB local storage.</noscript>
     </main>
 
     <dialog id="start-dialog" class="modal start-modal" aria-labelledby="start-heading">
-      <div class="modal-hero"><span class="brand-mark" aria-hidden="true">▱</span><p class="eyebrow">BIM FORGE · ROOM STUDIES</p><h1 id="start-heading">Start with a room, then ask for a change.</h1><p>Mark up an object and describe the outcome. AI prepares a separate model proposal for you to review.</p></div>
-      <form id="project-form" class="start-form"><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="Ground floor study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create empty study <span aria-hidden="true">→</span></button></form>
+      <div class="modal-hero"><span class="brand-mark" aria-hidden="true">▱</span><p class="eyebrow">BIM FORGE · BUILDING STUDIES</p><h1 id="start-heading">Start your building study.</h1><p>Choose a starting model, mark up an object and describe the outcome. AI prepares a separate proposal for you to review.</p></div>
+      <form id="project-form" class="start-form"><label for="project-template">Starting point</label><select id="project-template"><option value="house">Multi-storey house · basement, ground floor and attic</option><option value="residential">Residential ground floor · 8 rooms</option><option value="room">Single empty room</option></select><p class="editor-help">Start with a connected concept model, then ask the AI to adapt it. The multi-storey house includes stairs, floor slabs and a pitched roof.</p><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="My house study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create project <span aria-hidden="true">→</span></button></form>
       <div class="or"><span>or</span></div>
       <button id="load-sample" class="button outline full" type="button" disabled>Open the House Pilot reference room</button>
       <button id="start-close" class="text-button modal-close" type="button" hidden>Return to current project</button>
-      <p class="modal-footnote"><i class="live-dot" aria-hidden="true"></i> Saved only in this browser. Demo JSON, not IFC.</p>
+      <p class="modal-footnote"><i class="live-dot" aria-hidden="true"></i> Draft models start in this browser. Submitted requests and accepted outcomes are retained on this server. Demo JSON, not IFC.</p>
     </dialog>
 
     <dialog id="auth-dialog" class="modal auth-modal" aria-labelledby="auth-heading">
@@ -167,10 +236,16 @@
 
     <dialog id="original-dialog" class="modal wide-modal" aria-labelledby="original-title"><div class="dialog-heading"><div><p class="eyebrow">PRESERVED REFERENCE</p><h2 id="original-title">Original room</h2></div><button class="icon-button" data-close="original-dialog" type="button" aria-label="Close original room">×</button></div><div id="original-drawing" class="drawing-surface"><p class="canvas-empty">Your original room will appear here.</p></div><p class="dialog-note">This root revision is never overwritten. Dashed comparisons always return to this model.</p></dialog>
 
-    <dialog id="changes-dialog" class="modal wide-modal" aria-labelledby="summary-heading"><div class="dialog-heading"><div><p class="eyebrow">DETERMINISTIC MODEL DELTA</p><h2 id="summary-heading">Detailed changes</h2></div><button class="icon-button" data-close="changes-dialog" type="button" aria-label="Close detailed changes">×</button></div><div class="delta-meta"><span id="change-count" class="subtle">No proposal selected</span><p id="comparison-note">Dimensions are in millimetres unless otherwise noted.</p></div><div class="table-scroll"><table><caption class="sr-only">Original and selected room properties</caption><thead><tr><th scope="col">Property</th><th scope="col">Original</th><th scope="col">Selected revision</th><th scope="col">Difference</th></tr></thead><tbody id="property-rows"><tr><th scope="row">Entrance width</th><td>—</td><td>—</td><td>—</td></tr></tbody></table></div></dialog>
+    <dialog id="changes-dialog" class="modal wide-modal" aria-labelledby="summary-heading"><div class="dialog-heading"><div><p class="eyebrow">DETERMINISTIC MODEL DELTA</p><h2 id="summary-heading">Detailed changes</h2></div><button class="icon-button" data-close="changes-dialog" type="button" aria-label="Close detailed changes">×</button></div><div class="delta-meta"><span id="change-count" class="subtle">No proposal selected</span><p id="comparison-note">Dimensions are in millimetres unless otherwise noted.</p></div><div class="comparison-toolbar" role="group" aria-label="Change detail view"><button id="changes-3d-tab" class="button quiet" type="button" aria-pressed="true">3D delta</button><button id="changes-properties-tab" class="button quiet" type="button" aria-pressed="false">Property details</button></div><div id="changes-3d-pane"><div id="changes-drawing" class="drawing-surface" data-model-view="3d"></div><div class="model-3d-controls"><div class="view-switch" role="group" aria-label="Delta rendering quality"><button id="delta-render-basic" type="button" aria-pressed="false">Basic</button><button id="delta-render-realistic" type="button" aria-pressed="true">Realistic</button></div><div class="viewer-tools"><button id="delta-cutaway" class="button quiet" type="button" aria-pressed="true">Cutaway</button><button id="delta-reset-3d" class="button quiet" type="button">Frame model</button></div><span>Drag to rotate · Right-drag to pan · Scroll to zoom</span></div><div id="changes-delta-summary" class="delta-summary"></div></div><div id="changes-properties-pane" class="table-scroll" hidden><table><caption class="sr-only">Comparison baseline and selected room properties</caption><thead><tr><th scope="col">Property</th><th scope="col" id="comparison-baseline">Original</th><th scope="col">Selected revision</th><th scope="col">Difference</th></tr></thead><tbody id="property-rows"><tr><th scope="row">Entrance width</th><td>—</td><td>—</td><td>—</td></tr></tbody></table></div></dialog>
 
     <dialog id="evidence-dialog" class="modal evidence-modal" aria-labelledby="evidence-title"><div class="dialog-heading"><div><p class="eyebrow">BOUND SOURCE</p><h2 id="evidence-title">Evidence</h2></div><button class="icon-button" data-close="evidence-dialog" type="button" aria-label="Close evidence">×</button></div><div class="evidence-body"><span id="evidence-kind" class="pill teal">Evidence</span><p id="evidence-description"></p><dl id="evidence-metadata" class="evidence-metadata"></dl><a id="evidence-source" class="button outline full" target="_blank" rel="noreferrer" hidden>Open source document</a></div><p class="dialog-note">This metadata is bound to the displayed model revision. Opening it does not change the model.</p></dialog>
 
-    <dialog id="working-dialog" class="modal working-modal" aria-labelledby="working-heading"><div class="working-mark" aria-hidden="true"><span></span><span></span><span></span></div><p class="eyebrow">MODEL-WORKING AI</p><h2 id="working-heading">Preparing a proposal…</h2><p>Inspecting the bound revision, trying the requested layout and running deterministic validation.</p><ol><li>Original remains untouched</li><li>Only bounded room tools are available</li><li>You decide what happens next</li></ol></dialog>
+    <dialog id="discard-request-dialog" class="modal" aria-labelledby="discard-request-heading" aria-describedby="discard-request-message">
+      <form method="dialog">
+        <p class="eyebrow">UNSENT REQUEST</p><h2 id="discard-request-heading">Keep your draft?</h2>
+        <p id="discard-request-message"></p><p class="editor-help">Submitted requests, their source files and the accepted model stay preserved.</p>
+        <div class="auth-actions"><button class="button outline" value="keep" autofocus>Keep editing</button><button class="button primary" value="discard">Discard draft and continue</button></div>
+      </form>
+    </dialog>
   </body>
 </html>
