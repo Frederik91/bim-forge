@@ -16,6 +16,14 @@ import { QualificationSchema, runQualification, validatePriorAdmission } from '.
 const digest = (bytes: string | Buffer): string => createHash('sha256').update(bytes).digest('hex');
 async function document(filename: string): Promise<unknown> { return JSON.parse(await readFile(filename, 'utf8')); }
 
+test('selection row limit admits two million and caps configuration at ten million', () => {
+  const schema = QualificationSchema.properties.maximumSelectionRows;
+  assert.equal(parse(schema, 2000000, 'selection row limit'), 2000000);
+  assert.equal(parse(schema, 10000000, 'selection row limit'), 10000000);
+  assert.throws(() => parse(schema, 10000001, 'selection row limit'), /Invalid selection row limit/);
+  assert.throws(() => parse(schema, 0, 'selection row limit'), /Invalid selection row limit/);
+});
+
 test('source-bound admitted branch gets bounded samples and durable edits, while incomplete admissions fail closed', async (t) => {
   const root = process.env.QVM142_ARTIFACT_ROOT;
   if (!root || !process.env.DATABASE_URL || !process.env.QVM_EXECUTION_LEASE) throw new Error('Server container, own database, lease and artifact root required');

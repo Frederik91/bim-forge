@@ -22,7 +22,7 @@ export const QualificationSchema = Type.Object({
   sourceCommit: Type.String({ pattern: '^[a-f0-9]{40}$' }), manifest: boundFile, admission: boundFile,
   priorAdmissionDir: Type.String({ minLength: 1 }), priorSha256: priorFiles,
   repeats: Type.Integer({ minimum: 1, maximum: 5 }), pageSize: Type.Integer({ minimum: 1, maximum: 100 }),
-  maximumSelectionRows: Type.Integer({ minimum: 1, maximum: 1000000 }),
+  maximumSelectionRows: Type.Integer({ minimum: 1, maximum: 10000000 }),
   statementTimeoutMs: Type.Integer({ minimum: 100, maximum: 60000 }),
   wallTimeMs: Type.Integer({ minimum: 1000, maximum: 900000 }),
 }, { additionalProperties: false });
