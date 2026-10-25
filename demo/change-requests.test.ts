@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
-import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewFurnishings } from '../src/room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { parseRequestActivity } from '../src/request-activity.ts';
@@ -156,6 +156,55 @@ test('acceptance and its ticket decision are atomic, replay-safe and cannot over
   const final = await RoomRepository.restore(second.project);
   assert.equal(final.head('main'), final.head('revised-entry'));
   assert.ok(final.view(current.head('main')), 'accepted predecessor remains in history');
+});
+
+for (const finishesLate of [false, true]) test(`two independent chair proposals remain accept-ready after the first is accepted (${finishesLate ? 'second finishes later' : 'both finished'})`, async (t) => {
+  const shell = await RoomRepository.create();
+  const snapshot = previewFurnishings(shell.view(shell.head('main')).snapshot, { furnishings: [
+    { id: 'chair-one', type: 'Furniture', kind: 'chair', name: 'Chair one', position: [1, 2], width: .6, depth: .6, height: 1, rotationDeg: 0, supportId: null },
+    { id: 'chair-two', type: 'Furniture', kind: 'chair', name: 'Chair two', position: [4, 2], width: .6, depth: .6, height: 1, rotationDeg: 0, supportId: null },
+  ] });
+  const repo = await RoomRepository.createProject({ projectId: shell.projectId, name: 'Concurrent chair review', snapshot });
+  let releaseSecond: (() => void) | undefined;
+  const rotate: ModelWorker = { identity: worker.identity, async run(session) {
+    const input = session.input;
+    assert.ok(input && typeof input === 'object' && 'request' in input && input.request && typeof input.request === 'object' && 'selectedObjectIds' in input.request);
+    const ids = input.request.selectedObjectIds;
+    assert.ok(Array.isArray(ids) && typeof ids[0] === 'string');
+    if (finishesLate && ids[0] === 'chair-two') await pause(session.signal, release => { releaseSecond = release; });
+    const output = await session.executeTool('run_model_script', { language: 'typescript', source: `
+      await model.inspect();
+      await model.previewFurnishings(${JSON.stringify({ furnishings: snapshot.entities.filter(item => item.type === 'Furniture').map(item => item.id === ids[0] ? { ...item, rotationDeg: 180 } : item) })});
+      return { kind: 'propose', review: { intent:{interpretation:'Rotate one chair.',assumptions:[],certainty:95,basis:'The fixture specifies the chair and rotation.'}, summary: 'Rotate one chair.', rationale: 'Rotate the selected chair in place.', constraints: 'Preserve every other object.', uncertainty: 'Concept review only.' } };
+    ` });
+    assert.equal(output.ok, true);
+  } };
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-independent-chairs-'));
+  const file = path.join(directory, 'requests.sqlite');
+  const queue = new ChangeRequests(file, () => rotate);
+  t.after(async () => { await queue.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  for (const [id, chair] of [['first-chair', 'chair-one'], ['second-chair', 'chair-two']] satisfies [string, string][]) {
+    await queue.submit(repo.serialize(), { ...request(repo, id, id), selectedObjectIds: [chair], instruction: 'Rotate the selected chair 180 degrees in place.' });
+  }
+  await waitFor(queue, 'first-chair');
+  await waitFor(queue, 'second-chair', finishesLate ? ['working'] : ['ready']);
+  assert.equal(queue.get('first-chair').state, 'ready');
+  const originalReview = queue.get('second-chair').result;
+  await decide(queue, 'first-chair', { action: 'accept', decisionId: 'accept-first-chair' });
+  if (finishesLate) { assert.ok(releaseSecond); releaseSecond(); await waitFor(queue, 'second-chair'); }
+  assert.equal(queue.get('second-chair').state, 'ready', 'an unrelated accepted chair change must not require a request revision');
+  const staleDatabase = new DatabaseSync(file);
+  const stale = { ...queue.get('second-chair'), state: 'needs-input', error: 'The accepted model changed. Revise this request against the current model before accepting.' };
+  staleDatabase.prepare('UPDATE requests SET state=?, body=? WHERE id=?').run(stale.state, JSON.stringify(stale), stale.id);
+  staleDatabase.close();
+  await queue.refreshProject(repo.projectId);
+  assert.equal(queue.get('second-chair').state, 'ready', 'recover compatible tickets marked stale by older versions without rerunning the agent');
+  const accepted = await decide(queue, 'second-chair', { action: 'accept', decisionId: 'accept-second-chair' });
+  const final = await RoomRepository.restore(accepted.project);
+  assert.deepEqual(final.view(final.head('main')).snapshot.entities.filter(item => item.type === 'Furniture').map(item => item.rotationDeg), [180, 180]);
+  assert.equal(accepted.ticket.state, 'completed');
+  if (!finishesLate) assert.deepEqual(queue.get('second-chair').result, originalReview, 'retain the original immutable reviewed proposal');
+  assert.equal((await decide(queue, 'second-chair', { action: 'accept', decisionId: 'accept-second-chair' })).project, accepted.project);
 });
 
 test('server restart recovers interrupted work without trusting a stale working marker', async (t) => {

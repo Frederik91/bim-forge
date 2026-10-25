@@ -213,6 +213,11 @@ export class ChangeRequests {
       return next;
     }
   }
+  async refreshProject(projectId: string): Promise<void> {
+    for (const ticket of this.#all(identifier(projectId))) {
+      if ((ticket.state === 'ready' || ticket.state === 'needs-input') && ticket.result?.status === 'ready') await this.refreshProposal(ticket.id);
+    }
+  }
   executions(id: string): StoredExecution[] {
     this.get(id);
     return this.#db.prepare('SELECT request_id, attempt, execution_id, body FROM request_executions WHERE ticket_id=? ORDER BY rowid').all(id).map((row) => {

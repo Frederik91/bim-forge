@@ -634,7 +634,8 @@ function updateControls() {
   ui['conflict-right'].disabled = !canCompare;
   ui['check-conflicts'].disabled = !canCompare;
   ui['recover-save'].disabled = busy;
-  const reviewMatches = activeReview?.proposalRevisionId === null || activeReview?.proposalRevisionId === selectedRevision;
+  const reviewMatches = activeReview?.proposalRevisionId === null || activeReview?.proposalRevisionId === selectedRevision
+    || (repo !== null && requireRepository().reviewAt(selectedRevision)?.review.requestId === activeReview?.requestId);
   const ticket = backlogItems.find((item) => item.id === activeTicketId);
   ui['accept-proposal'].disabled = !writable || !activeTicketId || ticket?.state !== 'ready' || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || reviewState(activeReview) !== 'pending';
   ui['reject-proposal'].disabled = !writable || !ticket || !['ready', 'needs-input', 'failed'].includes(ticket.state);
@@ -1366,6 +1367,7 @@ function renderReview() {
     ? intent.assumptions.map(assumption => element('li', assumption)) : [element('li', 'No additional assumptions reported.')] : []));
   const evidence = review.worker ? ` · ${review.worker.provider}/${review.worker.model} · ${review.validator}` : '';
   ui['review-binding'].textContent = `Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}${evidence}`;
+  if (ticket?.state === 'ready' && serverProjectText) ui['review-binding'].textContent += ' · Acceptance checks this reviewed delta against the current server model.';
   updateControls();
 }
 
@@ -1427,7 +1429,7 @@ ui['import-file'].addEventListener('change', () => {
     await recognizeHousePilot(next);
     await persist(next);
     ui['project-name'].value = next.name;
-    activeReview = next.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
+    activeReview = next.reviewAt(selectedRevision)?.review ?? null;
     renderReview();
     closeDialog(ui['start-dialog']);
     showPage('project');
@@ -2038,7 +2040,7 @@ async function selectRevision(branch: string, revisionId: string): Promise<void>
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; revisionTicketId = null;
   selectedBranch = branch;
   selectedRevision = revisionId;
-  activeReview = project.reviews().find((review) => review.proposalRevisionId === revisionId) ?? null;
+  activeReview = project.reviewAt(revisionId)?.review ?? null;
   activeTicketId = backlogItems.find((item) => item.request.requestId === activeReview?.requestId)?.id ?? null;
   resetEditor();
   renderComparison();
@@ -2205,8 +2207,12 @@ function renderComparison(): void {
   const originalId = project.root();
   const original = project.view(originalId).snapshot;
   const selected = preview ?? project.view(selectedRevision).snapshot;
-  const review = project.reviews().find((item) => item.proposalRevisionId === selectedRevision);
-  const comparison = review ? project.view(review.baseRevisionId).snapshot : original;
+  const reviewedRevision = project.reviewAt(selectedRevision);
+  const review = reviewedRevision?.review;
+  const comparison = reviewedRevision ? project.view(reviewedRevision.comparisonBaseRevisionId).snapshot : original;
+  const comparisonLabel = ui['review-page'].querySelector('.comparison-toolbar span');
+  if (comparisonLabel) comparisonLabel.textContent = reviewedRevision && reviewedRevision.comparisonBaseRevisionId !== review?.baseRevisionId
+    ? 'Applied changes compared with the preceding accepted revision' : 'Compare with this proposal’s bound base';
   const isOriginal = selectedRevision === originalId;
   renderRoomNavigation(selected);
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
@@ -2252,7 +2258,8 @@ function renderComparison(): void {
   ui['selected-title'].textContent = spaces(selected).length && currentPage === 'request' ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = spaces(selected).length ? 'Choose a storey for its plan, or explore the whole building in 3D. Select an object and describe a change for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
-  renderProperties(comparison, selected, diffSnapshots(comparison, selected), review ? `Proposal base ${review.baseRevisionId.slice(0, 10)}` : 'Original');
+  renderProperties(comparison, selected, diffSnapshots(comparison, selected), reviewedRevision
+    ? `${reviewedRevision.comparisonBaseRevisionId === review?.baseRevisionId ? 'Proposal base' : 'Accepted predecessor'} ${reviewedRevision.comparisonBaseRevisionId.slice(0, 10)}` : 'Original');
 }
 
 function renderProjectOverview(): void {
@@ -2347,7 +2354,7 @@ function render(): void {
   const project = requireRepository();
   ui['project-title'].textContent = project.name;
   document.title = `${project.name} · Room studies`;
-  if (!activeReview) activeReview = project.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
+  if (!activeReview) activeReview = project.reviewAt(selectedRevision)?.review ?? null;
   renderComparison();
   renderProjectOverview();
   renderHistory();
@@ -2387,7 +2394,7 @@ async function initialize() {
     selectedBranch = 'main';
     selectedRevision = repo.head('main');
     sourcePicker.setProject(restored.projectId);
-    activeReview = repo.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
+    activeReview = repo.reviewAt(selectedRevision)?.review ?? null;
     resetEditor();
     ui['project-name'].value = repo.name;
     render();

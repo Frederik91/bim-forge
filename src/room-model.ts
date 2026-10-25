@@ -1204,6 +1204,12 @@ export class RoomRepository {
       if (main !== roots[0].id && !reviews.some((review) => review.decision.status === 'accepted' && (review.decision.appliedRevisionId ?? review.proposalRevisionId) === main)) {
         fail('The current model must reference an accepted reviewed proposal.');
       }
+      for (const review of reviews) {
+        if (review.decision.status === 'pending' || !review.decision.appliedRevisionId) continue;
+        const onto = revisions.get(review.decision.appliedRevisionId)?.parentId;
+        if (!reviews.some((item) => item.decision.status !== 'pending'
+            && (item.decision.appliedRevisionId ?? item.proposalRevisionId) === onto)) fail('Proposal application must preserve an accepted predecessor.');
+      }
     }
     const restored: RepositoryState = value.version === 1
       ? { version: 1, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()] }
@@ -1244,6 +1250,17 @@ export class RoomRepository {
     const value = this.reviews().find((item) => item.proposalName === proposalName);
     if (!value) fail('Unknown reviewed proposal.');
     return value;
+  }
+
+  reviewAt(revisionId: string): { review: ProposalReview; comparisonBaseRevisionId: RevisionId } | null {
+    const selected = this.view(revisionId);
+    for (const review of this.reviews()) {
+      if (review.proposalRevisionId === selected.id) return freeze({ review, comparisonBaseRevisionId: review.baseRevisionId });
+      if (review.decision.status !== 'pending' && review.decision.appliedRevisionId === selected.id && selected.parentId !== null) {
+        return freeze({ review, comparisonBaseRevisionId: selected.parentId });
+      }
+    }
+    return null;
   }
 
   accept(name: string, input: unknown): RoomRepository {

@@ -250,6 +250,7 @@ export function createDemoServer({
         if (projectRoute) {
           if (request.method !== 'GET') { send(response, 405, { error: 'The backlog requires GET.' }); return; }
           const id = decodeURIComponent(projectRoute[1] ?? '');
+          await backlog.refreshProject(id);
           send(response, 200, { tickets: backlog.list(id), project: backlog.project(id) });
         } else if (ticketRoute) {
           const id = decodeURIComponent(ticketRoute[1] ?? '');
