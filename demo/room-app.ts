@@ -6,6 +6,7 @@ import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
+import { requestContext } from './request-context.ts';
 import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
@@ -1218,7 +1219,9 @@ async function openTicket(id: string): Promise<void> {
   if (ticket.state === 'rejected') activeReview.decision = { status: 'superseded' };
   selectedBranch = result.status === 'ready' ? result.review.proposalName : 'main';
   selectedRevision = proposed.head(selectedBranch);
-  selectedObject = result.review.selectedObjectIds.find((id) => proposed.view(selectedRevision).snapshot.entities.some((item) => item.id === id)) ?? selectedObject;
+  const context = requestContext(proposed.view(selectedRevision).snapshot, result.review.selectedObjectIds);
+  activeLevelId = context.levelId; focusedRoomId = context.roomId;
+  selectedObject = context.selectedId ?? selectedObject;
   resetEditor(); render(); showPage('review');
   ui['ticket-history'].replaceChildren();
   if (Array.isArray(value.ticket.history)) for (const [index, archived] of value.ticket.history.entries()) {
@@ -1257,15 +1260,19 @@ async function reviseTicket(item: BacklogItem): Promise<void> {
   const originalRequest = detail.ticket.request;
   const originalSources = parseSourceContext(originalRequest);
   if (parseBacklogItem(detail.ticket).projectId !== next.projectId) throw new Error('Request project mismatch.');
+  if (!Array.isArray(originalRequest.selectedObjectIds) || !originalRequest.selectedObjectIds.every(id => typeof id === 'string')) throw new Error('Invalid original request selection.');
+  const snapshot = next.view(next.head('main')).snapshot;
+  const visual = parseVisualRequest(snapshot, originalRequest.visualIntent);
+  const context = requestContext(snapshot, originalRequest.selectedObjectIds, visual);
   await persist(next);
   activeReview = null; revisionTicketId = item.id;
   sourcePicker.restore(next.projectId, originalSources.sources ?? []);
   ui['request-reconstruct'].checked = Boolean(originalSources.authoringScope);
   ui['reconstruction-scope'].value = originalSources.authoringScope ?? 'floor-plan-reconstruction';
-  const firstSelected = Array.isArray(originalRequest.selectedObjectIds) ? originalRequest.selectedObjectIds[0] : null;
-  if (typeof firstSelected === 'string' && next.view(next.head('main')).snapshot.entities.some((entity) => entity.id === firstSelected)) selectedObject = firstSelected;
+  activeLevelId = context.levelId; focusedRoomId = context.roomId;
+  selectedObject = context.selectedId ?? selectedObject;
+  if (snapshot.version === 2 && !context.levelId) modelView = '3d';
   resetEditor();
-  const visual = parseVisualRequest(next.view(next.head('main')).snapshot, originalRequest.visualIntent);
   if (visual.kind === 'spatial-reference') visualDraft = visual.destination;
   ui['request-text'].value = item.request.instruction;
   ui['proposal-name'].value = '';
@@ -2065,7 +2072,7 @@ function renderRoomNavigation(snapshot: ModelSnapshot): void {
   ui['show-roof'].checked = roofVisible;
   generic('level-context').textContent = activeLevelId ? `Viewing ${storeys.find(level => level.id === activeLevelId)?.name ?? 'level'}. Requests keep this level as context.`
     : 'Whole building in 3D. Pick a level to isolate its plan and contents.';
-  const objects = view.entities;
+  const objects = view.entities.filter(item => !activeLevelId || item.type !== 'Level' || item.id === activeLevelId);
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
   if (!objects.some(item => item.id === selectedObject)) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
   ui['selected-object'].value = selectedObject;

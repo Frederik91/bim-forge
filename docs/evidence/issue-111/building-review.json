@@ -1,0 +1,311 @@
+{
+  "requestId": "eef4f9ec-b045-4bf8-b91e-0624546e68c9",
+  "proposalName": "model-a-house-with-basement-cpagenmdjeddjkhokjgpbnngolbjimfj",
+  "baseRevisionId": "c050c7bdaebb75d7115659ee44495d8a884f7a68034ebc3f72820020e98c9b78",
+  "proposalRevisionId": "743aa52566583a44ad9c450ef33299ac3ae5189a5de2ecea328f6b34495fc94f",
+  "selectedObjectIds": [
+    "wall-north"
+  ],
+  "instruction": "Model a house with basement at -3 m, ground floor at 0 m and attic at 3 m. Each storey is 8 m east-west by 6 m north-south, split into west and east rooms of 4 by 6 m with a connecting door. Ground has an exterior entrance. Add straight stairs basement-west to ground-west and ground-east to attic-east, each 4 m long, 0.8 m wide, 15 steps, clear of walls and doors. Use 150 mm walls, 200 mm slabs, 2.7 m wall height below attic, 4.2 m nominal attic walls and a 200 mm gable roof with 2.7 m eaves, 4.2 m ridge along X. Preserve history. Explain estimated construction and stair assumptions for human review.",
+  "summary": "Three-storey 8 × 6 m house with six rooms, connecting doors, ground entrance, two straight stairs, slabs and gabled roof.",
+  "rationale": "Reconstructs the empty original shell under explicit building scope at -3, 0 and +3 m. Reuses entrance identity and south offset. No contents need relocation. Historical revisions remain unchanged; acceptance is separate.",
+  "constraints": "Wall-centreline dimensions reduce clear sizes by wall thickness. Uses specified walls, slabs and roof; roof heights are attic-relative, no overhang. Stairs ascend north at X=1.6/6 m, Y=1–5 m, away from doors, with end landing space and derived voids. Each has 4 m horizontal run, 0.8 m width, 15 steps over 3 m rise (200 mm nominal rise).",
+  "uncertainty": "Assumed centred 0.9 × 2.1 m connecting doors and south ground-west entrance. Construction is conceptual: junctions, foundations, waterproofing, railings and door swings are undetailed. The 300 mm wall-to-floor gap includes a 200 mm slab. Landing, tread-count and roof/stair headroom need review; no structural, construction, code or accessibility certification.",
+  "worker": {
+    "provider": "openai-codex-app-server",
+    "model": "gpt-6.1-sol",
+    "responseIds": [
+      "01a1723d-d69a-72d1-8e8e-163c282780a5"
+    ],
+    "usage": {
+      "inputTokens": 24945,
+      "outputTokens": 58,
+      "totalTokens": 25003
+    }
+  },
+  "toolCalls": [
+    {
+      "name": "run_model_script",
+      "status": "accepted",
+      "error": null
+    },
+    {
+      "name": "run_model_script",
+      "status": "accepted",
+      "error": null
+    },
+    {
+      "name": "run_model_script",
+      "status": "accepted",
+      "error": null
+    },
+    {
+      "name": "run_model_script",
+      "status": "rejected",
+      "error": "Review text requires 1 to 600 readable characters."
+    },
+    {
+      "name": "run_model_script",
+      "status": "rejected",
+      "error": "Review text requires 1 to 400 readable characters."
+    },
+    {
+      "name": "run_model_script",
+      "status": "accepted",
+      "error": null
+    }
+  ],
+  "scriptExecutions": [
+    {
+      "version": 1,
+      "executionId": "310bc388-b72e-4f0a-a4ec-f48adeedf16b",
+      "language": "javascript",
+      "sourceSha256": "a4a27af6f8937275e7e95d46d5169e967bfdb28e7675661fbbe1b65d11d0807d",
+      "status": "completed",
+      "disposition": "observation",
+      "validation": "not-run",
+      "contractSha256": "0db534d18853879d57bbedd7eb1f3d43746b1fe70a7b314d62a37e7170ef9832",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "model.inspect",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": null
+    },
+    {
+      "version": 1,
+      "executionId": "b1bc422c-2ec4-4244-a874-712f6f5a2ca0",
+      "language": "javascript",
+      "sourceSha256": "66291894c6b5a296a0ca80d3b5a4b37ec55a3b73d81923a4d1d100771de1668d",
+      "status": "completed",
+      "disposition": "observation",
+      "validation": "not-run",
+      "contractSha256": "0db534d18853879d57bbedd7eb1f3d43746b1fe70a7b314d62a37e7170ef9832",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "docs.search",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": null
+    },
+    {
+      "version": 1,
+      "executionId": "1e86883c-956d-4c27-802f-406d6a9df12c",
+      "language": "javascript",
+      "sourceSha256": "096ac413215c14d457058c1e168adbcbaeca8298d4aafe02771de08660cdced5",
+      "status": "completed",
+      "disposition": "observation",
+      "validation": "not-run",
+      "contractSha256": "0db534d18853879d57bbedd7eb1f3d43746b1fe70a7b314d62a37e7170ef9832",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "docs.read",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": null
+    },
+    {
+      "version": 1,
+      "executionId": "4fe93083-2e3d-4a25-8876-55b1f9168ecf",
+      "language": "javascript",
+      "sourceSha256": "b1fd4e60fc16f1449544eeb2d709c9d0d7f89fcac84444ed5f8b335985d710e6",
+      "status": "completed",
+      "disposition": "discarded",
+      "validation": "failed",
+      "contractSha256": "0db534d18853879d57bbedd7eb1f3d43746b1fe70a7b314d62a37e7170ef9832",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "model.inspect",
+          "disposition": "completed"
+        },
+        {
+          "sequence": 2,
+          "method": "model.previewBuilding",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": {
+        "code": "invalid-proposal",
+        "message": "Review text requires 1 to 600 readable characters.",
+        "line": null,
+        "column": null
+      }
+    },
+    {
+      "version": 1,
+      "executionId": "131a396d-c8fa-439a-96c7-a3a6351d0317",
+      "language": "javascript",
+      "sourceSha256": "22492d72de973884f9f6f2948d036b96a561c062dc5fe09e0bb86af267adc2f6",
+      "status": "completed",
+      "disposition": "discarded",
+      "validation": "failed",
+      "contractSha256": "0db534d18853879d57bbedd7eb1f3d43746b1fe70a7b314d62a37e7170ef9832",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "model.inspect",
+          "disposition": "completed"
+        },
+        {
+          "sequence": 2,
+          "method": "model.previewBuilding",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": {
+        "code": "invalid-proposal",
+        "message": "Review text requires 1 to 400 readable characters.",
+        "line": null,
+        "column": null
+      }
+    },
+    {
+      "version": 1,
+      "executionId": "344705cc-9c4e-4051-bf3e-b6abed5c8663",
+      "language": "javascript",
+      "sourceSha256": "f1d605335517eb42f6441e075f30476658d442ce1ea035359cac06a8c142ac5a",
+      "status": "completed",
+      "disposition": "proposal",
+      "validation": "passed",
+      "contractSha256": "0db534d18853879d57bbedd7eb1f3d43746b1fe70a7b314d62a37e7170ef9832",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "model.inspect",
+          "disposition": "completed"
+        },
+        {
+          "sequence": 2,
+          "method": "model.previewBuilding",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": null
+    }
+  ],
+  "intent": {
+    "interpretation": "Reconstruct the requested basement, ground and attic house with west/east rooms, connecting doors, two straight stairs and an X-ridge gable roof.",
+    "assumptions": [
+      "Use wall-centreline bounds at the existing southwest origin.",
+      "Centre connecting doors; retain south entrance identity and offset.",
+      "Stairs ascend north; 4 m means horizontal run.",
+      "Roof heights are attic-relative; no overhang."
+    ],
+    "certainty": 96,
+    "basis": "Explicit building reconstruction specifies levels, dimensions, roof and stair connections. The inspected base is an empty single-room shell with south entrance. Door sizes, stair direction and exact positions are unspecified."
+  },
+  "authoringScope": "building-reconstruction",
+  "validator": "room-graph-v1",
+  "decision": {
+    "status": "pending",
+    "decisionId": null,
+    "actor": null
+  },
+  "changes": {
+    "entities": {
+      "added": [
+        "attic",
+        "attic-connecting-door",
+        "attic-east",
+        "attic-west",
+        "basement",
+        "basement-connecting-door",
+        "basement-east",
+        "basement-west",
+        "building-roof-3dsanj588svis2n36bvnj162ygie6p6p2zc4uc0izl06ca2jbo",
+        "building-slab-3dsanj588svis2n36bvnj162ygie6p6p2zc4uc0izl06ca2jbo",
+        "building-slab-45tgrrnyf0bsb8tw8hwcvvq9x9utk4qnz7ig5e6iup1jkptd4d",
+        "building-slab-5h4ok8kgkotoubqqrvg9kvvxpvl5fnma0cuao35ywdlg4z6pb6",
+        "building-wall-1j6zmkg7zbeajvuw1bez2pv5pbskp66jzptlxaosl8vsdi9f0l",
+        "building-wall-20en3p4lzjj5a57qlspq6w8ijlq37hk51lu3q75zsftpdadiff",
+        "building-wall-2c7lz3fuhh2eqx7lfhifnhrvd1uxla6297tw5weo1ttu5khzqz",
+        "building-wall-2dnjres13fcibxrywgztylfbp4uzozkkqjg9m7aak0vcjfvw8t",
+        "building-wall-2p8dfzegd7ohg49n461qn5uwc0xa7mvmjjfpohbtr2q0k6sjt4",
+        "building-wall-2uxxkn5hd1der4h6ofq6f8shn6byd53jumzkzazmvbkovlxc73",
+        "building-wall-2vtv5vugloijespar487b2iaediyd0lezii6pkqqie6yk3uaxc",
+        "building-wall-3j457h8l55e59w4vkih4izc4pm6kvd3vqvlc9jazzox77ixwg",
+        "building-wall-3jnphgk47sgduytas7106edtlfpuc40u84ijl1j8iqmnaqxyzw",
+        "building-wall-3s4i4qofpqplusn75shzucox8ws4un0zssezj7xc9ayiv24fne",
+        "building-wall-45mhq1xoa32ynmkcq5s6wa5m53a4idlx22uzs3k3t9iye0c7f1",
+        "building-wall-5wwil5wnylldpm9lafr1678wmubpbdlp0h3xxh0gkkoea6f5qe",
+        "building-wall-5zruus0chd532ifwzutk889rxwc3ed2jj0ehkk5bg30zaqcb5t",
+        "building-wall-62pdqpfqu0vjx0ovua17nnwfgabzgfqwljhuggc7mul2oix5at",
+        "building-wall-9mnutunp7r8twbjfy52na37xtv6sxuwealj2qvqdgh5v0cw8s",
+        "ground",
+        "ground-connecting-door",
+        "ground-east",
+        "ground-west",
+        "stair-basement-ground",
+        "stair-ground-attic"
+      ],
+      "removed": [
+        "wall-east",
+        "wall-north",
+        "wall-south",
+        "wall-west"
+      ],
+      "modified": []
+    },
+    "relationships": {
+      "added": [
+        "floor-host-1b3fbnekfyh3ld9ews9aw37ucjly6k4zxs0ibyycjyql8bbziv",
+        "floor-host-21rkvxw4gll7i0mc1lr4lskqhool7l79i5z2zrvo3soybu2c9t",
+        "floor-host-393jkoi5zt5dys6zfm5ahxeo0lgip69ra4v7mdm2c9j5t8juh7",
+        "floor-host-6a3zmykp8ey1fju19ve31a8dtjieiro6lh8it0m1925trk4kaz"
+      ],
+      "removed": [
+        "host-entry"
+      ],
+      "modified": []
+    }
+  }
+}

@@ -43,3 +43,9 @@ Accept historical read/edit support to preserve hashes and small deltas. This is
 - Run validation and applicable suites in server containers, then actual ScriptBox/model proposal and browser checks in an isolated server candidate. Attach screenshots and an inspectable model delta to a draft PR. No shared-preview deployment or merge is authorized.
 
 Initial bounds remain explicit: up to six levels, at most twelve rectangular rooms per level, globally bounded graph/history. Retain current graph limits unless the verified house fixture demonstrates a need to raise all affected transport/storage budgets coherently. Complex roofs, multi-flight stairs and structural/code certification are outside this first slice.
+
+## Verified implementation
+
+The starter now includes basement (-3 m), ground (0 m) and attic (+3 m), six rooms, connecting stairs, slabs and a gabled roof. The storey selector controls isolated plans and 3D; Whole building opens the stack in 3D. Show roof and Cutaway compose with the current level. Floor markings carry their level identity. An explicit reconstruction scope distinguishes one-storey changes from whole-building proposals.
+
+See [server and browser evidence](evidence/issue-111/README.md), including an actual ChatGPT building proposal, its complete model delta, and an attic-only request accepted through the browser. Historical single-floor data remains byte- and hash-preserving. Every new model proposal still requires human acceptance.
