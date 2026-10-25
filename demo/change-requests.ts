@@ -204,6 +204,34 @@ export class ChangeRequests {
   list(projectId: string): TicketSummary[] {
     return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, ...summary }) => summary);
   }
+  async refreshProject(projectId: string): Promise<void> {
+    this.#assertOpen();
+    const text = this.project(projectId);
+    if (!text) return;
+    const current = await RoomRepository.restore(text);
+    const updates: Array<{ before: Ticket; error: string | null }> = [];
+    for (const ticket of this.#all(projectId)) {
+      if ((ticket.state !== 'ready' && ticket.state !== 'needs-input') || ticket.result?.status !== 'ready') continue;
+      const proposed = await RoomRepository.restore(ticket.result.project);
+      updates.push({ before: ticket, error: this.#acceptanceError(current, proposed, ticket.request.proposalName) });
+    }
+    this.#assertOpen();
+    if (this.project(projectId) !== text) return;
+    this.#transaction(() => {
+      for (const { before, error } of updates) {
+        const latest = this.get(before.id);
+        if (JSON.stringify(latest) !== JSON.stringify(before)) continue;
+        const state = error === null ? 'ready' : 'needs-input';
+        if (latest.state === state && latest.error === error) continue;
+        this.#put(recordActivity({ ...latest, state, error }, { stage: state,
+          message: error ?? 'The reviewed delta is compatible with the current model. Explicit acceptance preserves intervening changes.' }));
+      }
+    });
+  }
+  #acceptanceError(current: RoomRepository, proposed: RoomRepository, name: string): string | null {
+    try { current.previewAcceptance(proposed, name); return null; }
+    catch (error) { return error instanceof Error ? error.message : 'The proposal cannot be applied to the current model.'; }
+  }
   async submit(project: unknown, input: unknown): Promise<TicketSummary> {
     this.#assertOpen();
     const repository = await RoomRepository.restore(project);
@@ -337,11 +365,13 @@ export class ChangeRequests {
       const currentText = this.project(ticket.projectId);
       const current = await RoomRepository.restore(currentText);
       if (!this.#isWorking(ticket)) return;
-      const stale = current.head('main') !== ticket.request.baseRevisionId || this.project(ticket.projectId) !== currentText;
-      this.#put(recordActivity({ ...this.get(ticket.id), state: result.status === 'ready' && !stale ? 'ready' : 'needs-input',
-        error: stale ? 'The accepted model changed. Revise this request against the current model before accepting.' : null, updatedAt: Date.now(),
+      const error = result.status === 'ready' ? this.#acceptanceError(current, result.repository, ticket.request.proposalName) : null;
+      const state = result.status === 'ready' && !error ? 'ready' : 'needs-input';
+      this.#put(recordActivity({ ...this.get(ticket.id), state,
+        error, updatedAt: Date.now(),
         result: { status: result.status, project: result.repository.serialize(), review: result.review } },
-        { stage: result.status === 'ready' && !stale ? 'ready' : 'needs-input', message: stale ? 'The accepted model changed. Revise this proposal against its current revision.' : result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.' }));
+        { stage: state, message: error ?? (result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.') }));
+      if (this.project(ticket.projectId) !== currentText) await this.refreshProject(ticket.projectId);
     } catch (error) {
       this.#attempts.get(ticket.id)?.controller.abort();
       if (!this.#isWorking(ticket)) return;
@@ -381,28 +411,25 @@ export class ChangeRequests {
       if (action === 'cancel' && active?.requestId === ticket.request.requestId && active.attempt === ticket.attempts) active.controller.abort();
       return { ticket: next, project: text };
     }
-    if (action === 'accept' && ticket.state === 'needs-input' && ticket.result?.status === 'ready') throw new BacklogConflict('This proposal is based on an older or unaccepted model. Revise it against the current accepted model.');
-    if (action !== 'accept' || ticket.state !== 'ready' || ticket.result?.status !== 'ready') throw new BacklogConflict('Only a ready proposal can be accepted.');
+    if (action !== 'accept' || (ticket.state !== 'ready' && ticket.state !== 'needs-input') || ticket.result?.status !== 'ready') throw new BacklogConflict('Only a ready proposal can be accepted.');
     const current = await RoomRepository.restore(text);
-    if (current.head('main') !== ticket.request.baseRevisionId) throw new BacklogConflict('This proposal is based on an older or unaccepted model. Request a revision against the current accepted model; accepting it would overwrite intervening work.');
     const proposed = await RoomRepository.restore(ticket.result.project);
     this.#assertOpen();
     if (proposed.projectId !== current.projectId || proposed.root() !== current.root()) throw new Error('The proposal belongs to another project.');
-    const accepted = proposed.accept(ticket.request.proposalName, { decisionId, actor: 'preview-human' });
+    const conflict = this.#acceptanceError(current, proposed, ticket.request.proposalName);
+    if (conflict) throw new BacklogConflict(conflict);
+    const accepted = await current.acceptProposal(proposed, ticket.request.proposalName, { decisionId, actor: 'preview-human' });
     const acceptedText = accepted.serialize();
     const next: Ticket = recordActivity({ ...ticket, state: 'completed', decisionId, decisionAction: action }, { stage: 'completed', message: 'Proposal explicitly accepted and saved as the current model.' });
     this.#transaction(() => {
       // Async validation above may have overlapped another decision.
       const latest = this.get(id);
       if (latest.decisionId === decisionId && latest.decisionAction === action) return;
-      if (this.project(ticket.projectId) !== text || this.get(id).updatedAt !== ticket.updatedAt || this.get(id).state !== 'ready') throw new BacklogConflict('The model or ticket changed while reviewing. Refresh before deciding.');
+      if (this.project(ticket.projectId) !== text || JSON.stringify(this.get(id)) !== JSON.stringify(ticket)) throw new BacklogConflict('The model or ticket changed while reviewing. Refresh before deciding.');
       this.#db.prepare('UPDATE projects SET body=? WHERE id=?').run(acceptedText, ticket.projectId);
       this.#put(next);
-      for (const other of this.#withState('ready')) {
-        if (other.projectId === ticket.projectId && other.id !== ticket.id) this.#put(recordActivity({ ...other, state: 'needs-input',
-          error: 'The accepted model changed. Revise this request against the current model before accepting.' }, { stage: 'needs-input', message: 'Another proposal was accepted. This proposal now needs revision against the current model.' }));
-      }
     });
+    await this.refreshProject(ticket.projectId);
     return { ticket: this.get(id), project: this.project(ticket.projectId) ?? acceptedText };
   }
   #assertOpen(): void { if (this.#closed) throw new Error('The change request queue is closed.'); }

@@ -1059,7 +1059,7 @@ function renderBacklog(): void {
     const heading = element('header'); heading.append(element('h2', requestLabel(item.request.proposalName)), element('span', stateLabels[item.state], 'pill'));
     card.append(heading, element('p', item.request.instruction), element('small', `Base ${item.request.baseRevisionId.slice(0, 10)} · ${new Date(item.createdAt).toLocaleString()} · attempt ${item.attempts}`));
     if (item.error) card.append(element('p', item.error, 'ticket-error'));
-    if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Based on a different revision. Revise against the current model before accepting.', 'ticket-warning'));
+    if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'The model has advanced. This proposal is compatible; acceptance preserves intervening changes.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
     const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
     add(item.state === 'queued' || item.state === 'working' ? 'View progress' : 'View activity', () => { void perform(() => openActivity(item.id)); });
@@ -1220,6 +1220,7 @@ function renderReview() {
   ui['review-uncertainty'].textContent = review.uncertainty;
   const evidence = review.worker ? ` · ${review.worker.provider}/${review.worker.model} · ${review.validator}` : '';
   ui['review-binding'].textContent = `Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}${evidence}`;
+  if (ticket?.state === 'ready' && serverProjectText) ui['review-binding'].textContent += ' · Acceptance checks this reviewed delta against the current server model.';
   updateControls();
 }
 

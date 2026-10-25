@@ -204,6 +204,7 @@ export function createDemoServer({
         if (projectRoute) {
           if (request.method !== 'GET') { send(response, 405, { error: 'The backlog requires GET.' }); return; }
           const id = decodeURIComponent(projectRoute[1] ?? '');
+          await backlog.refreshProject(id);
           send(response, 200, { tickets: backlog.list(id), project: backlog.project(id) });
         } else if (ticketRoute) {
           const id = decodeURIComponent(ticketRoute[1] ?? '');
@@ -216,6 +217,7 @@ export function createDemoServer({
             send(response, 200, await backlog.decide(id, await readJson(request, 2048)));
           } else {
             if (request.method !== 'GET') { send(response, 405, { error: 'A request requires GET.' }); return; }
+            await backlog.refreshProject(backlog.get(id).projectId);
             send(response, 200, { ticket: { ...backlog.get(id), executions: backlog.executions(id) } });
           }
         }

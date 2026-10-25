@@ -7,6 +7,7 @@ import type { Door, Entity, HostingRelationship, ModelSnapshot, Point, RoomLayou
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
 import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, MAX_SCRIPT_EVIDENCE_BYTES, parseScriptExecutionEvidence, parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
+import { createResidentialProject } from './residential-floor.ts';
 
 interface DoorShape { id: string; type: 'Door'; name: string; width: number; height: number }
 interface WallShape { id: string; type: 'Wall'; name: string; start: Point; end: Point; thickness: number; height: number }
@@ -691,6 +692,55 @@ test('accepting an AI proposal advances main while preserving the original and p
   assert.throws(() => accepted.accept('main', decision), /proposal to accept/);
   assert.throws(() => accepted.accept('missing-proposal', decision), /Unknown proposal/);
   assert.equal(proposed.head('main'), root);
+});
+
+async function reviewedFurnitureChange(repo: RoomRepository, name: string, snapshot: ModelSnapshot): Promise<RoomRepository> {
+  return repo.proposeReviewedModel({ name, from: repo.head('main'), snapshot, review: {
+    requestId: `request-${name}`, selectedObjectIds: ['office-chair'], instruction: 'Apply the selected furniture change.',
+    summary: 'Update selected furniture.', rationale: 'Requested model change.', constraints: 'Retain unrelated objects.', uncertainty: 'Concept review.',
+    worker: { provider: 'fixture', model: 'reviewed-fixture', responseIds: [], usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+    toolCalls: [{ name: 'preview_furnishings', status: 'accepted', error: null }], validator: 'room-graph-v1',
+  } });
+}
+
+test('conflict-aware acceptance preserves independent chair changes and immutable review history', async () => {
+  const repo = await createResidentialProject('Concurrent chairs');
+  const base = repo.view(repo.head('main')).snapshot;
+  const change = (id: string): ModelSnapshot => ({ ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === id ? { ...item, rotationDeg: 180 } : item) });
+  const one = await reviewedFurnitureChange(repo, 'first-chair', change('dining-chair-one'));
+  const two = await reviewedFurnitureChange(repo, 'second-chair', change('office-chair'));
+  const originalReview = two.review('second-chair'); const originalProposal = two.view(two.head('second-chair'));
+  const firstAccepted = await repo.acceptProposal(one, 'first-chair', { decisionId: 'chair-one-decision', actor: 'tester' });
+  const final = await firstAccepted.acceptProposal(two, 'second-chair', { decisionId: 'chair-two-decision', actor: 'tester' });
+  const current = final.view(final.head('main'));
+  assert.equal(current.parentId, firstAccepted.head('main'));
+  assert.deepEqual(diffSnapshots(repo.view(repo.head('main')).snapshot, current.snapshot).entities.modified.map(item => item.id), ['dining-chair-one', 'office-chair']);
+  assert.deepEqual(final.view(final.head('second-chair')), originalProposal);
+  const review = final.review('second-chair');
+  assert.deepEqual({ ...review, decision: originalReview.decision }, originalReview);
+  assert.ok(review.decision.status === 'accepted');
+  assert.deepEqual(review.decision.application, { ontoRevisionId: firstAccepted.head('main'), appliedRevisionId: current.id });
+  assert.equal(final.review('first-chair').decision.status, 'superseded');
+  assert.equal((await RoomRepository.restore(final.serialize())).serialize(), final.serialize());
+  const forged = parseRecord(final.serialize());
+  const forgedReview = recordArray(forged, 'reviews').find(item => item.proposalName === 'second-chair');
+  assert.ok(forgedReview && isRecord(forgedReview.decision) && isRecord(forgedReview.decision.application));
+  forgedReview.decision.application.appliedRevisionId = final.root();
+  await assert.rejects(RoomRepository.restore(JSON.stringify(forged)), /application history/);
+});
+
+test('conflict-aware acceptance blocks divergent chair edits and invalid combined supports without mutation', async () => {
+  const repo = await createResidentialProject('Merge validation'); const base = repo.view(repo.head('main')).snapshot;
+  const first = await reviewedFurnitureChange(repo, 'chair-left', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-chair' ? { ...item, rotationDeg: 90 } : item) });
+  const second = await reviewedFurnitureChange(repo, 'chair-right', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-chair' ? { ...item, rotationDeg: 180 } : item) });
+  const accepted = await repo.acceptProposal(first, 'chair-left', { decisionId: 'accept-left', actor: 'tester' }); const before = accepted.serialize();
+  await assert.rejects(accepted.acceptProposal(second, 'chair-right', { decisionId: 'accept-right', actor: 'tester' }), /conflict: office-chair/);
+  assert.equal(accepted.serialize(), before);
+  const desk = await reviewedFurnitureChange(repo, 'smaller-desk', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-desk' ? { ...item, width: 1.3 } : item) });
+  const laptop = await reviewedFurnitureChange(repo, 'move-laptop', { ...base, entities: base.entities.map(item => item.type === 'Furniture' && item.id === 'office-laptop' ? { ...item, position: [11, 1] } : item) });
+  const deskAccepted = await repo.acceptProposal(desk, 'smaller-desk', { decisionId: 'accept-desk', actor: 'tester' });
+  await assert.rejects(deskAccepted.acceptProposal(laptop, 'move-laptop', { decisionId: 'accept-laptop', actor: 'tester' }), /support|desk|table/);
+  assert.equal(deskAccepted.review('smaller-desk').decision.status, 'accepted');
 });
 
 function visualRequest(repo: RoomRepository, layout: RoomLayout, overrides: Record<string, unknown> = {}): Record<string, unknown> {
