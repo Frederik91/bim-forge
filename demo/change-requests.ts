@@ -8,10 +8,13 @@ import type { ModelWorker } from '../src/model-proposal.ts';
 import { ModelScripts } from '../src/model-script.ts';
 import { parseScriptExecutionEvidence } from '../src/script-evidence.ts';
 import type { ScriptExecutionEvidence } from '../src/script-evidence.ts';
+import { RequestSourceStore } from './request-source-store.ts';
+import { parseRequestSources, parseAuthoringScope } from '../src/request-sources.ts';
+import type { RequestSource } from '../src/request-sources.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
-type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent'> & { selectedObjectIds: readonly string[] };
+type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope'> & { selectedObjectIds: readonly string[] };
 type StoredResult = { status: 'ready' | 'declined'; project: string; review: unknown };
 interface Ticket {
   id: string;
@@ -85,7 +88,9 @@ function parseStored(text: string): Ticket {
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history, activity,
     request: { requestId: r.requestId, proposalName: r.proposalName, baseRevisionId: r.baseRevisionId,
-      selectedObjectIds: r.selectedObjectIds, instruction: r.instruction, visualIntent: storedVisual(visual) } };
+      selectedObjectIds: r.selectedObjectIds, instruction: r.instruction, visualIntent: storedVisual(visual),
+      ...(Object.hasOwn(r, 'sources') ? { sources: parseRequestSources(r.sources) } : {}),
+      ...(Object.hasOwn(r, 'authoringScope') ? { authoringScope: parseAuthoringScope(r.authoringScope) } : {}) } };
 }
 function recordActivity(ticket: Ticket, update: ActivityUpdate): Ticket {
   const at = Date.now();
@@ -117,6 +122,8 @@ function storedVisual(value: Record<string, unknown>): RequestInput['visualInten
 
 export class ChangeRequests {
   readonly #db: DatabaseSync;
+  readonly #sources: RequestSourceStore;
+  readonly #uploads = new Map<AbortController, Promise<RequestSource>>();
   readonly #worker: () => ModelWorker | null;
   readonly #scripts = new ModelScripts();
   readonly #attempts = new Map<string, ActiveAttempt>();
@@ -130,6 +137,7 @@ export class ChangeRequests {
     this.#db.exec('CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), state TEXT NOT NULL, body TEXT NOT NULL); CREATE INDEX IF NOT EXISTS requests_project ON requests(project_id); CREATE INDEX IF NOT EXISTS requests_state ON requests(state);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES requests(id), fingerprint TEXT NOT NULL);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS request_executions (ticket_id TEXT NOT NULL REFERENCES requests(id), request_id TEXT NOT NULL, attempt INTEGER NOT NULL, execution_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(ticket_id, request_id, attempt, execution_id));');
+    this.#sources = new RequestSourceStore(this.#db);
     for (const ticket of this.#withState('working')) {
       this.#put(recordActivity({ ...ticket, state: ticket.attempts < 3 ? 'queued' : 'failed',
         error: 'The server restarted during processing. The accepted model is unchanged.' },
@@ -201,6 +209,21 @@ export class ChangeRequests {
     const row = this.#db.prepare('SELECT body FROM projects WHERE id=?').get(identifier(id));
     return row && typeof row.body === 'string' ? row.body : null;
   }
+  async addSource(input: Parameters<RequestSourceStore['add']>[0]): Promise<RequestSource> {
+    this.#assertOpen();
+    const controller = new AbortController();
+    const forward = () => controller.abort(input.signal.reason);
+    if (input.signal.aborted) forward();
+    input.signal.addEventListener('abort', forward, { once: true });
+    const task = this.#sources.add({ ...input, projectId: identifier(input.projectId), signal: controller.signal });
+    this.#uploads.set(controller, task);
+    try { const source = await task; this.#assertOpen(); return source; }
+    finally { input.signal.removeEventListener('abort', forward); this.#uploads.delete(controller); }
+  }
+  source(projectId: string, id: string): ReturnType<RequestSourceStore['get']> {
+    this.#assertOpen();
+    return this.#sources.get(identifier(projectId), identifier(id));
+  }
   list(projectId: string): TicketSummary[] {
     return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, ...summary }) => summary);
   }
@@ -210,7 +233,8 @@ export class ChangeRequests {
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
     const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
-      selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent };
+      selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
+      ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };
     const body = repository.serialize();
     const fingerprint = createHash('sha256').update(JSON.stringify({ project: body, request })).digest('hex');
     const existing = this.#submission(request.requestId, fingerprint);
@@ -241,6 +265,7 @@ export class ChangeRequests {
       const latest = this.project(repository.projectId);
       if (latest !== currentText && latest !== body) throw new BacklogConflict('The accepted server model changed during submission. Refresh before submitting.');
       if (!latest) this.#db.prepare('INSERT INTO projects(id,body) VALUES(?,?)').run(repository.projectId, body);
+      if (request.sources) this.#sources.bind(repository.projectId, request.sources, request.requestId);
       this.#put(ticket);
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
@@ -257,7 +282,8 @@ export class ChangeRequests {
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
     const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
-      selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent };
+      selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
+      ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };
     const body = repository.serialize();
     const fingerprint = createHash('sha256').update(JSON.stringify({ project: body, request })).digest('hex');
     const previous = this.#submission(request.requestId, fingerprint);
@@ -281,6 +307,7 @@ export class ChangeRequests {
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
       if (this.project(ticket.projectId) !== currentText || this.get(id).fingerprint !== ticket.fingerprint) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
+      if (request.sources) this.#sources.bind(ticket.projectId, request.sources, request.requestId);
       this.#put(next);
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
@@ -314,6 +341,7 @@ export class ChangeRequests {
   }
   async #run(ticket: Ticket, worker: ModelWorker, signal: AbortSignal): Promise<void> {
     let evidenceError: Error | null = null;
+    let prepared: Awaited<ReturnType<RequestSourceStore['prepare']>> | null = null;
     const work: { task: Promise<void> | null } = { task: null };
     const trackedWorker: ModelWorker = { identity: worker.identity, run: (session) => {
       work.task = Promise.resolve().then(() => worker.run(session));
@@ -322,9 +350,14 @@ export class ChangeRequests {
     try {
       const repository = await RoomRepository.restore(ticket.project);
       if (!this.#isWorking(ticket) || signal.aborted) return;
+      if (ticket.request.sources) {
+        this.#put(recordActivity(this.get(ticket.id), { stage: 'inspecting', message: 'Preparing the attached reference files for the agent.' }));
+        prepared = await this.#sources.prepare(ticket.projectId, ticket.request.sources, signal);
+        if (!this.#isWorking(ticket) || signal.aborted) return;
+      }
       const result = await prepareModelProposal(repository, ticket.request, trackedWorker, (event) => {
         if (this.#isWorking(ticket)) this.#put(recordActivity(this.get(ticket.id), event));
-      }, { signal, scripts: this.#scripts, onExecution: (record) => {
+      }, { signal, scripts: this.#scripts, ...(prepared ? { sourceInput: prepared } : {}), onExecution: (record) => {
         try { this.#recordExecution(ticket, record); }
         catch (error) {
           evidenceError = error instanceof Error ? error : new Error('Execution evidence could not be saved.');
@@ -350,6 +383,7 @@ export class ChangeRequests {
     } finally {
       // Core drains script calls; retain the slot until provider cleanup also ends.
       if (work.task) await work.task.catch(() => {});
+      await prepared?.dispose();
     }
   }
   async decide(id: string, input: unknown): Promise<{ ticket: Ticket; project: string }> {
@@ -411,9 +445,11 @@ export class ChangeRequests {
     this.#closed = true;
     clearInterval(this.#timer);
     for (const active of this.#attempts.values()) active.controller.abort();
+    for (const controller of this.#uploads.keys()) controller.abort();
     this.#closing = (async () => {
       try {
         await Promise.allSettled([...this.#attempts.values()].map((active) => active.task));
+        await Promise.allSettled([...this.#uploads.values()]);
         await this.#scripts.dispose();
       } finally { this.#db.close(); }
     })();

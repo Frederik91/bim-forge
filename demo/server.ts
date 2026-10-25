@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { CodexAccountConnection, CodexAppServerError } from '../src/codex-app-server.ts';
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
+import { MAX_SOURCE_BYTES, sourceMediaType, sourceName } from '../src/request-sources.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
@@ -193,6 +194,46 @@ export function createDemoServer({
         send(response, 202, { ticket: await backlog.submit(payload.project, payload.request) });
       } catch (error) {
         send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Change request failed.' });
+      }
+      return;
+    }
+    const sourceRoute = /^\/api\/projects\/([a-f0-9-]{36})\/sources\/([a-f0-9-]{36})$/.exec(request.url ?? '');
+    if (sourceRoute) {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      request.once('aborted', abort);
+      const disconnectedUpload = () => { if (!response.writableEnded) abort(); };
+      response.once('close', disconnectedUpload);
+      try {
+        sameOriginRequest(request, publicOrigin);
+        const projectId = sourceRoute[1] ?? ''; const id = sourceRoute[2] ?? '';
+        if (request.method === 'POST') {
+          const mediaType = sourceMediaType(request.headers['content-type']);
+          const header = request.headers['x-source-name'];
+          const name = sourceName(typeof header === 'string' ? decodeURIComponent(header) : undefined);
+          const declared = request.headers['content-length'];
+          if (declared && (!/^\d+$/.test(declared) || Number(declared) > MAX_SOURCE_BYTES)) throw new Error('Source files must be at most 6 MiB.');
+          const chunks: Buffer[] = []; let size = 0;
+          request.setTimeout(30000, () => { abort(); request.destroy(); });
+          for await (const chunk of request) {
+            controller.signal.throwIfAborted();
+            const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            size += bytes.length;
+            if (size > MAX_SOURCE_BYTES) throw new Error('Source files must be at most 6 MiB.');
+            chunks.push(bytes);
+          }
+          const source = await backlog.addSource({ projectId, id, name, mediaType, bytes: Buffer.concat(chunks), signal: controller.signal });
+          send(response, 201, { source });
+        } else if (request.method === 'GET') {
+          const { source, bytes } = backlog.source(projectId, id);
+          response.writeHead(200, { 'Content-Type': source.mediaType, 'Content-Length': bytes.length,
+            'Content-Disposition': `${source.mediaType.startsWith('image/') ? 'inline' : 'attachment'}; filename="source"; filename*=UTF-8''${encodeURIComponent(source.name).replace(/'/g, '%27')}` });
+          response.end(bytes);
+        } else send(response, 405, { error: 'Source files require GET or POST.' });
+      } catch (error) {
+        if (!controller.signal.aborted) send(response, request.method === 'GET' ? 404 : 400, { error: request.method === 'GET' ? 'Source file is unavailable in this project.' : error instanceof Error ? error.message : 'Source upload failed.' });
+      } finally {
+        request.removeListener('aborted', abort); response.removeListener('close', disconnectedUpload);
       }
       return;
     }

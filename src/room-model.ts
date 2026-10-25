@@ -377,9 +377,12 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   const review = copy(input);
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
   const hasIntent = review !== null && typeof review === 'object' && Object.hasOwn(review, 'intent');
+  const hasSources = review !== null && typeof review === 'object' && Object.hasOwn(review, 'sources');
+  const hasScope = review !== null && typeof review === 'object' && Object.hasOwn(review, 'authoringScope');
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
     'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
-    ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : [])]);
+    ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
+    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
   const baseRevisionId = revisionIdentifier(review.baseRevisionId);
@@ -447,7 +450,9 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   return freeze({
     requestId, proposalName, baseRevisionId, proposalRevisionId, selectedObjectIds, instruction, summary, rationale,
     constraints, uncertainty, worker: { provider, model, responseIds, usage: { inputTokens, outputTokens, totalTokens } },
-    toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}), validator: 'room-graph-v1', decision,
+    toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}),
+    ...(hasSources ? { sources: parseRequestSources(review.sources) } : {}),
+    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), validator: 'room-graph-v1', decision,
   });
 }
 
@@ -1087,8 +1092,11 @@ export class RoomRepository {
     const details = proposal.review;
     const hasScripts = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scriptExecutions');
     const hasIntent = details !== null && typeof details === 'object' && Object.hasOwn(details, 'intent');
+    const hasSources = details !== null && typeof details === 'object' && Object.hasOwn(details, 'sources');
+    const hasScope = details !== null && typeof details === 'object' && Object.hasOwn(details, 'authoringScope');
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
-      'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : [])]);
+      'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
+      ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : [])]);
     const base = this.view(from);
     const next = await this.#commit(proposalName, base, proposal.snapshot);
     if (next === this) fail('The reviewed proposal must change the bound revision.');
@@ -1100,6 +1108,8 @@ export class RoomRepository {
       toolCalls: details.toolCalls, validator: details.validator,
       ...(hasScripts ? { scriptExecutions: details.scriptExecutions } : {}),
       ...(hasIntent ? { intent: details.intent } : {}),
+      ...(hasSources ? { sources: details.sources } : {}),
+      ...(hasScope ? { authoringScope: details.authoringScope } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches));
     const reviews = [...next.reviews(), record];
