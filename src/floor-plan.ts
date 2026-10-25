@@ -55,6 +55,10 @@ export function spaceForFootprint(snapshot: ModelGraph, footprint: Bounds): Spac
 
 export function entitySpace(snapshot: ModelGraph, entity: Entity): Space | null {
   if (entity.type === 'Space') return entity;
+  if (entity.type === 'AssetInstance' && entity.placement.kind === 'room') {
+    const roomId = entity.placement.roomId;
+    return spaces(snapshot).find((item) => item.id === roomId) ?? null;
+  }
   if (entity.type === 'Furniture' || entity.type === 'Equipment') {
     const level = entityLevel(snapshot, entity);
     return spaceAt(snapshot.version === 2 && level ? levelView(snapshot, level.id) : snapshot, entity.position);
@@ -183,7 +187,7 @@ export function validateFloorPlan(snapshot: ModelGraph): void {
     throw new Error('Buildings require one to six levels with distinct elevations.');
   }
   for (const entity of snapshot.entities) {
-    if (entity.type !== 'Level' && !entityLevel(snapshot, entity)) throw new Error('Every building entity requires a valid level owner.');
+    if (entity.type !== 'Level' && entity.type !== 'AssetFamily' && !entityLevel(snapshot, entity)) throw new Error('Every building entity requires a valid level owner.');
     if (entity.type === 'Furniture' && entity.supportId !== null) {
       const support = snapshot.entities.find((item) => item.id === entity.supportId);
       if (!support || entityLevel(snapshot, support)?.id !== entityLevel(snapshot, entity)?.id) throw new Error('Furniture supports must remain on the same level.');

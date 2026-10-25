@@ -96,7 +96,8 @@ export function previewFloor(baseSnapshot: unknown, input: unknown): ModelSnapsh
       relationships: [...base.relationships.filter((link) => !removed.has(link.source) && !removed.has(link.target)), ...shell.relationships] });
   }
   const shell = compileFloorLayout(layout, { kind: 'legacy' });
-  return validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment'), ...shell.entities],
+  return validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment'
+    || item.type === 'AssetFamily' || item.type === 'AssetInstance'), ...shell.entities],
     relationships: shell.relationships });
 }
 

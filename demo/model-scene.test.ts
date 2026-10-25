@@ -13,6 +13,8 @@ import { viewerBuilding } from './building-viewer-fixture.ts';
 import { roofHeightAt } from '../src/building-levels.ts';
 import { validateSnapshot } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
+import { assetGeometry } from '../src/asset-family.ts';
+import { familyViewerSnapshot } from './generated-family-viewer-fixture.ts';
 
 const furnishings = [
   { id: 'desk-test', type: 'Furniture', name: 'Desk', kind: 'desk', position: [3, 3], width: 1.8, depth: .8, height: .75, rotationDeg: 0, supportId: null },
@@ -338,4 +340,97 @@ test('before slab ghosts stay inspectable but cannot intercept a current-floor r
   const reference = viewer.referenceAt(screen.x, screen.y);
   assert.ok(reference?.kind === 'floor-point'); assert.equal(reference.levelId, 'attic');
   assert.ok(Math.abs(reference.positionMm[0] - 4500) <= 2); assert.ok(Math.abs(reference.positionMm[1] - 1000) <= 2);
+});
+
+test('generated families render exact instance heights and unrelated geometry in both modes without changing definitions', async (t) => {
+  const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
+  const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const repo = await RoomRepository.create(); const snapshot = familyViewerSnapshot(repo.view(repo.head('main')).snapshot);
+  const saved = JSON.stringify(snapshot);
+  viewer.setModel(snapshot); viewer.setCutaway(true); viewer.select('person-187');
+  const meshes = [...viewer.scene.meshes];
+  for (const mode of ['basic', 'realistic'] satisfies ('basic' | 'realistic')[]) {
+    viewer.setMode(mode); viewer.scene.render();
+    for (const [id, height] of [['person-187', 1.87], ['person-165', 1.65], ['plinth-one', .8]] satisfies [string, number][]) {
+      const item = snapshot.entities.find((entity) => entity.type === 'AssetInstance' && entity.id === id); assert.ok(item?.type === 'AssetInstance');
+      const own = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith(id + '-')); assert.ok(own.length);
+      assert.ok(Math.abs(Math.min(...own.map((mesh) => mesh.getBoundingInfo().boundingBox.minimumWorld.y))) < 1e-6);
+      assert.ok(Math.abs(Math.max(...own.map((mesh) => mesh.getBoundingInfo().boundingBox.maximumWorld.y)) - height) < 1e-6);
+      assert.equal(assetGeometry(snapshot, item).bounds.maxZ, height);
+      assert.equal(assetGeometry(snapshot, item).dimensions.height, height);
+      assert.ok(own.every((mesh) => mode === 'basic' ? mesh.material instanceof StandardMaterial : mesh.material instanceof PBRMaterial));
+    }
+    const body = viewer.scene.meshes.find((mesh) => mesh.name === 'person-187-#507a92'); assert.ok(body);
+    const color = body.material instanceof PBRMaterial ? body.material.albedoColor : body.material instanceof StandardMaterial ? body.material.diffuseColor : null;
+    assert.equal(color?.toHexString().toLowerCase(), '#507a92');
+    const point = Vector3.Project(modelPoint(3.6, .8, 1.8), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+    assert.equal(viewer.objectAt(point.x, point.y), 'person-187', 'all primitive parts pick the owning instance');
+  }
+  const plinth = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('plinth-one-'));
+  assert.ok(Math.abs(Math.min(...plinth.map((mesh) => mesh.getBoundingInfo().boundingBox.minimumWorld.x)) - 5.2) < 1e-6);
+  assert.ok(Math.abs(Math.max(...plinth.map((mesh) => mesh.getBoundingInfo().boundingBox.maximumWorld.z)) - 1.1) < 1e-6, 'world XY is already rotated by the evaluator');
+  for (const family of snapshot.entities.filter((item) => item.type === 'AssetFamily')) {
+    assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith(family.id)), false);
+    assert.equal(viewer.anchorOnScreen(family.id, 800, 600), null);
+  }
+  assert.ok(viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('person-187-')).every((mesh) => mesh.renderOutline));
+  assert.deepEqual(viewer.scene.meshes, meshes);
+  assert.equal(JSON.stringify(snapshot), saved);
+});
+
+test('resizing one generated instance retains its family, ghosts and isolated delta without changing another size of that family', async (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const repo = await RoomRepository.create(); const before = familyViewerSnapshot(repo.view(repo.head('main')).snapshot);
+  const saved = JSON.stringify(before);
+  const after = validateSnapshot({ ...before, entities: before.entities.map((item) => item.type === 'AssetInstance' && item.id === 'person-187'
+    ? { ...item, size: { ...item.size, height: 2.1 } } : item) });
+  assert.deepEqual(modelChanges(before, after).map((item) => item.id), ['person-187']);
+  viewer.setModel(after, before); viewer.setMode('basic'); viewer.setCutaway(false); viewer.scene.render();
+  const ghosts = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('before:person-187-')); assert.ok(ghosts.length);
+  const solids = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('person-187-')); assert.ok(solids.length);
+  assert.ok(Math.abs(Math.max(...ghosts.map((mesh) => mesh.getBoundingInfo().boundingBox.maximumWorld.y)) - 1.87) < 1e-6);
+  assert.ok(Math.abs(Math.max(...solids.map((mesh) => mesh.getBoundingInfo().boundingBox.maximumWorld.y)) - 2.1) < 1e-6);
+  assert.ok(ghosts.every((mesh) => mesh.material instanceof StandardMaterial && mesh.material.wireframe));
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name === 'change-path:person-187'));
+  assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:person-165-') || mesh.name.startsWith('before:plinth-one-')), false);
+  assert.equal(JSON.stringify(before), saved);
+});
+
+test('room-owned generated instances follow their level exactly once, including anchors, ghosts and visibility', (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const before = familyViewerSnapshot(viewerBuilding(), 'attic-right');
+  const saved = JSON.stringify(before);
+  const after = validateSnapshot({ ...before, entities: before.entities.map((item) => item.id === 'attic' ? { ...item, elevation: 3.5 } : item) });
+  for (const id of ['person-187', 'person-165', 'plinth-one']) assert.ok(modelChanges(before, after).some((item) => item.id === id && item.reason === 'placement'));
+  viewer.setModel(after, before); viewer.setMode('basic'); viewer.setLevel('attic'); viewer.setRoofVisible(false); viewer.setCutaway(false); viewer.scene.render();
+  const solids = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('person-187-'));
+  const ghosts = viewer.scene.meshes.filter((mesh) => mesh.name.startsWith('before:person-187-'));
+  assert.ok(solids.length && ghosts.length);
+  assert.ok(Math.abs(Math.min(...solids.map((mesh) => mesh.getBoundingInfo().boundingBox.minimumWorld.y)) - 3.5) < 1e-6);
+  assert.ok(Math.abs(Math.max(...solids.map((mesh) => mesh.getBoundingInfo().boundingBox.maximumWorld.y)) - 5.37) < 1e-6);
+  assert.ok(Math.abs(Math.max(...ghosts.map((mesh) => mesh.getBoundingInfo().boundingBox.maximumWorld.y)) - 4.87) < 1e-6);
+  const item = after.entities.find((entity) => entity.id === 'person-187'); assert.ok(item);
+  assert.ok(Math.abs(entityAnchor(item, after).y - 5.52) < 1e-6);
+  assert.ok([...solids, ...ghosts].every((mesh) => mesh.isEnabled()));
+  viewer.setLevel('ground'); viewer.scene.render();
+  assert.ok([...solids, ...ghosts].every((mesh) => !mesh.isEnabled()));
+  assert.equal(viewer.scene.meshes.find((mesh) => mesh.name === 'change-path:person-187')?.isEnabled(), false);
+  assert.equal(JSON.stringify(before), saved);
+});
+
+test('explicit family reassignment preserves the original definition and reviews the new definition without rendering it', async (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const repo = await RoomRepository.create(); const before = familyViewerSnapshot(repo.view(repo.head('main')).snapshot);
+  const family = before.entities.find((item) => item.type === 'AssetFamily' && item.id === 'standing-person'); assert.ok(family?.type === 'AssetFamily');
+  const replacement = { ...family, id: 'revised-figure', name: 'Revised figure proxy', parts: family.parts.map((part) => ({ ...part, color: '#bb6633' })) };
+  const after = validateSnapshot({ ...before, entities: [...before.entities.map((item) => item.type === 'AssetInstance' && item.id === 'person-187'
+    ? { ...item, familyId: replacement.id } : item), replacement] });
+  const changes = modelChanges(before, after);
+  assert.deepEqual(changes.map((item) => [item.id, item.status]), [['person-187', 'modified'], ['revised-figure', 'added']]);
+  assert.deepEqual(after.entities.find((item) => item.id === family.id), family);
+  viewer.setModel(after, before); viewer.setMode('realistic'); viewer.setCutaway(false); viewer.scene.render();
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:person-187-')));
+  assert.ok(viewer.scene.meshes.some((mesh) => mesh.name === 'person-187-#bb6633'));
+  assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('standing-person') || mesh.name.startsWith('revised-figure')), false);
+  assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:person-165-')), false);
 });

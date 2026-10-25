@@ -9,6 +9,13 @@ export function levels(snapshot: ModelGraph): Level[] {
 export function entityLevel(snapshot: ModelGraph, entityOrId: Entity | string): Level | null {
   const entity = typeof entityOrId === 'string' ? snapshot.entities.find((item) => item.id === entityOrId) : entityOrId;
   if (!entity) return null;
+  if (entity.type === 'AssetFamily') return null;
+  if (entity.type === 'AssetInstance') {
+    if (entity.placement.kind === 'single-room') return null;
+    const roomId = entity.placement.roomId;
+    const room = snapshot.entities.find((item) => item.type === 'Space' && item.id === roomId);
+    return room ? entityLevel(snapshot, room) : null;
+  }
   if (entity.type === 'Level') return entity;
   if (entity.type === 'Door' || entity.type === 'Window') {
     const host = snapshot.relationships.find((link) => link.source === entity.id);
@@ -37,7 +44,7 @@ export function levelView(snapshot: ModelGraph, levelId: string): LevelView {
   if (!level) throw new Error('Unknown level.');
   const incidentStairs = snapshot.entities.filter((item): item is Stair => item.type === 'Stair'
     && (item.fromLevelId === levelId || item.toLevelId === levelId));
-  const entities = snapshot.entities.filter((item) => item.type === 'Level'
+  const entities = snapshot.entities.filter((item) => item.type === 'Level' || item.type === 'AssetFamily'
     || (item.type === 'Stair' ? incidentStairs.includes(item) : entityLevel(snapshot, item)?.id === levelId));
   const ids = new Set(entities.map((item) => item.id));
   const relationships = snapshot.relationships.filter((link) => ids.has(link.source) && ids.has(link.target));

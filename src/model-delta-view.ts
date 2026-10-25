@@ -1,5 +1,6 @@
 import { diffSnapshots } from './room-model.ts';
 import { entityElevation } from './building-levels.ts';
+import { assetGeometry } from './asset-family.ts';
 import { slabPieces, wallSections } from './viewer-geometry.ts';
 import type { Entity, ModelSnapshot } from './room-model.ts';
 
@@ -12,8 +13,12 @@ export type ModelChange = ChangeIdentity & (
 
 function derivedGeometry(snapshot: ModelSnapshot, id: string) {
   const item = snapshot.entities.find((entity) => entity.id === id);
-  if (!item) return null;
+  if (!item || item.type === 'AssetFamily') return null;
   const base = entityElevation(snapshot, item);
+  if (item.type === 'AssetInstance') {
+    const geometry = assetGeometry(snapshot, item);
+    return { base, family: geometry.family, bounds: geometry.bounds, dimensions: geometry.dimensions, footprint: geometry.footprint };
+  }
   if (item.type === 'Stair') return { base, upper: entityElevation(snapshot, item.toLevelId) };
   if (item.type === 'Slab') return { base, pieces: slabPieces(snapshot, item) };
   if (item.type === 'Furniture') {

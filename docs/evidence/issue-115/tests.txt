@@ -1,0 +1,32 @@
+✔ optional names derive from intent and stable identity; concurrent unnamed requests, retries and revisions remain distinct (246.266957ms)
+✔ submission is durable before acknowledgement, idempotent and independent of worker availability (419.542485ms)
+✔ multiple tickets queue immediately; only two agents run and cancellation cannot publish late results (163.714158ms)
+✔ acceptance and its ticket decision are atomic, replay-safe and cannot overwrite intervening work (150.370396ms)
+✔ server restart recovers interrupted work without trusting a stale working marker (493.695645ms)
+✔ failed and declined requests remain readable; retries are bounded and rejection preserves the model (127.665657ms)
+✔ concurrent delivery of the same submission, decision and revision converges to one outcome (175.615314ms)
+✔ working requests expose real tool progress before completion, persist it, and ignore late activity after cancellation (428.57159ms)
+✔ server recovery and revisions keep attempt activity bound to the correct request version (719.329915ms)
+✔ legacy tickets without activity remain readable; malformed or mixed-version activity fails closed (298.512472ms)
+✔ execution evidence survives provider failure, retries, revisions and reopening without overwriting earlier executions (839.054708ms)
+✔ a failed execution journal write fails the attempt closed (382.643449ms)
+✔ failed script executions remain auditable without producing a proposal (89.504477ms)
+✔ cancellation retains terminal script evidence and freezes ticket activity (78.768871ms)
+✔ close aborts all attempts and waits for worker cleanup before closing storage (21.270245ms)
+✔ backlog puts review first, followed by progress, waiting and finished work (1.596307ms)
+✔ every request remains visible, with questions and failures needing attention first (0.479307ms)
+✔ local demo serves only explicit assets and exposes only the bounded proposal endpoint (62.877583ms)
+✔ remote runtime starts device authorization without exposing credentials (17.525497ms)
+✔ server configuration parses local TCP and bounded remote Unix socket modes (1.654312ms)
+✔ authentication endpoints expose only public connection state and reject cross-origin mutations (6.556051ms)
+✔ proposal endpoint binds request to revision and returns a validated separate AI proposal (172.29826ms)
+✔ slow proposals return a job immediately, are idempotent, and expose readable failures (22.131054ms)
+✔ HTTP cancellation aborts the worker and retains execution evidence without changing the accepted project (59.027564ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5088.006217

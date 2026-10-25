@@ -1,0 +1,12 @@
+{
+  "accepted": true,
+  "levelId": "level-ground",
+  "roomId": "level-ground-east",
+  "height": 1.87,
+  "addedIds": [
+    "ground-east-person",
+    "person-proxy-v1"
+  ],
+  "unchangedHouseGeometry": true,
+  "unchangedRelationships": true
+}

@@ -1,0 +1,540 @@
+
+> bim-forge@0.1.0 validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+
+
+> bim-forge@0.1.0 lint
+> node scripts/validate-typescript.ts
+
+Strict TypeScript valid. 106 source file(s) checked.
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> bim-forge@0.1.0 typecheck
+> tsc --noEmit
+
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+Policy valid. 0 changed file(s) checked.
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> bim-forge@0.1.0 test
+> npm run build:demo && node --test factory/runner.test.ts factory/live.test.ts factory/publisher.test.ts factory/publisher-identity.test.ts factory/publish-store.test.ts factory/coding.test.ts factory/health.test.ts factory/schedule-check.test.ts src/room-model.test.ts src/model-script.test.ts src/house-pilot.test.ts demo/model-scene.test.ts src/office.test.ts src/residential-floor.test.ts src/visual-request.test.ts demo/change-requests.test.ts src/codex-app-server.test.ts demo/server.test.ts src/floor-layout.test.ts demo/request-source-store.test.ts demo/source-requests.test.ts src/building-layout.test.ts src/building-levels.test.ts src/multi-storey-house.test.ts src/building-agent.test.ts src/building-schema.test.ts demo/request-context.test.ts && npm run test:assets
+
+
+> bim-forge@0.1.0 build:demo
+> node scripts/build-demo.ts
+
+
+  dist/demo/room-app.mjs  2.5mb ⚠️
+
+⚡ Done in 336ms
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+✔ optional names derive from intent and stable identity; concurrent unnamed requests, retries and revisions remain distinct (273.469146ms)
+✔ submission is durable before acknowledgement, idempotent and independent of worker availability (591.334102ms)
+✔ multiple tickets queue immediately; only two agents run and cancellation cannot publish late results (189.012217ms)
+✔ acceptance and its ticket decision are atomic, replay-safe and cannot overwrite intervening work (200.410918ms)
+✔ server restart recovers interrupted work without trusting a stale working marker (450.781865ms)
+✔ failed and declined requests remain readable; retries are bounded and rejection preserves the model (116.99079ms)
+✔ concurrent delivery of the same submission, decision and revision converges to one outcome (216.875313ms)
+✔ working requests expose real tool progress before completion, persist it, and ignore late activity after cancellation (413.801984ms)
+✔ server recovery and revisions keep attempt activity bound to the correct request version (751.982109ms)
+✔ legacy tickets without activity remain readable; malformed or mixed-version activity fails closed (381.955497ms)
+✔ execution evidence survives provider failure, retries, revisions and reopening without overwriting earlier executions (812.451021ms)
+✔ a failed execution journal write fails the attempt closed (352.187717ms)
+✔ failed script executions remain auditable without producing a proposal (85.69748ms)
+✔ cancellation retains terminal script evidence and freezes ticket activity (96.283344ms)
+✔ close aborts all attempts and waits for worker cleanup before closing storage (20.073419ms)
+BJS - [09:17:03]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:03]: Babylon.js v9.32.0 - Null engine
+✔ real Babylon scene preserves every object, support elevation, camera and selection across modes without changing the model (202.476163ms)
+✔ walls have actual door and window gaps, cutaway affects visibility only, and replacement disposes old resources (50.378686ms)
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+✔ ray destinations are generic, millimetre-bound floor/wall references and do not infer move/group operations (1.460935ms)
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+✔ actual Babylon rays select visible desk geometry and mark floor points through cutaway walls (32.900566ms)
+✔ 3D delta retains before ghosts for moved and removed objects, solid additions and a stable camera without changing either revision (55.005135ms)
+✔ 3D delta includes opening placement and host geometry when only hosting relationships change (3.757029ms)
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:04]: Babylon.js v9.32.0 - Null engine
+✔ derived support elevation and door-size gaps appear in the 3D delta even without changed relationship records (5.040834ms)
+✔ a residential floor renders shared walls once, frames a room without editing geometry and retains whole-floor deltas (235.40205ms)
+✔ legacy floor references stay visible on an isolated residential level without changing their wire shape or model (85.664471ms)
+✔ stacked geometry applies each floor elevation once, including supported furniture, openings and equipment (49.53045ms)
+✔ incoming stair footprints are real slab voids and ray picking preserves the selected floor (50.348929ms)
+✔ pitched roof solids and gable wall vertices meet the shared roof underside at eaves and ridge (86.369574ms)
+✔ level isolation and roof visibility compose with cutaway, framing and annotation visibility without rebuilding geometry (65.300045ms)
+✔ building floor annotations require explicit levels and wall annotations inherit the host elevation (3.920798ms)
+✔ level elevation and incoming stair changes produce derived object and slab-void deltas with before ghosts (128.023856ms)
+✔ roof changes derive clipped-wall deltas and flat roofs have physical thickness (50.557891ms)
+✔ before slab ghosts stay inspectable but cannot intercept a current-floor reference ray (73.861043ms)
+BJS - [09:17:05]: Babylon.js v9.32.0 - Null engine
+✔ generated families render exact instance heights and unrelated geometry in both modes without changing definitions (63.819901ms)
+BJS - [09:17:05]: Babylon.js v9.32.0 - Null engine
+BJS - [09:17:05]: Babylon.js v9.32.0 - Null engine
+✔ resizing one generated instance retains its family, ghosts and isolated delta without changing another size of that family (50.200527ms)
+✔ room-owned generated instances follow their level exactly once, including anchors, ghosts and visibility (131.413865ms)
+✔ explicit family reassignment preserves the original definition and reviews the new definition without rendering it (30.868476ms)
+✔ opening or revising an attic ticket restores its object, room and level independently of the browsing floor (16.885211ms)
+✔ level-qualified destinations restore their floor without persisting a level into legacy references (7.763506ms)
+✔ uploads bind exact project, bytes and metadata; replay and concurrent delivery are idempotent (19.082477ms)
+✔ memberships share the ticket transaction; expiry preserves bound sources and immutable upload identities (9.028223ms)
+✔ source bytes and request memberships survive SQLite close and reopen (499.057598ms)
+✔ real PNG/PDF/text inputs normalize privately and retain source/page mappings and extracted text (1505.407794ms)
+✔ admission rejects wrong decoded formats, corrupt/encrypted PDFs, excess pages, UTF-8 and pixel limits without leaks (465.771843ms)
+✔ request aggregate text and visual budgets reject the complete request without truncation (2051.4739ms)
+✔ prepared PNG bytes have an aggregate 12 MiB limit and failures remove every attempt file (1696.522589ms)
+✔ cancelled preparation drains native work, removes its directory and retains durable source bytes (1828.167393ms)
+✔ local demo serves only explicit assets and exposes only the bounded proposal endpoint (43.339794ms)
+✔ remote runtime starts device authorization without exposing credentials (18.153029ms)
+✔ server configuration parses local TCP and bounded remote Unix socket modes (3.426193ms)
+✔ authentication endpoints expose only public connection state and reject cross-origin mutations (9.633293ms)
+✔ proposal endpoint binds request to revision and returns a validated separate AI proposal (192.348503ms)
+✔ slow proposals return a job immediately, are idempotent, and expose readable failures (24.474677ms)
+✔ HTTP cancellation aborts the worker and retains execution evidence without changing the accepted project (66.032987ms)
+
+Fontconfig error: No writable cache directories
+	/var/cache/fontconfig
+	/.cache/fontconfig
+	/.fontconfig
+
+Fontconfig error: No writable cache directories
+	/var/cache/fontconfig
+	/.cache/fontconfig
+	/.fontconfig
+
+Fontconfig error: No writable cache directories
+	/var/cache/fontconfig
+	/.cache/fontconfig
+	/.fontconfig
+
+Fontconfig error: No writable cache directories
+	/var/cache/fontconfig
+	/.cache/fontconfig
+	/.fontconfig
+✔ real PNG/PDF/text survive queued restart, reach the worker, bind the review and stay private until explicit acceptance (3024.216028ms)
+✔ binary source route checks origin, actual type, immutable identity and project membership (295.849942ms)
+✔ returns exactly the validated approval and freezes it without changing inputs (5.88436ms)
+✔ accepts every allowed daily limit and lowercase hexadecimal digest characters (1.320343ms)
+✔ not-before is inclusive, expiry is exclusive, and a 24-hour window is allowed (0.88421ms)
+✔ rejects zero, reversed, and over-24-hour windows (0.394537ms)
+✔ binds approval to exact bytes and requires a lowercase 64-hex trusted digest (0.553235ms)
+✔ requires a bounded Buffer and rejects oversized input before parsing (0.604756ms)
+✔ uses fatal UTF-8 decoding for malformed, truncated, overlong, and surrogate sequences (0.521029ms)
+✔ rejects noncanonical encodings even with a matching exact-byte digest (1.579898ms)
+✔ rejects duplicate fields including identical values and escaped field names (0.543502ms)
+✔ rejects malformed JSON and non-object JSON values (0.730379ms)
+✔ requires all seven keys and forbids every additional control field (1.244635ms)
+✔ requires version 1 and the exact fixed repository (0.866599ms)
+✔ scope and deployment bindings must be primitive lowercase 64-hex strings (1.904855ms)
+✔ daily limit must be a safe integer from 1 through 6 (1.08162ms)
+✔ timestamps require real calendar dates in canonical UTC with milliseconds (2.500105ms)
+✔ rejects invalid clocks and clocks outside the approved interval (0.772663ms)
+✔ activation has exactly three frozen fields; null means enabled and idle (0.612535ms)
+✔ activation rejects missing, extra, mistyped and unknown policy fields (1.342939ms)
+✔ activation and permit require bounded Buffers and exact compact JSON plus one newline (5.319396ms)
+✔ permit is canonical, binds exact approval and activation bytes, and returns frozen values (0.928622ms)
+✔ permit rejects all missing or extra fields and invalid shapes (4.383215ms)
+✔ all digests require lowercase hexadecimal strings and wrong package never authorizes (7.496873ms)
+✔ activation revocation, replacement, unknown policy and absence block publication (2.284132ms)
+✔ run and boot identifiers must be strict lowercase hyphenated UUID hex (6.32694ms)
+✔ nanoseconds are canonical decimal strings of at most 24 digits (7.879169ms)
+✔ same-boot 20-minute lifetime has inclusive start and exclusive deadline and rejects rollback (1.787181ms)
+✔ embedded approval still uses the unchanged seven-field parser and current wall clock (2.639013ms)
+✔ invalid clocks always fail with a generic error without disclosing supplied values (2.406751ms)
+✔ protected read accepts administrator-owned app-readable files without filesystem writes (2.695581ms)
+✔ protected read rejects absent permits or activation without falling back to manual files (10.22098ms)
+✔ both directories must be real protected directories owned by the selected administrator (10.316745ms)
+✔ both protected files reject writable modes, symlinks, hard links, directories and oversized bytes (13.832757ms)
+﹣ both protected files independently reject a different owner (0.083308ms) # SKIP
+✔ pause checks detect files, directories and dangling symlinks at either pause path (4.831647ms)
+✔ protected reads recheck pause paths after permit validation and propagate inspection errors (2.988747ms)
+✔ disabled, empty and existing profiles never claim, generate, stage or publish (2.144748ms)
+✔ one guarded wake publishes exact bytes while the same coding lease is held; duplicate returns receipt (2.012615ms)
+✔ intake refuses invalid bindings, unavailable resources, pause, expiry and interrupted ownership without effects (1.892213ms)
+✔ activation, deployment, pauses, expiry, reboot, clock rollback and original deadline stop mid-job and never retry (2.829148ms)
+✔ unknown publication is terminal; later wake cannot retry even with unchanged approval (1.876665ms)
+✔ failed cleanup preserves active ownership and requires recovery, not another model call (1.210114ms)
+✔ a previously consumed coding scope is reported for manual reconciliation, never republished (0.383264ms)
+✔ cleanup accepts only exact recorded run services and case links (0.424102ms)
+✔ actual instance overrides stop before model start even when template measurement matches (0.555894ms)
+✔ evidence parse or write failure cannot mask the original cleanup recovery signal (0.294734ms)
+✔ isolated job inputs remain readable under the scheduler restrictive umask (0.976214ms)
+✔ verifier collection excludes lifecycle messages and unrelated process records before strict validation (4.258484ms)
+✔ unexpected verifier process output remains in evidence and fails the unchanged strict validator (1.415283ms)
+✔ verifier collection refuses missing or malformed identity before reading any journal (0.27208ms)
+✔ verifier journal failure propagates and failed execution evidence cannot become successful (0.94811ms)
+✔ unit cleanup failure preserves observed invocation even when journal collection also fails (2.860275ms)
+✔ independent staging checks ledger, outputs, verification and exact manifest; no candidate import (10.686635ms)
+✔ permit is checked immediately before every repository request (0.304194ms)
+✔ scheduled publication is an exclusive mode, never a manual fallback (400.226556ms)
+✔ immutable closure measurement includes dependency bytes and refuses writable files and escaped links (2.558783ms)
+✔ deployment measurement hashes every byte using bounded reads rather than whole-file allocation (8.21382ms)
+✔ deployment measurement still rejects the aggregate byte budget before reading contents (0.858651ms)
+✔ deployment measurement refuses changes to file contents, size, metadata or path during reads (12.376109ms)
+✔ a cleanup failure can retain the shared coding lease without deleting durable history (72.715723ms)
+✔ application profiles reuse a fixed contract for a matched new module and test (0.803369ms)
+✔ application profiles reject mixed, nested, unsafe, and unpaired paths (0.395699ms)
+✔ application admission needs valid and invalid evidence for both public entry points (1.104746ms)
+✔ application packages add only approved source and append tests without replacing checks (1.124469ms)
+✔ application materialization creates a fixed directory but never overwrites source (1.95943ms)
+✔ application materialization refuses unsafe parents before writing any package bytes (1.284021ms)
+✔ application evidence retains the exact independent result and fixed rejection contract (1.571273ms)
+✔ review body gives the owner the required five-part behavior decision (1.09275ms)
+✔ all run provenance hashes, publication identifiers and changed paths stay in collapsible details (0.608491ms)
+✔ rendering is deterministic across repeated calls and run property insertion order without mutating inputs (0.471994ms)
+✔ missing or malformed acceptance evidence cannot become a success or code-review claim (1.109183ms)
+✔ hashes and verified status alone cannot establish successful policy or test execution (0.98734ms)
+✔ absent evidence leaves the recommendation on hold and no missing context is invented (0.149929ms)
+✔ profile-specific technical names never change the review or deployment decision (0.440348ms)
+✔ input formatting cannot add review headings or close the evidence disclosure (0.284522ms)
+✔ approved repository changes admit normal change classes and exact existing paths (0.523896ms)
+✔ repository-change generation receives pinned contents and cannot invent paths (0.272817ms)
+✔ repository changes replace only approved regular files in a disposable candidate (1.629924ms)
+✔ repository changes retain policy limits and reject executable cases for consequential work (0.604358ms)
+✔ repository changes reject stale plans, unsafe paths and unresolved questions (0.308242ms)
+✔ ready coding scope binds exact issue, source, paths, plan and independent cases (6.811754ms)
+✔ only two complete fixed profiles are available and their contracts are immutable (0.403232ms)
+✔ schedule scope fixes paths and cases while packaging preserves all existing tests (2.910551ms)
+✔ independent profile errors cannot be swapped or supplied by a candidate (1.511106ms)
+✔ model source cannot select operations, existing validators, file modes or extra paths (0.578379ms)
+✔ only the controller appends approved new tests to the pinned manifest (0.522592ms)
+✔ materialization adds approved bytes but refuses existing files and symlink parents (4.981444ms)
+✔ source generator retains tools-disabled policy, fixed auth home and bounded prompt (0.721283ms)
+✔ independent comparisons reject forged success, missing output and abnormal termination (2.420614ms)
+✔ non-admin dispatch refuses before contacting GitHub or starting a model (164.292214ms)
+✔ the installed symlink entry cannot silently skip administrator dispatch (134.884368ms)
+✔ coding lease, completed reuse and failed reuse never silently start another attempt (110.116676ms)
+✔ issue-wide coding starts remain capped across changed spec hashes (241.317119ms)
+✔ interrupted runs and unsafe spec files require explicit administrator recovery (81.439184ms)
+✔ scheduled admission consumes one approval with its durable run and reuses failed delivery (124.985341ms)
+✔ scheduled daily admission counts manual starts and a fresh approval cannot reset issue attempts (261.179553ms)
+✔ six-start setup approval counts existing manual and scheduled starts and blocks the seventh (496.605971ms)
+✔ six-start setup approval cannot reset the cumulative three-start issue limit (237.814746ms)
+✔ scheduled admission rejects changed bindings, unexpected authority and corrupt time without clearing history (139.956264ms)
+✔ scheduled admission refuses malformed approval metadata anywhere in history (509.586099ms)
+✔ scheduled admission refuses duplicate consumption of any older approval (290.42989ms)
+✔ empty arrays produce the exact ordered zero summary (1.96998ms)
+✔ mixed statuses count every run (0.228937ms)
+✔ each status independently determines attention (0.261679ms)
+✔ sensitive-looking metadata is neither inspected nor reproduced (0.177334ms)
+✔ invalid collections, records, and statuses are rejected (1.937059ms)
+✔ 1000 records are accepted (0.520958ms)
+✔ CLI prints exactly one summary and omits metadata (81.499168ms)
+✔ CLI accepts an empty array (77.573001ms)
+✔ CLI rejects malformed JSON and invalid records without leaking input (779.055287ms)
+✔ CLI enforces the 64 KiB byte boundary (238.945665ms)
+✔ CLI counts UTF-8 bytes, including ignored metadata (74.820712ms)
+✔ CLI rejects invalid UTF-8 (82.630001ms)
+✔ parses a completed structured Codex turn and retains reported usage (2.196971ms)
+✔ failed, unfinished, or tool-using turns cannot become accepted plans (0.666044ms)
+✔ invalid usage or non-JSON final output fails closed (0.406414ms)
+✔ only the exact disabled-host startup notice is recorded as a warning (0.344342ms)
+✔ intake rejects pull requests, closed issues, and empty scope (0.388178ms)
+✔ remote pause signals are cached briefly and freshly checked on request (0.484042ms)
+✔ CLI requires explicit operator scope approval before accessing GitHub (112.887876ms)
+✔ live adapter fixes its command and keeps issue text and credentials out of arguments (2.685514ms)
+✔ live and fixture results cannot collide, and live artifacts retain provenance and usage (388.867049ms)
+✔ Linux timeout terminates the planner process group, including descendants (1586.709177ms)
+✔ approved files are privately snapshotted and only one publisher can run (150.939977ms)
+✔ writable, aliased, symlinked, and unapproved package files are refused (1.750069ms)
+✔ draft intent survives an interrupted request and blocks another package for the issue (391.973133ms)
+✔ three failed mutation attempts stop writes across different approved packages (438.146619ms)
+✔ interrupted locks and corrupt history are never automatically discarded (46.980033ms)
+✔ authentication signs the expected App identity, restricts the token, and revokes it after use (27.052438ms)
+✔ the credential capability refuses merge, approval, settings changes, main writes, and non-draft PRs (3.982963ms)
+✔ wrong identity and elevated App permissions fail before minting a token (3.013104ms)
+✔ invalid token rights, broad scope, and operation failures still revoke minted tokens (4.304568ms)
+✔ network failures do not expose credential-shaped error details (0.968278ms)
+✔ approval binds the exact package bytes and publication identity (3.263552ms)
+✔ an unapproved package cannot reach GitHub (0.778322ms)
+✔ manual exact-byte approval publishes all six demo assets, glossary, matched source tests and manifest (8.864552ms)
+✔ manual demo publishing rejects sibling paths, nested paths, traversal, case variants and agent instructions (7.289724ms)
+✔ demo manifest permits only matched appended tests and preserves validator and lifecycle checks (12.844877ms)
+✔ demo and glossary additions retain credential scanning, file limits and pinned denylist checks (1.573547ms)
+✔ the final published change review keeps publication hashes in collapsed evidence (4.173117ms)
+✔ a prepared application package publishes its matched new tests without changing validators (4.118832ms)
+✔ publishes the exact approved files to a new bot-authored draft and reuses it without writes (2.095729ms)
+✔ rejects unsupported paths, operations, duplicate files, credentials, and oversized packages before network access (4.11063ms)
+✔ missing human approval, code ownership, trusted CI, or non-bypass protection refuses all writes (3.667786ms)
+✔ stale scope, pause signals, or protected paths refuse all writes (3.509721ms)
+✔ a branch-only partial publication resumes without rewriting the branch (1.866137ms)
+✔ a lost PR response reconciles the existing draft instead of posting another (1.814281ms)
+✔ unexpected branch contents or a changed PR fail closed without repair writes (11.221128ms)
+✔ pause activated after object creation prevents later branch or PR publication (1.375293ms)
+✔ symlink parents cannot be used for publishing (0.469744ms)
+✔ an unresolved draft intent permits discovery but never another draft POST (1.643023ms)
+✔ saves a validated report, pinned inputs, event history, and explicit unknown usage (186.656849ms)
+✔ duplicate delivery reuses a result, but changed issue content creates a new input (347.947352ms)
+✔ refuses storage inside the checkout, including a symlink alias (1.561464ms)
+✔ pause and missing fixture approval block before spawning a planner (76.588963ms)
+✔ missing or ambiguous pause state fails closed (38.277295ms)
+✔ timeout kills the simulated planner before returning and records its outcome (156.491861ms)
+✔ a pause during planning terminates the planner and persists cancellation (90.601133ms)
+✔ loss of pause state during a run cancels work (74.657522ms)
+✔ only one job can use a store; operator cancellation releases it (74.369731ms)
+✔ invalid output fails rather than creating a successful report (150.511146ms)
+✔ a valid clarification request is distinct from a ready plan (149.061297ms)
+✔ plan text retains Unicode through process pipes (144.175109ms)
+✔ oversized process output fails and leaves no accepted plan (137.101436ms)
+✔ failed runs do not retry automatically, and explicit retries stop at the ceiling (519.563095ms)
+✔ restart recovery marks abandoned work interrupted and never retries it (399.298726ms)
+✔ shell-looking issue text remains recorded data and does not execute (152.804123ms)
+✔ CLI fails clearly on missing arguments and reports an empty store (265.511782ms)
+✔ gate combination 0: API and CLI agree (84.603665ms)
+✔ gate combination 1: API and CLI agree (83.14544ms)
+✔ gate combination 2: API and CLI agree (79.139809ms)
+✔ gate combination 3: API and CLI agree (75.129847ms)
+✔ gate combination 4: API and CLI agree (80.74898ms)
+✔ gate combination 5: API and CLI agree (76.680117ms)
+✔ gate combination 6: API and CLI agree (89.52162ms)
+✔ gate combination 7: API and CLI agree (93.778771ms)
+✔ gate combination 8: API and CLI agree (90.292568ms)
+✔ gate combination 9: API and CLI agree (90.134688ms)
+✔ gate combination 10: API and CLI agree (100.23558ms)
+✔ gate combination 11: API and CLI agree (87.317646ms)
+✔ gate combination 12: API and CLI agree (91.955251ms)
+✔ gate combination 13: API and CLI agree (84.737025ms)
+✔ gate combination 14: API and CLI agree (82.736705ms)
+✔ gate combination 15: API and CLI agree (112.836372ms)
+✔ gate combination 16: API and CLI agree (100.971648ms)
+✔ gate combination 17: API and CLI agree (90.934641ms)
+✔ gate combination 18: API and CLI agree (99.714382ms)
+✔ gate combination 19: API and CLI agree (91.441967ms)
+✔ gate combination 20: API and CLI agree (79.646859ms)
+✔ gate combination 21: API and CLI agree (82.236745ms)
+✔ gate combination 22: API and CLI agree (81.810622ms)
+✔ gate combination 23: API and CLI agree (100.034912ms)
+✔ gate combination 24: API and CLI agree (97.924519ms)
+✔ gate combination 25: API and CLI agree (95.251584ms)
+✔ gate combination 26: API and CLI agree (96.970396ms)
+✔ gate combination 27: API and CLI agree (87.037089ms)
+✔ gate combination 28: API and CLI agree (109.012661ms)
+✔ gate combination 29: API and CLI agree (110.710828ms)
+✔ gate combination 30: API and CLI agree (94.208515ms)
+✔ gate combination 31: API and CLI agree (91.458363ms)
+✔ integer boundaries and all daily limits (1187.420216ms)
+✔ reject invalid top-level values (534.672171ms)
+✔ reject missing fields and extra metadata before reporting readiness (1143.860802ms)
+✔ reject invalid boolean types for every boolean field (2630.387197ms)
+✔ reject invalid integer types and ranges (1953.912495ms)
+✔ API requires own data fields and does not invoke accessors (0.407691ms)
+✔ API preserves frozen input and returns independent reports (0.177248ms)
+✔ CLI rejects malformed JSON and multiple input objects (664.706721ms)
+✔ CLI accepts surrounding JSON whitespace (118.150624ms)
+✔ CLI byte limit includes whitespace and accepts exactly 4096 bytes (369.245616ms)
+✔ CLI rejects invalid UTF-8 rather than replacing bytes (491.677175ms)
+✔ CLI rejects Unicode metadata and counts encoded input bytes (178.800592ms)
+✔ building reconstruction scope parses explicitly and rejects inferred or unknown authority (1.380209ms)
+✔ the registered agent contract inspects legacy and V2 snapshots without adding or losing stored fields (823.69975ms)
+✔ selected levels and attached references cannot grant the building capability (894.401586ms)
+✔ typed building scripts preserve ownership, isolate coincident rooms and save review scope without accepting (959.23511ms)
+✔ floor reconstruction authority stays on the base level after rebuilding and transferring the selected furnishing (747.961713ms)
+✔ floor-only building edits bind one selected level and preserve other floors after rejected retargeting (754.910945ms)
+✔ cross-level furnishing transfers require explicit ownership assignments and preserve supported groups atomically (802.734019ms)
+✔ queued building sources, scope and level references survive processing, review, explicit acceptance and restart (1951.351334ms)
+✔ whole-building authoring compiles three coincident floors with stairs and no false exterior doors (62.518928ms)
+✔ one-floor reconstruction preserves other storeys, contents, slabs, roof and incident stairs exactly (237.785163ms)
+✔ a failed level edit preserves the draft when retained stairs or slab no longer fit (7.542438ms)
+✔ legacy content moves into a unique zero level, and building contents retain their owner (17.839656ms)
+✔ authoring rejects unknown fields and accessors before running untrusted getters (0.751247ms)
+✔ coincident floor plans resolve ownership and elevations without mutating the building (19.059475ms)
+✔ level projections include incident stairs while their world base remains the lower level (4.105183ms)
+✔ roof queries return local underside height for either pitch direction or flat roofs (21.496714ms)
+✔ the real ScriptBox compiler accepts building arrays, mixed openings and both named roof profiles (858.51369ms)
+✔ pinned Codex app-server starts with an isolated auth home (754.197181ms)
+✔ device authorization exposes only the documented URL and transitions to a ChatGPT account (3.649921ms)
+✔ device authorization cancels and fails closed on unsupported protocol data (1.594598ms)
+✔ concurrent starts share one code and cancellation ignores stale completion (1.7772ms)
+✔ cancelling while a code is being issued cancels the upstream attempt (6.298801ms)
+✔ a foreign installation login and expired completion cannot connect the account (4.677796ms)
+✔ expired device authorization is cancelled and becomes retryable (35.602954ms)
+✔ proposal worker uses one ephemeral read-only thread and only the BIM tool namespace (11.235771ms)
+✔ proposal timeout interrupts the active Codex turn (11.647225ms)
+✔ already cancelled proposals do not create a Codex thread (3.037844ms)
+✔ cancellation during thread creation settles immediately and never starts a turn (4.823257ms)
+✔ cancellation during turn startup interrupts its late identity and revokes tool dispatch (1.107907ms)
+✔ cancellation discards an in-flight script reply and ignores late completion (2.017417ms)
+✔ timeout during turn startup settles before the RPC and interrupts a late turn (11.719957ms)
+✔ only a host terminal reply completes authoring and completed runs detach cancellation (2.850215ms)
+✔ prepared source images are sent as actual localImage inputs alongside request text (1.066542ms)
+✔ a 6 by 4 metre sketch produces two connected rooms, five walls, two doors and an inspectable delta (28.867535ms)
+✔ wall and host identities are deterministic across input order, repeated reconstruction and negative coordinates (13.930132ms)
+✔ opening offsets are room-relative on merged horizontal and vertical walls on all four sides (5.276442ms)
+✔ inserting an earlier opening preserves existing host links and full-length opening IDs do not collide (6.426075ms)
+✔ T junctions share one continuous partition and a door cannot straddle two neighbouring room sides (4.743896ms)
+✔ gaps, overlaps, invalid bounds, duplicate identities and unreachable rooms fail deterministic validation (3.932741ms)
+✔ openings must name existing rooms, fit their own side and wall height, and never overlap (5.087383ms)
+✔ the exact schema rejects unknown fields, unsupported opening variants, fractional and unbounded dimensions (2.969787ms)
+✔ existing entity limits still apply to the compiled graph (9.498638ms)
+✔ furniture and equipment survive exactly and an incompatible floor cannot silently discard either (5.649665ms)
+✔ named FloorOpening declarations accept a mixed Door and Window array in a real TypeScript invocation (802.803774ms)
+✔ only an explicitly scoped script can author a floor, with real execution evidence and unchanged base (1518.452121ms)
+✔ a caught invalid floor leaves the draft untouched and can be corrected in the same script (802.7473ms)
+✔ reconstruction retains current draft moves and explicit furnishing removals within one script (1462.381414ms)
+✔ canonical House Pilot fixture binds project, room, entities and evidence to one revision (23.74644ms)
+✔ fixture assessment deterministically exposes one conflict and one unknown (2.747903ms)
+✔ supported values preserve measured, observed and documented provenance (15.402046ms)
+✔ entity knowledge separates evidence-backed facts, uncertainty, conflicts and unknowns (5.525017ms)
+✔ every supported fixture value resolves to inspectable evidence metadata (4.000004ms)
+✔ custom project roots serialize and restore without falling back to the demo room (6.957973ms)
+✔ custom project creation rejects unsupported entities and invalid project identities (4.109941ms)
+✔ the only executable tool uses real typed scripts; evidence, delta and explicit human acceptance survive restore (834.606756ms)
+✔ intent assumptions and self-rated certainty survive script review, acceptance and exact restore without approval authority (818.079959ms)
+✔ certainty is bounded plain review data rather than an approval threshold (0.759461ms)
+✔ high intent certainty cannot bypass geometry validation and decline metadata never mutates the model (765.243018ms)
+✔ write then throw rolls back; the next observation and corrected script start from the immutable base (828.960405ms)
+✔ a caught invalid geometry operation leaves no partial write and can be repaired in the same script (671.09897ms)
+✔ observation and decline discard staged geometry rather than persisting an implicit checkpoint (771.540733ms)
+✔ caught forbidden host access poisons the attempt and cannot be followed by a proposal (77.287713ms)
+✔ an ordinary guest exception cannot hide a caught forbidden call or restore proposal authority (77.023564ms)
+✔ hostile method names and diagnostic controls still produce bounded durable failure evidence (194.470263ms)
+✔ a resource limit after a write discards it and prevents ready publication through the proposal application (61.118605ms)
+✔ cancelling one execution cannot affect another pending request sharing the runtime (711.836203ms)
+✔ provider failure after a valid scripted proposal still publishes nothing (808.623096ms)
+✔ inspection retains room memberships, doorway connections, coordinates and generated docs in the real package (773.240673ms)
+✔ returned snapshots, forged evidence, empty deltas and legacy executable authoring tools are rejected (610.687229ms)
+✔ browser-safe three-level fixture restores exactly within existing graph and storage limits (53.955167ms)
+✔ historical root hash and exact bytes survive, and chair moves retain legacy format (3.570226ms)
+✔ building ownership is required while openings reject duplicate ownership fields (5.819483ms)
+✔ stairs supply real reachability and must connect adjacent levels with contained axis-aligned footprints (13.974749ms)
+✔ incident stairs cannot obstruct exterior or internal door clearance at either endpoint (5.254924ms)
+✔ stair flights with overlapping XY and positive vertical overlap are rejected (8.83974ms)
+✔ adjacent stair flights may share an elevation boundary and unrelated levels do not block doors (6.599029ms)
+✔ furnishings require explicit new ownership; retained IDs stay put and transfers are explicit (23.809035ms)
+✔ room furnishing authoring derives ownership and preserves adjacent levels byte for byte (24.973391ms)
+✔ same-level overlap, cross-level supports, stair voids and sloping roof clearance are enforced (22.411887ms)
+✔ unrelated upper stairs do not block basement furnishings or equipment (9.812151ms)
+✔ lower solids may meet an upper slab underside but cannot cross it or move above their owner (8.793922ms)
+✔ attic nominal walls reach the ridge and are clipped by the roof underside (10.656036ms)
+✔ roofs and slabs reject invalid shape, location and thickness (6.789031ms)
+✔ changing level elevation changes dependent world bases without rewriting their entity fields (10.815094ms)
+✔ a complete office is a validated six-object delta and survives reviewed acceptance and restore (856.475804ms)
+✔ House Pilot shell editing preserves window and equipment instead of treating every object as a door (5.229983ms)
+✔ furnishing guards reject collisions, unsupported devices, exterior objects and blocked doors (5.521736ms)
+✔ one residential level has eight enclosed rooms, shared walls and a doorway path for every room (12.621361ms)
+✔ invalid room boundaries, overlapping walls and disconnected rooms are rejected deterministically (15.152563ms)
+✔ furniture cannot cross partitions or block either side of an internal door (22.163696ms)
+✔ residential export restores all identities and old single-room snapshots gain no implicit entities (27.158198ms)
+✔ room-scoped AI proposal preserves every other room and remains separate until reviewed acceptance (1129.997086ms)
+✔ explicit whole-floor transfer retains stable identity and includes source and destination in the delta (16.126377ms)
+✔ sample project contains four walls, one hosted door and metre units (32.848076ms)
+✔ a separate proposal preserves original bytes, stable ids and parent revision (10.906378ms)
+✔ all returned history and deltas are deeply immutable (2.760473ms)
+✔ same content has deterministic revision hashes across projects and restores (5.088773ms)
+✔ repeated exact proposals are idempotent and unchanged widths create no history (2.910789ms)
+✔ conflicting proposals are visible without applying either one (3.270025ms)
+✔ multiple generations retain all original ancestor snapshots (6.430829ms)
+✔ proposal validates units, fit, identity and source before changing history (3.650983ms)
+✔ semantic comparison includes added, removed, changed entities and relationships (3.856715ms)
+✔ graph validator refuses duplicates, missing hosts, bad geometry and unknown fields (2.550776ms)
+✔ corrupt saves cannot replace a valid repository (7.278234ms)
+✔ JSON input limits use encoded bytes and constructor cannot forge valid history (1.016706ms)
+✔ restoration normalizes main-first branch order and rejects invalid proposal names (6.81884ms)
+✔ a caller-supplied iterator cannot bypass graph validation and accessors never run (1.528695ms)
+✔ rectangle layout is an exact deeply frozen millimetre projection and preview round-trips (2.415124ms)
+✔ moving each side updates both adjoining corners without moving the opposite wall (4.216982ms)
+✔ translated rectangles preserve arbitrary wall identities, properties, every direction and every host side (36.597635ms)
+✔ door width and offset edits leave walls fixed and enforce exact fit on every host (6.281523ms)
+✔ shrinking any host rejects a displaced opening without repairing it (4.765892ms)
+✔ preview accepts inclusive coordinate, span, width and one millimetre boundaries (2.123358ms)
+✔ layout validation rejects every invalid numeric boundary atomically (4.822678ms)
+✔ unsupported topology is rejected geometrically without tightening the graph validator (5.360698ms)
+✔ preview copies caller data and never shares mutable layout or snapshot objects (3.286097ms)
+✔ layout proposals commit one revision, retain ancestor bases and preserve all earlier bytes (4.991851ms)
+✔ both proposal APIs share no-op, deterministic identity, idempotence and name collision behavior (5.73842ms)
+✔ version one legacy files restore with identical hashes and non-rectangles stay read-only for the new API (7.722898ms)
+✔ exact field sets and finite plain JSON are enforced at every new API boundary (3.907049ms)
+✔ both proposal APIs retain history limits without changing the full repository (33.171245ms)
+✔ accepting an AI proposal advances main while preserving the original and proposal branch (792.027467ms)
+✔ model-working AI receives bounded tools and saves only its validated proposal (933.044533ms)
+✔ proposal requests reject stale identities before calling AI and let AI recover from invalid geometry (761.877945ms)
+✔ model worker can decline without changing repository history (569.230655ms)
+✔ historical reviewed saves retain all legacy evidence names and exact bytes without script evidence (6.083429ms)
+✔ script review evidence survives proposal creation, acceptance and exact restore without legacy submit records (5.983835ms)
+✔ script evidence parses every upstream call disposition and returns detached data (1.31875ms)
+✔ script evidence rejects unknown fields, raw payloads, malformed digests, enums and coordinates (2.141998ms)
+✔ execution count and aggregate host-call limits are inclusive and sequences cannot repeat or decrease (1.67214ms)
+✔ script execution evidence enforces the exact UTF-8 byte boundary without truncation (2.707483ms)
+✔ invalid script evidence fails proposal creation and saved-review restoration atomically (17.355971ms)
+✔ script evidence rejects contradictory atomic outcomes and retains genuine discarded audit records (9.12122ms)
+✔ saved script reviews require one final successful proposal and matching actual tool evidence (55.182024ms)
+✔ recoverable failures and observations retain ordered evidence through proposal acceptance and exact restore (2.842438ms)
+✔ floor and wall references carry no move, group, or wall-attachment assumption (48.975053ms)
+✔ coincident building floor points remain distinct by level while legacy references retain their exact shape (12.625845ms)
+✔ another desk adds only a desk while the original devices and chair remain unchanged (1159.39145ms)
+✔ freestanding setup relocation resolves explicit supports without requiring an assembly entity (740.563937ms)
+✔ forged, stale and workstation-specific context fails before invoking an agent (4.2126ms)
+ℹ tests 406
+ℹ suites 0
+ℹ pass 405
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 27586.737809
+
+> bim-forge@0.1.0 test:assets
+> node --test src/asset-family.test.ts src/asset-history.test.ts src/asset-placement.test.ts src/asset-schema.test.ts src/asset-agent.test.ts
+
+✔ ordinary TypeScript authors a 1870 mm person and reuses its family at another height without replacing unrelated legacy objects (933.875494ms)
+✔ room placement derives V2 levels for coincident XY instances and keeps family definitions nonspatial (738.726392ms)
+✔ a failed asset script discards every staged definition and instance before the next execution (668.836044ms)
+✔ family immutability and all-six-extrema validation reject atomic edits while leaving unrelated assets available (557.436876ms)
+✔ ordinary asset requests keep typed execution evidence through queued processing, human acceptance and restart (1015.075898ms)
+✔ every primitive renders all analytic extrema after sizing and each quarter turn (21.577181ms)
+✔ one normalized family scales to two person heights and returns detached derived geometry (2.06564ms)
+✔ families require positive normalized primitives and raw analytic extrema on all six faces (7.978661ms)
+✔ missing/non-family IDs cannot supply geometry or footprints (0.660092ms)
+✔ asset boundaries reject unknown fields, malformed bindings, blank/control text and off-grid placement (6.691428ms)
+✔ asset proposals retain old root bytes and preserve proxy descriptions through human acceptance and exact restore (50.422279ms)
+✔ a changed family recipe requires a new ID even on a sibling proposal from before registration (21.951978ms)
+✔ restore rejects conflicting family recipes even when every saved revision hash is correct (12.85221ms)
+✔ atomic asset authoring retains the legacy format and produces only native definition/instance deltas (59.635173ms)
+✔ upserts cannot mutate recipes, overwrite shell entities, use dangling IDs or run accessors (46.936043ms)
+✔ native asset bindings derive their level and room while definitions stay nonspatial dependencies (25.571489ms)
+✔ room, shell, ceiling, door, stair, roof and upper-slab constraints apply to asset instances (52.074169ms)
+✔ occupancy is shared across ordinary furniture/assets and across equipment vertical offsets (10.472492ms)
+✔ shell and furnishing edits preserve assets or fail atomically with explicit rebinding guidance (87.438419ms)
+✔ budgets bound families, parts and combined furnishings without changing graph limits (46.224469ms)
+✔ real ScriptBox declarations accept native family arrays, primitive variants and discriminated placements (847.987988ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4512.165829
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

@@ -105,6 +105,7 @@
               <div id="wall-fields" class="dimension-grid" hidden><div><label id="wall-position-label" for="wall-position">Wall position <span>mm</span></label><input id="wall-position" type="number" min="-1000000" max="1000000" step="1" aria-describedby="edit-feedback" disabled></div><div><label for="wall-length">Wall length <span>mm</span></label><input id="wall-length" type="number" min="1" max="1000000" step="1" inputmode="numeric" aria-describedby="edit-feedback" disabled></div></div>
               <p id="selection-help" class="editor-help">Choose an object on the plan. Numeric fields are available if you prefer not to drag.</p>
             </div>
+            <section id="asset-details" class="knowledge-panel asset-details" aria-label="Generated asset family" hidden></section>
             <section id="knowledge-panel" class="knowledge-panel" aria-labelledby="knowledge-heading">
               <header><div><p class="eyebrow">MODEL KNOWLEDGE</p><h3 id="knowledge-heading">What do we know?</h3></div><span id="knowledge-summary" class="pill">No evidence</span></header>
               <p id="knowledge-empty" class="empty-note">Select an object with linked House Pilot evidence.</p>
@@ -138,8 +139,12 @@
 
       <section id="backlog-page" class="workflow-page" aria-labelledby="backlog-heading" hidden>
         <header class="page-heading"><div><p class="eyebrow">PROJECT CHANGE REQUESTS</p><h1 id="backlog-heading">Keep the ideas moving.</h1><p>Send requests, continue exploring, and review proposals when they are ready.</p></div><button id="open-current-model" class="button outline" type="button">Open current model</button></header>
-        <div class="backlog-toolbar"><div><strong id="backlog-summary">0 requests</strong><p id="backlog-connection" role="status">Connecting to the server backlog…</p></div><label for="backlog-filter">Show<select id="backlog-filter"><option value="all">All requests</option><option value="queued">Queued</option><option value="working">Working</option><option value="needs-input">Needs your input</option><option value="ready">Ready for review</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="rejected">Rejected</option><option value="cancelled">Cancelled</option></select></label></div>
-        <div id="backlog-list" class="backlog-list"></div>
+        <div class="backlog-toolbar"><div><strong id="backlog-summary">0 requests</strong><p id="backlog-connection" role="status">Connecting to the server backlog…</p></div></div>
+        <div id="backlog-tabs" class="backlog-tabs" role="tablist" aria-label="Change request status"></div>
+        <section id="backlog-panel" role="tabpanel" tabindex="0" aria-labelledby="backlog-tab-review" aria-describedby="backlog-tab-description">
+          <p id="backlog-tab-description" class="backlog-tab-description"></p>
+          <div id="backlog-list" class="backlog-list"></div>
+        </section>
       </section>
 
       <section id="activity-page" class="workflow-page" aria-labelledby="activity-heading" hidden>

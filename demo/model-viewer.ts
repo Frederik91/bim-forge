@@ -2,6 +2,7 @@ import { Engine } from '@babylonjs/core/Engines/engine.js';
 import { FileToolsOptions } from '@babylonjs/core/Misc/fileTools.pure.js';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { entityLevel } from '../src/building-levels.ts';
+import { assetGeometry } from '../src/asset-family.ts';
 import { ModelScene } from './model-scene.ts';
 import type { RenderingMode } from './model-scene.ts';
 import type { ModelSnapshot, Point } from '../src/room-model.ts';
@@ -151,10 +152,13 @@ export class ModelViewer {
   }
 
   private updateCaption(): void {
-    const item = this.state?.snapshot.entities.find((candidate) => candidate.id === this.state?.selectedId)
-      ?? this.state?.comparison?.entities.find((candidate) => candidate.id === this.state?.selectedId);
+    const current = this.state?.snapshot.entities.find((candidate) => candidate.id === this.state?.selectedId);
+    const item = current ?? this.state?.comparison?.entities.find((candidate) => candidate.id === this.state?.selectedId);
+    const source = current ? this.state?.snapshot : this.state?.comparison;
+    const asset = item?.type === 'AssetInstance' && source ? assetGeometry(source, item) : null;
+    const dimensions = asset ? ` · ${asset.family.name} · proxy ${asset.dimensions.width} × ${asset.dimensions.depth} × ${asset.dimensions.height} m` : '';
     const change = this.state?.comparison ? modelChanges(this.state.comparison, this.state.snapshot).find((entry) => entry.id === item?.id) : null;
-    this.caption.textContent = item ? `${item.name} · ${item.id}${change ? ' · ' + (change.status === 'modified' ? 'Changed: wireframe before, solid after' : change.status === 'removed' ? 'Removed: before only' : 'Added: after only') : ''}` : 'Select an object to inspect';
+    this.caption.textContent = item ? `${item.name} · ${item.id}${dimensions}${change ? ' · ' + (change.status === 'modified' ? 'Changed: wireframe before, solid after' : change.status === 'removed' ? 'Removed: before only' : 'Added: after only') : ''}` : 'Select an object to inspect';
     this.handle.setAttribute('aria-label', `Mark a destination using ${item?.name ?? 'selection'} as reference`);
     this.handle.title = 'Drag to mark a location; Enter for coordinates. No geometry is moved.';
     this.handle.hidden = !item || !this.state?.interactive;
@@ -189,7 +193,7 @@ export class ModelViewer {
         && (next.roofVisible || item.type !== 'Roof'));
     };
     const objects = [...new Map([...(state.comparison?.entities ?? []), ...state.snapshot.entities].map((item) => [item.id, item])).values()]
-      .filter((item) => inLevel(state.snapshot, item.id) || inLevel(state.comparison, item.id));
+      .filter((item) => item.type !== 'AssetFamily' && (inLevel(state.snapshot, item.id) || inLevel(state.comparison, item.id)));
     const changes = new Map((state.comparison ? modelChanges(state.comparison, state.snapshot) : []).map((item) => [item.id, item.status]));
     if (!objects.some((item) => item.id === next.selectedId) || state.comparison && !this.comparisonSelection && !changes.has(next.selectedId)) {
       next = { ...next, selectedId: objects.find((item) => changes.has(item.id))?.id ?? objects[0]?.id ?? '' };
