@@ -1,19 +1,20 @@
 import { createHash } from 'node:crypto';
 import { Type } from 'typebox';
 import type { Static, TSchema } from 'typebox';
-import { Check } from 'typebox/value';
+import { Compile } from 'typebox/compile';
 
 export const JsonSchema = Type.Cyclic({
   Json: Type.Union([Type.Null(), Type.Boolean(), Type.Number(), Type.String(),
     Type.Array(Type.Ref('Json')), Type.Record(Type.String(), Type.Ref('Json'))]),
 }, 'Json');
 export type Json = Static<typeof JsonSchema>;
+export const JsonObjectSchema = Type.Record(Type.String(), JsonSchema);
 export const IdSchema = Type.String({ minLength: 1, maxLength: 200, pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]*$' });
 export const HashSchema = Type.String({ pattern: '^[a-f0-9]{64}$' });
 const nullableId = Type.Union([IdSchema, Type.Null()]);
 export const EntitySchema = Type.Object({
   entityId: IdSchema, kind: IdSchema, typeId: nullableId, containerId: nullableId, systemId: nullableId,
-  fromId: nullableId, toId: nullableId, document: Type.Record(Type.String(), JsonSchema),
+  fromId: nullableId, toId: nullableId, document: JsonObjectSchema,
 }, { additionalProperties: false });
 export type StoredEntity = Static<typeof EntitySchema>;
 export const CommandSchema = Type.Object({
@@ -26,8 +27,19 @@ export type Command = Static<typeof CommandSchema>;
 export { ObservationSchema } from '../contracts/schema.ts';
 export type { Observation } from '../contracts/schema.ts';
 
+const validators = new WeakMap<TSchema, (value: unknown) => boolean>();
+function checkCompiled<T extends TSchema>(schema: T, value: unknown): value is Static<T> {
+  let check = validators.get(schema);
+  if (!check) {
+    const validator = Compile(schema);
+    check = (input: unknown): boolean => validator.Check(input);
+    validators.set(schema, check);
+  }
+  return check(value);
+}
+
 export function parse<T extends TSchema>(schema: T, value: unknown, label: string): Static<T> {
-  if (!Check(schema, value)) throw new Error(`Invalid ${label}`);
+  if (!checkCompiled(schema, value)) throw new Error(`Invalid ${label}`);
   return value;
 }
 
