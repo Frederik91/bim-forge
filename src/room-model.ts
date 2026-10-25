@@ -87,10 +87,27 @@ export interface Furniture {
 }
 
 export interface Bounds { minX: number; minY: number; maxX: number; maxY: number }
-export interface Level { id: EntityId; type: 'Level'; name: string; elevation: 0 }
+export interface Level { id: EntityId; type: 'Level'; name: string; elevation: number }
 export interface Space { id: EntityId; type: 'Space'; name: string; levelId: EntityId; bounds: Bounds }
 
-export type Entity = Wall | Door | Window | Equipment | Furniture | Level | Space;
+export interface Slab { id: EntityId; type: 'Slab'; name: string; levelId: EntityId; bounds: Bounds; thickness: number }
+export interface Stair {
+  id: EntityId; type: 'Stair'; name: string; fromLevelId: EntityId; toLevelId: EntityId;
+  start: Point; end: Point; width: number; steps: number;
+}
+export type RoofProfile = { kind: 'flat'; height: number }
+  | { kind: 'gable'; eaveHeight: number; ridgeHeight: number; ridgeAxis: 'x' | 'y' };
+export interface Roof {
+  id: EntityId; type: 'Roof'; name: string; levelId: EntityId;
+  bounds: Bounds; thickness: number; profile: RoofProfile;
+}
+export type LegacyEntity = Wall | Door | Window | Equipment | Furniture | Level | Space;
+export type BuildingWall = Wall & { levelId: EntityId };
+export type BuildingFurniture = Furniture & { levelId: EntityId };
+export type BuildingEquipment = Equipment & { levelId: EntityId };
+export type BuildingEntity = BuildingWall | BuildingFurniture | BuildingEquipment
+  | Door | Window | Level | Space | Slab | Stair | Roof;
+export type Entity = LegacyEntity | BuildingEntity;
 
 export interface HostingRelationship {
   id: EntityId;
@@ -100,10 +117,25 @@ export interface HostingRelationship {
   offset: number;
 }
 
-export interface ModelSnapshot {
+export interface LegacySnapshot {
+  version?: never;
   units: 'm';
-  entities: Entity[];
+  entities: LegacyEntity[];
   relationships: HostingRelationship[];
+}
+export interface SnapshotV2 {
+  version: 2;
+  units: 'm';
+  entities: BuildingEntity[];
+  relationships: HostingRelationship[];
+}
+export type ModelSnapshot = LegacySnapshot | SnapshotV2;
+/** Read views are graphs, not complete snapshots suitable for persistence/validation. */
+export interface ModelGraph {
+  readonly version?: 2;
+  readonly units: 'm';
+  readonly entities: readonly Entity[];
+  readonly relationships: readonly HostingRelationship[];
 }
 
 export interface RoomLayout {
