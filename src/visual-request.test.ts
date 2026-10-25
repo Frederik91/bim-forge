@@ -5,6 +5,8 @@ import { parseVisualRequest } from './visual-request.ts';
 import { prepareModelProposal } from './model-proposal.ts';
 import type { Furniture } from './room-model.ts';
 import type { ModelWorkerSession } from './model-proposal.ts';
+import { viewerBuilding } from '../demo/building-viewer-fixture.ts';
+import { levelView } from './building-levels.ts';
 
 async function office() {
   const shell = await RoomRepository.create('Visual request test');
@@ -33,6 +35,29 @@ test('floor and wall references carry no move, group, or wall-attachment assumpt
   assert.equal(repo.serialize(), saved, 'a reference cannot change model geometry or history');
 });
 
+test('coincident building floor points remain distinct by level while legacy references retain their exact shape', async () => {
+  const snapshot = viewerBuilding(); const saved = JSON.stringify(snapshot);
+  for (const levelId of ['basement', 'ground', 'attic']) {
+    const request = { kind: 'spatial-reference', destination: { kind: 'floor-point', levelId, positionMm: [4500, 1000] } };
+    assert.deepEqual(parseVisualRequest(snapshot, request), request);
+    assert.deepEqual(parseVisualRequest(levelView(snapshot, levelId), request), request);
+    const wall = { kind: 'spatial-reference', destination: { kind: 'wall-point', wallId: levelId + '-shared', alongWallMm: 1000 } };
+    assert.deepEqual(parseVisualRequest(snapshot, wall), wall);
+  }
+  for (const destination of [
+    { kind: 'floor-point', positionMm: [4500, 1000] },
+    { kind: 'floor-point', levelId: 'unknown', positionMm: [4500, 1000] },
+    { kind: 'floor-point', levelId: 'ground', positionMm: [6500, 1000] },
+    { kind: 'floor-point', levelId: 'ground', positionMm: [4500.5, 1000] },
+    { kind: 'floor-point', levelId: 'ground', positionMm: [4500, 1000], elevation: 0 },
+  ]) assert.throws(() => parseVisualRequest(snapshot, { kind: 'spatial-reference', destination }));
+  const repo = await RoomRepository.create(); const legacy = repo.view(repo.head('main')).snapshot;
+  const request = { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [3000, 1000] } };
+  assert.deepEqual(parseVisualRequest(legacy, request), request);
+  assert.throws(() => parseVisualRequest(legacy, { ...request, destination: { ...request.destination, levelId: 'ground' } }));
+  assert.equal(JSON.stringify(snapshot), saved);
+});
+
 test('another desk adds only a desk while the original devices and chair remain unchanged', async () => {
   const repo = await office(); const before = repo.view(repo.head('main')).snapshot;
   const furnishings = before.entities.filter((item) => item.type === 'Furniture');
@@ -50,7 +75,7 @@ test('another desk adds only a desk while the original devices and chair remain 
     const next = { ...newDesk, id: 'new-desk' };
     assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
       await model.previewFurnishings(${JSON.stringify({ furnishings: [...furnishings, next] })});
-      return {kind:'propose',review:{summary:'Create one freestanding desk.',rationale:'Selection is a reference, not a move command.',
+      return {kind:'propose',review:{intent:{interpretation:'Create one freestanding desk.',assumptions:[],certainty:90,basis:'The fixture requests another desk without companions.'},summary:'Create one freestanding desk.',rationale:'Selection is a reference, not a move command.',
         constraints:'All original objects retained exactly.',uncertainty:'Concept-only placement.'}};
     ` })).ok, true);
   } });
@@ -73,7 +98,7 @@ test('freestanding setup relocation resolves explicit supports without requiring
     assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
       await model.inspect();
       await model.previewFurnishings(${JSON.stringify({ furnishings: moved })});
-      return {kind:'propose',review:{summary:'Relocate desk, screen, laptop and chair.',rationale:'Explicitly requested setup companions; no assembly is required.',
+      return {kind:'propose',review:{intent:{interpretation:'Relocate the requested items.',assumptions:[],certainty:90,basis:'The fixture explicitly names the companions.'},summary:'Relocate desk, screen, laptop and chair.',rationale:'Explicitly requested setup companions; no assembly is required.',
         constraints:'Shell, corner table, plant and supports preserved.',uncertainty:'Circulation requires design review.'}};
     ` })).ok, true);
   } });

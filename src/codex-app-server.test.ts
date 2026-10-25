@@ -381,3 +381,22 @@ test('only a host terminal reply completes authoring and completed runs detach c
   await completed; success.abort(); await tick();
   assert.equal(rpc.requests.some((request) => request.method === 'turn/interrupt'), false);
 });
+
+test('prepared source images are sent as actual localImage inputs alongside request text', async (t) => {
+  const rpc = proposalRpc();
+  const connection = await CodexAccountConnection.open({ rpc }); t.after(() => connection.close());
+  const session = { ...proposalSession(new AbortController().signal, async () => ({ ok: true, done: true })),
+    input: { sourceDocuments: [{ sourceId: 'plan-source', text: 'Reference page 1' }] },
+    images: [{ path: '/tmp/private-attempt/plan-1.png' }, { path: '/tmp/private-attempt/plan-2.png' }] };
+  const completed = connection.modelWorker().run(session);
+  await tick();
+  const turn = rpc.requests.find((entry) => entry.method === 'turn/start');
+  assert.ok(turn && turn.params !== null && typeof turn.params === 'object' && 'input' in turn.params);
+  assert.deepEqual(turn.params.input, [
+    { type: 'text', text: JSON.stringify(session.input), text_elements: [] },
+    { type: 'localImage', path: '/tmp/private-attempt/plan-1.png' }, { type: 'localImage', path: '/tmp/private-attempt/plan-2.png' },
+  ]);
+  await rpc.serverRequest('item/tool/call', { threadId: 'cancel-thread', namespace: 'bim_model', tool: 'run_model_script', arguments: {} });
+  rpc.emit('turn/completed', { threadId: 'cancel-thread', turn: { id: 'cancel-turn', status: 'completed' } });
+  await completed;
+});

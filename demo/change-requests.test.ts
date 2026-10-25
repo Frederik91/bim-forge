@@ -24,6 +24,7 @@ const worker: ModelWorker = { identity: { provider: 'test', model: 'backlog-agen
     await model.inspect();
     await model.previewRectangle(${JSON.stringify(visual.layout)});
     return { kind: 'propose', review: {
+      intent: {interpretation:'Widen the entry.',assumptions:[],certainty:90,basis:'The fixture request specifies the width.'},
       summary: 'Widen the entry.', rationale: 'Requested width fits the host.',
       constraints: 'Keep the room shell and hosting.', uncertainty: 'Concept model, not construction approval.'
     } };
@@ -143,9 +144,10 @@ test('acceptance and its ticket decision are atomic, replay-safe and cannot over
   assert.equal(accepted.ticket.state, 'completed');
   assert.equal((await decide(queue, 'one', { action: 'accept', decisionId: 'decision-one' })).project, accepted.project);
   await assert.rejects(() => decide(queue, 'one', { action: 'reject', decisionId: 'decision-one' }), /another action/);
-  await assert.rejects(() => decide(queue, 'two', { action: 'accept', decisionId: 'decision-two' }), /older or unaccepted/);
+  await assert.rejects(() => decide(queue, 'two', { action: 'accept', decisionId: 'decision-two' }), /Conflicting changes to door-entry/);
   assert.equal(queue.project(repo.projectId), accepted.project);
   assert.equal(queue.get('two').state, 'needs-input');
+  assert.match(queue.get('two').error ?? '', /Conflicting changes to door-entry/);
   await assert.rejects(() => queue.submit(repo.serialize(), request(repo, 'old-client', 'old-client-entry')), /server model changed/);
   const revised = await queue.revise('two', current.serialize(), request(current, 'two-revised', 'revised-entry', 1300));
   assert.equal(revised.id, 'two'); assert.equal(revised.history.length, 1);

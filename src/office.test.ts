@@ -41,7 +41,7 @@ test('a complete office is a validated six-object delta and survives reviewed ac
       assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
         await model.inspect();
         await model.previewFurnishings(${JSON.stringify({ furnishings: officeItems })});
-        return {kind:'propose',review:{summary:'Add six office furnishings.',rationale:'Clear entry with a desk facing north.',
+        return {kind:'propose',review:{intent:{interpretation:'Furnish the office.',assumptions:[],certainty:90,basis:'The fixture names all six items.'},summary:'Add six office furnishings.',rationale:'Clear entry with a desk facing north.',
           constraints:'One entry door retained.',uncertainty:'Concept only, not construction approval.'}};
       ` })).ok, true);
       session.recordProviderEvent({ responseId: 'office-turn', inputTokens: 100, outputTokens: 50, totalTokens: 150 });
