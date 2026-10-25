@@ -1,0 +1,15 @@
+✔ full typed documents survive immutable versions, CAS, retry and branch divergence (345.198845ms)
+✔ dangling relationships abort all publication, delete tombstones preserve history (77.706575ms)
+✔ two real database connections racing one expected head publish exactly one command (25.770951ms)
+✔ W0 fixture load preserves all source documents/counts/checksums and type projections (114.676324ms)
+✔ existing product snapshot and delta oracles agree within unchanged native limits (131.541259ms)
+✔ command boundary rejects silent overwrites, duplicate writes and malformed endpoints (0.965298ms)
+✔ W4 COPY decoder preserves typed properties, escaped content and independent bigint namespaces (1.964217ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1784.865889

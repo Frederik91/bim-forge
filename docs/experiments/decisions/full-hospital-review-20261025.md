@@ -24,7 +24,7 @@ The 25 earlier consolidated records remain immutable. Adding this terminal recor
 
 ## Subsequent transport verification
 
-The full run retained its original transport. After the run and exact state capture, integration source `1146065ebabab93bdaef932402fb796b9f82cc4e` passed seven storage checks in a new PostgreSQL database, `qvm_w5_postfull_20261025a`. The [test output](full-hospital-20261025/postfull-transport-tests.log) and [source binding](full-hospital-20261025/postfull-source-commit.txt) are retained. This includes typed-document readback, CAS races, reference rejection, retries, branch divergence and history checks, plus boundary/decoder cases. No tests were skipped.
+The full run retained its original transport. After the run and exact state capture, integration source `1146065ebabab93bdaef932402fb796b9f82cc4e` passed seven storage checks in a new PostgreSQL database, `qvm_w5_postfull_20261025a`. The [test output](full-hospital-20261025/postfull-transport-tests.txt) and [source binding](full-hospital-20261025/postfull-source-commit.txt) are retained. This includes typed-document readback, CAS races, reference rejection, retries, branch divergence and history checks, plus boundary/decoder cases. No tests were skipped.
 
 That source removes a duplicate outer document from insert arguments while preserving complete bodies, SQL-visible fields and version hashes. Its separate 65-entity byte diagnostic and tests do not establish a full-load speedup. The full trial was not rerun with this change. Selection utility unit tests passed earlier, but its full working-set queries were not run against an unpublished partial graph.
 
