@@ -19,7 +19,7 @@ export const storageScenarios = [
 
 export function pendingStorageObservations(): Observation[] {
   return storageScenarios.map((scenario) => ({ ...scenario, passed: false,
-    observed: 'Not executed: awaiting coordinator-supplied W5 PostgreSQL schema/CLI contract, W0 fixture/record contract and a server execution lease.',
+    observed: 'Not executed: awaiting coordinator-supplied W5 PostgreSQL schema/CLI implementation contract and a server execution lease. W0 contract v1 is available.',
     limitations: ['This is an uncovered case, not an observed candidate failure.', 'Portable package checks do not qualify database recovery, model interpretation or atomic acceptance.'],
   }));
 }
