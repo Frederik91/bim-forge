@@ -24,6 +24,7 @@ async function main(): Promise<void> {
     observationSchema: await bindingFor(root, 'experiments/contracts/schema.ts'),
     recordWriter: await bindingFor(root, 'experiments/contracts/records.ts'),
     runner: await bindingFor(root, 'experiments/semantic/runner.ts'),
+    candidate: await bindingFor(root, 'experiments/semantic/candidate.ts'),
   };
   const registry: unknown = JSON.parse((await readFile(path.join(root, bindings.definition.path), 'utf8')).replace(/^\uFEFF/, ''));
   const referenceInput: unknown = JSON.parse(await readFile(path.join(root, bindings.sharedFixture.path), 'utf8'));
@@ -31,9 +32,9 @@ async function main(): Promise<void> {
   // Reserve before execution; an existing run directory is never overwritten.
   await mkdir(output);
   const { observations, artifacts } = await runSemanticCases();
-  const coverage = coverageFor(registry, observations);
-  const raw = JSON.stringify({ format: 'w1-standalone-raw-v1',
-    variant: 'baseline-room-model', baselineReferenceCommit: 'f6a7db7c1366eea48a3c677e518efe0f2816383b',
+  const coverage = [...coverageFor(registry, observations), ...coverageFor(registry, observations, 'VM-C1-semantic-prototype')];
+  const raw = JSON.stringify({ format: 'w1-standalone-raw-v2',
+    variants: ['baseline-room-model', 'VM-C1-semantic-prototype'], baselineReferenceCommit: 'f6a7db7c1366eea48a3c677e518efe0f2816383b',
     authoritativeW0ContractCommit: W0_CONTRACT_COMMIT, bindings,
     sourceGit: { commit: bindings.runner.commit, repositoryRoot: root,
       verification: 'bindingFor verified committed bytes using the available Git object database.' },

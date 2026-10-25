@@ -9,14 +9,17 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { Type } from 'typebox';
 import { Check } from 'typebox/value';
-import { RoomRepository } from '../../src/room-model.ts';
+import { RoomRepository, identifier, validateSnapshot } from '../../src/room-model.ts';
 import { concurrencyCases, emptyReservedRegion, northWallGap } from './concurrency.ts';
-import { current, entity, fixture } from './fixture.ts';
+import { change, current, entity, fixture, furniture, move } from './fixture.ts';
 import { coverageFor } from './coverage.ts';
 import { identityCases } from './identity.ts';
 import { parseObservations } from './protocol.ts';
 import type { CaseResult, Observation } from './protocol.ts';
 import { runSemanticCases } from './runner.ts';
+import { SemanticCandidate, canonical } from './candidate.ts';
+import type { Predicate } from './candidate.ts';
+import { candidateCases, candidateCommand, candidateDraft } from './candidate-cases.ts';
 
 function caseById(cases: CaseResult[], caseId: string): CaseResult {
   const value = cases.find((item) => item.observation.caseId === caseId);
@@ -117,6 +120,120 @@ test('coverage accounts for exact W0 definition assertions and refuses stale def
   assert.equal(coverage.find((item) => item.experimentId === 'EX-03')?.coverage[2]?.coverage, 'not-covered');
   assert.throws(() => coverageFor({ experiments: [] }, observations), /stale/);
   assert.throws(() => coverageFor(registry, observations.filter((item) => item.caseId !== 'native-identity-restore')), /unobserved/);
+  const candidateCoverage = coverageFor(registry, observations, 'VM-C1-semantic-prototype');
+  assert.equal(candidateCoverage.find((item) => item.experimentId === 'EX-03')?.coverage[0]?.coverage, 'not-covered');
+  assert.ok(candidateCoverage.flatMap((item) => item.coverage).every((item) => item.caseIds.every((id) => id.startsWith('vmc1-'))));
+});
+
+test('VM-C1 compares the same expectations against independently executed native inputs', async () => {
+  const baseline = [...await identityCases(), ...await concurrencyCases()];
+  const candidate = await candidateCases(baseline);
+  for (const item of candidate) {
+    const reference = baseline.find((base) => `vmc1-${base.observation.caseId}` === item.observation.caseId);
+    assert.ok(reference);
+    assert.equal(item.observation.expected, reference.observation.expected);
+    assert.equal(item.artifact.variant, 'VM-C1-semantic-prototype');
+    assert.equal(item.observation.passed, true, item.observation.caseId);
+    assert.ok(item.artifact.operations.length > 0);
+    assert.ok(item.observation.limitations.length > 0);
+  }
+  for (const id of ['native-id-churn-lineage', 'native-split-merge-lineage', 'phantom-empty-region-assumption',
+    'changed-destination-wall-valid-geometry', 'acceptance-command-payload-retry', 'declared-independent-metadata-fields']) {
+    assert.equal(caseById(baseline, id).observation.passed, false);
+    assert.equal(caseById(candidate, `vmc1-${id}`).observation.passed, true);
+  }
+});
+
+test('candidate command receipts preserve original payload and head across retries after subsequent edits', async () => {
+  const root = SemanticCandidate.create(current(await fixture()));
+  const snapshot = root.head().snapshot;
+  const draft = candidateDraft(root, 'move-desk', move(snapshot, 'desk-one', [1.4, 2]));
+  const command = candidateCommand(draft);
+  const first = root.apply(command);
+  const later = first.state.apply(candidateCommand(candidateDraft(first.state, 'move-bed', move(first.state.head().snapshot, 'bed-one', [4.2, 2.5]))));
+  const before = later.state.serialize();
+  const retry = later.state.apply({ draft, actor: command.actor, commandId: command.commandId });
+  assert.equal(retry.state, later.state);
+  assert.deepEqual(retry.receipt, first.receipt);
+  assert.equal(retry.state.serialize(), before);
+  assert.throws(() => later.state.apply({ ...command, actor: 'Altered fixture actor' }), /changed payload/);
+  assert.throws(() => later.state.apply({ ...command, draft: { ...draft, fieldRule: 'isolated-furniture-name-kind-v1' } }), /changed payload/);
+  assert.throws(() => later.state.apply({ ...command, commandId: 'different-command' }), /already has an application receipt/);
+  assert.throws(() => later.state.apply({ ...command, approved: true }), /boundary/);
+  assert.equal(later.state.serialize(), before);
+  assert.throws(() => Object.defineProperty(retry.receipt, 'actor', { value: 'Changed' }), TypeError);
+});
+
+test('candidate predicates affect revision identity and reject later phantom insertions without partial publication', async () => {
+  const root = SemanticCandidate.create(current(await fixture())); const snapshot = root.head().snapshot;
+  const predicate: Predicate = { kind: 'empty-region', bounds: { minX: .6, minY: .7, maxX: 2, maxY: 2.5 }, exceptId: 'desk-one' };
+  const moved = move(snapshot, 'desk-one', [1.4, 2]);
+  const bare = root.apply(candidateCommand(candidateDraft(root, 'move-desk', moved)));
+  const constrained = root.apply(candidateCommand(candidateDraft(root, 'move-desk', moved, { predicates: [predicate] })));
+  assert.notEqual(bare.state.head().id, constrained.state.head().id);
+  assert.equal(canonical(bare.state.head().snapshot), canonical(constrained.state.head().snapshot));
+  assert.equal(constrained.receipt.equivalence.checks[0]?.passed, true);
+  const insertion = candidateDraft(root, 'insert-chair', validateSnapshot({ ...snapshot, entities: [...snapshot.entities,
+    furniture({ id: 'phantom-chair', kind: 'chair', position: [1, 1] })] }));
+  const before = constrained.state.serialize();
+  assert.throws(() => constrained.state.apply(candidateCommand(insertion)), /predicate requires renewed review/);
+  assert.equal(constrained.state.serialize(), before);
+  assert.equal(constrained.state.receipts().length, 1);
+  assert.throws(() => candidateDraft(root, 'invalid-region', moved, { predicates: [{ ...predicate,
+    bounds: { minX: -1, minY: 0, maxX: 2, maxY: 2 } }] }), /clear native room bounds/);
+  assert.throws(() => root.apply({ ...candidateCommand(insertion), draft: { ...insertion,
+    baseRevisionId: 'f'.repeat(64) } }), /ancestry/);
+});
+
+test('candidate field independence is opt-in, rejects shape edits, and still rejects divergent same-field values', async () => {
+  const root = SemanticCandidate.create(current(await fixture())); const snapshot = root.head().snapshot;
+  const rule = { fieldRule: 'isolated-furniture-name-kind-v1' } satisfies { fieldRule: 'isolated-furniture-name-kind-v1' };
+  const renamedSnapshot = change(snapshot, 'chair-one', (item) => ({ ...item, name: 'Occurrence alpha' }));
+  const rename = candidateDraft(root, 'rename-chair', renamedSnapshot, rule);
+  const named = root.apply(candidateCommand(rename));
+  const classification = change(snapshot, 'chair-one', (item) => {
+    if (item.type !== 'Furniture') throw new Error('Expected chair fixture.');
+    return { ...item, kind: 'plant' };
+  });
+  assert.throws(() => named.state.apply(candidateCommand(candidateDraft(root, 'classify-chair', classification))), /Entity conflict/);
+  const independent = candidateDraft(root, 'classify-chair', classification, rule);
+  const undeclared = root.apply(candidateCommand(candidateDraft(root, 'rename-without-rule', renamedSnapshot)));
+  assert.throws(() => undeclared.state.apply(candidateCommand(independent)), /not declared by the prior application/);
+  const merged = named.state.apply(candidateCommand(independent));
+  const chair = entity(merged.state.head().snapshot, 'chair-one');
+  assert.ok(chair.type === 'Furniture');
+  assert.equal(chair.name, 'Occurrence alpha'); assert.equal(chair.kind, 'plant');
+  const shape = change(snapshot, 'chair-one', (item) => {
+    if (item.type !== 'Furniture') throw new Error('Expected chair fixture.');
+    return { ...item, width: .5 };
+  });
+  assert.throws(() => named.state.apply(candidateCommand(candidateDraft(root, 'wide-chair', shape, rule))), /cannot establish independence/);
+  const divergent = candidateDraft(root, 'rename-other', change(snapshot, 'chair-one', (item) => ({ ...item, name: 'Occurrence beta' })), rule);
+  assert.throws(() => named.state.apply(candidateCommand(divergent)), /Divergent field conflict/);
+});
+
+test('candidate lineage binds actual deltas, rejects fabricated endpoints, and prevents resurrection of native identities', async () => {
+  const root = SemanticCandidate.create(current(await fixture())); const snapshot = root.head().snapshot;
+  const replacement = change(snapshot, 'chair-one', (item) => ({ ...item, id: identifier('chair-recreated') }));
+  assert.throws(() => candidateDraft(root, 'recreate-chair', replacement), /complete explicit object lineage/);
+  assert.throws(() => candidateDraft(root, 'recreate-chair', replacement, { lineage: [
+    { kind: 'replace', sources: ['chair-two'], targets: ['chair-recreated'] },
+  ] }), /Lineage endpoints/);
+  const draft = candidateDraft(root, 'recreate-chair', replacement, { lineage: [
+    { kind: 'replace', sources: ['chair-one'], targets: ['chair-recreated'] },
+  ] });
+  const before = root.serialize();
+  assert.throws(() => root.apply(candidateCommand({ ...draft, lineage: [] })), /complete explicit object lineage/);
+  assert.equal(root.serialize(), before);
+  const applied = root.apply(candidateCommand(draft));
+  assert.deepEqual(applied.receipt.lineage, draft.lineage);
+  assert.deepEqual(applied.state.head().lineage, draft.lineage);
+  assert.throws(() => candidateDraft(applied.state, 'resurrect-chair', snapshot, { lineage: [
+    { kind: 'replace', sources: ['chair-recreated'], targets: ['chair-one'] },
+  ] }), /Historical native identity/);
+  assert.throws(() => root.apply({ ...candidateCommand(draft), draft: { ...draft, lineage: [
+    { kind: 'split', sources: ['chair-one'], targets: ['chair-recreated', 'chair-recreated'] },
+  ] } }), /Lineage endpoints/);
 });
 
 test('CLI emits the protocol array, binds raw bytes by hash, and refuses to overwrite a run directory', async () => {
