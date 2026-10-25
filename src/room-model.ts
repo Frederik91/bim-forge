@@ -6,6 +6,8 @@ import type { IntentAssessment } from './model-intent.ts';
 import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
 import type { RequestSource, AuthoringScope } from './request-sources.ts';
 import { entityLevel, levelView, levels, roofHeightAt, stairFootprint } from './building-levels.ts';
+import type { AssetFamily, AssetInstance } from './asset-family.ts';
+export type { AssetFamily, AssetInstance } from './asset-family.ts';
 
 const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
@@ -102,12 +104,12 @@ export interface Roof {
   id: EntityId; type: 'Roof'; name: string; levelId: EntityId;
   bounds: Bounds; thickness: number; profile: RoofProfile;
 }
-export type LegacyEntity = Wall | Door | Window | Equipment | Furniture | Level | Space;
+export type LegacyEntity = Wall | Door | Window | Equipment | Furniture | Level | Space | AssetFamily | AssetInstance;
 export type BuildingWall = Wall & { levelId: EntityId };
 export type BuildingFurniture = Furniture & { levelId: EntityId };
 export type BuildingEquipment = Equipment & { levelId: EntityId };
 export type BuildingEntity = BuildingWall | BuildingFurniture | BuildingEquipment
-  | Door | Window | Level | Space | Slab | Stair | Roof;
+  | Door | Window | Level | Space | Slab | Stair | Roof | AssetFamily | AssetInstance;
 export type Entity = LegacyEntity | BuildingEntity;
 
 export interface HostingRelationship {
@@ -315,7 +317,7 @@ function isEntityId(value: unknown): value is EntityId {
   return typeof value === 'string' && idPattern.test(value);
 }
 
-function identifier(value: unknown): EntityId {
+export function identifier(value: unknown): EntityId {
   if (!isEntityId(value)) fail('Invalid stable identifier.');
   return value;
 }
