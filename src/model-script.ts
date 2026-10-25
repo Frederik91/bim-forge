@@ -40,19 +40,14 @@ const wall = Type.Object({ id: identifier, type: Type.Literal('Wall'), name, sta
 const equipment = Type.Object({ id: identifier, type: Type.Literal('Equipment'), name, category: Type.Union([Type.Literal('mechanical'), Type.Literal('electrical')]),
   position: point, elevation: Type.Number(), width: Type.Number(), depth: Type.Number(), height: Type.Number() });
 const window = Type.Object({ id: identifier, type: Type.Literal('Window'), name, width: Type.Number(), height: Type.Number(), sillHeight: Type.Number() });
-const entity = Type.Union([
-  wall,
-  door,
-  window, equipment,
-  furniture, space, Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
-], { title: 'ModelEntity' });
 const relationships = Type.Array(Type.Object({
   id: identifier, type: Type.Literal('hosted-by'), source: identifier, target: identifier, offset: Type.Number(),
 }), { maxItems: 100 });
-const buildingEntity = Type.Union([
-  Type.Object({ ...wall.properties, levelId: identifier }),
-  Type.Object({ ...equipment.properties, levelId: identifier }),
-  Type.Object({ ...furniture.properties, levelId: identifier }),
+// Read contract only: core validation enforces required V2 ownership before staging/persistence.
+const entity = Type.Union([
+  Type.Object({ ...wall.properties, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...equipment.properties, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...furniture.properties, levelId: Type.Optional(identifier) }),
   door, window, space,
   Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
   Type.Object({ id: identifier, type: Type.Literal('Slab'), name, levelId: identifier, bounds, thickness: Type.Number() }),
@@ -62,11 +57,9 @@ const buildingEntity = Type.Union([
     Type.Object({ kind: Type.Literal('flat'), height: Type.Number() }),
     Type.Object({ kind: Type.Literal('gable'), eaveHeight: Type.Number(), ridgeHeight: Type.Number(), ridgeAxis: Type.Union([Type.Literal('x'), Type.Literal('y')]) }),
   ]) }),
-], { title: 'BuildingEntity' });
-const snapshot = Type.Union([
-  Type.Object({ units: Type.Literal('m'), entities: Type.Array(entity, { maxItems: 100 }), relationships }, { additionalProperties: false }),
-  Type.Object({ version: Type.Literal(2), units: Type.Literal('m'), entities: Type.Array(buildingEntity, { maxItems: 100 }), relationships }, { additionalProperties: false }),
-], { title: 'ModelSnapshot' });
+], { title: 'ModelEntity' });
+const snapshot = Type.Object({ version: Type.Optional(Type.Literal(2)), units: Type.Literal('m'),
+  entities: Type.Array(entity, { maxItems: 100 }), relationships }, { title: 'ModelSnapshot', additionalProperties: false });
 const collectionChanges = Type.Object({ added: Type.Array(identifier), removed: Type.Array(identifier), modified: Type.Array(identifier) });
 const changes = Type.Object({ entities: collectionChanges, relationships: collectionChanges });
 const inspection = Type.Object({
