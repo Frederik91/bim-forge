@@ -5,6 +5,7 @@ import { parseIntentAssessment } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
 import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
 import type { RequestSource, AuthoringScope } from './request-sources.ts';
+import { entityLevel, levelView, levels, roofHeightAt, stairFootprint } from './building-levels.ts';
 
 const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
@@ -508,8 +509,53 @@ function wallLength(wall: Wall): number {
   ) / 1000;
 }
 
-function parseEntity(input: JsonValue): Entity {
+function parseBounds(input: JsonValue): Bounds {
+  fields(input, ['minX', 'minY', 'maxX', 'maxY']);
+  const bounds = { minX: metres(input.minX, -1000, 1000), minY: metres(input.minY, -1000, 1000),
+    maxX: metres(input.maxX, -1000, 1000), maxY: metres(input.maxY, -1000, 1000) };
+  if (bounds.minX >= bounds.maxX || bounds.minY >= bounds.maxY) fail('Bounds must have positive width and depth.');
+  return bounds;
+}
+
+function parseEntity(input: JsonValue, building = false): Entity {
   if (!input || Array.isArray(input) || typeof input !== 'object') fail('Unexpected model fields.');
+  if (building && (input.type === 'Wall' || input.type === 'Furniture' || input.type === 'Equipment')) {
+    const { levelId: rawLevel, ...geometry } = input;
+    const levelId = identifier(rawLevel);
+    const entity = parseEntity(geometry);
+    if (entity.type !== 'Wall' && entity.type !== 'Furniture' && entity.type !== 'Equipment') fail('Invalid owned geometry.');
+    return { ...entity, levelId };
+  }
+  if (building && input.type === 'Slab') {
+    fields(input, ['id', 'type', 'name', 'levelId', 'bounds', 'thickness']);
+    return { id: identifier(input.id), type: 'Slab', name: label(input.name), levelId: identifier(input.levelId),
+      bounds: parseBounds(input.bounds), thickness: metres(input.thickness, .001, 5) };
+  }
+  if (building && input.type === 'Stair') {
+    fields(input, ['id', 'type', 'name', 'fromLevelId', 'toLevelId', 'start', 'end', 'width', 'steps']);
+    const steps = input.steps;
+    if (typeof steps !== 'number' || !Number.isInteger(steps) || steps < 1 || steps > 100) fail('Stairs require one to one hundred whole steps.');
+    return { id: identifier(input.id), type: 'Stair', name: label(input.name),
+      fromLevelId: identifier(input.fromLevelId), toLevelId: identifier(input.toLevelId),
+      start: point(input.start), end: point(input.end), width: metres(input.width, .1, 5), steps };
+  }
+  if (building && input.type === 'Roof') {
+    fields(input, ['id', 'type', 'name', 'levelId', 'bounds', 'thickness', 'profile']);
+    const profile = input.profile;
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) fail('Unsupported roof profile.');
+    let parsed: RoofProfile;
+    if (profile.kind === 'flat') {
+      fields(profile, ['kind', 'height']);
+      parsed = { kind: 'flat', height: metres(profile.height) };
+    } else if (profile.kind === 'gable') {
+      fields(profile, ['kind', 'eaveHeight', 'ridgeHeight', 'ridgeAxis']);
+      if (profile.ridgeAxis !== 'x' && profile.ridgeAxis !== 'y') fail('Gable ridge axis must be x or y.');
+      parsed = { kind: 'gable', eaveHeight: metres(profile.eaveHeight), ridgeHeight: metres(profile.ridgeHeight), ridgeAxis: profile.ridgeAxis };
+      if (parsed.ridgeHeight <= parsed.eaveHeight) fail('Gable ridge must be higher than its eaves.');
+    } else return fail('Unsupported roof profile.');
+    return { id: identifier(input.id), type: 'Roof', name: label(input.name), levelId: identifier(input.levelId),
+      bounds: parseBounds(input.bounds), thickness: metres(input.thickness, .001, 5), profile: parsed };
+  }
   if (input.type === 'Level') fields(input, ['id', 'type', 'name', 'elevation']);
   else if (input.type === 'Space') fields(input, ['id', 'type', 'name', 'levelId', 'bounds']);
   else if (input.type === 'Wall') fields(input, ['id', 'type', 'name', 'start', 'end', 'thickness', 'height']);
@@ -523,8 +569,8 @@ function parseEntity(input: JsonValue): Entity {
   const id = identifier(input.id);
   const name = label(input.name);
   if (input.type === 'Level') {
-    if (input.elevation !== 0) fail('This prototype supports one level at elevation zero.');
-    return { id, type: 'Level', name, elevation: 0 };
+    if (!building && input.elevation !== 0) fail('This prototype supports one level at elevation zero.');
+    return { id, type: 'Level', name, elevation: building ? metres(input.elevation, -100, 100) : 0 };
   }
   if (input.type === 'Space') {
     fields(input.bounds, ['minX', 'minY', 'maxX', 'maxY']);
@@ -587,7 +633,20 @@ export function furnitureFootprint(item: Furniture): { minX: number; minY: numbe
     minY: item.position[1] - depth / 2, maxY: item.position[1] + depth / 2 };
 }
 
-function validateFurnishings(entities: Entity[], relationships: HostingRelationship[]): void {
+function footprintCorners(bounds: Bounds): Point[] {
+  return [[bounds.minX, bounds.minY], [bounds.minX, bounds.maxY], [bounds.maxX, bounds.minY], [bounds.maxX, bounds.maxY]];
+}
+
+function isLegacyEntity(entity: Entity): entity is LegacyEntity {
+  return entity.type !== 'Slab' && entity.type !== 'Stair' && entity.type !== 'Roof';
+}
+
+function isBuildingEntity(entity: Entity): entity is BuildingEntity {
+  return (entity.type !== 'Wall' && entity.type !== 'Furniture' && entity.type !== 'Equipment')
+    || ('levelId' in entity && typeof entity.levelId === 'string');
+}
+
+function validateFurnishings(entities: readonly Entity[], relationships: readonly HostingRelationship[], graph?: ModelGraph): void {
   const items = entities.filter((item): item is Furniture => item.type === 'Furniture');
   if (!items.length) return;
   if (items.length > 32) fail('The prototype supports at most 32 furnishings.');
@@ -624,6 +683,16 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
       fail(`${item.name} must fit inside the room, clear of wall thickness.`);
     }
     if (item.height > Math.min(...walls.map((wall) => wall.height))) fail('Furniture must fit below the room ceiling.');
+    if (graph?.version === 2) {
+      const level = entityLevel(graph, item);
+      const top = item.height + (device && support?.type === 'Furniture' ? support.height : 0);
+      if (!level || footprintCorners(footprint).some((point) => top > roofHeightAt(graph, level.id, point) + 1e-9)) {
+        fail('Furniture and supported devices must fit below the roof underside.');
+      }
+      if (graph.entities.some((stair) => stair.type === 'Stair' && overlaps(footprint, stairFootprint(stair)))) {
+        fail('Furniture must remain clear of stairs and slab voids.');
+      }
+    }
   }
   for (const item of items) {
     const footprint = furnitureFootprint(item);
@@ -666,11 +735,30 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
 export function previewFurnishings(baseSnapshot: unknown, input: unknown): ModelSnapshot {
   const base = validateSnapshot(baseSnapshot);
   const value = copy(input);
-  fields(value, ['furnishings']);
+  const hasAssignments = value !== null && typeof value === 'object' && Object.hasOwn(value, 'levelAssignments');
+  fields(value, hasAssignments ? ['furnishings', 'levelAssignments'] : ['furnishings']);
   if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 furnishings.');
-  const furnishings = value.furnishings.map(parseEntity);
+  const furnishings = value.furnishings.map((item) => parseEntity(item));
   if (furnishings.some((item) => item.type !== 'Furniture')) fail('Only furnishings can be changed by this tool.');
-  return validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type !== 'Furniture'), ...furnishings], relationships: base.relationships });
+  const assignments = new Map<EntityId, EntityId>();
+  if (hasAssignments) {
+    if (base.version !== 2) fail('Level assignments require a version-2 building.');
+    if (!Array.isArray(value.levelAssignments) || value.levelAssignments.length > 32) fail('Provide up to 32 level assignments.');
+    for (const assignment of value.levelAssignments) {
+      fields(assignment, ['entityId', 'levelId']);
+      const entityId = identifier(assignment.entityId); const levelId = identifier(assignment.levelId);
+      if (assignments.has(entityId) || !furnishings.some((item) => item.id === entityId)) fail('Level assignments must uniquely identify incoming furnishings.');
+      if (!levels(base).some((level) => level.id === levelId)) fail('Level assignment references an unknown level.');
+      assignments.set(entityId, levelId);
+    }
+  }
+  const owned = base.version !== 2 ? furnishings : furnishings.map((item) => {
+    const existing = base.entities.find((entity) => entity.id === item.id && entity.type === 'Furniture');
+    const levelId = assignments.get(item.id) ?? (existing ? entityLevel(base, existing)?.id : undefined);
+    if (!levelId) fail('New building furnishings require an explicit level assignment.');
+    return { ...item, levelId };
+  });
+  return validateSnapshot({ ...base, entities: [...base.entities.filter((item) => item.type !== 'Furniture'), ...owned] });
 }
 
 /** A room-bounded replacement cannot remove or transfer furnishings in adjacent spaces. */
@@ -681,18 +769,27 @@ export function previewRoomFurnishings(baseSnapshot: unknown, input: unknown): M
   const room = spaces(base).find((item) => item.id === value.roomId);
   if (!room) fail('Choose a room from the bound floor.');
   if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 room furnishings.');
-  const incoming = value.furnishings.map(parseEntity);
+  const incoming = value.furnishings.map((item) => parseEntity(item));
+  const view = base.version === 2 ? levelView(base, room.levelId) : base;
   for (const item of incoming) {
     if (item.type !== 'Furniture') fail('Only furnishings can be changed by this tool.');
-    if (spaceForFootprint(base, furnitureFootprint(item))?.id !== room.id) fail('Room furnishing changes must remain inside the selected room, clear of shared walls. Use the whole-floor tool for explicit transfers.');
+    const existing = base.entities.find((entity) => entity.id === item.id);
+    if (base.version === 2 && existing && entityLevel(base, existing)?.id !== room.levelId) fail('Room furnishing changes cannot transfer objects between levels.');
+    if (spaceForFootprint(view, furnitureFootprint(item))?.id !== room.id) fail('Room furnishing changes must remain inside the selected room, clear of shared walls. Use the whole-floor tool for explicit transfers.');
   }
-  const retained = base.entities.filter((item) => item.type === 'Furniture' && spaceForFootprint(base, furnitureFootprint(item))?.id !== room.id);
-  return previewFurnishings(base, { furnishings: [...retained, ...incoming] });
+  const retained = base.entities.filter((item): item is Furniture => item.type === 'Furniture'
+    && (base.version === 2 && entityLevel(base, item)?.id !== room.levelId || spaceForFootprint(view, furnitureFootprint(item))?.id !== room.id));
+  const unowned = retained.map((item) => { const { id, type, name, kind, position, width, depth, height, rotationDeg, supportId } = item;
+    return { id, type, name, kind, position, width, depth, height, rotationDeg, supportId }; });
+  return previewFurnishings(base, { furnishings: [...unowned, ...incoming], ...(base.version === 2
+    ? { levelAssignments: incoming.map((item) => ({ entityId: item.id, levelId: room.levelId })) } : {}) });
 }
 
 export function validateSnapshot(input: unknown): ModelSnapshot {
   const value = copy(input);
-  fields(value, ['units', 'entities', 'relationships']);
+  const building = value !== null && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, 'version');
+  fields(value, building ? ['version', 'units', 'entities', 'relationships'] : ['units', 'entities', 'relationships']);
+  if (building && value.version !== 2) fail('Unsupported model snapshot version.');
   if (value.units !== 'm') fail('Unsupported model snapshot.');
   const entityValues = value.entities;
   const relationshipValues = value.relationships;
@@ -701,7 +798,7 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
   const byEntityId = new Map<EntityId, Entity>();
   const entities: Entity[] = [];
   for (const item of entityValues) {
-    const entity = parseEntity(item);
+    const entity = parseEntity(item, building);
     if (byEntityId.has(entity.id)) fail('Duplicate entity identifier.');
     byEntityId.set(entity.id, entity);
     entities.push(entity);
@@ -726,23 +823,24 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
   if (entities.some((entity) => (entity.type === 'Door' || entity.type === 'Window') && !hosted.has(entity.id))) {
     fail('Every opening must have exactly one host.');
   }
-  validateFloorPlan({ units: 'm', entities, relationships });
-  validateFurnishings(entities, relationships);
+  const graph: ModelGraph = { ...(building ? { version: 2 as const } : {}), units: 'm', entities, relationships };
+  validateFloorPlan(graph);
+  if (building) {
+    if (entities.filter((item) => item.type === 'Furniture').length > 32) fail('The prototype supports at most 32 furnishings.');
+    for (const level of levels(graph)) {
+      const view = levelView(graph, level.id);
+      validateFurnishings(view.entities, view.relationships, view);
+    }
+  } else validateFurnishings(entities, relationships);
   const byId = (a: ModelItem, b: ModelItem): number => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   entities.sort(byId); relationships.sort(byId);
-  return freeze({ units: 'm', entities, relationships });
+  if (building && entities.every(isBuildingEntity)) return freeze({ version: 2, units: 'm', entities, relationships });
+  if (!building && entities.every(isLegacyEntity)) return freeze({ units: 'm', entities, relationships });
+  return fail('Snapshot entity format does not match its version.');
 }
 
 function cloneSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
-  return {
-    units: 'm',
-    entities: snapshot.entities.map((entity): Entity => {
-      if (entity.type === 'Wall') return { ...entity, start: [...entity.start], end: [...entity.end] };
-      if (entity.type === 'Equipment' || entity.type === 'Furniture') return { ...entity, position: [...entity.position] };
-      return { ...entity };
-    }),
-    relationships: snapshot.relationships.map((relationship) => ({ ...relationship })),
-  };
+  return structuredClone(snapshot);
 }
 
 function fixture(): ModelSnapshot {
@@ -881,7 +979,7 @@ function changes<T extends ModelItem>(before: T[], after: T[]): CollectionChange
 
 export function diffSnapshots(before: unknown, after: unknown): ModelDelta {
   const left = validateSnapshot(before); const right = validateSnapshot(after);
-  return freeze({ entities: changes(left.entities, right.entities), relationships: changes(left.relationships, right.relationships) });
+  return freeze({ entities: changes<Entity>(left.entities, right.entities), relationships: changes(left.relationships, right.relationships) });
 }
 
 function branchMap(branches: Branch[]): Map<BranchName, Branch> {
@@ -1189,7 +1287,7 @@ export class RoomRepository {
     const base = this.view(validatedBaseId).snapshot;
     const left = this.view(leftId).snapshot; const right = this.view(rightId).snapshot;
     return freeze([
-      ...collectionConflicts('entity', base.entities, left.entities, right.entities),
+      ...collectionConflicts<Entity>('entity', base.entities, left.entities, right.entities),
       ...collectionConflicts('relationship', base.relationships, left.relationships, right.relationships),
     ]);
   }

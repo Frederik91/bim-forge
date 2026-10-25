@@ -1,10 +1,11 @@
-import type { Bounds, Door, Entity, ModelSnapshot, Point, Space, Wall } from './room-model.ts';
+import type { Bounds, Door, Entity, ModelGraph, Point, Space, Stair, Wall } from './room-model.ts';
+import { entityLevel, levelView, levels, roofHeightAt, stairFootprint } from './building-levels.ts';
 
-export function spaces(snapshot: ModelSnapshot): Space[] {
+export function spaces(snapshot: ModelGraph): Space[] {
   return snapshot.entities.filter((item): item is Space => item.type === 'Space');
 }
 
-export function floorBounds(snapshot: ModelSnapshot): Bounds {
+export function floorBounds(snapshot: ModelGraph): Bounds {
   const points = snapshot.entities.flatMap((item): Point[] => item.type === 'Wall' ? [item.start, item.end] : []);
   if (!points.length) throw new Error('A model requires walls to frame its floor.');
   return { minX: Math.min(...points.map(([x]) => x)), minY: Math.min(...points.map(([, y]) => y)),
@@ -25,8 +26,10 @@ export function overlapsBounds(a: Bounds, b: Bounds): boolean {
   return a.minX < b.maxX - 1e-9 && a.maxX > b.minX + 1e-9 && a.minY < b.maxY - 1e-9 && a.maxY > b.minY + 1e-9;
 }
 
-export function spaceAt(snapshot: ModelSnapshot, [x, y]: Point): Space | null {
-  return spaces(snapshot).find(({ bounds: b }) => x > b.minX && x < b.maxX && y > b.minY && y < b.maxY) ?? null;
+export function spaceAt(snapshot: ModelGraph, [x, y]: Point): Space | null {
+  const matches = spaces(snapshot).filter(({ bounds: b }) => x > b.minX && x < b.maxX && y > b.minY && y < b.maxY);
+  if (matches.length > 1) throw new Error('A spatial query requires a level-scoped graph.');
+  return matches[0] ?? null;
 }
 
 function wallOnBoundary(wall: Wall, b: Bounds): boolean {
@@ -36,32 +39,40 @@ function wallOnBoundary(wall: Wall, b: Bounds): boolean {
     : (wall.start[0] === b.minX || wall.start[0] === b.maxX) && Math.min(wall.start[1], wall.end[1]) < b.maxY && Math.max(wall.start[1], wall.end[1]) > b.minY;
 }
 
-export function clearSpaceBounds(snapshot: ModelSnapshot, space: Space): Bounds {
-  const walls = snapshot.entities.filter((item): item is Wall => item.type === 'Wall' && wallOnBoundary(item, space.bounds));
+export function clearSpaceBounds(snapshot: ModelGraph, space: Space): Bounds {
+  const walls = snapshot.entities.filter((item): item is Wall => item.type === 'Wall' && wallOnBoundary(item, space.bounds)
+    && (snapshot.version !== 2 || entityLevel(snapshot, item)?.id === space.levelId));
   const inset = Math.max(0, ...walls.map((wall) => wall.thickness / 2));
   const b = space.bounds;
   return { minX: b.minX + inset, minY: b.minY + inset, maxX: b.maxX - inset, maxY: b.maxY - inset };
 }
 
-export function spaceForFootprint(snapshot: ModelSnapshot, footprint: Bounds): Space | null {
-  return spaces(snapshot).find((space) => containsBounds(clearSpaceBounds(snapshot, space), footprint)) ?? null;
+export function spaceForFootprint(snapshot: ModelGraph, footprint: Bounds): Space | null {
+  const matches = spaces(snapshot).filter((space) => containsBounds(clearSpaceBounds(snapshot, space), footprint));
+  if (matches.length > 1) throw new Error('A footprint query requires a level-scoped graph.');
+  return matches[0] ?? null;
 }
 
-export function entitySpace(snapshot: ModelSnapshot, entity: Entity): Space | null {
+export function entitySpace(snapshot: ModelGraph, entity: Entity): Space | null {
   if (entity.type === 'Space') return entity;
-  if (entity.type === 'Furniture' || entity.type === 'Equipment') return spaceAt(snapshot, entity.position);
+  if (entity.type === 'Furniture' || entity.type === 'Equipment') {
+    const level = entityLevel(snapshot, entity);
+    return spaceAt(snapshot.version === 2 && level ? levelView(snapshot, level.id) : snapshot, entity.position);
+  }
   return null;
 }
 
 export interface DoorConnection { door: Door; roomIds: string[]; exterior: boolean }
 
 /** Opening endpoints, not just its midpoint, must belong to each connected room side. */
-export function doorConnections(snapshot: ModelSnapshot): DoorConnection[] {
-  const rooms = spaces(snapshot);
+export function doorConnections(snapshot: ModelGraph): DoorConnection[] {
   return snapshot.entities.filter((item): item is Door => item.type === 'Door').map((door) => {
     const host = snapshot.relationships.find((link) => link.source === door.id);
     const wall = snapshot.entities.find((item) => item.id === host?.target);
     if (!host || wall?.type !== 'Wall') throw new Error('Door requires a wall host.');
+    const owner = entityLevel(snapshot, wall);
+    const view = snapshot.version === 2 && owner ? levelView(snapshot, owner.id) : snapshot;
+    const rooms = spaces(view);
     const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
     const dx = (wall.end[0] - wall.start[0]) / length; const dy = (wall.end[1] - wall.start[1]) / length;
     const a: Point = [wall.start[0] + dx * host.offset, wall.start[1] + dy * host.offset];
@@ -71,18 +82,18 @@ export function doorConnections(snapshot: ModelSnapshot): DoorConnection[] {
       return wallOnBoundary(wall, r) && containsBounds(r, { minX: Math.min(a[0], b[0]), maxX: Math.max(a[0], b[0]),
         minY: Math.min(a[1], b[1]), maxY: Math.max(a[1], b[1]) });
     }).map((room) => room.id);
-    const f = floorBounds(snapshot);
+    const f = floorBounds(view);
     const exterior = dx !== 0 ? a[1] === f.minY || a[1] === f.maxY : a[0] === f.minX || a[0] === f.maxX;
     return { door, roomIds, exterior };
   });
 }
 
 /** Bounded first slice: one rectangular level tiled by non-overlapping rectangular rooms. */
-export function validateFloorPlan(snapshot: ModelSnapshot): void {
-  const rooms = spaces(snapshot); const levels = snapshot.entities.filter((item) => item.type === 'Level');
-  if (!rooms.length && !levels.length) return; // Legacy snapshots retain their exact contents and hashes.
-  const level = levels[0];
-  if (levels.length !== 1 || !level || rooms.length < 2 || rooms.length > 12) throw new Error('A residential floor requires one level and two to twelve rooms.');
+function validateSingleFloor(snapshot: ModelGraph, levelId?: string): void {
+  const rooms = spaces(snapshot); const floorLevels = levels(snapshot);
+  if (!rooms.length && !floorLevels.length) return; // Legacy snapshots retain their exact contents and hashes.
+  const level = levelId ? floorLevels.find((item) => item.id === levelId) : floorLevels[0];
+  if ((!levelId && floorLevels.length !== 1) || !level || rooms.length < 2 || rooms.length > 12) throw new Error('A residential floor requires one level and two to twelve rooms.');
   const walls = snapshot.entities.filter((item): item is Wall => item.type === 'Wall');
   const f = floorBounds(snapshot);
   for (const room of rooms) {
@@ -127,11 +138,85 @@ export function validateFloorPlan(snapshot: ModelSnapshot): void {
   }
   const connections = doorConnections(snapshot);
   for (const connection of connections) if (connection.roomIds.length !== (connection.exterior ? 1 : 2)) throw new Error('Each door must connect two rooms or one room to the exterior.');
-  const reached = new Set(connections.filter((link) => link.exterior).flatMap((link) => link.roomIds));
-  for (let i = 0; i < rooms.length; i += 1) for (const link of connections) if (link.roomIds.some((id) => reached.has(id))) for (const id of link.roomIds) reached.add(id);
-  if (rooms.some((room) => !reached.has(room.id))) throw new Error('Every room needs a doorway path to the exterior.');
+  if (snapshot.version !== 2) validateReachability(rooms, connections.filter((link) => link.exterior).flatMap((link) => link.roomIds), connections.map((link) => link.roomIds));
   for (const item of snapshot.entities) if (item.type === 'Equipment') {
     const [x, y] = item.position;
     if (!spaceForFootprint(snapshot, { minX: x - item.width / 2, maxX: x + item.width / 2, minY: y - item.depth / 2, maxY: y + item.depth / 2 })) throw new Error('Equipment must fit inside one room clear of walls.');
   }
+}
+
+function validateReachability(rooms: Space[], exits: string[], edges: string[][]): void {
+  const reached = new Set(exits);
+  for (let i = 0; i < rooms.length; i += 1) for (const edge of edges) if (edge.some((id) => reached.has(id))) for (const id of edge) reached.add(id);
+  if (rooms.some((room) => !reached.has(room.id))) throw new Error('Every room needs a doorway path to the exterior, including stairs between levels.');
+}
+
+/** Topology validates each owned floor, then connects floors through actual stairs. */
+export function validateFloorPlan(snapshot: ModelGraph): void {
+  if (snapshot.version !== 2) return validateSingleFloor(snapshot);
+  const ordered = levels(snapshot);
+  if (!ordered.length || ordered.length > 6 || new Set(ordered.map((level) => level.elevation)).size !== ordered.length) {
+    throw new Error('Buildings require one to six levels with distinct elevations.');
+  }
+  for (const entity of snapshot.entities) {
+    if (entity.type !== 'Level' && !entityLevel(snapshot, entity)) throw new Error('Every building entity requires a valid level owner.');
+    if (entity.type === 'Furniture' && entity.supportId !== null) {
+      const support = snapshot.entities.find((item) => item.id === entity.supportId);
+      if (!support || entityLevel(snapshot, support)?.id !== entityLevel(snapshot, entity)?.id) throw new Error('Furniture supports must remain on the same level.');
+    }
+  }
+  for (const level of ordered) {
+    const view = levelView(snapshot, level.id);
+    validateSingleFloor(view, level.id);
+    const bounds = floorBounds(view);
+    const slabs = view.entities.filter((item) => item.type === 'Slab');
+    if (slabs.length !== 1 || !slabs[0] || !containsBounds(slabs[0].bounds, bounds) || !containsBounds(bounds, slabs[0].bounds)) {
+      throw new Error('Each level requires one slab matching its floor bounds.');
+    }
+    const below = ordered[ordered.indexOf(level) - 1];
+    if (below && level.elevation - slabs[0].thickness <= below.elevation) throw new Error('Slab thickness must fit between levels.');
+    const roofs = view.entities.filter((item) => item.type === 'Roof');
+    if (roofs.length > 1) throw new Error('A level supports at most one roof.');
+    for (const roof of roofs) {
+      if (level.id !== ordered.at(-1)?.id || !containsBounds(roof.bounds, bounds)) throw new Error('A roof must cover the highest level.');
+      const minimum = (roof.profile.kind === 'flat' ? roof.profile.height : roof.profile.eaveHeight) - roof.thickness;
+      if (minimum <= 0) throw new Error('Roof underside must remain above its level.');
+    }
+    for (const opening of view.entities) {
+      if (opening.type !== 'Door' && opening.type !== 'Window') continue;
+      const host = view.relationships.find((link) => link.source === opening.id);
+      const wall = view.entities.find((item) => item.id === host?.target);
+      if (!host || wall?.type !== 'Wall') continue;
+      const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
+      const points: Point[] = [host.offset, host.offset + opening.width].map((offset) =>
+        [wall.start[0] + (wall.end[0] - wall.start[0]) * offset / length, wall.start[1] + (wall.end[1] - wall.start[1]) * offset / length]);
+      const top = opening.height + (opening.type === 'Window' ? opening.sillHeight : 0);
+      if (points.some((point) => top > roofHeightAt(view, level.id, point) + 1e-9)) throw new Error('Hosted openings must fit below the roof underside.');
+    }
+    for (const equipment of view.entities) {
+      if (equipment.type !== 'Equipment') continue;
+      const [x, y] = equipment.position;
+      const b = { minX: x - equipment.width / 2, maxX: x + equipment.width / 2, minY: y - equipment.depth / 2, maxY: y + equipment.depth / 2 };
+      const corners: Point[] = [[b.minX, b.minY], [b.minX, b.maxY], [b.maxX, b.minY], [b.maxX, b.maxY]];
+      if (corners.some((point) => equipment.elevation + equipment.height > roofHeightAt(view, level.id, point) + 1e-9)) throw new Error('Equipment must fit below the roof underside.');
+      if (view.incidentStairs.some((stair) => overlapsBounds(b, stairFootprint(stair)))) throw new Error('Equipment must remain clear of stairs and slab voids.');
+    }
+  }
+  const stairs = snapshot.entities.filter((item): item is Stair => item.type === 'Stair');
+  const stairEdges = stairs.map((stair) => {
+    const from = ordered.findIndex((level) => level.id === stair.fromLevelId);
+    const to = ordered.findIndex((level) => level.id === stair.toLevelId);
+    if (from < 0 || to !== from + 1) throw new Error('Stairs must connect adjacent levels from lower to higher.');
+    const dx = stair.end[0] - stair.start[0]; const dy = stair.end[1] - stair.start[1];
+    if ((dx === 0) === (dy === 0)) throw new Error('Stairs require a positive axis-aligned run.');
+    const footprint = stairFootprint(stair);
+    const lower = spaceForFootprint(levelView(snapshot, stair.fromLevelId), footprint);
+    const upper = spaceForFootprint(levelView(snapshot, stair.toLevelId), footprint);
+    if (!lower || !upper) throw new Error('The complete stair footprint must fit a room at both endpoints.');
+    return [lower.id, upper.id];
+  });
+  const connections = doorConnections(snapshot);
+  // Without a terrain/landing model, only elevation-zero exterior doors establish ground exits.
+  const exits = connections.filter((link) => link.exterior && entityLevel(snapshot, link.door)?.elevation === 0).flatMap((link) => link.roomIds);
+  validateReachability(spaces(snapshot), exits, [...connections.map((link) => link.roomIds), ...stairEdges]);
 }
