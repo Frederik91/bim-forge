@@ -23,7 +23,7 @@ services:
       CODEX_HOME: /var/lib/bim-forge/codex
       BIM_FORGE_AGENT_WORKDIR: /tmp/bim-forge-agent
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+      - /tmp:rw,noexec,nosuid,nodev,size=192m,mode=1777
     volumes:
       - /run/bim-preview:/run/bim-preview:rw
       - /srv/bim-preview/state:/var/lib/bim-forge/codex:rw

@@ -11,20 +11,25 @@
     "validate": "npm run lint && npm run typecheck && node scripts/validate-policy.ts",
     "lint": "node scripts/validate-typescript.ts",
     "typecheck": "tsc --noEmit",
-    "build:demo": "esbuild demo/room-app.ts --bundle --platform=browser --format=esm --target=es2023 --outfile=dist/demo/room-app.mjs",
-    "test": "npm run build:demo && node --test factory/runner.test.ts factory/live.test.ts factory/publisher.test.ts factory/publisher-identity.test.ts factory/publish-store.test.ts factory/coding.test.ts factory/health.test.ts factory/schedule-check.test.ts src/room-model.test.ts src/house-pilot.test.ts src/model-view.test.ts src/office.test.ts src/codex-app-server.test.ts demo/server.test.ts",
+    "build:demo": "node scripts/build-demo.ts",
+    "test": "npm run build:demo && node --test factory/runner.test.ts factory/live.test.ts factory/publisher.test.ts factory/publisher-identity.test.ts factory/publish-store.test.ts factory/coding.test.ts factory/health.test.ts factory/schedule-check.test.ts src/room-model.test.ts src/model-script.test.ts src/house-pilot.test.ts demo/model-scene.test.ts src/office.test.ts src/residential-floor.test.ts src/visual-request.test.ts demo/change-requests.test.ts src/codex-app-server.test.ts demo/server.test.ts src/floor-layout.test.ts demo/request-source-store.test.ts demo/source-requests.test.ts src/building-layout.test.ts src/building-levels.test.ts src/multi-storey-house.test.ts src/building-agent.test.ts src/building-schema.test.ts demo/request-context.test.ts demo/request-tabs.test.ts demo/proposal-reconciliation.test.ts && npm run test:assets",
+    "test:assets": "node --test src/asset-family.test.ts src/asset-history.test.ts src/asset-placement.test.ts src/asset-schema.test.ts src/asset-agent.test.ts",
     "factory": "node factory/cli.ts",
     "factory:plan": "node factory/live.ts",
     "factory:publish": "node factory/publish.ts",
     "factory:code": "node factory/code-job.ts"
   },
   "dependencies": {
+    "@babylonjs/core": "9.32.0",
+    "@frederik91/scriptbox": "0.1.1",
     "@openai/codex": "0.164.0",
-    "qrcode": "1.5.4"
+    "qrcode": "1.5.4",
+    "sharp": "0.35.5",
+    "typebox": "1.4.3"
   },
   "devDependencies": {
-    "@types/qrcode": "1.5.6",
     "@types/node": "^26.6.5",
+    "@types/qrcode": "1.5.6",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
