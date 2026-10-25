@@ -5,9 +5,6 @@
   "runId": null,
   "executionStatus": "not-run",
   "conclusion": "not-run",
-  "issue": null,
-  "pullRequest": null,
-  "supersedesRun": null,
   "startedAt": null,
   "finishedAt": null,
   "hypothesis": null,
@@ -20,48 +17,36 @@
   },
   "definition": {
     "commit": null,
-    "registryPath": "docs/experiments/registry.json",
-    "sha256": null,
-    "budgets": null
+    "path": "docs/experiments/registry.json",
+    "sha256": null
   },
   "implementation": {
     "sourceCommit": null,
     "runnerCommit": null,
-    "generatorCommit": null,
-    "schemaHash": null,
-    "indexDefinitionHash": null,
-    "validatorVersions": [],
-    "containerImageDigests": []
+    "validators": []
   },
   "dataset": {
-    "profile": null,
-    "profileSha256": null,
+    "name": null,
     "seed": null,
-    "manifestSha256": null,
-    "initialStateHash": null,
-    "actualCounts": null,
-    "historyScenario": null
+    "manifestSha256": null
   },
   "environment": {
     "host": null,
-    "softwareVersions": null,
+    "software": {},
+    "imageDigests": [],
     "cpuLimit": null,
     "memoryLimitBytes": null,
     "diskBudgetBytes": null,
-    "storageDescription": null,
-    "databaseSettingsHash": null,
+    "storage": null,
     "cacheProcedure": null,
     "measurementSlot": null
   },
-  "reproduction": {
-    "commands": [],
-    "artifactReferences": []
-  },
-  "assertions": [],
-  "modelDelta": null,
-  "metrics": null,
+  "commands": [],
+  "observations": [],
+  "coverage": [],
   "errors": [],
   "evidence": [],
-  "coverageLimitations": [],
+  "observationsArtifact": null,
+  "limitations": [],
   "decisionImplications": []
 }

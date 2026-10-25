@@ -22,8 +22,14 @@ test('draft templates and missing evidence cannot become terminal qualification 
   assert.throws(() => parseObservations([{ experimentId: 'EX-04', caseId: 'missing-behavior' }]), /Invalid/);
 });
 
+test('binding a repository with a trailing separator resolves to the same committed bytes', async () => {
+  const path = 'docs/design/versioned-model-candidate.md';
+  assert.deepEqual(await bindingFor(`${repository}/`, path), await bindingFor(repository, path));
+});
+
 async function example(evidence: string): Promise<Run> {
-  await writeFile(join(evidence, 'raw.json'), '{"executed":true}\n');
+  const observations = [{ experimentId: 'EX-04', caseId: 'contract-check', expected: 'typed and bound', observed: 'typed and bound', passed: true, limitations: [] }];
+  await writeFile(join(evidence, 'raw.json'), `${JSON.stringify(observations)}\n`);
   const design = await bindingFor(repository, 'docs/design/versioned-model-candidate.md');
   const definition = await bindingFor(repository, 'docs/experiments/registry.json');
   const raw: unknown = JSON.parse((await readFile(definition.path, 'utf8')).replace(/^\uFEFF/, ''));
@@ -43,9 +49,9 @@ async function example(evidence: string): Promise<Run> {
     environment: { host: 'disposable-test-container', software: { node: process.version }, imageDigests: [`sha256:${sha256('test-only')}`],
       cpuLimit: 1, memoryLimitBytes: 1024, diskBudgetBytes: 4096, storage: 'temporary', cacheProcedure: 'not a benchmark', measurementSlot: 'test-only' },
     commands: ['node --test experiments/contracts/contract.test.ts'],
-    observations: [{ experimentId: 'EX-04', caseId: 'contract-check', expected: 'typed and bound', observed: 'typed and bound', passed: true, limitations: [] }],
+    observations,
     coverage: required.assertions.map(assertion => ({ assertion, caseIds: ['contract-check'], coverage: 'covered' })),
-    evidence: [await describeArtifact(evidence, 'raw.json', 'application/json')], errors: [], limitations: [], decisionImplications: [],
+    evidence: [await describeArtifact(evidence, 'raw.json', 'application/json')], observationsArtifact: 'raw.json', errors: [], limitations: [], decisionImplications: [],
   });
 }
 
@@ -58,6 +64,7 @@ test('publication verifies exact bindings and artifacts and never overwrites an 
     const before = await readFile(target, 'utf8');
     await assert.rejects(publishRun(run, roots), /EEXIST/);
     assert.equal(await readFile(target, 'utf8'), before);
+    await assert.rejects(verifyRun(parseRun({ ...run, observations: run.observations.map(item => ({ ...item, observed: 'invented' })) }), roots), /executed artifact/);
     await writeFile(join(root, 'raw.json'), 'changed');
     await assert.rejects(verifyRun(run, roots), /integrity/);
     await assert.rejects(describeArtifact(root, '../outside.txt', 'text/plain'), /within/);
@@ -72,5 +79,10 @@ test('missing assertions, failed observations and partial coverage cannot be rep
     assert.throws(() => parseRun({ ...run, coverage: run.coverage.map(item => ({ ...item, coverage: 'partial' })) }), /Passed/);
     await assert.rejects(verifyRun(parseRun({ ...run, coverage: [] , conclusion: 'inconclusive' }), { repository, evidence: root }), /every bound/);
     assert.throws(() => parseRun({ ...run, recordKind: 'template' }), /terminal run/);
+    const unrecorded = { ...run, environment: { ...run.environment, diskBudgetBytes: null } };
+    assert.throws(() => parseRun(unrecorded), /recorded disk budget/);
+    assert.throws(() => parseRun({ ...unrecorded, conclusion: 'inconclusive' }), /explicit limitation/);
+    assert.equal(parseRun({ ...unrecorded, conclusion: 'inconclusive',
+      limitations: ['Original correctness execution did not record a numeric disk budget.'] }).environment.diskBudgetBytes, null);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
