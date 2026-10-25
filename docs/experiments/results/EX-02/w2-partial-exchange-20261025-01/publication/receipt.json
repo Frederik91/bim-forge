@@ -1,0 +1,27 @@
+{
+  "publishedAt": "2026-10-25T12:27:19.182Z",
+  "evidenceRoot": "/qualification/w2-runs/w2-terminal-package-20261025-01/evidence",
+  "preparationExecuted": false,
+  "databaseJobsExecuted": false,
+  "fullHospitalBranchTouched": false,
+  "records": [
+    {
+      "experimentId": "EX-02",
+      "path": "published/EX-02/w2-partial-exchange-20261025-01/result.json",
+      "sha256": "1b82a0b70cdf1ae1ac9738bc8864acb193b12eb12238be550de3d041b6ac9981",
+      "bytes": 128322,
+      "conclusion": "failed",
+      "observations": 53,
+      "failedObservations": 20
+    },
+    {
+      "experimentId": "EX-08",
+      "path": "published/EX-08/w2-partial-coordinates-20261025-01/result.json",
+      "sha256": "71ec659767ef9d61d7da000cd55073238bf3b2f4d3d701cf3c82980358851005",
+      "bytes": 93219,
+      "conclusion": "inconclusive",
+      "observations": 36,
+      "failedObservations": 4
+    }
+  ]
+}

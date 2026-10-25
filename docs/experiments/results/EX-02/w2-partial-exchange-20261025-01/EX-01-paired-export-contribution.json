@@ -1,0 +1,57 @@
+{
+  "sourceCommit": "be6e71b2cc641d669de9f2e57dec49623744100a",
+  "provenance": "controlled-generated; not independent vendor exports or Revit",
+  "releasedSchemaQualification": "unavailable: missing pytest in historical environment",
+  "pairs": [
+    {
+      "path": "preparation/ifc-native/m.pair.json",
+      "bytes": 222,
+      "sha256": "0dcf7f4b87118f365be02e69118d3414974563a80f7182252611c6df73c49707",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "preparation/ifc-native/mm.pair.json",
+      "bytes": 230,
+      "sha256": "438a8014b6842af9d621cfd9af16a0e61d13545f7a89fead8eb320489d34dcfc",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "preparation/ifc-native/rotated-m.pair.json",
+      "bytes": 238,
+      "sha256": "cc981537a0448165826c73aa342e3417ad2aa8068e1e174d12b12d981a551cb5",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "preparation/ifc-native/rotated-mm.pair.json",
+      "bytes": 246,
+      "sha256": "36ce96b229f29c61b158b7e59e24f89c9ea3773faa23b7f308c69165b63b777b",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "preparation/native-authoring/m.pair.json",
+      "bytes": 222,
+      "sha256": "0dcf7f4b87118f365be02e69118d3414974563a80f7182252611c6df73c49707",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "preparation/native-authoring/mm.pair.json",
+      "bytes": 230,
+      "sha256": "438a8014b6842af9d621cfd9af16a0e61d13545f7a89fead8eb320489d34dcfc",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "preparation/native-authoring/rotated-m.pair.json",
+      "bytes": 238,
+      "sha256": "cc981537a0448165826c73aa342e3417ad2aa8068e1e174d12b12d981a551cb5",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "preparation/native-authoring/rotated-mm.pair.json",
+      "bytes": 246,
+      "sha256": "36ce96b229f29c61b158b7e59e24f89c9ea3773faa23b7f308c69165b63b777b",
+      "mediaType": "application/json"
+    }
+  ],
+  "evidenceRoot": "/qualification/w2-runs/w2-terminal-package-20261025-01/evidence",
+  "note": "Raw IFC and snapshot artifacts are retained beside each pair file. W1 owns EX-01 terminal conclusions."
+}

@@ -1,0 +1,11 @@
+✔ W2 derives the narrow dimensions from the authoritative W0 fixture and changes one occurrence (7.752478ms)
+✔ native boundary refuses duplicate identities, dangling relationships and unsupported property forms (4.832019ms)
+✔ property overlay preserves unfamiliar typed values and rejects incomplete independent inventories (5.764128ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 966.240247
