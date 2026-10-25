@@ -103,9 +103,9 @@
         "Content deduplication does not couple future edits."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": "docs/experiments/results/EX-03/w1-baseline-20261025a/result.json",
-      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-03/w1-ex03-shared-20261025c/result.json",
+      "latestReview": "docs/experiments/decisions/shared-properties-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
