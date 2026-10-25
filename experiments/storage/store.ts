@@ -131,7 +131,10 @@ export class Storage {
     const [row] = await this.rows(Type.Object({ entity_id: IdSchema, missing: IdSchema }), `
       SELECT v.entity_id,refs.id AS missing FROM qvm_storage.visibility v
       CROSS JOIN LATERAL (VALUES(v.type_id),(v.container_id),(v.system_id),(v.from_id),(v.to_id)) refs(id)
-      LEFT JOIN qvm_storage.visibility target ON target.branch=v.branch AND target.entity_id=refs.id
+      LEFT JOIN LATERAL (
+        SELECT target.entity_id FROM qvm_storage.visibility target
+        WHERE target.branch=$1 AND target.entity_id=refs.id LIMIT 1
+      ) target ON true
       WHERE v.branch=$1 AND refs.id IS NOT NULL AND target.entity_id IS NULL LIMIT 1`, [branch]);
     if (row) throw new Error(`Dangling reference ${row.entity_id} -> ${row.missing}`);
   }
