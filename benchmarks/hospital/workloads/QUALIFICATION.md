@@ -81,8 +81,28 @@ small samples only; main's combined review owns the terminal qualification statu
 
 Tests require a server container with the tools image, its dependencies, a fresh
 `qvm_w5_issue142_*` database, lease and `QVM142_ARTIFACT_ROOT`. Run root
-`npm run validate`, `node_modules/.bin/tsc --noEmit --noUncheckedIndexedAccess`,
-and `node --test benchmarks/hospital/workloads/qualification.test.ts`. The test
+`npm run validate`, then the focused strict check and runner tests:
+
+```sh
+node_modules/.bin/tsc --ignoreConfig --noEmit --strict --noUncheckedIndexedAccess \
+  --exactOptionalPropertyTypes --module nodenext --target es2024 \
+  --allowImportingTsExtensions --skipLibCheck \
+  benchmarks/hospital/workloads/qualification.ts \
+  benchmarks/hospital/workloads/qualification.test.ts
+node --test benchmarks/hospital/workloads/qualification.test.ts
+```
+
+The test
 alone initializes/imports its six-record fixture and performs full scans of that
 fixture to create and independently check admission evidence. Failed and successful
 test artifacts are retained below the explicit artifact root.
+
+Server evidence on 25 October: source `78ce3e5b785e87132a3da6e0e46d7ff2ff6ca08d`
+passed root validation, the focused strict check and 12/12 tests against
+`qvm_w5_issue142_b`, with test client limited to 0.5 CPU / 1 GiB. Artifacts:
+`/ssd1/bim-forge-qualification/qvm-20261025/artifacts/issue142-runner-b`
+(`validate.log`, `strict-focused.log`, `tests.log`, and `fixtures/runner-*/`).
+Attempt A retains the corrected generic-return compiler error. Attempt B's
+`strict.log` retains the separate attempted whole-repository unchecked-index
+check: pre-existing viewer/product errors prevent that broader check. The root
+check and the stronger focused check both pass; no validators were changed.
