@@ -16,6 +16,8 @@ import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
 import type { RequestState } from './change-requests.ts';
 import { parseIntentAssessment } from '../src/model-intent.ts';
 import type { IntentAssessment } from '../src/model-intent.ts';
+import { RequestSourcePicker, parseSourceContext, renderSourceContext } from './request-source-ui.ts';
+import type { RequestSourceContext } from './request-source-ui.ts';
 
 type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
@@ -38,7 +40,7 @@ type AuthSession =
   | (AuthSessionBase & { status: 'failed'; connected: false; account: null; error: string })
   | (AuthSessionBase & { status: 'pending'; connected: false; account: null; device: { verificationUrl: string; userCode: string; expiresAt: number } })
   | (AuthSessionBase & { status: 'connected'; connected: true; account: AuthAccount });
-interface ActiveReview {
+interface ActiveReview extends RequestSourceContext {
   requestId: string;
   proposalName: string;
   baseRevisionId: string;
@@ -148,6 +150,9 @@ const ui = {
   'door-width': input('door-width'),
   'proposal-name': input('proposal-name'),
   'request-text': requiredElement('request-text', HTMLTextAreaElement),
+  'request-source-files': input('request-source-files'), 'request-source-list': generic('request-source-list'),
+  'request-source-status': generic('request-source-status'), 'request-source-error': generic('request-source-error'),
+  'request-reconstruct': input('request-reconstruct'),
   'save-proposal': button('save-proposal'),
   'export-project': button('export-project'),
   'import-project': button('import-project'),
@@ -275,6 +280,18 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
   if (text !== undefined) node.textContent = text;
   if (className) node.className = className;
   return node;
+}
+
+const sourcePicker = new RequestSourcePicker({ input: ui['request-source-files'], list: ui['request-source-list'],
+  status: ui['request-source-status'], error: ui['request-source-error'] }, updateControls);
+ui['request-reconstruct'].addEventListener('change', updateControls);
+
+function clearRequestSources(): void {
+  ui['request-reconstruct'].checked = false; submission = null; sourcePicker.clear();
+}
+
+function requestDirty(): boolean {
+  return dirty() || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
 function evidenceById(id: EvidenceItem['id']): EvidenceItem | undefined {
@@ -568,8 +585,10 @@ function updateControls() {
   ui['selected-object'].disabled = busy || !preview || dragging;
   ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture);
   ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
-  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture);
-  ui['save-proposal'].textContent = busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
+  sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository));
+  ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository);
+  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready;
+  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
   ui['discard-preview'].disabled = busy || !repo || !dirty() || dragging;
@@ -616,7 +635,7 @@ function resetEditor() {
   invalidInput = false; layout = null; preview = null;
   if (!repo) return;
   preview = requireRepository().view(selectedRevision).snapshot;
-  if (spaces(preview).length) feedback('Choose a room or object and describe the change. Shared walls and connecting doors stay visible; floor shell edits are not available yet.');
+  if (spaces(preview).length) feedback('Choose a room or object and describe the change. To propose a new floor layout, explicitly enable reconstruction below.');
   else try { layout = rectangleLayout(preview); feedback('Select an object and sketch the intent. The sketch is not authoritative model geometry.'); }
   catch (error) { feedback(`This saved layout is view-only: ${error instanceof Error ? error.message : 'unsupported geometry'}`, true); }
   const objects = preview.entities;
@@ -721,7 +740,7 @@ ui['discard-preview'].addEventListener('click', () => {
   if (busy || gesture || visualGesture || !repo) return;
   resetEditor(); renderComparison(); updateControls(); status('Visual request sketch discarded. Saved model history is unchanged.');
 });
-window.addEventListener('beforeunload', (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', (event) => { if (requestDirty()) { event.preventDefault(); event.returnValue = ''; } });
 
 async function perform(action: () => void | Promise<void>): Promise<void> {
   if (busy || gesture || visualGesture) return;
@@ -745,13 +764,15 @@ async function persist(next: RoomRepository, branch = 'main'): Promise<void> {
   const nextGeneration = await database.saveCAS(text, generation);
   generation = nextGeneration;
   savedText = text;
-  if (repo?.projectId !== next.projectId) { backlogItems = []; serverProjectText = null; revisionTicketId = null; submission = null; }
+  const projectChanged = repo?.projectId !== next.projectId;
+  if (projectChanged) { backlogItems = []; serverProjectText = null; revisionTicketId = null; submission = null; }
   repo = next;
   reviewRepository = null;
   activeTicketId = null;
   selectedBranch = branch;
   selectedRevision = repo.head(branch);
   resetEditor();
+  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); }
   render();
 }
 
@@ -824,9 +845,10 @@ ui['open-room'].addEventListener('click', () => {
 });
 function beginRequest(): boolean {
   if (!repo) return false;
-  if (dirty() && !window.confirm('Discard the unsent markup and return to the accepted model?')) return false;
+  if (requestDirty() && !window.confirm('Discard the unsent request, including attached sources, and return to the accepted model?')) return false;
   reviewRepository = null; activeTicketId = null; activeReview = null; revisionTicketId = null;
   selectedBranch = 'main'; selectedRevision = repo.head('main');
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   resetEditor(); render(); showPage('request');
   return true;
 }
@@ -869,7 +891,7 @@ for (const prefix of ['', 'review-', 'delta-']) {
   });
   button(`${prefix}cutaway`).addEventListener('click', () => { cutaway = !cutaway; if (repo) renderComparison(); });
 }
-window.addEventListener('pagehide', () => { modelViewer?.dispose(); modelViewer = null; });
+window.addEventListener('pagehide', () => { sourcePicker.releasePreviews(); modelViewer?.dispose(); modelViewer = null; });
 window.addEventListener('pageshow', (event) => { if (event.persisted && repo) renderComparison(); });
 ui['request-canvas-tab'].addEventListener('click', () => showRequestPane('canvas'));
 ui['request-details-tab'].addEventListener('click', () => showRequestPane('details'));
@@ -965,6 +987,7 @@ function parseProposalResponse(value: unknown): ProposalResponse {
       constraints: requiredText(reviewValue, 'constraints'),
       uncertainty: requiredText(reviewValue, 'uncertainty'),
       ...(Object.hasOwn(reviewValue, 'intent') ? { intent: parseIntentAssessment(reviewValue.intent) } : {}),
+      ...parseSourceContext(reviewValue),
       status: value.status,
       worker,
       validator: typeof reviewValue.validator === 'string' ? reviewValue.validator : undefined,
@@ -982,10 +1005,13 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (name && (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main')) throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
     const instruction = ui['request-text'].value.trim();
     if (!instruction || instruction.length > 1000) throw new Error('Describe the outcome in 1 to 1000 characters.');
+    const sources = sourcePicker.sources;
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: selectedRevision,
-      selectedObjectIds: focusedRoomId && selectedObject !== focusedRoomId ? [selectedObject, focusedRoomId] : [selectedObject], instruction, visualIntent } };
+      selectedObjectIds: focusedRoomId && selectedObject !== focusedRoomId ? [selectedObject, focusedRoomId] : [selectedObject], instruction, visualIntent,
+      ...(sources.length ? { sources } : {}),
+      ...(ui['request-reconstruct'].checked ? { authoringScope: 'floor-plan-reconstruction' } : {}) } };
     const fingerprint = JSON.stringify(content);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
     const response = await fetch(revisionTicketId ? `/api/change-requests/${encodeURIComponent(revisionTicketId)}/revision` : '/api/change-requests', {
@@ -996,6 +1022,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (!isRecord(acknowledgement)) throw new Error('Invalid request acknowledgement.');
     const submittedName = parseBacklogItem(acknowledgement.ticket).request.proposalName;
     submission = null; revisionTicketId = null;
+    clearRequestSources();
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
     resetEditor(); renderComparison();
     await refreshBacklog();
@@ -1013,7 +1040,7 @@ async function proposalJson(response: Response): Promise<unknown> {
 
 interface BacklogItem {
   id: string; projectId: string; state: RequestState; createdAt: number; attempts: number; error: string | null;
-  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string };
+  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string } & RequestSourceContext;
 }
 function parseBacklogItem(value: unknown): BacklogItem {
   if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
@@ -1022,7 +1049,7 @@ function parseBacklogItem(value: unknown): BacklogItem {
   if (state !== 'queued' && state !== 'working' && state !== 'needs-input' && state !== 'ready'
       && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
   return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, attempts: value.attempts, error: value.error,
-    request: { requestId: requiredText(value.request, 'requestId'), proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId: requiredText(value.request, 'baseRevisionId') } };
+    request: { requestId: requiredText(value.request, 'requestId'), proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId: requiredText(value.request, 'baseRevisionId'), ...parseSourceContext(value.request) } };
 }
 const stateLabels: Record<RequestState, string> = { queued: 'Queued', working: 'Working', 'needs-input': 'Needs your input',
   ready: 'Ready for review', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed' };
@@ -1062,6 +1089,8 @@ function renderBacklog(): void {
     const card = element('article', undefined, 'request-ticket'); card.dataset.state = item.state;
     const heading = element('header'); heading.append(element('h2', requestLabel(item.request.proposalName)), element('span', stateLabels[item.state], 'pill'));
     card.append(heading, element('p', item.request.instruction), element('small', `Base ${item.request.baseRevisionId.slice(0, 10)} · ${new Date(item.createdAt).toLocaleString()} · attempt ${item.attempts}`));
+    const sources = element('section', undefined, 'retained-sources');
+    renderSourceContext(sources, item.projectId, item.request); card.append(sources);
     if (item.error) card.append(element('p', item.error, 'ticket-error'));
     if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Based on a different revision. Revise against the current model before accepting.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
@@ -1077,12 +1106,12 @@ function renderBacklog(): void {
 }
 ui['backlog-filter'].addEventListener('change', renderBacklog);
 async function openActivity(id: string): Promise<void> {
-  if (dirty() && !window.confirm('Discard unsent markup and open request activity?')) return;
+  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and open request activity?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = parseBacklogItem(value.ticket);
   if (ticket.projectId !== repo?.projectId) throw new Error('Request project mismatch.');
-  resetEditor(); activityTicketId = id; activitySignature = '';
+  clearRequestSources(); ui['request-text'].value = ''; resetEditor(); activityTicketId = id; activitySignature = '';
   renderActivity(value.ticket); showPage('activity');
 }
 
@@ -1101,6 +1130,7 @@ function renderActivity(value: Record<string, unknown>): void {
   generic('activity-instruction').textContent = ticket.request.instruction;
   generic('activity-state').textContent = stateLabels[ticket.state];
   generic('activity-binding').textContent = `Request ${ticket.request.requestId} · base ${ticket.request.baseRevisionId.slice(0, 10)} · attempt ${ticket.attempts} of 3`;
+  renderSourceContext(generic('activity-sources'), ticket.projectId, ticket.request, true);
   generic('activity-error').hidden = !ticket.error; generic('activity-error').textContent = ticket.error ?? '';
   generic('activity-list').replaceChildren(...events.map((event) => {
     const row = element('li'); row.dataset.stage = event.stage;
@@ -1133,7 +1163,7 @@ for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventL
 });
 
 async function openTicket(id: string): Promise<void> {
-  if (dirty() && !window.confirm('Discard unsent markup and open this request?')) return;
+  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and open this request?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = parseBacklogItem(value.ticket);
@@ -1145,7 +1175,8 @@ async function openTicket(id: string): Promise<void> {
   } });
   const proposed = await RoomRepository.restore(result.project);
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
-  reviewRepository = proposed; activeTicketId = id; activeReview = result.review;
+  clearRequestSources(); ui['request-text'].value = '';
+  reviewRepository = proposed; activeTicketId = id; activeReview = { ...parseSourceContext(ticket.request), ...result.review };
   reviewDelta = result.status === 'ready'; modelView = '3d';
   if (ticket.state === 'completed') activeReview.decision = { status: 'accepted' };
   if (ticket.state === 'rejected') activeReview.decision = { status: 'superseded' };
@@ -1160,6 +1191,8 @@ async function openTicket(id: string): Promise<void> {
     if (!isRecord(version)) throw new Error('Invalid earlier request.');
     const earlier = parseBacklogItem(version);
     const detail = element('details'); detail.append(element('summary', `Earlier attempt ${index + 1} · ${requestLabel(earlier.request.proposalName)}`), element('p', earlier.request.instruction));
+    const sources = element('section', undefined, 'retained-sources');
+    renderSourceContext(sources, earlier.projectId, earlier.request); detail.append(sources);
     if (isRecord(version.result) && isRecord(version.result.review) && typeof version.result.review.summary === 'string') detail.append(element('p', version.result.review.summary));
     ui['ticket-history'].append(detail);
   }
@@ -1179,14 +1212,19 @@ async function decideTicket(id: string, action: string, activityVersion: string 
   await refreshBacklog();
 }
 async function reviseTicket(item: BacklogItem): Promise<void> {
+  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and revise this ticket?')) return;
   await refreshBacklog();
   if (!serverProjectText) throw new Error('Refresh the server model before revising.');
   const next = await RoomRepository.restore(serverProjectText);
   const detail = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
   if (!isRecord(detail) || !isRecord(detail.ticket) || !isRecord(detail.ticket.request)) throw new Error('Missing original request context.');
   const originalRequest = detail.ticket.request;
+  const originalSources = parseSourceContext(originalRequest);
+  if (parseBacklogItem(detail.ticket).projectId !== next.projectId) throw new Error('Request project mismatch.');
   await persist(next);
   activeReview = null; revisionTicketId = item.id;
+  sourcePicker.restore(next.projectId, originalSources.sources ?? []);
+  ui['request-reconstruct'].checked = originalSources.authoringScope === 'floor-plan-reconstruction';
   const firstSelected = Array.isArray(originalRequest.selectedObjectIds) ? originalRequest.selectedObjectIds[0] : null;
   if (typeof firstSelected === 'string' && next.view(next.head('main')).snapshot.entities.some((entity) => entity.id === firstSelected)) selectedObject = firstSelected;
   resetEditor();
@@ -1201,8 +1239,9 @@ ui['open-current-model'].addEventListener('click', () => {
   void perform(async () => {
     await refreshBacklog();
     if (!serverProjectText) { beginRequest(); return; }
-    if (dirty() && !window.confirm('Discard unsent markup and open the server model?')) return;
+    if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and open the server model?')) return;
     await persist(await RoomRepository.restore(serverProjectText));
+    clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
     activeReview = null; revisionTicketId = null; render(); showPage('request');
     status('Opened the current accepted server model.');
   });
@@ -1215,6 +1254,9 @@ function renderReview() {
   if (!review) return;
   const state = reviewState(review);
   const ticket = backlogItems.find((item) => item.id === activeTicketId);
+  const sourceContext = { ...(ticket?.request.requestId === review.requestId ? parseSourceContext(ticket.request) : {}), ...parseSourceContext(review) };
+  renderSourceContext(generic('review-sources'), repo?.projectId ?? '', sourceContext, true);
+  generic('review-scale-note').hidden = !sourceContext.authoringScope;
   ui['review-status'].textContent = ticket?.state === 'rejected' ? 'Rejected' : ticket?.state === 'needs-input' ? 'Needs your input' : state === 'accepted' ? 'Accepted version'
     : state === 'superseded' ? 'Earlier accepted version'
       : state === 'declined' ? 'No proposal prepared' : 'Ready for review';
@@ -1849,7 +1891,8 @@ function renderProperties(original: ModelSnapshot, selected: ModelSnapshot, delt
 function selectRevision(branch: string, revisionId: string): void {
   if (busy || gesture || !repo) return;
   const project = requireRepository();
-  if (dirty() && !window.confirm('Discard the unsaved request sketch and view this saved revision?')) return;
+  if (requestDirty() && !window.confirm('Discard the unsent request and attached sources, and view this saved revision?')) return;
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; revisionTicketId = null;
   selectedBranch = branch;
   selectedRevision = revisionId;
   activeReview = project.reviews().find((review) => review.proposalRevisionId === revisionId) ?? null;
@@ -2164,6 +2207,7 @@ async function initialize() {
     savedText = record.text;
     selectedBranch = 'main';
     selectedRevision = repo.head('main');
+    sourcePicker.setProject(restored.projectId);
     activeReview = repo.reviews().find((review) => review.proposalRevisionId === selectedRevision) ?? null;
     resetEditor();
     ui['project-name'].value = repo.name;

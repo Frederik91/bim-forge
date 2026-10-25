@@ -109,6 +109,19 @@
             <form id="proposal-form" class="proposal-form">
               <div class="proposal-connection"><div><span class="connection-dot" aria-hidden="true"></span><p><strong id="proposal-auth-copy">Connect ChatGPT to prepare this proposal</strong><small>Uses your eligible ChatGPT plan. No API key is required.</small></p></div><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
               <div><label for="request-text">What do you want the AI to achieve?</label><textarea id="request-text" maxlength="1000" rows="3" aria-describedby="proposal-help" required disabled></textarea></div>
+              <fieldset class="request-sources">
+                <legend>Source files <span>optional</span></legend>
+                <label for="request-source-files">Attach a sketch or document</label>
+                <input id="request-source-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown" aria-describedby="request-source-help request-source-status" disabled>
+                <p id="request-source-help" class="editor-help">PNG, JPEG, WebP, PDF, text or Markdown. Up to 4 files · 6 MiB each · 12 MiB total. Sources stay with the submitted request.</p>
+                <p id="request-source-status" class="editor-help" role="status" aria-live="polite" aria-atomic="true">No sources attached.</p>
+                <p id="request-source-error" class="source-error" role="alert" hidden></p>
+                <ul id="request-source-list" class="source-list" aria-label="Attached request sources"></ul>
+              </fieldset>
+              <div class="reconstruction-scope">
+                <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Reconstruct floor layout (propose replacing walls, rooms and openings)</span></label>
+                <p id="reconstruction-help" class="editor-help">The original stays preserved. Existing furniture is kept unless separately requested. Supports 2–12 rectangular rooms on one floor. Check proposed scale and dimension assumptions before accepting.</p>
+              </div>
               <div class="proposal-footer"><div><label for="proposal-name">Request name <span>optional</span></label><input id="proposal-name" placeholder="Named automatically from your request" pattern="[a-z]+(-[a-z]+)*" maxlength="64" aria-describedby="proposal-help" disabled></div><button id="save-proposal" type="submit" class="button primary" disabled>Send change request <span aria-hidden="true">→</span></button></div>
               <p id="proposal-help" class="editor-help">Send this to the project backlog and keep working. Agents process requests on the server, even when you close this page. Every proposal still needs review.</p>
             </form>
@@ -126,6 +139,7 @@
         <header class="page-heading"><div><p class="eyebrow">CHANGE REQUEST ACTIVITY</p><h1 id="activity-heading">Agent activity</h1><p id="activity-instruction"></p></div><button id="activity-back" class="button outline" type="button">Back to backlog</button></header>
         <section class="activity-card">
           <header><span id="activity-state" class="pill teal"></span><p id="activity-binding"></p></header>
+          <section id="activity-sources" class="retained-sources" aria-label="Sources bound to this request" hidden></section>
           <p id="activity-connection" role="status" aria-live="polite">Connecting to request activity…</p>
           <p class="editor-help">Actual tool actions and validation outcomes. Private reasoning is not shown. Work continues on the server while you explore.</p>
           <p id="activity-error" class="ticket-warning" hidden></p>
@@ -149,6 +163,8 @@
               <ul id="review-assumptions"></ul>
             </section>
             <dl class="review-list"><div><dt>What changed</dt><dd id="review-summary"></dd></div><div><dt>Why this approach</dt><dd id="review-rationale"></dd></div><div><dt>Constraints respected</dt><dd id="review-constraints"></dd></div><div><dt>Uncertainty</dt><dd id="review-uncertainty"></dd></div><div class="review-binding"><dt>Bound evidence</dt><dd id="review-binding"></dd></div></dl>
+            <section id="review-sources" class="retained-sources" aria-label="Sources bound to this proposal" hidden></section>
+            <p id="review-scale-note" class="source-scope-note" hidden>Check the AI’s scale, dimensions and assumptions above against the attached sources. Reconstruction is limited to 2–12 rectangular rooms on one floor; this proposal still needs your acceptance.</p>
             <div id="ticket-history" class="ticket-history"></div>
             <button id="view-changes" class="button quiet full" type="button">Inspect detailed model delta</button>
             <div class="review-actions"><button id="accept-proposal" type="button" class="button primary">Accept this version</button><button id="reject-proposal" type="button" class="button quiet">Reject proposal</button><button id="request-revision" type="button" class="button outline">Request a revision</button></div>
