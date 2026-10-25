@@ -1,0 +1,104 @@
+✖ an ordinary guest exception cannot hide a caught forbidden call or restore proposal authority (195.584445ms)
+✖ hostile method names and diagnostic controls still produce bounded durable failure evidence (46.462837ms)
+✖ script evidence rejects contradictory atomic outcomes and retains genuine discarded audit records (2.503951ms)
+✖ saved script reviews require one final successful proposal and matching actual tool evidence (22.389926ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 0
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 838.191576
+
+✖ failing tests:
+
+test at src/model-script.test.ts:116:1
+✖ an ordinary guest exception cannot hide a caught forbidden call or restore proposal authority (195.584445ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /lost execution authority/. Input:
+
+  'ModelWorkerError: host denial remains fatal even when the final guest error is ordinary\n' +
+    '\n' +
+    'true !== false\n'
+
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///app/src/model-script.test.ts:118:3)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ModelWorkerError: host denial remains fatal even when the final guest error is ordinary
+
+    true !== false
+
+        at prepareModelProposal (file:///app/src/model-proposal.ts:240:27)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async waitForActual (node:assert:646:5)
+        ... 3 lines matching cause stack trace ...
+        at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+      [cause]: AssertionError [ERR_ASSERTION]: host denial remains fatal even when the final guest error is ordinary
+
+      true !== false
+
+          at Object.run (file:///app/src/model-script.test.ts:125:12)
+          at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+          at async runWorker (file:///app/src/model-proposal.ts:133:9)
+          at async prepareModelProposal (file:///app/src/model-proposal.ts:217:5)
+          at async waitForActual (node:assert:646:5)
+          at async strict.rejects (node:assert:769:25)
+          at async TestContext.<anonymous> (file:///app/src/model-script.test.ts:118:3)
+          at async Test.run (node:internal/test_runner/test:1409:7)
+          at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+    },
+    expected: /lost execution authority/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at src/model-script.test.ts:130:1
+✖ hostile method names and diagnostic controls still produce bounded durable failure evidence (46.462837ms)
+  AssertionError [ERR_ASSERTION]: every terminal runtime outcome reaches the durable evidence callback
+
+  0 !== 1
+
+      at TestContext.<anonymous> (file:///app/src/model-script.test.ts:137:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at src/room-model.test.ts:1081:1
+✖ script evidence rejects contradictory atomic outcomes and retains genuine discarded audit records (2.503951ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception: completed/observation/passed/no diagnostic
+      at TestContext.<anonymous> (file:///app/src/room-model.test.ts:1095:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /Invalid script evidence/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at src/room-model.test.ts:1108:1
+✖ saved script reviews require one final successful proposal and matching actual tool evidence (22.389926ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection: {"scriptExecutions":[{"version":1,"executionId":"execution-1","language":"typescript","sourceSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"failed","disposition":"discarded","validation":"not-run","contractSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","policyVersion":"bim-model-v1","runtime":{"packageVersion":"0.1.0","guestAbi":2,"bootstrapVersion":3,"artifactSha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},"calls":[{"sequence":1,"method":"model.previewRectangle","disposition":"completed"}],"diagnostic":{"code":"script-error","message":"The script failed.","line":null,"column":null}}],"toolCalls":[{"name":"run_model_script","status":"rejected","error":"The script failed."}]}
+      at async TestContext.<anonymous> (file:///app/src/room-model.test.ts:1141:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /[Ss]cript/,
+    operator: 'rejects',
+    diff: 'simple'
+  }

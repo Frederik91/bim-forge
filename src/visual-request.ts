@@ -1,8 +1,12 @@
+import { boundsMm, floorBounds } from './floor-plan.ts';
 import { previewRectangle, rectangleLayout } from './room-model.ts';
-import type { ModelSnapshot, Point, RoomLayout } from './room-model.ts';
+import { levels, levelView } from './building-levels.ts';
+import type { ModelGraph, Point, RoomLayout } from './room-model.ts';
 
+export type FloorSpatialReference = Readonly<{ kind: 'floor-point'; levelId: string; positionMm: Point }>;
 export type SpatialReference =
-  | Readonly<{ kind: 'floor-point'; positionMm: Point }>
+  | FloorSpatialReference
+  | Readonly<{ kind: 'floor-point'; positionMm: Point; levelId?: never }>
   | Readonly<{ kind: 'wall-point'; wallId: string; alongWallMm: number }>;
 
 export type VisualRequest =
@@ -19,7 +23,7 @@ function record(value: unknown, keys: readonly string[]): asserts value is Recor
   }
 }
 
-export function parseVisualRequest(snapshot: ModelSnapshot, input: unknown): VisualRequest {
+export function parseVisualRequest(snapshot: ModelGraph, input: unknown): VisualRequest {
   if (!isRecord(input)) throw new Error('A visual request kind is required.');
   if (input.kind === 'selection') { record(input, ['kind']); return { kind: 'selection' }; }
   if (input.kind === 'rectangle-layout-sketch') {
@@ -31,15 +35,19 @@ export function parseVisualRequest(snapshot: ModelSnapshot, input: unknown): Vis
   const target = input.destination;
   if (!isRecord(target)) throw new Error('A spatial reference is required.');
   if (target.kind === 'floor-point') {
-    record(target, ['kind', 'positionMm']);
+    const level = snapshot.version === 2 ? levels(snapshot).find((item) => item.id === target.levelId) : null;
+    if (snapshot.version === 2 && !level) throw new Error('A building floor reference requires a known levelId.');
+    record(target, snapshot.version === 2 ? ['kind', 'levelId', 'positionMm'] : ['kind', 'positionMm']);
     if (!Array.isArray(target.positionMm) || target.positionMm.length !== 2) throw new Error('A floor reference requires two whole millimetre coordinates.');
     const [x, y]: unknown[] = target.positionMm;
     if (typeof x !== 'number' || typeof y !== 'number' || !Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
       throw new Error('A floor reference requires two whole millimetre coordinates.');
     }
-    const b = rectangleLayout(snapshot).boundsMm;
-    if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) throw new Error('The floor reference must be inside the room.');
-    return { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [x, y] } };
+    const b = boundsMm(floorBounds(level ? levelView(snapshot, level.id) : snapshot));
+    if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) throw new Error('The floor reference must be inside the floor.');
+    return { kind: 'spatial-reference', destination: level
+      ? { kind: 'floor-point', levelId: level.id, positionMm: [x, y] }
+      : { kind: 'floor-point', positionMm: [x, y] } };
   }
   record(target, ['kind', 'wallId', 'alongWallMm']);
   const wall = snapshot.entities.find((item) => item.id === target.wallId);

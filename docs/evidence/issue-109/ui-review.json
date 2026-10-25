@@ -1,0 +1,338 @@
+{
+  "state": "ready",
+  "request": {
+    "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+    "proposalName": "draw-the-floor-plan-from-jdjebmjfpklckeanmkcimjofahjdaapf",
+    "baseRevisionId": "c050c7bdaebb75d7115659ee44495d8a884f7a68034ebc3f72820020e98c9b78",
+    "selectedObjectIds": [
+      "door-entry"
+    ],
+    "instruction": "Draw the floor plan from the attached sketch and PDF, using their dimensions and door positions. Explain any assumptions in the proposal.",
+    "visualIntent": {
+      "kind": "selection"
+    },
+    "sources": [
+      {
+        "id": "5dbc94e9-3940-4866-8458-ebb2298e7363",
+        "name": "synthetic-ui-floor.png",
+        "mediaType": "image/png",
+        "byteLength": 44026,
+        "sha256": "627c22a398baede771b594ce3bbccadbb4c3a664dba4abc4c9f077d45e8e733d"
+      },
+      {
+        "id": "eac69438-db68-4416-96b9-c4f3f420b0a3",
+        "name": "synthetic-ui-floor.pdf",
+        "mediaType": "application/pdf",
+        "byteLength": 1299,
+        "sha256": "c02f86b5eb1476eabf3a35d7b25ad35de1fa519df4379f8d2d18fac05fda6eb1"
+      }
+    ],
+    "authoringScope": "floor-plan-reconstruction"
+  },
+  "activity": [
+    {
+      "stage": "queued",
+      "message": "Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 1,
+      "at": 1792915288938,
+      "attempt": 0
+    },
+    {
+      "stage": "started",
+      "message": "Agent started on the bound model. Waiting for its next reported tool action.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 2,
+      "at": 1792915288955,
+      "attempt": 1
+    },
+    {
+      "stage": "inspecting",
+      "message": "Preparing the attached reference files for the agent.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 3,
+      "at": 1792915288971,
+      "attempt": 1
+    },
+    {
+      "stage": "inspecting",
+      "message": "Inspecting the bound model, selected identities and room relationships from the script.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 4,
+      "at": 1792915304004,
+      "attempt": 1
+    },
+    {
+      "stage": "inspecting",
+      "message": "Inspecting the bound model, selected identities and room relationships from the script.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 5,
+      "at": 1792915332581,
+      "attempt": 1
+    },
+    {
+      "stage": "validating",
+      "message": "Testing a scripted model change against the model and placement validators.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 6,
+      "at": 1792915332611,
+      "attempt": 1
+    },
+    {
+      "stage": "validated",
+      "message": "Scripted change passed deterministic validation. Accepted model remains unchanged.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 7,
+      "at": 1792915332628,
+      "attempt": 1
+    },
+    {
+      "stage": "validation-failed",
+      "message": "Script did not produce a valid proposal. Staged changes were discarded.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 8,
+      "at": 1792915332658,
+      "attempt": 1
+    },
+    {
+      "stage": "inspecting",
+      "message": "Inspecting the bound model, selected identities and room relationships from the script.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 9,
+      "at": 1792915364575,
+      "attempt": 1
+    },
+    {
+      "stage": "validating",
+      "message": "Testing a scripted model change against the model and placement validators.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 10,
+      "at": 1792915364589,
+      "attempt": 1
+    },
+    {
+      "stage": "validated",
+      "message": "Scripted change passed deterministic validation. Accepted model remains unchanged.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 11,
+      "at": 1792915364603,
+      "attempt": 1
+    },
+    {
+      "stage": "submitting",
+      "message": "Preparing the host-validated scripted model delta and human review.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 12,
+      "at": 1792915364632,
+      "attempt": 1
+    },
+    {
+      "stage": "ready",
+      "message": "Validated proposal is ready for your review. Nothing is accepted automatically.",
+      "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+      "sequence": 13,
+      "at": 1792915368857,
+      "attempt": 1
+    }
+  ],
+  "review": {
+    "requestId": "ce6f2478-03e7-49dd-972e-32a25457131d",
+    "proposalName": "draw-the-floor-plan-from-jdjebmjfpklckeanmkcimjofahjdaapf",
+    "baseRevisionId": "c050c7bdaebb75d7115659ee44495d8a884f7a68034ebc3f72820020e98c9b78",
+    "proposalRevisionId": "33cda6617af9bdc9c397bb9937ead34a4bf4993c4ad3a0492a5f33fd61615329",
+    "selectedObjectIds": [
+      "door-entry"
+    ],
+    "instruction": "Draw the floor plan from the attached sketch and PDF, using their dimensions and door positions. Explain any assumptions in the proposal.",
+    "summary": "Reconstruct the 6 × 4 m floor: Living room west, Office east, each 3 × 4 m, with two 0.9 m doors.",
+    "rationale": "Sources: 5dbc94e9-3940-4866-8458-ebb2298e7363 image 1 and eac69438-db68-4416-96b9-c4f3f420b0a3 PDF page 1. Labelled dimensions determine centre-line spans, 0.15 m walls and 2.7 m height. Replace shell, add central partition and rooms, retain entry door identity with revised host position, and add internal door. Existing scene has no furnishings, equipment or windows; none added.",
+    "constraints": "North is +Y; southwest origin retained. Door widths 0.9 m. Door offsets estimated: entry 1.000 m from southwest corner along south wall; internal door 0.850 m north of partition south end. Door heights assumed 2.100 m from existing entry. Swing graphics are not modeled. Human review only, not construction approval.",
+    "uncertainty": "Offsets are not dimensioned. PDF entry is approximately 1.000 m from west, versus approximately 0.600 m in sketch; PDF position chosen. Internal offset approximately 0.850 m agrees across references. These estimates on a 1 mm grid are not measured accuracy. Room labels interpreted as centre-line dimensions, not clear sizes.",
+    "worker": {
+      "provider": "openai-codex-app-server",
+      "model": "gpt-6.1-sol",
+      "responseIds": [
+        "01a17214-355b-75d3-bf93-c373c18104e0"
+      ],
+      "usage": {
+        "inputTokens": 19527,
+        "outputTokens": 64,
+        "totalTokens": 19591
+      }
+    },
+    "toolCalls": [
+      {
+        "name": "run_model_script",
+        "status": "accepted",
+        "error": null
+      },
+      {
+        "name": "run_model_script",
+        "status": "rejected",
+        "error": "Review text requires 1 to 800 readable characters."
+      },
+      {
+        "name": "run_model_script",
+        "status": "accepted",
+        "error": null
+      }
+    ],
+    "scriptExecutions": [
+      {
+        "version": 1,
+        "executionId": "477e60da-149d-4d65-b77e-1e556a25a671",
+        "language": "javascript",
+        "sourceSha256": "a4a27af6f8937275e7e95d46d5169e967bfdb28e7675661fbbe1b65d11d0807d",
+        "status": "completed",
+        "disposition": "observation",
+        "validation": "not-run",
+        "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+        "policyVersion": "proposal-intent-v1",
+        "runtime": {
+          "packageVersion": "0.1.1",
+          "guestAbi": 2,
+          "bootstrapVersion": 3,
+          "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+        },
+        "calls": [
+          {
+            "sequence": 1,
+            "method": "model.inspect",
+            "disposition": "completed"
+          }
+        ],
+        "diagnostic": null
+      },
+      {
+        "version": 1,
+        "executionId": "bb678b08-2cf1-499b-834f-a7197b186cc0",
+        "language": "javascript",
+        "sourceSha256": "71a2a9f2063c385a0e48b47b635eee51d34a0cdcb2999aa4e61cc2e7f3037d5e",
+        "status": "completed",
+        "disposition": "discarded",
+        "validation": "failed",
+        "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+        "policyVersion": "proposal-intent-v1",
+        "runtime": {
+          "packageVersion": "0.1.1",
+          "guestAbi": 2,
+          "bootstrapVersion": 3,
+          "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+        },
+        "calls": [
+          {
+            "sequence": 1,
+            "method": "model.inspect",
+            "disposition": "completed"
+          },
+          {
+            "sequence": 2,
+            "method": "model.previewFloor",
+            "disposition": "completed"
+          }
+        ],
+        "diagnostic": {
+          "code": "invalid-proposal",
+          "message": "Review text requires 1 to 800 readable characters.",
+          "line": null,
+          "column": null
+        }
+      },
+      {
+        "version": 1,
+        "executionId": "c4bbde5e-07c7-4618-9ffd-e880dfc126bb",
+        "language": "javascript",
+        "sourceSha256": "e1430d501ca1df8325e596a43ad226dca4890d15d501fb03655cedfdff449d58",
+        "status": "completed",
+        "disposition": "proposal",
+        "validation": "passed",
+        "contractSha256": "8b99a268980e0b3ed98b188c568bc217d1a806d64d958d40895ea9209619ba67",
+        "policyVersion": "proposal-intent-v1",
+        "runtime": {
+          "packageVersion": "0.1.1",
+          "guestAbi": 2,
+          "bootstrapVersion": 3,
+          "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+        },
+        "calls": [
+          {
+            "sequence": 1,
+            "method": "model.inspect",
+            "disposition": "completed"
+          },
+          {
+            "sequence": 2,
+            "method": "model.previewFloor",
+            "disposition": "completed"
+          }
+        ],
+        "diagnostic": null
+      }
+    ],
+    "intent": {
+      "interpretation": "Reconstruct the two-room reference plan using labelled dimensions and PDF-preferred door placement.",
+      "assumptions": [
+        "Prefer PDF entry position over differing sketch.",
+        "Treat room sizes as wall-centre-line spans.",
+        "Use existing 2.1 m entry height for both doors."
+      ],
+      "certainty": 91,
+      "basis": "Both sources show the same rectangular two-room layout and labelled dimensions. Door offsets are estimated; PDF and sketch differ at entry. No contents require preservation."
+    },
+    "sources": [
+      {
+        "id": "5dbc94e9-3940-4866-8458-ebb2298e7363",
+        "name": "synthetic-ui-floor.png",
+        "mediaType": "image/png",
+        "byteLength": 44026,
+        "sha256": "627c22a398baede771b594ce3bbccadbb4c3a664dba4abc4c9f077d45e8e733d"
+      },
+      {
+        "id": "eac69438-db68-4416-96b9-c4f3f420b0a3",
+        "name": "synthetic-ui-floor.pdf",
+        "mediaType": "application/pdf",
+        "byteLength": 1299,
+        "sha256": "c02f86b5eb1476eabf3a35d7b25ad35de1fa519df4379f8d2d18fac05fda6eb1"
+      }
+    ],
+    "authoringScope": "floor-plan-reconstruction",
+    "validator": "room-graph-v1",
+    "decision": {
+      "status": "pending",
+      "decisionId": null,
+      "actor": null
+    },
+    "changes": {
+      "entities": {
+        "added": [
+          "door-internal",
+          "floor-wall-h-p0-p0-p6000",
+          "floor-wall-h-p4000-p0-p6000",
+          "floor-wall-v-p0-p0-p4000",
+          "floor-wall-v-p3000-p0-p4000",
+          "floor-wall-v-p6000-p0-p4000",
+          "level-ground",
+          "living-room",
+          "office"
+        ],
+        "removed": [
+          "wall-east",
+          "wall-north",
+          "wall-south",
+          "wall-west"
+        ],
+        "modified": []
+      },
+      "relationships": {
+        "added": [
+          "floor-host-1b3fbnekfyh3ld9ews9aw37ucjly6k4zxs0ibyycjyql8bbziv",
+          "floor-host-5oglgdd8vgf25hdbdg7v6q32dvgqozhbwvqzfyuxf6w112mcqs"
+        ],
+        "removed": [
+          "host-entry"
+        ],
+        "modified": []
+      }
+    }
+  }
+}

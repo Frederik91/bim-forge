@@ -1,0 +1,8 @@
+{"replay":"all-desks-with-contents","passed":true,"note":"Rechecks saved live outputs without another model call."}
+{"replay":"desk-wall","passed":true,"note":"Rechecks saved live outputs without another model call."}
+{"replay":"rotated-desk-wall","passed":true,"note":"Rechecks saved live outputs without another model call."}
+{"replay":"plant-wall","passed":true,"note":"Rechecks saved live outputs without another model call."}
+{"replay":"explicit-freestanding","passed":true,"note":"Rechecks saved live outputs without another model call."}
+{"replay":"another-desk-only","passed":true,"note":"Rechecks saved live outputs without another model call."}
+{"replay":"choose-a-reasonable-wall","passed":true,"note":"Rechecks saved live outputs without another model call."}
+{"replay":"unsupported-topology","passed":true,"note":"Rechecks saved live outputs without another model call."}
