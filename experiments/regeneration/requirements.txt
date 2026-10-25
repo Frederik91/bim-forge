@@ -1,0 +1,6 @@
+# Coordinator installs this wheel in its disposable, pinned Python container.
+# Python 3.11 + Linux x86_64/glibc >=2.28 is a published wheel target.
+# The coordinator must also pin the image digest and resolved transitive tooling.
+cadquery-ocp==8.0.1.1.0
+cadquery-ocp-proxy==8.0.1.1.0
+vtk==9.6.2
