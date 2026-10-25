@@ -119,12 +119,14 @@ export class Storage {
 
   async insertVersions(items: StoredEntity[]): Promise<void> {
     if (items.length === 0) return;
-    const records = items.map((item) => ({ versionId: hash(item), ...item }));
+    const records = items.map((body) => ({ versionId: hash(body), entityId: body.entityId, kind: body.kind,
+      typeId: body.typeId, containerId: body.containerId, systemId: body.systemId,
+      fromId: body.fromId, toId: body.toId, body }));
     await this.client.query(`INSERT INTO qvm_storage.versions
       SELECT x."versionId",x."entityId",x.kind,x."typeId",x."containerId",x."systemId",x."fromId",x."toId",x.body
       FROM jsonb_to_recordset($1::jsonb) AS x("versionId" text,"entityId" text,kind text,"typeId" text,
         "containerId" text,"systemId" text,"fromId" text,"toId" text,body jsonb)
-      ON CONFLICT (version_id) DO NOTHING`, [JSON.stringify(records.map(({ versionId, ...body }) => ({ ...body, body, versionId })))]);
+      ON CONFLICT (version_id) DO NOTHING`, [JSON.stringify(records)]);
   }
 
   async validateReferences(branch: string): Promise<void> {
