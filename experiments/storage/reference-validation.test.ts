@@ -160,10 +160,10 @@ test('tiny-data EXPLAIN executes both SQL paths with the existing projection ind
       }
       // Tiny tables can prefer sequential scans. This checks index eligibility, not performance.
       await store.client.query('SET LOCAL enable_seqscan=off');
+      const indexed = await store.client.query<Record<string, unknown>>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${deletedReferencesSql}`,
+        [branch, ['target']]);
       for (const { column } of referenceCases) {
-        const plan = await store.client.query<Record<string, unknown>>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${deletedReferencesSql}`,
-          [branch, ['target']]);
-        const text = JSON.stringify(plan.rows);
+        const text = JSON.stringify(indexed.rows);
         assert.ok(text.includes(`visibility_${column.replace('_id', '')}`));
       }
       context.diagnostic('All five existing partial incoming indexes are eligible; no scale claim.');
