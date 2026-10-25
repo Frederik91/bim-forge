@@ -83,7 +83,11 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     await artifact('config.json', config);
     await artifact('execution-envelope.json', { ...config.execution, spaceBefore: await spaceSnapshot(config.execution),
       enforcement: 'Client checks reserves and cooperative load deadline; coordinator watchdog enforces total shared 200 GiB allocation and hard wall timeout.',
-      claim: 'Exploratory budgets, not product SLOs; no winner without limiter and tuning evidence.' });
+      claim: config.execution.purpose === 'extended-initial-inventory'
+        ? 'Separate extended initial inventory completion experiment; cannot pass the original two-hour acceptance target.'
+        : config.execution.purpose === 'resource-sensitivity-initial-inventory'
+        ? 'Controlled reduced/medium resource sensitivity experiment; cannot qualify the original full inventory target.'
+        : 'Exploratory budgets, not product SLOs; no winner without limiter and tuning evidence.' });
     await artifact('environment.json', {
       timestamp: new Date().toISOString(), host: hostname(), osRelease: release(), cpus: cpus().map((cpu) => cpu.model), totalmem: totalmem(),
       node: process.version, versions: process.versions, argv: process.argv, execArgv: process.execArgv,
@@ -123,8 +127,15 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
     if (mode.kind === 'load-only') {
       await artifact('metrics-loaded.json', await store.metrics());
-      observe('initial-inventory', 'Initial inventory published at one revision before bounded updates',
-        JSON.stringify({ revisionId: loaded.revisionId, records: loaded.fingerprint.count }), true);
+      const extended = config.execution.purpose === 'extended-initial-inventory';
+      const sensitivity = config.execution.purpose === 'resource-sensitivity-initial-inventory';
+      if (extended || sensitivity) await checkpoint();
+      observe(extended || sensitivity ? config.execution.purpose : 'initial-inventory',
+        extended || sensitivity ? 'Separate initial inventory experiment published at one revision within the declared limit'
+          : 'Initial inventory published at one revision before bounded updates',
+        JSON.stringify({ revisionId: loaded.revisionId, records: loaded.fingerprint.count }), true,
+        extended ? ['Separate completion experiment; cannot pass the original two-hour acceptance target.']
+          : sensitivity ? ['Controlled reduced/medium resource sensitivity experiment; cannot qualify the original full inventory target.'] : []);
       return observations;
     }
     const firstPage = await store.page({ branch: config.branch, after: '', limit: config.pageSize });

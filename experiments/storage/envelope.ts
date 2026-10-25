@@ -5,18 +5,9 @@ import { HashSchema, parse } from './contract.ts';
 import type { Json } from './contract.ts';
 
 const GiB = 1024 ** 3;
-export const ExecutionSchema = Type.Object({
+const ExecutionProperties = {
   decisionPath: Type.String({ minLength: 1 }), decisionSha256: HashSchema,
-  mode: Type.Union([
-    Type.Object({ kind: Type.Literal('load-only') }, { additionalProperties: false }),
-    Type.Object({ kind: Type.Literal('load-and-measure') }, { additionalProperties: false }),
-    Type.Object({ kind: Type.Literal('measure-existing'), loadRecord: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-  ]),
-  purpose: Type.Union([Type.Literal('initial-inventory'), Type.Literal('bounded-updates'), Type.Literal('smaller-fixture-history')]),
-  measurement: Type.Union([Type.Literal('correctness'), Type.Literal('warm-single-client-exploratory'), Type.Literal('comparative')]),
   maxBoundedUpdates: Type.Integer({ minimum: 1, maximum: 100 }),
-  loadWallTimeLimitMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
-  loadStatementTimeoutMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
   space: Type.Object({
     dataPath: Type.String({ minLength: 1 }), hostRootPath: Type.String({ minLength: 1 }),
     dataBudgetBytes: Type.Integer({ minimum: 1, maximum: 200 * GiB }),
@@ -28,7 +19,37 @@ export const ExecutionSchema = Type.Object({
     oneHop: Type.Number({ exclusiveMinimum: 0, maximum: 1000 }), boundedDelta: Type.Number({ exclusiveMinimum: 0, maximum: 2000 }),
     smallAccept: Type.Number({ exclusiveMinimum: 0, maximum: 4000 }),
   }, { additionalProperties: false }),
-}, { additionalProperties: false });
+};
+export const ExecutionSchema = Type.Union([
+  Type.Object({
+    ...ExecutionProperties,
+    purpose: Type.Union([Type.Literal('initial-inventory'), Type.Literal('bounded-updates'), Type.Literal('smaller-fixture-history')]),
+    mode: Type.Union([
+      Type.Object({ kind: Type.Literal('load-only') }, { additionalProperties: false }),
+      Type.Object({ kind: Type.Literal('load-and-measure') }, { additionalProperties: false }),
+      Type.Object({ kind: Type.Literal('measure-existing'), loadRecord: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+    ]),
+    measurement: Type.Union([Type.Literal('correctness'), Type.Literal('warm-single-client-exploratory'), Type.Literal('comparative')]),
+    loadWallTimeLimitMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
+    loadStatementTimeoutMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
+  }, { additionalProperties: false }),
+  Type.Object({
+    ...ExecutionProperties,
+    purpose: Type.Literal('extended-initial-inventory'),
+    mode: Type.Object({ kind: Type.Literal('load-only') }, { additionalProperties: false }),
+    measurement: Type.Literal('correctness'),
+    loadWallTimeLimitMs: Type.Integer({ minimum: 1000, maximum: 21600000 }),
+    loadStatementTimeoutMs: Type.Integer({ minimum: 1000, maximum: 21600000 }),
+  }, { additionalProperties: false }),
+  Type.Object({
+    ...ExecutionProperties,
+    purpose: Type.Literal('resource-sensitivity-initial-inventory'),
+    mode: Type.Object({ kind: Type.Literal('load-only') }, { additionalProperties: false }),
+    measurement: Type.Literal('correctness'),
+    loadWallTimeLimitMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
+    loadStatementTimeoutMs: Type.Integer({ minimum: 1000, maximum: 7200000 }),
+  }, { additionalProperties: false }),
+]);
 export type Execution = Static<typeof ExecutionSchema>;
 
 export function validateExecution(config: {
@@ -36,12 +57,22 @@ export function validateExecution(config: {
   environment: { nodeCpuLimit: number; nodeMemoryLimitBytes: number; postgresCpuLimit: number; postgresMemoryLimitBytes: number; diskBudgetBytes: number };
 }): void {
   const { execution, environment } = config;
-  if (environment.nodeCpuLimit > 1 || environment.nodeMemoryLimitBytes > GiB
-      || environment.postgresCpuLimit > 1.5 || environment.postgresMemoryLimitBytes > 3 * GiB) {
+  const resourceSensitivity = execution.purpose === 'resource-sensitivity-initial-inventory';
+  if (environment.nodeCpuLimit > (resourceSensitivity ? 2 : 1) || environment.nodeMemoryLimitBytes > GiB
+      || environment.postgresCpuLimit > (resourceSensitivity ? 2.5 : 1.5)
+      || environment.postgresMemoryLimitBytes > (resourceSensitivity ? 6 : 3) * GiB) {
     throw new Error('Resource declaration exceeds the predeclared initial CPU/memory envelope');
   }
   if (environment.diskBudgetBytes !== execution.space.dataBudgetBytes) throw new Error('Disk budgets must agree');
   const full = config.scale === 'full' || config.scale === 'detail-stress';
+  if (resourceSensitivity && ((config.scale !== 'reduced' && config.scale !== 'medium')
+      || config.historyRevisions !== 1 || config.leaseMode !== 'exclusive-measurement')) {
+    throw new Error('Resource sensitivity initial inventory requires reduced/medium scale, exactly one revision and an exclusive measurement lease');
+  }
+  if (execution.purpose === 'extended-initial-inventory'
+      && (config.scale !== 'full' || config.historyRevisions !== 1 || config.leaseMode !== 'exclusive-measurement')) {
+    throw new Error('Extended initial inventory requires full scale, exactly one revision and an exclusive measurement lease');
+  }
   if (execution.purpose === 'initial-inventory' && (config.historyRevisions !== 1 || execution.mode.kind !== 'load-only')) {
     throw new Error('Initial inventory must load only, at exactly one revision');
   }
