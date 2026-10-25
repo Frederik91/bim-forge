@@ -1,0 +1,3549 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "bounded-batch-comparison-20261025a",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T19:12:32.150673Z",
+  "finishedAt": "2026-10-25T19:30:48.001440073Z",
+  "hypothesis": "Larger row-count batches reduce avoidable commit overhead while retaining the existing byte trigger and complete reduced fidelity.",
+  "variant": "Five alternating fresh reduced pairs;250 vs5000 row threshold;original CPU/RAM and8GiB WAL",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+    "runnerCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+    "validators": [
+      "Original complete W4 producer byte/count/hash and source/database body/kind/property oracles in every admitted case",
+      "Independent coordinator recheck of actual images/CPU/RAM, original errors/observations and fingerprint/property outcomes",
+      "Source-bound root/strict and focused tests; exact outputs retained with their respective sources"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1 reduced",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca"
+  },
+  "environment": {
+    "host": "192.168.1.17; existing services active",
+    "software": {
+      "node": "24.22.1",
+      "postgresql": "15.14",
+      "sources": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098,d3160be232eabbb99e371b427c8bfb422b41d490",
+      "profile": "Individual actual resource/WAL settings and I/O counters are retained per sample."
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "Fresh per-sample databases in the new private SSD-backed round3 cluster. All old/new allocations count toward total200GiB.",
+    "cacheProcedure": "Private checkpoint before each timed job; unchanged host caches; no cold-cache claim. New containers disable swap.",
+    "measurementSlot": "Exclusive database sequence; no competing qualification DB workload. Existing services and bounded file-only analysis remain active."
+  },
+  "commands": [
+    "python3 /ssd1/bim-forge-qualification/qvm-20261025/round3/trial.py <unique-id> <explicit-arm-arguments>",
+    "node experiments/storage/cli.ts workload <pinned-config> <fresh-output>"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-a-1-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":53057.842264,\"publication\":29357.313887000004,\"analyze\":307.5390269999916}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-b-1-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":42340.317771999995,\"publication\":28243.420148999998,\"analyze\":425.28290600000764}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-a-2-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":49416.748709,\"publication\":26386.864478000003,\"analyze\":498.96244599999045}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-b-2-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":42631.411212,\"publication\":26611.614991000002,\"analyze\":303.49401199999556}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-a-3-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":53031.101077,\"publication\":29025.052999999993,\"analyze\":298.0184770000051}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-b-3-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":42749.15777,\"publication\":27107.293379000002,\"analyze\":308.24697500000184}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-a-4-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":58845.357379999994,\"publication\":26786.874269,\"analyze\":300.1788830000005}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-b-4-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":42290.899637999995,\"publication\":26443.827899999997,\"analyze\":296.46719600001234}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-a-5-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":52343.81336,\"publication\":27170.347876,\"analyze\":511.3232019999996}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-batch-b-5-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":42266.90297,\"publication\":26987.206604,\"analyze\":300.7573010000051}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-synthetic-scope",
+      "expected": "Database-only synthetic and selected-scale scope remains explicit.",
+      "observed": "No real hospital completeness, geometry, engineering authority, full history/client/concurrency matrix or general language winner is qualified.",
+      "passed": true,
+      "limitations": [
+        "Scope assertion only."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-batch-a-1-fidelity",
+        "r3-batch-b-1-fidelity",
+        "r3-batch-a-2-fidelity",
+        "r3-batch-b-2-fidelity",
+        "r3-batch-a-3-fidelity",
+        "r3-batch-b-3-fidelity",
+        "r3-batch-a-4-fidelity",
+        "r3-batch-b-4-fidelity",
+        "r3-batch-a-5-fidelity",
+        "r3-batch-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-batch-a-1-fidelity",
+        "r3-batch-b-1-fidelity",
+        "r3-batch-a-2-fidelity",
+        "r3-batch-b-2-fidelity",
+        "r3-batch-a-3-fidelity",
+        "r3-batch-b-3-fidelity",
+        "r3-batch-a-4-fidelity",
+        "r3-batch-b-4-fidelity",
+        "r3-batch-a-5-fidelity",
+        "r3-batch-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-batch-a-1-fidelity",
+        "r3-batch-b-1-fidelity",
+        "r3-batch-a-2-fidelity",
+        "r3-batch-b-2-fidelity",
+        "r3-batch-a-3-fidelity",
+        "r3-batch-b-3-fidelity",
+        "r3-batch-a-4-fidelity",
+        "r3-batch-b-4-fidelity",
+        "r3-batch-a-5-fidelity",
+        "r3-batch-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-batch-a-1-fidelity",
+        "r3-batch-b-1-fidelity",
+        "r3-batch-a-2-fidelity",
+        "r3-batch-b-2-fidelity",
+        "r3-batch-a-3-fidelity",
+        "r3-batch-b-3-fidelity",
+        "r3-batch-a-4-fidelity",
+        "r3-batch-b-4-fidelity",
+        "r3-batch-a-5-fidelity",
+        "r3-batch-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "coverage": "covered",
+      "caseIds": [
+        "coordinator-synthetic-scope"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "analyze.py",
+      "sha256": "05d2b9b05fefc7354c261056f8c74a4a5df325fe31d1e8c0926b6120be04697c",
+      "bytes": 1181,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "batch-decision.md",
+      "sha256": "8674d279315cb48bd3b7f43d7ce55fa3fd11b3f5579bdba6cb48ae6109487545",
+      "bytes": 1976,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "budget.ndjson",
+      "sha256": "6d554802410646ab59c78b5337edc35f15ae4f2dbb22ac836dd0c64b686304cd",
+      "bytes": 14355,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "cgroup-resources.ndjson",
+      "sha256": "a1b589d9abc3be95c83d8fd41cd4dfb35c631463c7279c3afff4be1f2476c372",
+      "bytes": 256018,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "collect.py",
+      "sha256": "98886693dc56244db61045c127c4a551e17bb70d1f8886a829ff58122d2b98d1",
+      "bytes": 10781,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-fixed-settings.json",
+      "sha256": "4a4c7366fe180238a1cfc4ec506f80fd35f9e871a330e30a0fa20d2e389ba5b9",
+      "bytes": 998,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/budget-after.ndjson",
+      "sha256": "421b79791e0734982b68d2363a6b747369ac3bacb5baade87b7baddefebfc46e",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-1/budget-before.ndjson",
+      "sha256": "5024ed0be9ca8b9e35b9196de4512d4e04feabb3b89f58b1bad2e43bcb9616a4",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-1/client-container-after.json",
+      "sha256": "39cdc026eb96d551b654237ebaef9e9fe2923f7b3a8121b8ca8682820ef866c6",
+      "bytes": 9221,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/client-container-before.json",
+      "sha256": "3c6de4212ea423231e6e65b591978d556984386baffb6f1aad8aef060a3bf069",
+      "bytes": 9416,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/client-cpu-stat.txt",
+      "sha256": "0cf84ddaad87f34b412e69267f1f42957f251642387a966a52068811a91f8a5a",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/client-memory-peak.txt",
+      "sha256": "fe2f44ecffaf4981e345ef4b1878910ffe5533364325149e5fe5192e61aca18f",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/config.json",
+      "sha256": "a01e74a8231b33e6f871c254a584a949bb394beb4d147f3b8664599ce4437a40",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/container-id.txt",
+      "sha256": "a526bbaccb29caeb39f34e74479f4d349047739eed3314b12d0113d9eb6847c3",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/coordinator-detected-finish-at.txt",
+      "sha256": "42a520479c25f9ed8661f48a740077631186ed8855ddaef9deecc63eaf55977c",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/decision-commit.txt",
+      "sha256": "4e23934996ff39609fdc3d01f54179de95b3001c0c1538859e85b74534533cd9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/execution-facts.json",
+      "sha256": "6043ccd8e7f3e36a71f27b5922635fc3bb6f273958aac6f9cca927adfa0db2ce",
+      "bytes": 2940,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/independent-backend-cleanup.json",
+      "sha256": "34ced115249093cbb92586265a8c67bcf8fc91def5c072b950917d022ee7f597",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/job-finished-at.txt",
+      "sha256": "a905b9d225f39bfdc5df1a6bc49670d69d5619c94b21a649f86ef0dd81898d4a",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/job-started-at.txt",
+      "sha256": "4740c3d015ac12de7c5fe2cb925ca80ac8674d8ee6a9a525108f0f52d07e7a33",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/metrics-after.json",
+      "sha256": "f5315ee573fe96fa4e914aadf65d93a24ccc5649760bf911884523daefdf92e3",
+      "bytes": 3779,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/metrics-before.json",
+      "sha256": "31d9a9f47cc79315f39293f9474b925523871d7d966bcdb6f8b389da48cb83ee",
+      "bytes": 3704,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/postgres-cgroup-after.json",
+      "sha256": "270acf25999d0ad0046f38019f88099d46bb9383ead27640e0474cb537d8f6f0",
+      "bytes": 1656,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/postgres-cgroup-before.json",
+      "sha256": "93ddf4c3b97d9029e7a3d4c19d0e323f42fee12f731ca11342820589c86c4652",
+      "bytes": 1658,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/progress.ndjson",
+      "sha256": "ce42d839b69733f28b9e38804d8e610ca589066582d33a7c4a1f86d2898aac94",
+      "bytes": 12310,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-1/resources.ndjson",
+      "sha256": "69fa7fb9bb2148f638d36e9c157cb214888b6a5ff476751ce5163defef4748c6",
+      "bytes": 6165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-1/run/artifact-checksums.json",
+      "sha256": "35b459fba344bcb51308b65166f1ff58d9dd295faf88f3719b8f27b8967e663d",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/config.json",
+      "sha256": "a01e74a8231b33e6f871c254a584a949bb394beb4d147f3b8664599ce4437a40",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/environment.json",
+      "sha256": "0a2d601fe5f6febfb74719c5c904a96efc987eb8d6b3c7a0a76133577c82a27c",
+      "bytes": 38743,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/execution-envelope.json",
+      "sha256": "0a73841ecb5b3f674bf1ec55076fe84ee9cb7e4737d150d5661d920f0d36349a",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/load.json",
+      "sha256": "346c86f5820607013fec19725fd497c000eab82360235c03607725f1d2b37114",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/metrics-before.json",
+      "sha256": "7c6ddb1e8440c33623fba02f8f1efd7ad27ac5e5eb13c151c9fa43e5e0c483b7",
+      "bytes": 16585,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/metrics-loaded.json",
+      "sha256": "bbc1c0cd00e746ca3d6098431643fc5d282c87f5baade70a5ccc59fb6de55ca9",
+      "bytes": 16719,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/observations.json",
+      "sha256": "1fa4526a58f6233762bcdbb5b28774331c2ce9146a9a47b3a87abd7b1f6356f4",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-1/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/source-commit.txt",
+      "sha256": "24036b75105e98021aa99f2e3d28147f9d4aaa85f52cfc3314b6dedd98b56bac",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-1/stdout.json",
+      "sha256": "1fa4526a58f6233762bcdbb5b28774331c2ce9146a9a47b3a87abd7b1f6356f4",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/budget-after.ndjson",
+      "sha256": "f02804cb36cd6dbff7e1014949eba05f5610cb1704317d4807e785702565260c",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-2/budget-before.ndjson",
+      "sha256": "89f21ba82f8e0a78157747b44a2a602297bd7954aeccaeb72d46b5116c9c7dfb",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-2/client-container-after.json",
+      "sha256": "397b0026d3cd675dcef2d3157eb060cdf7941f6bca6547c3c1ad0fe1f2eb3b0e",
+      "bytes": 9221,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/client-container-before.json",
+      "sha256": "2bd8cafe4d46e9ba94787531a8778645c29f381a2709243510fca6a94f8403da",
+      "bytes": 9416,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/client-cpu-stat.txt",
+      "sha256": "053b323cbcc19b5dcdd18ddc85a6a6fd81f3dc1837a4a3730d68b692f3fbe0a6",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/client-memory-peak.txt",
+      "sha256": "12dd57ee35ae418e941050cc6bed93e18295b28c1282d21b88d7bb7fd25ac73e",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/config.json",
+      "sha256": "3bf07dfb69b53dfb5beeb8b581071e3eff7bb94e8ec284f6f175d707f66917eb",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/container-id.txt",
+      "sha256": "d33ab7512fbff03a1f620198ae2d1df686e19e2bfffb2a595a209bf9a957aee1",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/coordinator-detected-finish-at.txt",
+      "sha256": "cc249abc923a007d8652d51cb4cd29de8d458555b9996a2d8b384ca910c98f5d",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/execution-facts.json",
+      "sha256": "9293b392ae9610a08c3d53f1d03adff181d0d2737688cef6484ab0b157a80223",
+      "bytes": 2941,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/job-finished-at.txt",
+      "sha256": "07fd86d56f2a64d92f65b261af715c98cc119442268b6c3c5511617c30fa9fcb",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/job-started-at.txt",
+      "sha256": "e9303ad2f918d66532264e6e6b4a2211e7ee6508770ce64d46f8e8402851ee2b",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/metrics-after.json",
+      "sha256": "704f4363641402595d7198163ba5add62d4c0868cf6692f5a5fcf9e9b38903a6",
+      "bytes": 3777,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/metrics-before.json",
+      "sha256": "aefd4119da188a52a404126fe91ba4542d7831a5651f98ba433d2998acfebb66",
+      "bytes": 3706,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/postgres-cgroup-after.json",
+      "sha256": "d2fd310f12613c5566dcbb623b70f47a70b5036a57cd9f092a7dd0fc6892ad16",
+      "bytes": 1659,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/postgres-cgroup-before.json",
+      "sha256": "f3a14cc025b7f296bd7842a2454480cb40000dcd4a91edc3a275a812b74a56d4",
+      "bytes": 1656,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/progress.ndjson",
+      "sha256": "5e409952c96a57d7abf4b133e69ccac55b8e5da9bc8845bdbfab57d9832006aa",
+      "bytes": 12311,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-2/resources.ndjson",
+      "sha256": "e291a2ccf42015dee84e04774274117dc6d50a0c79472074fd0dac3e81138b53",
+      "bytes": 5608,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-2/run/artifact-checksums.json",
+      "sha256": "1e88c74fa459bb35e8d16d53642115ab2553731fb14eab2f29042a052d2839de",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/config.json",
+      "sha256": "3bf07dfb69b53dfb5beeb8b581071e3eff7bb94e8ec284f6f175d707f66917eb",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/environment.json",
+      "sha256": "5d5b92c3f7cdbd7aa1c9e02ebe0cd194add6b7f1d3385f20a9b66d7c31164ec8",
+      "bytes": 38743,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/execution-envelope.json",
+      "sha256": "9b6f0ff4c1d5214fb8a9e5ff41d641dc74bb1058063962db48c254f2b741514d",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/load.json",
+      "sha256": "4d605f1069f2607bb50c6165d16fb2c5ab2acfebe86f81b9235dbdc6be580685",
+      "bytes": 2064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/metrics-before.json",
+      "sha256": "ee3c8c98ac609d3455827afe8e91e985097d5b9a97c3acc4c1a24fe99946b2fb",
+      "bytes": 16586,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/metrics-loaded.json",
+      "sha256": "160d534554b1fb6a349a46ec0cd4ae9efbbb3cd233719844542893c6a8a450b6",
+      "bytes": 16716,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/observations.json",
+      "sha256": "e41d51ea2734be03945805dd64bc6eedd411cde98cc11fe5bc5e6d5a20834c8e",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-2/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/source-commit.txt",
+      "sha256": "24036b75105e98021aa99f2e3d28147f9d4aaa85f52cfc3314b6dedd98b56bac",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-2/stdout.json",
+      "sha256": "e41d51ea2734be03945805dd64bc6eedd411cde98cc11fe5bc5e6d5a20834c8e",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/budget-after.ndjson",
+      "sha256": "a0c8d23649ee4c999a6491d941c3b919cadd408f54e73b1e1758bec832f628e8",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-3/budget-before.ndjson",
+      "sha256": "0f0e783a230de7f9697aaa66bb1ec0f74640cebe87f5fd5ea79f166b35e657bf",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-3/client-container-after.json",
+      "sha256": "6d4c207772482d9561d26832e961e18f6109b07d810c029672b5116924f7c61f",
+      "bytes": 9221,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/client-container-before.json",
+      "sha256": "995bf95e3b5a1a1d48919bc92df4d500f6760a9cb64cfc6002693b73265ab42b",
+      "bytes": 9416,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/client-cpu-stat.txt",
+      "sha256": "6cfcbc475a4872b65c2da695b05fc57c766bb1d91a1c5b45b743e7ca56a2e91a",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/client-memory-peak.txt",
+      "sha256": "5032e3c9f551321dcf1ea4a8dd77ff00680c759d3c20d4362e59a15204858571",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/config.json",
+      "sha256": "441d55ae99cbb5554c55d6f0523705bccf27351409911a4c79a141766e446e9e",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/container-id.txt",
+      "sha256": "d92f182576a8ad0f2d5780f4248867d1d00358e5a84df25da7992feaf283516e",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/coordinator-detected-finish-at.txt",
+      "sha256": "20046a30413aa35050d398fd8b3d3c37c3708be745bcd8bf26f75701cf3579ac",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/execution-facts.json",
+      "sha256": "84883438f58aad2cda2ea8d82d19da24f3b81a2afc353448e5f3c72240ac5045",
+      "bytes": 2940,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/independent-backend-cleanup.json",
+      "sha256": "a87669214f4d70d4a5fad271a82b78684960c7ab6b9a1a55fbf6aa79786d156f",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/job-finished-at.txt",
+      "sha256": "6af795a4a539eff0f7f3b6adf9ab1e080f0b1694a33f5ec9f7256e588d21dca6",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/job-started-at.txt",
+      "sha256": "9b453efc4e780a66920141efa3a2d7d122c053a535d99f81aa97eccafadd4d72",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/metrics-after.json",
+      "sha256": "e29453ea7ad8bb3b13ee53b94639a60d85b4fcfbb25932c713963bd6ebb581f3",
+      "bytes": 3778,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/metrics-before.json",
+      "sha256": "0596c2325997b4512eca1986851d0cb4ddbd487654d128cb7d26f737440e9097",
+      "bytes": 3711,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/postgres-cgroup-after.json",
+      "sha256": "b0834ecdf61b677d1c872df0be5d22288fea3557a855240672e6cb822355aeab",
+      "bytes": 1661,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/postgres-cgroup-before.json",
+      "sha256": "4b1be109da1de45dcc5a621f5a212cc506d83b87766bbdb42b8b075dc315ec5d",
+      "bytes": 1658,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/progress.ndjson",
+      "sha256": "924749fba55694a72a549a5c8aa00666871e846b5541127e7c5aeaf6c5bdd77d",
+      "bytes": 12320,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-3/resources.ndjson",
+      "sha256": "0f4503f525189f6162d2805184dd2a8a8d533cc857701bc44905d48d4e889f91",
+      "bytes": 6168,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-3/run/artifact-checksums.json",
+      "sha256": "edae136a9d0e22b7379c49ae0c3b542b8f304c9df4c25bf6843d61847d9f3322",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/config.json",
+      "sha256": "441d55ae99cbb5554c55d6f0523705bccf27351409911a4c79a141766e446e9e",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/environment.json",
+      "sha256": "0492b055a7762f03cc8fa3b9746be9a613ee15210e99830ba36bb4647048c81d",
+      "bytes": 38743,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/execution-envelope.json",
+      "sha256": "f548d1cff98164ae5ebd7a2b589c331af4b290692b0993505743b39ab302b8fe",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/load.json",
+      "sha256": "aa967211d2c91741cd146f431a3ed19e6b298cbb788ef5e7af3138bdbf4b7dcc",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/metrics-before.json",
+      "sha256": "2b9a7d56e4dc6a3f13a6bb5eb04324d99caf55d9c431d566e2d7fcba3f1c797d",
+      "bytes": 16587,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/metrics-loaded.json",
+      "sha256": "b80400d11c6b1384cb102f737e1b7cb2c48ad9ec1c39aa0cfb44eedf042441c6",
+      "bytes": 16716,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/observations.json",
+      "sha256": "2728161e2ae7ef3e1aa86a925267ea808d489778bce1b769bbe1e5285746bea1",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-3/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/source-commit.txt",
+      "sha256": "24036b75105e98021aa99f2e3d28147f9d4aaa85f52cfc3314b6dedd98b56bac",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-3/stdout.json",
+      "sha256": "2728161e2ae7ef3e1aa86a925267ea808d489778bce1b769bbe1e5285746bea1",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/budget-after.ndjson",
+      "sha256": "7b6ce7bc64919bc1b5759115e45ee0d80d491879e41c1bd0be8f046f696f608c",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-4/budget-before.ndjson",
+      "sha256": "9da40b60acbc0979b2f69b9c7b5cba96ce1ca4affaabea1137a5e94880082b60",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-4/client-container-after.json",
+      "sha256": "0cfaa15decba92d0704df3c7ff4ad54084c350011eaee1331e08082902361572",
+      "bytes": 9221,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/client-container-before.json",
+      "sha256": "424e17e29cd86c34a19f149a6e16462b5633f2a7f5fe07d9d42f2874b17e7d14",
+      "bytes": 9416,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/client-cpu-stat.txt",
+      "sha256": "2a98eae2362015de5372d5defb26adb188235b2d0a84ebc5d25cf9043778de20",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/client-memory-peak.txt",
+      "sha256": "20821dabbf619d7cf0c42151384ef0d8fc2800fdb147aa517bc38277a4b8aeee",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/config.json",
+      "sha256": "929ea1d6f14e0c33c00d3b8d9d26d647997df7d20e45c7147354eba5a65acea8",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/container-id.txt",
+      "sha256": "7c8edfaba87cd8529525ff99ac2e69a1fcbb698283c4ba84fa564a68a27d881e",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/coordinator-detected-finish-at.txt",
+      "sha256": "e86807642e7dc7ff945214eb9ecfb57c14390ddc623adf7bf5cf4749f3af27fc",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/execution-facts.json",
+      "sha256": "2c5aa8a9f51c432a4205cea1a548db5d6b7724a2deeadf33b68aca343b08a83c",
+      "bytes": 2940,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/independent-backend-cleanup.json",
+      "sha256": "2aaf3ff25acbdf8b4385d9408c3c2aeb4ac791e0146b54bd95566179361672f1",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/job-finished-at.txt",
+      "sha256": "f0f7a30ac3bc2a1aa5e8fb71c923bedeff7cf9b7f701a903aa5f940bd2c901f1",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/job-started-at.txt",
+      "sha256": "46ff58bb0ee1b451b066d9c85c9eb4ddfe0a0bb261f842b5e5b02c5dff4119c1",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/metrics-after.json",
+      "sha256": "5dceab9f5ddea8cd2d72c7033edcf5dabafdd105b7a820c053ae82f70f7b1a74",
+      "bytes": 3778,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/metrics-before.json",
+      "sha256": "a69506bf1dcd97c23e6da710b57d3c256a369075498767eb53acfdfcce8a1e32",
+      "bytes": 3706,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/postgres-cgroup-after.json",
+      "sha256": "1a40a1e5155b32764d08ded88ecc748b8396759397d19d2a7452061107903ef5",
+      "bytes": 1667,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/postgres-cgroup-before.json",
+      "sha256": "cb1ba095b2655d38cc9953bdb1b037e8a2d343288a767d08aa42f0846207ce81",
+      "bytes": 1661,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/progress.ndjson",
+      "sha256": "16e47a26675ed818d51121252dd73a18fbcc99c896d79d6b0f6476d53ecfe073",
+      "bytes": 12295,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-4/resources.ndjson",
+      "sha256": "6624139d4193d8580e546db2ffee19badaed1829835383dbf61118d1785e5e2b",
+      "bytes": 6183,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-4/run/artifact-checksums.json",
+      "sha256": "66fdae995fdd1fbeb88e949bd2ad842a7d3df258b464c73e14902a8987ee80b7",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/config.json",
+      "sha256": "929ea1d6f14e0c33c00d3b8d9d26d647997df7d20e45c7147354eba5a65acea8",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/environment.json",
+      "sha256": "a66e41c6873972f80df2020150d1e2e7bde016cf836db4c90652c86cf420482a",
+      "bytes": 38743,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/execution-envelope.json",
+      "sha256": "a08e50e0f406f259a37e83d146d8bfd67422b4b059d08c25217474fd6233893b",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/load.json",
+      "sha256": "4fea627fcf63ecd21048e97d3fa5ca4286707329d7f58cb4c4e5300b638df847",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/metrics-before.json",
+      "sha256": "6a4956fccbe5898e8357c2ae13e396afbb1ea9b93ca720ad9bdb1b8cc30381f1",
+      "bytes": 16587,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/metrics-loaded.json",
+      "sha256": "6afb87db5e45411711010be9bbcfe98599fb1c34069deeeb0bc4a8fdbc224dc5",
+      "bytes": 16718,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/observations.json",
+      "sha256": "4f3f21b1b228e4afbaf6e139349c4fae6e061b77767161c478dd016d38341d30",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-4/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/source-commit.txt",
+      "sha256": "24036b75105e98021aa99f2e3d28147f9d4aaa85f52cfc3314b6dedd98b56bac",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-4/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-4/stdout.json",
+      "sha256": "4f3f21b1b228e4afbaf6e139349c4fae6e061b77767161c478dd016d38341d30",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/budget-after.ndjson",
+      "sha256": "2c2a140cc9494d9c75e8de3699f7a2dcab87c79ce2ff478e2b2508dc15539866",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-5/budget-before.ndjson",
+      "sha256": "8cacc63cf42db0ecfb02b951480b8b57c7bf9894cf875c447857dd6b94c8833d",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-5/client-container-after.json",
+      "sha256": "7e6749245fda16578d5854ea258db4ae461ffab0be51a35dd76dc7739977c68f",
+      "bytes": 9221,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/client-container-before.json",
+      "sha256": "bffd10c4ce02634a4937814c09b370fae6fb4ab1e8668ca1ccbd64ccc73b3d89",
+      "bytes": 9416,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/client-cpu-stat.txt",
+      "sha256": "803550482a84dba1abecb29c983b2fd8488855227f504a038ecc27c79c4ceb63",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/client-memory-peak.txt",
+      "sha256": "2677351c5921c710ce8baa09e5e660e67ec2c96bf179a6ec7a9a305285381dcd",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/config.json",
+      "sha256": "21d80010b0b5f90fe865a97d5dc427fb85aad21e82de765908bb04fa8fabb2ee",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/container-id.txt",
+      "sha256": "e82ea6daf6a9d90b1bebbf5e210656ffc47977a182992229ad3475d2fe08852d",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/coordinator-detected-finish-at.txt",
+      "sha256": "950475270ddfd6e1f2d870778179bc85b0e8f0ad7999c6f54234ff5636a97f55",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/execution-facts.json",
+      "sha256": "2c6b4095ff8c5b330f067aa31e92ed334a0271e2ec696a05eaf6795137200f6e",
+      "bytes": 2932,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/job-finished-at.txt",
+      "sha256": "4db40aed77c2162e7432eede694492cecccc7f5840ce0954e49966e3b2ec9d21",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/job-started-at.txt",
+      "sha256": "80da81b958d7619ba2c3270d135a7f6b8b6e19edd5ab783e0e4cb7e3082ae290",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/metrics-after.json",
+      "sha256": "e03aec60a03caa74eef2a9348433afafdd372e3bafc0c616910162e3c364c201",
+      "bytes": 3782,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/metrics-before.json",
+      "sha256": "c7d26e8b5a22d171335ae215368cd20fdf299c8a4aef5ec20045be5fa9b0dc19",
+      "bytes": 3707,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/postgres-cgroup-after.json",
+      "sha256": "3ccb8fdff00dd5fa7f7358aa3c49809fe0615f3f05f1f83054acf9e89a8f65b9",
+      "bytes": 1665,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/postgres-cgroup-before.json",
+      "sha256": "9348c348a20f64774e0d7967b1e1afbbc598643e05ded0244b22da8621734a03",
+      "bytes": 1666,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/progress.ndjson",
+      "sha256": "373a8ea907cd0d04540963730a0be548ef74e860deb03a908c8932df3a2947f4",
+      "bytes": 15557,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-5/resources.ndjson",
+      "sha256": "c7a44efc04e11a82a928ff5c353a9cecf5ce073b4651d068b6d99cd5743502f8",
+      "bytes": 7288,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-5/run/artifact-checksums.json",
+      "sha256": "9815f812a9eb3956a241a9d67056bfab2ce978d44912143057f7a7ce28969d66",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/config.json",
+      "sha256": "21d80010b0b5f90fe865a97d5dc427fb85aad21e82de765908bb04fa8fabb2ee",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/environment.json",
+      "sha256": "d36cd93c2d930b348ec9289927b5cd0bd9163e01e91902b42c825eda7f8665c5",
+      "bytes": 38743,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/execution-envelope.json",
+      "sha256": "69aaa29ac148d53277f2d0eb1672d21fa9003a1a38487eab192ca75e8d4d0fab",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/load.json",
+      "sha256": "e1a6569d01c992a4f7d0ea5a2babfaa9e85da94f13a0774a6de6515f9cf107a0",
+      "bytes": 2056,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/metrics-before.json",
+      "sha256": "fcef86b833e530acf35ebaddc82cd0d822136d83471ead7bad2c433cfcce1603",
+      "bytes": 16587,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/metrics-loaded.json",
+      "sha256": "992e32247d57c4c39ffedbc0a625cf62649f3dab03a7dd807f7555b6b0ed7926",
+      "bytes": 16720,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/observations.json",
+      "sha256": "fd95f92a5f94fb8c377b171001fc9c8565e78eb3563ce952a7892acb25d519d3",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-a-5/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/source-commit.txt",
+      "sha256": "24036b75105e98021aa99f2e3d28147f9d4aaa85f52cfc3314b6dedd98b56bac",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-a-5/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-a-5/stdout.json",
+      "sha256": "fd95f92a5f94fb8c377b171001fc9c8565e78eb3563ce952a7892acb25d519d3",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/budget-after.ndjson",
+      "sha256": "89f21ba82f8e0a78157747b44a2a602297bd7954aeccaeb72d46b5116c9c7dfb",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-1/budget-before.ndjson",
+      "sha256": "421b79791e0734982b68d2363a6b747369ac3bacb5baade87b7baddefebfc46e",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-1/client-container-after.json",
+      "sha256": "d49d37c950f37290dc29ee465e6bf5a752bbe93e08e7df165e57f9ad200876cb",
+      "bytes": 9233,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/client-container-before.json",
+      "sha256": "285e42ec8010a8fb7275a6667ef1e0d5e240a3c42a4c8f8df458abfdc9dd1b12",
+      "bytes": 9428,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/client-cpu-stat.txt",
+      "sha256": "49d3bf0ce1b320b4093747c4a20403330d2bc53a405844003c1a2fbf0eb64601",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/client-memory-peak.txt",
+      "sha256": "0579a86b397bd68282f833cd1bd3e8c9e3f58088b0e21d4d4020a8cda9f1aeaa",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/config.json",
+      "sha256": "770bd3cb634b0f242a8baa9e3556e92de46dda427341d365a0b18f99afc7e6df",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/container-id.txt",
+      "sha256": "dfc8cc78de8a501cb9b899e35c08218d6d1d4d274f9ae2d15268569b1a223ac2",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/coordinator-detected-finish-at.txt",
+      "sha256": "ed6b67820e6612ecf584ebb5b4b916389ac49ec756d670c5f44afcd05f67b2dd",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/execution-facts.json",
+      "sha256": "4556b88752ead94c230295c838c6e52fe660ac3f517965b0566ff6f60f853077",
+      "bytes": 2946,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/independent-backend-cleanup.json",
+      "sha256": "11c177e35c4401f0b6415e0a3567e97922f9fcf6a9ee49f7403eea8bc2a9ef8a",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/job-finished-at.txt",
+      "sha256": "87bb306e20dc2b1f541b98b4b7834a0dbdf727063266973f8d2ba52f788c483c",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/job-started-at.txt",
+      "sha256": "3bb2597d1a45df1dcef4ea5bceb0e61e1b67c9dd1a331e54edaf87a759c7e123",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/metrics-after.json",
+      "sha256": "5f65fa666d363ea73389e5d6e3e78da318f496546493a54a820df8c89fabbd09",
+      "bytes": 3779,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/metrics-before.json",
+      "sha256": "818f156e3259d0b7be6e7901455ce77e99ce1f560d73b48b9b93a41cc6446fc4",
+      "bytes": 3706,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/postgres-cgroup-after.json",
+      "sha256": "606652bcaace551b087eacbb2622faeaabee4247957f7f7786f856a67d05a79f",
+      "bytes": 1657,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/postgres-cgroup-before.json",
+      "sha256": "b9aeda05b41140c5f31ef38cdedd79a368ab9c696271d1584c5c0f8ca1d04d3d",
+      "bytes": 1655,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/progress.ndjson",
+      "sha256": "40a2bdf05ee6bdf460c12a9e54848c596f7a113bed490ea0003fe47f3eadba89",
+      "bytes": 12180,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-1/resources.ndjson",
+      "sha256": "49f2ed1a0eb756c781c9f1256b539c724fb4cb152784010420598ad839ac5e88",
+      "bytes": 5601,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-1/run/artifact-checksums.json",
+      "sha256": "32e2bf1b4cda8e85e59a6a43812eb7d845d3f4f7a551f5efb4ac6e2f68bea517",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/config.json",
+      "sha256": "770bd3cb634b0f242a8baa9e3556e92de46dda427341d365a0b18f99afc7e6df",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/environment.json",
+      "sha256": "95a295b9ae0d26e5d641ef0c1f418c0961932e57acfff497ac6b45a3775501fb",
+      "bytes": 39980,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/execution-envelope.json",
+      "sha256": "d01a5475afced1daa9f6e326300e2ad496ac15c467c40815d3589dfa3c68ed4e",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/load.json",
+      "sha256": "cdf2e81958d1f6564633adb2bc78801c8cd3bd696a1b62050485a438bd42a798",
+      "bytes": 2070,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/metrics-before.json",
+      "sha256": "69f73029668038224bf1bd549f7d726d414c27df79653e0bf4d94d8a9e5c1802",
+      "bytes": 16585,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/metrics-loaded.json",
+      "sha256": "ce1758329305f88c92aec909f5426d406ebb859ea40f61a410015137a254e0eb",
+      "bytes": 16718,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/observations.json",
+      "sha256": "eeb13f411bed81a067e15415f979a061bbd77693e88e03af64ae517478edfd95",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-1/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/source-commit.txt",
+      "sha256": "376679b347a129be0c6a2248cff64e50cecff4be98b70624dfad75e3e6fe7d50",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-1/stdout.json",
+      "sha256": "eeb13f411bed81a067e15415f979a061bbd77693e88e03af64ae517478edfd95",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/budget-after.ndjson",
+      "sha256": "0f0e783a230de7f9697aaa66bb1ec0f74640cebe87f5fd5ea79f166b35e657bf",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-2/budget-before.ndjson",
+      "sha256": "b0e1a9859600f674d61bca7c19ec3ee0d380b557cb38a193e2e2be03c7a46c56",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-2/client-container-after.json",
+      "sha256": "28f4af02043e4d042361ababcb26284a0f72a77d74df9e5dec6d82d9b5d989c5",
+      "bytes": 9232,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/client-container-before.json",
+      "sha256": "b1965d38a0db55f0310c0ec2a8796bdaea8f5770a95754c2f704b0782ddc5fd9",
+      "bytes": 9427,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/client-cpu-stat.txt",
+      "sha256": "6c4ed2189094cbaa56f28cc2239854d838060a50f0a021619dcf44cc641784fa",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/client-memory-peak.txt",
+      "sha256": "824735f6d6368fa26729725accd92af11260f7f8657caa223e189a004221b0e1",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/config.json",
+      "sha256": "385a8b4b4d6ef0b4a4af2dc43222a149d2cbdd43f19f63e157144114b3272ccf",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/container-id.txt",
+      "sha256": "cb74a562373159ae36731e229a665cc761b792f4414dab2e874d21a804c992a1",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/coordinator-detected-finish-at.txt",
+      "sha256": "a5fb1c8e092193cadef42edf58c1650cdea212dde7b7cc1a4076485943075dde",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/execution-facts.json",
+      "sha256": "da08676e4427f2982c478cf1cb8e871d2ec40109267011d9b11a19161dedb7a3",
+      "bytes": 2940,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/independent-backend-cleanup.json",
+      "sha256": "f9c33feadedec4fc246dd0cfd2ea63ac25ff5e88d906b890bac4b077794739be",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/job-finished-at.txt",
+      "sha256": "407c5eb645c53bf2c34f18931f2e522119a1e8bf0f0243d8c350228c87589d82",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/job-started-at.txt",
+      "sha256": "242230163745d9f5c00485c650611a694dd2a1e9022cccaca032493204831792",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/metrics-after.json",
+      "sha256": "bed4a18b3229edade3e1e7143063fdc14cb64ffade2c25c38e96586051f6a96b",
+      "bytes": 3778,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/metrics-before.json",
+      "sha256": "29a8105ae569d732c19e33303916309b6543c19b12febb07c4a3f46053ace1eb",
+      "bytes": 3705,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/postgres-cgroup-after.json",
+      "sha256": "44a43d341b43b1676ad819ab8f18ade37d7379dcf488ee4ae5ebd87cfc0b18a6",
+      "bytes": 1659,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/postgres-cgroup-before.json",
+      "sha256": "bb6e8bee0a051c97b3705854a39f84467ff57bf73e370d8fd2fc047404790c16",
+      "bytes": 1657,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/progress.ndjson",
+      "sha256": "0ccee18993a783dc07aed78ebba13a61ed4fa8c6255ffb8e72c5172c02baf152",
+      "bytes": 12176,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-2/resources.ndjson",
+      "sha256": "a22c5e8a7bf4da660ab906c5289594af15b6b42ceec95a6ef7b9f7d4793fd65c",
+      "bytes": 5592,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-2/run/artifact-checksums.json",
+      "sha256": "207ce46610da1cf406e6ad178a5a88544807ca82b998a4e3ee676a16e598eb5c",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/config.json",
+      "sha256": "385a8b4b4d6ef0b4a4af2dc43222a149d2cbdd43f19f63e157144114b3272ccf",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/environment.json",
+      "sha256": "6d71879324bd2c5211260d58a4b40152a609e6da4d5a318579133becf6ea0537",
+      "bytes": 38743,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/execution-envelope.json",
+      "sha256": "1db102775291844a014b06266e8eba3284c394fee73bde88eb01babe397a61e6",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/load.json",
+      "sha256": "3b0054f8e31ea22a299ab5188f1082ba982ceb63b3419205c6fd9810e8005d0d",
+      "bytes": 2064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/metrics-before.json",
+      "sha256": "a5de11f1b1796edaa666fcda3874d8931c054aad66ac6ca75123ac4db5ed543b",
+      "bytes": 16586,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/metrics-loaded.json",
+      "sha256": "dc4576d4bc8cab5fb8c278811d1364f54b3576fde8d01634321f32b4b150de2d",
+      "bytes": 16716,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/observations.json",
+      "sha256": "98323899fb6972e4e5e3cf1c03bbe215038ffd5e6fa15290a0fcfc72bc31489f",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-2/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/source-commit.txt",
+      "sha256": "376679b347a129be0c6a2248cff64e50cecff4be98b70624dfad75e3e6fe7d50",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-2/stdout.json",
+      "sha256": "98323899fb6972e4e5e3cf1c03bbe215038ffd5e6fa15290a0fcfc72bc31489f",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/budget-after.ndjson",
+      "sha256": "bac63a39125367c614433b61a85564093228f5935329008fd012d9365ff84ce9",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-3/budget-before.ndjson",
+      "sha256": "a0c8d23649ee4c999a6491d941c3b919cadd408f54e73b1e1758bec832f628e8",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-3/client-container-after.json",
+      "sha256": "4b5a66d20ee8f20560b1183107ea6ddc4a4e31a458f14f61e6570b815391c8cd",
+      "bytes": 9233,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/client-container-before.json",
+      "sha256": "dd1b420b72b54b6f86a0e1ce1e02dfbb5e56cc9068d66cce5bf8efe18729f8a9",
+      "bytes": 9428,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/client-cpu-stat.txt",
+      "sha256": "ee0208b1b8a767b0091f91b5986a71c2fd4ce6cba4326437ab1f0eeeca43ed0c",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/client-memory-peak.txt",
+      "sha256": "38de6a412eccb5ed9db8962548e4c243383b9bb0e8218e5e6bec940de494ea44",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/config.json",
+      "sha256": "1781cc8db7c807de7249d57157f115b7b562a11cac45a8955f9f6f2a0467bc4f",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/container-id.txt",
+      "sha256": "daeb6ada81761a070bcce741eac105290a2c65a374d4e3deab03d1270b81561d",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/coordinator-detected-finish-at.txt",
+      "sha256": "8080cbb7b16c65924f07abed88dde98ff0c4fb61a607c846616c347e2a7ec8c2",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/execution-facts.json",
+      "sha256": "a4a85b821c09610d414fdee94ae903814d14efb5173384572f48b431bb7514af",
+      "bytes": 2939,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/independent-backend-cleanup.json",
+      "sha256": "d675a0712704f11692664a530503e5f76cd8a9bbf7e6688005bdb1c8f8f938b0",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/job-finished-at.txt",
+      "sha256": "cb13df860da412a73a99e447c2d84badb1af7a1c7f35050baba7d010240be55d",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/job-started-at.txt",
+      "sha256": "c05582cd61349fd914910a9e8161c3d847faa3f7541cb98f04bf094a961a77b3",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/metrics-after.json",
+      "sha256": "cde6f0f6099b565d8b4c935917ee5c1b3359a4b145f064e67490c31d336814b8",
+      "bytes": 3777,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/metrics-before.json",
+      "sha256": "d73175255b047edd1c24d632444fdbd44845054454a8765645af240612c01635",
+      "bytes": 3704,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/postgres-cgroup-after.json",
+      "sha256": "694b322a810e17575a5dd2a8fb7d6f74a0114c2ce23154ee9768e9cb9063c65d",
+      "bytes": 1660,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/postgres-cgroup-before.json",
+      "sha256": "f12fa1ea0e487180fb5a274827f2b165be33588fc84583a7f46cc0cd46f73d18",
+      "bytes": 1661,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/progress.ndjson",
+      "sha256": "84b138e9fc582314aba7f088c823f96ac04a9bb06bf16147e7afdb6c0c88c7e0",
+      "bytes": 12417,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-3/resources.ndjson",
+      "sha256": "a3723d9d38968ee1373bd508fe433afb47fdd233fdc06d845946001348d00425",
+      "bytes": 5611,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-3/run/artifact-checksums.json",
+      "sha256": "6eabf1bf219d36263ef05dbbde3cf9f9fd729ac612c3a7a9c11783420bc276b6",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/config.json",
+      "sha256": "1781cc8db7c807de7249d57157f115b7b562a11cac45a8955f9f6f2a0467bc4f",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/environment.json",
+      "sha256": "4c189151573eb87fc41b7b0f89339219bbe6d9b9e584e1f242f4b5075a06647e",
+      "bytes": 38356,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/execution-envelope.json",
+      "sha256": "900f73a067cf8ae09201d480d37aaf0411a2af1acaabfa7af9021c30e1365c58",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/load.json",
+      "sha256": "5dd6b9df720534697e71ba5121e5af86aa66ca9cc2532079542b77debf31ec1e",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/metrics-before.json",
+      "sha256": "f7e685952a2bef8dc207a33ed334021fa3cce499851106b07d1681e9bd6d5185",
+      "bytes": 16585,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/metrics-loaded.json",
+      "sha256": "51a22e80b4914015885ad699b5b27fec98a61fa3ac5ed00185c6f2843d1943a8",
+      "bytes": 16716,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/observations.json",
+      "sha256": "f8535f11a911d4262e76742d9712a8fcf4c4b85df07e651b031f84daeaf40245",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-3/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/source-commit.txt",
+      "sha256": "376679b347a129be0c6a2248cff64e50cecff4be98b70624dfad75e3e6fe7d50",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-3/stdout.json",
+      "sha256": "f8535f11a911d4262e76742d9712a8fcf4c4b85df07e651b031f84daeaf40245",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/budget-after.ndjson",
+      "sha256": "174b4c3c7da193bcad0a63f47abe859d080c91e44b3df970c2fa926de0f48b92",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-4/budget-before.ndjson",
+      "sha256": "7b6ce7bc64919bc1b5759115e45ee0d80d491879e41c1bd0be8f046f696f608c",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-4/client-container-after.json",
+      "sha256": "35dffdc15c211702914ae532bb90f80c293639048cadb48e64685780aba62d07",
+      "bytes": 9232,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/client-container-before.json",
+      "sha256": "1bd2ac99004a34d05dd638c547232cfaeb6929987f9cedf48f62206668141d0d",
+      "bytes": 9428,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/client-cpu-stat.txt",
+      "sha256": "3db38a3f3b5ed3575284184c77f404bd5bb923178545eaae99ddf631ce38d6b0",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/client-memory-peak.txt",
+      "sha256": "511a73f177a19708c1789f2d3dea388a6b6a67a22d11645f7ef1d3fdd6f74a88",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/config.json",
+      "sha256": "644ff7f8a4d153acf274d678d874656ac6810e352d173164e836553d9ed4008b",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/container-id.txt",
+      "sha256": "911443a0c0068b222691fdaff487130f1b8f15135b1d92d48c109231cbb2ccf6",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/coordinator-detected-finish-at.txt",
+      "sha256": "d9e3055423647eaa7acd051f2afe88b2d1728513847e6516d77d89ad7835d986",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/execution-facts.json",
+      "sha256": "e03f8a4e5dc42504ab77032e51d2f04a2683306057c513fdb8e8fd6a0ea9c0b0",
+      "bytes": 2945,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/independent-backend-cleanup.json",
+      "sha256": "5c0d9c22d3e671d29ea8acde9011d57ce78015d7c6b0a9748bc4da64203e3376",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/job-finished-at.txt",
+      "sha256": "e2c531879676c819b1a172a0c31d3fa780ed448a257c854fab66d5168475880f",
+      "bytes": 30,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/job-started-at.txt",
+      "sha256": "fbdeb774aa7d4e0ade113c258b8e2fc4a64bb4e4c28563760620c1400b4d1ca9",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/metrics-after.json",
+      "sha256": "ec5b72296103827a86ec3132f1554d8f0334e9c258a2b57044dc03df636bd5bf",
+      "bytes": 3779,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/metrics-before.json",
+      "sha256": "1a73f7502e170373cc0e1449486e38013f121948b7b4e67d200ebef36ae6acb9",
+      "bytes": 3707,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/postgres-cgroup-after.json",
+      "sha256": "482b1a11dd4485efdbbedaaada3c1376b340fbecd5e11747fa5ee0a45fe22b31",
+      "bytes": 1667,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/postgres-cgroup-before.json",
+      "sha256": "718144c88ceec0baec493a87f7af50fd3d988dcb9d75d7dfc1015bed0b0d6b55",
+      "bytes": 1666,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/progress.ndjson",
+      "sha256": "dc5a86051eebfda5110b39060f827d0291fa3441f60fa3898b7030288fec7ff0",
+      "bytes": 12177,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-4/resources.ndjson",
+      "sha256": "c21f87200827359ac5519778c2b4b4c91402aded5ff5b99b756c909cda9c9d86",
+      "bytes": 5587,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-4/run/artifact-checksums.json",
+      "sha256": "0741a41ee9590cbc318f58c78590ba369cfc1fc1557ee8bef57a235ca358e8d7",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/config.json",
+      "sha256": "644ff7f8a4d153acf274d678d874656ac6810e352d173164e836553d9ed4008b",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/environment.json",
+      "sha256": "94f743c86cfd299997972bec9b11ab69942e48770395530db3d182f0d76e33d1",
+      "bytes": 38356,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/execution-envelope.json",
+      "sha256": "6e95a92d79344c556a6fb53ac37e6dd32a8688b61076f383c27d54320ecc99e8",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/load.json",
+      "sha256": "3033fac0922ea04f4026fe930e7ff0f5fb8a5f27c603f3dcbb0745519d482ebf",
+      "bytes": 2070,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/metrics-before.json",
+      "sha256": "8c471cdbe85a384cd59a9956510155900fe0c01e3857123258ce539d0e08bc55",
+      "bytes": 16587,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/metrics-loaded.json",
+      "sha256": "86b61d519ffa0add71616c7ba8e4471b380784504295dc896c702e8774ca9af5",
+      "bytes": 16716,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/observations.json",
+      "sha256": "cabe1f62fb5590243b43de34c99870fd8ad6b1f1828d649125264f5e07135a8c",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-4/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/source-commit.txt",
+      "sha256": "376679b347a129be0c6a2248cff64e50cecff4be98b70624dfad75e3e6fe7d50",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-4/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-4/stdout.json",
+      "sha256": "cabe1f62fb5590243b43de34c99870fd8ad6b1f1828d649125264f5e07135a8c",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/budget-after.ndjson",
+      "sha256": "9c21db7fe81080174e2bc38c1e3b8011f861fb283590e1caae488b793aa02ab2",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-5/budget-before.ndjson",
+      "sha256": "2c2a140cc9494d9c75e8de3699f7a2dcab87c79ce2ff478e2b2508dc15539866",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-5/client-container-after.json",
+      "sha256": "5d76d8aedf6b165a82e42e0136e677f4357575b1ece2006ff4d65329ce403ae8",
+      "bytes": 9233,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/client-container-before.json",
+      "sha256": "f51aaf15aa0620ca54cf2e661469ee7479bb21180185d0ef8c057b582978bba9",
+      "bytes": 9428,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/client-cpu-stat.txt",
+      "sha256": "c998ad68be5ed26d3fad9caaf9a775dca081203ec2719fa6a3482066e7002e52",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/client-memory-peak.txt",
+      "sha256": "b105404df96a0becda78599bafb621b76a4bd982ba8822615c30600ef60e9564",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/config.json",
+      "sha256": "5542015aec3d80e39d8b45ea29c4173cc633aac0a8d25581d2e9e7c565ecdf38",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/container-id.txt",
+      "sha256": "e573757cb5312ef40ab76760eae90718ca59eb6e4815134ed74e8ffacbd21db4",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/coordinator-detected-finish-at.txt",
+      "sha256": "ea4144f8b48995ea908f60dba845b9d9623ea0fd1b28796a4551fd2b7d73695f",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/decision-commit.txt",
+      "sha256": "74f383c83e74f2a90e4ee70c8b7bb07a2f5b04bb3a41e54628e4656d5d2b9f4d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/execution-facts.json",
+      "sha256": "2d68f6cc3e8ff33a380f9a0e324ce0e66060ed9fa5249cdc2637244b90dc9336",
+      "bytes": 2931,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/independent-backend-cleanup.json",
+      "sha256": "d88d19b935d70e4f0b72230f7e1f05cb0864a392040f9ab0b85a0698a03f9cf6",
+      "bytes": 58,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/independent-owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/job-finished-at.txt",
+      "sha256": "685b1fb056d4fa1c91245e0b183b6dcab1ae67744392fcb3d87ab9fbaf76439a",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/job-started-at.txt",
+      "sha256": "2205062d053152a3f206aa3b8b7dcf940b0cc17823e3885ee5c2d482b3d888e3",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/metrics-after.json",
+      "sha256": "8cea92e168597d7c9430eb90533f13d1b3d1ff01fb0a662d0ddbd346dad82574",
+      "bytes": 3780,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/metrics-before.json",
+      "sha256": "109b585f19f67edadd4aed226d045082f99a330a18d9bbe97e64b80b6b8f32ad",
+      "bytes": 3707,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/orchestration/cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/orchestration/enforcer.py",
+      "sha256": "3e7ae33e252350584c80fa44a63b92471f86a16b1d292bc5240700afab8d4560",
+      "bytes": 4053,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/orchestration/trial.py",
+      "sha256": "e442262137c16cc7eeec5a6a99988864330a4c8b7df3dce65aaa9a235b0e4412",
+      "bytes": 12593,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/postgres-cgroup-after.json",
+      "sha256": "475b0de8acb3224e4fdc30e882753e0f132d50270b132cd04589d1a681edf29d",
+      "bytes": 1666,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/postgres-cgroup-before.json",
+      "sha256": "36a4dc4d47f3de3fda1f5f5427323aa7990d2017fedf8868ad4bb970cd0bac99",
+      "bytes": 1664,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/progress.ndjson",
+      "sha256": "72663c22d64deadc06dbdfbff1c884fbc5131a62a61fa88cb2889d261adcfd60",
+      "bytes": 12181,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-5/resources.ndjson",
+      "sha256": "19ef5e3365c8b187446ee772c603d0457434f1a6bd8a913121efb054763ebb9f",
+      "bytes": 5583,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-5/run/artifact-checksums.json",
+      "sha256": "ed6be8c87a7395f55947e7912e078f1cfcbd321abb95f1c38b9c8bf0ab25518a",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/config.json",
+      "sha256": "5542015aec3d80e39d8b45ea29c4173cc633aac0a8d25581d2e9e7c565ecdf38",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/environment.json",
+      "sha256": "0142176bfa4509fbfeca0c73400205b2d19ab84aabd91e97177d2db10a409125",
+      "bytes": 38743,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/execution-envelope.json",
+      "sha256": "8d0d0d61b0924b186e57a9355b9bdf8d349dbe1acb4f685ce7db04fa94f90908",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/load.json",
+      "sha256": "7cdb0dc48bc8d4e82a5f33d6291f7f6960aee95d7a7f89a417a5e4a2cd50f009",
+      "bytes": 2056,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/metrics-before.json",
+      "sha256": "9536e5eb788afecf0fa47ac67c9981a8428740a68dedb26653ff597dec411ce2",
+      "bytes": 16584,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/metrics-loaded.json",
+      "sha256": "1331df58510917e0196fbafb637b9c0d7124839d4b9fa2a0a48bc4ff3070ed5c",
+      "bytes": 16717,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/observations.json",
+      "sha256": "05c714b97d33a6eb7ed46221145b37d7476460440dab9896cea27b675f714ada",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-batch-b-5/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/source-commit.txt",
+      "sha256": "376679b347a129be0c6a2248cff64e50cecff4be98b70624dfad75e3e6fe7d50",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-batch-b-5/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-batch-b-5/stdout.json",
+      "sha256": "05c714b97d33a6eb7ed46221145b37d7476460440dab9896cea27b675f714ada",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "terminal-observations.json",
+      "sha256": "0b3b59bb1b6917ff4630d7c014eb0a9acb715bb616dda54229f283858333724f",
+      "bytes": 8664,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "measurement-summary.json",
+      "sha256": "acaa35a4226e026f3ed3d62688670a79333c4d69760f0c8a558d79ae91e57d88",
+      "bytes": 9910,
+      "mediaType": "application/json"
+    }
+  ],
+  "observationsArtifact": "terminal-observations.json",
+  "errors": [],
+  "limitations": [
+    "The4MiB trigger is checked after append, not a total wire/heap cap.",
+    "The predeclared selection rule is applied before a new medium/full trial; no full-scale benefit follows from this comparison alone.",
+    "All records are synthetic metadata; geometry, engineering authority and production adoption remain unqualified.",
+    "Cluster WAL/checkpoint counters may include private-cluster background maintenance; per-database I/O and raw activity are retained.",
+    "Completion and source-body fidelity do not qualify broad interactive tail latency or concurrent offered-load capacity."
+  ],
+  "decisionImplications": [
+    "Preserve both original failed two-hour full trials and all new attempts.",
+    "Interpret configuration/resource effects only at their executed scale and source.",
+    "Further full history, contention, IFC/kernel and authority qualification remains necessary."
+  ]
+}

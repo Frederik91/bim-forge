@@ -1,0 +1,352 @@
+{
+  "at": "2026-10-25T19:30:58.175387+00:00",
+  "rule": "At least 10 percent lower median complete-job time, non-overlapping ranges, and all fidelity/memory checks pass",
+  "candidateSelected": true,
+  "sourceDirectory": "round3-batch-final",
+  "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+  "summary": {
+    "a": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 106.018731,
+        "range": [
+          100.449068,
+          133.37799
+        ]
+      },
+      "ingestSeconds": {
+        "median": 53.031101077,
+        "range": [
+          49.416748709,
+          58.845357379999996
+        ]
+      },
+      "publicationSeconds": {
+        "median": 27.170347876,
+        "range": [
+          26.386864478000003,
+          29.357313887000004
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 51.57597,
+        "range": [
+          49.282642,
+          52.160104
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 217718784,
+        "range": [
+          212213760,
+          223526912
+        ]
+      },
+      "wal_bytes": {
+        "median": 815119220,
+        "range": [
+          814349668,
+          815966926
+        ]
+      },
+      "wal_sync": {
+        "median": 1291,
+        "range": [
+          1265,
+          1305
+        ]
+      },
+      "wal_sync_time": {
+        "median": 8561.368000000017,
+        "range": [
+          7789.186999999976,
+          12100.337999999989
+        ]
+      }
+    },
+    "b": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 91.841844,
+        "range": [
+          91.655078,
+          93.187589
+        ]
+      },
+      "ingestSeconds": {
+        "median": 42.34031777199999,
+        "range": [
+          42.266902970000004,
+          42.74915777
+        ]
+      },
+      "publicationSeconds": {
+        "median": 26.987206604,
+        "range": [
+          26.443827899999995,
+          28.243420149
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 45.92118,
+        "range": [
+          45.511633,
+          46.597199
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 230543360,
+        "range": [
+          216350720,
+          236269568
+        ]
+      },
+      "wal_bytes": {
+        "median": 815095168,
+        "range": [
+          814175481,
+          815115373
+        ]
+      },
+      "wal_sync": {
+        "median": 291,
+        "range": [
+          272,
+          308
+        ]
+      },
+      "wal_sync_time": {
+        "median": 5044.994000000006,
+        "range": [
+          4585.415000000037,
+          5360.282999999996
+        ]
+      }
+    }
+  },
+  "samples": [
+    {
+      "runId": "r3-batch-a-1",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 105.847253,
+      "clientCpuSeconds": 51.628912,
+      "clientPeakBytes": 220094464,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 53.057842264,
+      "publicationSeconds": 29.357313887000004,
+      "analyzeSeconds": 0.30753902699999164,
+      "wal_bytes": 814349668,
+      "wal_fpi": 56,
+      "wal_records": 3454538,
+      "wal_sync": 1265,
+      "wal_sync_time": 8561.368000000017,
+      "wal_write_time": 258.3130000000001,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-b-1",
+      "passed": true,
+      "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+      "jobSeconds": 93.187589,
+      "clientCpuSeconds": 45.514129,
+      "clientPeakBytes": 236269568,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 42.34031777199999,
+      "publicationSeconds": 28.243420149,
+      "analyzeSeconds": 0.4252829060000076,
+      "wal_bytes": 815087365,
+      "wal_fpi": 41,
+      "wal_records": 3467520,
+      "wal_sync": 291,
+      "wal_sync_time": 4994.705000000016,
+      "wal_write_time": 189.70799999999963,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-a-2",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 100.449068,
+      "clientCpuSeconds": 49.282642,
+      "clientPeakBytes": 217718784,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 49.416748709,
+      "publicationSeconds": 26.386864478000003,
+      "analyzeSeconds": 0.49896244599999046,
+      "wal_bytes": 815119220,
+      "wal_fpi": 41,
+      "wal_records": 3468474,
+      "wal_sync": 1269,
+      "wal_sync_time": 7789.186999999976,
+      "wal_write_time": 280.2550000000001,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-b-2",
+      "passed": true,
+      "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+      "jobSeconds": 91.655078,
+      "clientCpuSeconds": 45.95779,
+      "clientPeakBytes": 236007424,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 42.631411211999996,
+      "publicationSeconds": 26.611614991000003,
+      "analyzeSeconds": 0.30349401199999554,
+      "wal_bytes": 815095716,
+      "wal_fpi": 42,
+      "wal_records": 3467526,
+      "wal_sync": 299,
+      "wal_sync_time": 5129.738000000012,
+      "wal_write_time": 185.17799999999988,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-a-3",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 106.018731,
+      "clientCpuSeconds": 51.57597,
+      "clientPeakBytes": 216641536,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 53.031101077,
+      "publicationSeconds": 29.025052999999993,
+      "analyzeSeconds": 0.29801847700000506,
+      "wal_bytes": 815123838,
+      "wal_fpi": 42,
+      "wal_records": 3468357,
+      "wal_sync": 1291,
+      "wal_sync_time": 7992.614999999991,
+      "wal_write_time": 244.4979999999996,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-b-3",
+      "passed": true,
+      "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+      "jobSeconds": 93.004477,
+      "clientCpuSeconds": 46.597199,
+      "clientPeakBytes": 229027840,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 42.74915777,
+      "publicationSeconds": 27.107293379,
+      "analyzeSeconds": 0.30824697500000187,
+      "wal_bytes": 815095168,
+      "wal_fpi": 42,
+      "wal_records": 3467532,
+      "wal_sync": 288,
+      "wal_sync_time": 4585.415000000037,
+      "wal_write_time": 184.03200000000015,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-a-4",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 108.371521,
+      "clientCpuSeconds": 52.160104,
+      "clientPeakBytes": 212213760,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 58.845357379999996,
+      "publicationSeconds": 26.786874269,
+      "analyzeSeconds": 0.3001788830000005,
+      "wal_bytes": 815054013,
+      "wal_fpi": 42,
+      "wal_records": 3466880,
+      "wal_sync": 1291,
+      "wal_sync_time": 12100.337999999989,
+      "wal_write_time": 250.46000000000004,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-b-4",
+      "passed": true,
+      "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+      "jobSeconds": 91.841844,
+      "clientCpuSeconds": 45.511633,
+      "clientPeakBytes": 230543360,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 42.29089963799999,
+      "publicationSeconds": 26.443827899999995,
+      "analyzeSeconds": 0.2964671960000123,
+      "wal_bytes": 815115373,
+      "wal_fpi": 44,
+      "wal_records": 3467535,
+      "wal_sync": 308,
+      "wal_sync_time": 5044.994000000006,
+      "wal_write_time": 158.85599999999977,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-a-5",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 133.37799,
+      "clientCpuSeconds": 51.116354,
+      "clientPeakBytes": 223526912,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 52.34381336,
+      "publicationSeconds": 27.170347876,
+      "analyzeSeconds": 0.5113232019999996,
+      "wal_bytes": 815966926,
+      "wal_fpi": 44,
+      "wal_records": 3482136,
+      "wal_sync": 1305,
+      "wal_sync_time": 10469.656000000017,
+      "wal_write_time": 198.76599999999962,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-batch-b-5",
+      "passed": true,
+      "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+      "jobSeconds": 91.79584,
+      "clientCpuSeconds": 45.92118,
+      "clientPeakBytes": 216350720,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 42.266902970000004,
+      "publicationSeconds": 26.987206604,
+      "analyzeSeconds": 0.3007573010000051,
+      "wal_bytes": 814175481,
+      "wal_fpi": 27,
+      "wal_records": 3453688,
+      "wal_sync": 272,
+      "wal_sync_time": 5360.282999999996,
+      "wal_write_time": 238.04000000000087,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    }
+  ],
+  "scope": "Reduced batching selection for a new medium/full trial only; no architecture or full-scale performance claim"
+}
