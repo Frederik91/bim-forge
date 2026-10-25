@@ -1,7 +1,8 @@
 # Hospital generator wire format v1
 
-W4 / issue #127, based on `f6a7db7c1366eea48a3c677e518efe0f2816383b`.
-This is synthetic qualification input. Implementation and server validation are pending.
+W4 / issue #127, stacked on W0 contract foundation
+`4fb723bc29a0fced971b3f4b2069e0fa31699a68`.
+This is synthetic qualification input. Source is prepared; server validation is pending.
 
 ## Invocation and transport
 
@@ -28,8 +29,8 @@ both producer and loader exit codes (`set -o pipefail`). A broken pipe is failur
 | relationships | `id, kind, source_id, target_id, revision_id, properties` | `bigint, text, bigint, bigint, bigint, jsonb` |
 | parameters | `id, entity_id, name, kind, value, depends_on_entity_id, revision_id, properties` | `bigint, bigint, text, text, jsonb, bigint, bigint, jsonb` |
 
-Entity IDs are positive integers, contiguous starting at 1 in profile
-`countsByKind` insertion order; ordinal is 1-based within a kind. Relationship
+Entity IDs are positive integers, contiguous starting at 1 in the canonical
+profile kind order (`KINDS` in `profile.ts`); ordinal is 1-based within a kind. Relationship
 and parameter IDs are independent positive contiguous sequences starting at 1.
 All foreign IDs reference the generated entity table at the **same scale and seed**.
 `revision_id=1` denotes this dataset's synthetic initial accepted snapshot;
@@ -41,8 +42,22 @@ spatial containment edge: reach space through owner. Compatible ports connect in
 canonical pairs (lower port ordinal -> higher); at most one connection per port.
 All other occurrences have one `instanceOf` edge to a class-compatible definition
 and one `containedIn` edge. MEP occurrences have one `memberOfSystem` edge. Spatial
-skeleton, definitions, zones, circuits and hosting/support rules will be detailed
-in the implementation. No duplicate edges are added to fill a target.
+skeleton and nested spatial paths are site -> building -> level -> zone -> space.
+Hosted objects are contained in their wall; supported objects are contained in
+their slab or containment segment. Walk that path to reach their space. Types
+belong to the site, systems to buildings, and circuits are typed electrical
+occurrences. No duplicate edges are added to fill a target.
+
+System domain is determined by system ordinal modulo 3: ordinal 1,4,7,... is
+electrical; 2,5,8,... is air; 3,6,9,... is water. Ports use a class/nominal connector
+size shared within a system. This compatibility is a synthetic metadata rule.
+It does not qualify engineering flow, circuit design or physical connectivity.
+`connectedTo` is undirected in meaning but stored once with increasing port ID.
+`parameterDependsOn` is occurrence -> definition or host/support; its JSON metadata
+binds the parameter row. `externalBinding` is occurrence -> its class definition,
+with a synthetic source URI. `provenance` is occurrence -> source project/site.
+The profile's `correspondsTo` has zero rows: this dataset does not fabricate a
+second imported representation.
 
 Properties are keyed typed values, not EAV rows. Values carry explicit state and
 scope; quantities carry units. Count logical values by `jsonb_object_keys(properties)`.
@@ -59,7 +74,10 @@ Counts round down by kind with a minimum valid skeleton; the manifest reports
 every admitted count and rounding difference. Parameters: 1,500,000 at full scale,
 scaled and capped by eligible occurrences. Relations follow typed topology,
 aiming at the profile's 18,000,000 +/- 15%; exact totals are authoritative in the
-generated manifest, never guessed by a loader. Count logical property values
+generated manifest, never guessed by a loader. The prepared full topology predicts
+18,742,644 relationships and 145,118,512 logical property values (272 above the
+estimated property total because small kinds round cohorts independently).
+These are analytical expectations awaiting server verification. Count logical property values
 exactly, rather than asserting the profile's 145,118,240 estimate is measured.
 
 `--table manifest` emits one JSON object. It streams all three tables internally
@@ -69,7 +87,86 @@ degree statistics and deterministic query/delta oracles. It is intentionally a
 separate generation pass. W5 can tee each live stream through a SHA-256 tool to
 compare against manifest hashes without retaining large input files.
 
-Preparation plan: TypeBox profile/CLI boundaries; constant-space arithmetic IDs
-and topology; streaming row serializers with backpressure; a manifest collector
-and correctness fixture checks. Only coordinator-allocated server containers may
-run checks. No local build/test has run; no qualification result is asserted.
+The manifest binds every generator implementation file to committed bytes using
+W0 `bindingFor`. Its source mount must be a real Git clone, such as a bundle clone
+on `/ssd1`, with a clean checkout of the source commit. A bare copied directory or
+a Windows worktree `.git` pointer is insufficient. Data-only tables do not invoke Git.
+
+Generation retains 35 ID ranges, system-sized port partitions, bounded row buffers
+and exact histograms; it has no map or array of all entity IDs. Payload cohort
+assignment is a seeded bijection, preserving exact global byte-cohort sizes and
+spreading large payloads across kinds. Each blob is exactly 256, 2,048 or 32,768
+UTF-8 JSON bytes at the current profile. The first at most 64 payloads per byte
+cohort supply explicitly labeled compression/deduplication samples.
+
+`check.ts` emits W0 `Observation[]` to stdout, with nonzero exit on failed checks.
+Its independent endpoint/degree maps are restricted to smoke or smaller, at most
+10,000 entities. This checker is deliberately separate from the memory-bounded
+data producer. `generator.test.ts` prepares six server test cases, including odd
+port counts, seed variation, COPY escaping and full analytical cardinalities.
+No local build/test has run; no qualification result is asserted. The observations
+cover generator correctness only. W5/W0 must account for every remaining EX-13
+assertion before publishing a terminal result; these observations carry limitations.
+
+## Prepared server commands
+
+Only the coordinator runs these commands in an allocated slot. They have not run.
+`W4_SOURCE` is an actual clean Git bundle clone of the handed-off source commit on
+`/ssd1`. Root dependencies are supplied by the tools image at `/node_modules`.
+`W4_EVIDENCE` is a unique run directory on `/ssd1`, retained with source/image
+bindings. Pin the tools image ID supplied by the coordinator; these examples use
+the immutable image ID rather than the mutable tag.
+
+```bash
+set -euo pipefail
+: "${W4_SOURCE:?actual source Git clone on /ssd1}"
+: "${W4_EVIDENCE:?unique allocated evidence directory on /ssd1}"
+W4_IMAGE=sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff
+mkdir -p "$W4_EVIDENCE"
+docker run --rm --cpus=1 --memory=2g \
+  -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
+  sh -c 'npm run validate && npx --no-install tsc --noEmit -p benchmarks/hospital/generator/tsconfig.json && node --test benchmarks/hospital/generator/generator.test.ts' \
+  >"$W4_EVIDENCE/validation.log" 2>&1
+docker run --rm --cpus=1 --memory=2g \
+  -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
+  node benchmarks/hospital/generator/check.ts --scale smoke \
+  >"$W4_EVIDENCE/observations.json" 2>"$W4_EVIDENCE/check.stderr"
+docker run --rm --cpus=1 --memory=2g \
+  -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
+  node benchmarks/hospital/generator/cli.ts --scale smoke --table manifest \
+  >"$W4_EVIDENCE/manifest-smoke.json" 2>"$W4_EVIDENCE/manifest.stderr"
+```
+
+The optional W5 integration pipeline below requires its tables and database
+container first. It generates directly into COPY and retains only the hash, not
+an on-disk input TSV. It is not authorization for a full job. First use smoke;
+then admit reduced/medium/full only in coordinator-allocated slots. Both sides
+must use the same source commit, profile, seed and scale as the manifest.
+
+```bash
+: "${W5_PG_CONTAINER:?disposable PostgreSQL 15 container}"
+: "${W5_PG_USER:?database user}"
+: "${W5_PG_DATABASE:?disposable database}"
+W4_SCALE=smoke
+for table in entities relationships parameters; do
+  docker run --rm --cpus=1 --memory=2g \
+    -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
+    node benchmarks/hospital/generator/cli.ts --scale "$W4_SCALE" --table "$table" \
+    2>"$W4_EVIDENCE/$table-generator.stderr" \
+  | tee >(sha256sum >"$W4_EVIDENCE/$table.sha256") \
+  | docker exec -i "$W5_PG_CONTAINER" psql -X -v ON_ERROR_STOP=1 \
+      -U "$W5_PG_USER" -d "$W5_PG_DATABASE" \
+      -c "COPY $table FROM STDIN WITH (FORMAT text)" \
+      >"$W4_EVIDENCE/$table-copy.log" 2>&1
+done
+```
+
+W5 should supply explicit COPY column lists from the stable table above if its
+physical schema has extra or reordered columns. Add FK/type/cardinality checks
+before timing. Compare the live hashes with `manifest.tables[table].sha256`.
+The resource limits above are proposed correctness/generator envelopes, not
+measured peak memory or authority to consume a server execution slot.
+
+History, branches and rejected proposals are recipes/oracles for W5; this stream
+materializes the initial revision only. External artifact bytes, real IFC, solver
+execution, database latency, recovery and approval behavior remain unqualified.
