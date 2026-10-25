@@ -79,5 +79,10 @@ test('missing assertions, failed observations and partial coverage cannot be rep
     assert.throws(() => parseRun({ ...run, coverage: run.coverage.map(item => ({ ...item, coverage: 'partial' })) }), /Passed/);
     await assert.rejects(verifyRun(parseRun({ ...run, coverage: [] , conclusion: 'inconclusive' }), { repository, evidence: root }), /every bound/);
     assert.throws(() => parseRun({ ...run, recordKind: 'template' }), /terminal run/);
+    const unrecorded = { ...run, environment: { ...run.environment, diskBudgetBytes: null } };
+    assert.throws(() => parseRun(unrecorded), /recorded disk budget/);
+    assert.throws(() => parseRun({ ...unrecorded, conclusion: 'inconclusive' }), /explicit limitation/);
+    assert.equal(parseRun({ ...unrecorded, conclusion: 'inconclusive',
+      limitations: ['Original correctness execution did not record a numeric disk budget.'] }).environment.diskBudgetBytes, null);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

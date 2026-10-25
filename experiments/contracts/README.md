@@ -28,3 +28,5 @@ Run from the repository root with its Git object database available, inside the 
 The qualification Dockerfile extends the cached preview build image with Git, PostgreSQL client tools, and Python virtual-environment support. Record the resulting image ID per run. Experimental Python packages live in a separately pinned environment on the test data volume. The first container check exposed missing Git in the preview build image; this explicit tools image supplies the required Git-object verification dependency.
 
 The root strict-TypeScript checker and tsconfig include `experiments` and `benchmarks`. Stream-specific dependencies belong in isolated experimental packages. W0 does not add experimental database drivers to production dependencies.
+
+An unrecorded original disk budget is represented by null and an explicit limitation. Such a terminal record cannot conclude passed. This retains failed or retrospective correctness evidence without inventing resource limits; it does not relax benchmark execution budgets.
