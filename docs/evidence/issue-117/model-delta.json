@@ -1,0 +1,130 @@
+{
+  "checked": true,
+  "root": "5b5a358a2a0502e092d4d743a114d3dfba92681e7cbe061c9ea37e74a403b653",
+  "acceptedRevision": "2730340a2bcd35de96189a099ef1d69e34628a53b7dac354c6a4b828d68cbca8",
+  "delta": {
+    "entities": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        {
+          "id": "main-bed",
+          "before": {
+            "id": "main-bed",
+            "type": "Furniture",
+            "name": "Double bed",
+            "kind": "bed",
+            "position": [
+              2,
+              7.8
+            ],
+            "width": 1.8,
+            "depth": 2,
+            "height": 0.6,
+            "rotationDeg": 0,
+            "supportId": null
+          },
+          "after": {
+            "id": "main-bed",
+            "type": "Furniture",
+            "name": "Double bed",
+            "kind": "bed",
+            "position": [
+              2,
+              7.8
+            ],
+            "width": 2,
+            "depth": 2,
+            "height": 0.6,
+            "rotationDeg": 0,
+            "supportId": null
+          }
+        },
+        {
+          "id": "office-desk",
+          "before": {
+            "id": "office-desk",
+            "type": "Furniture",
+            "name": "Office desk",
+            "kind": "desk",
+            "position": [
+              10.4,
+              0.9
+            ],
+            "width": 1.6,
+            "depth": 0.8,
+            "height": 0.75,
+            "rotationDeg": 0,
+            "supportId": null
+          },
+          "after": {
+            "id": "office-desk",
+            "type": "Furniture",
+            "name": "Office desk",
+            "kind": "desk",
+            "position": [
+              10.4,
+              0.9
+            ],
+            "width": 1.8,
+            "depth": 0.8,
+            "height": 0.75,
+            "rotationDeg": 0,
+            "supportId": null
+          }
+        }
+      ]
+    },
+    "relationships": {
+      "added": [],
+      "removed": [],
+      "modified": []
+    }
+  },
+  "tickets": [
+    {
+      "state": "completed",
+      "attempts": 1,
+      "history": [],
+      "request": {
+        "requestId": "730529ea-4448-419d-b98e-dbb1044d69d4",
+        "proposalName": "desk-wider",
+        "baseRevisionId": "5b5a358a2a0502e092d4d743a114d3dfba92681e7cbe061c9ea37e74a403b653",
+        "selectedObjectIds": [
+          "office-desk",
+          "room-office",
+          "level-ground"
+        ],
+        "instruction": "Widen the selected office desk by 0.2 m.",
+        "visualIntent": {
+          "kind": "selection"
+        }
+      }
+    },
+    {
+      "state": "completed",
+      "attempts": 1,
+      "history": [],
+      "request": {
+        "requestId": "69fee004-9a3c-4013-a35c-382157a95333",
+        "proposalName": "bed-wider",
+        "baseRevisionId": "5b5a358a2a0502e092d4d743a114d3dfba92681e7cbe061c9ea37e74a403b653",
+        "selectedObjectIds": [
+          "main-bed",
+          "room-bedroom-main",
+          "level-ground"
+        ],
+        "instruction": "Widen the selected bed by 0.2 m.",
+        "visualIntent": {
+          "kind": "selection"
+        }
+      }
+    }
+  ],
+  "appliedDecision": {
+    "status": "accepted",
+    "decisionId": "eaa0ac58-285e-4839-a964-54ed04da6c56",
+    "actor": "preview-human",
+    "appliedRevisionId": "2730340a2bcd35de96189a099ef1d69e34628a53b7dac354c6a4b828d68cbca8"
+  }
+}

@@ -11,7 +11,7 @@ export interface RequestSource {
   byteLength: number;
   sha256: string;
 }
-export type AuthoringScope = 'floor-plan-reconstruction';
+export type AuthoringScope = 'floor-plan-reconstruction' | 'building-reconstruction';
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -39,6 +39,6 @@ export function parseRequestSources(value: unknown): RequestSource[] {
   return items;
 }
 export function parseAuthoringScope(value: unknown): AuthoringScope {
-  if (value !== 'floor-plan-reconstruction') throw new Error('Invalid authoring scope.');
+  if (value !== 'floor-plan-reconstruction' && value !== 'building-reconstruction') throw new Error('Invalid authoring scope.');
   return value;
 }

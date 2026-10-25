@@ -1,40 +1,18 @@
-import { Type } from '@frederik91/scriptbox';
-import type { Static } from '@frederik91/scriptbox';
 import { Check } from 'typebox/value';
 import { createHash } from 'node:crypto';
 import { validateSnapshot } from './room-model.ts';
 import type { ModelSnapshot } from './room-model.ts';
-
-const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
-const name = Type.String({ minLength: 1, maxLength: 80 });
-const coordinate = Type.Integer({ minimum: -1000000, maximum: 1000000 });
-const dimension = Type.Integer({ minimum: 1, maximum: 100000 });
-const bounds = Type.Object({ minX: coordinate, minY: coordinate, maxX: coordinate, maxY: coordinate }, { additionalProperties: false });
-const opening = {
-  id: identifier, name, roomId: identifier,
-  side: Type.Union([Type.Literal('north'), Type.Literal('south'), Type.Literal('east'), Type.Literal('west')]),
-  offsetMm: Type.Integer({ minimum: 0, maximum: 1000000 }), widthMm: dimension, heightMm: dimension,
-};
-
-/** Room bounds follow wall centrelines. All dimensions are whole millimetres. */
-export const FloorLayoutSchema = Type.Object({
-  level: Type.Object({ id: identifier, name }, { additionalProperties: false }),
-  rooms: Type.Array(Type.Object({ id: identifier, name, boundsMm: bounds }, { additionalProperties: false }), { minItems: 2, maxItems: 12 }),
-  wallThicknessMm: dimension,
-  heightMm: dimension,
-  openings: Type.Array(Type.Union([
-    Type.Object({ ...opening, type: Type.Literal('Door') }, { additionalProperties: false }),
-    Type.Object({ ...opening, type: Type.Literal('Window'), sillHeightMm: Type.Integer({ minimum: 0, maximum: 100000 }) }, { additionalProperties: false }),
-  ], { title: 'FloorOpening' }), { maxItems: 100 }),
-}, { title: 'FloorLayout', additionalProperties: false });
-
-export type FloorLayout = Static<typeof FloorLayoutSchema>;
+import { entityLevel, levels } from './building-levels.ts';
+import { FloorLayoutSchema } from './building-schema.ts';
+import type { FloorLayout } from './building-schema.ts';
+export { FloorLayoutSchema } from './building-schema.ts';
+export type { FloorLayout } from './building-schema.ts';
 type Room = FloorLayout['rooms'][number];
 type Side = FloorLayout['openings'][number]['side'];
 interface Edge { axis: 'h' | 'v'; at: number; start: number; end: number }
 
 // Inspect descriptors before schema validation so arbitrary unknown callers cannot run accessors.
-function plainInput(value: unknown, depth = 0): unknown {
+export function plainLayoutInput(value: unknown, depth = 0): unknown {
   if (depth > 8) throw new Error('Floor layout must be bounded plain data.');
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -46,7 +24,7 @@ function plainInput(value: unknown, depth = 0): unknown {
     return Array.from({ length: value.length }, (_, index) => {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
       if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) throw new Error('Floor layout requires plain data.');
-      return plainInput(descriptor.value, depth + 1);
+      return plainLayoutInput(descriptor.value, depth + 1);
     });
   }
   const prototype: unknown = Object.getPrototypeOf(value);
@@ -57,12 +35,12 @@ function plainInput(value: unknown, depth = 0): unknown {
     if (typeof key !== 'string' || !descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) {
       throw new Error('Floor layout requires plain data.');
     }
-    return [key, plainInput(descriptor.value, depth + 1)];
+    return [key, plainLayoutInput(descriptor.value, depth + 1)];
   }));
 }
 
 export function parseFloorLayout(input: unknown): FloorLayout {
-  const value = plainInput(input);
+  const value = plainLayoutInput(input);
   if (!Check(FloorLayoutSchema, value)) throw new Error('Floor layout requires exact fields, two to twelve rooms and bounded whole millimetres.');
   return value;
 }
@@ -108,6 +86,27 @@ function hostId(openingId: string): string {
 export function previewFloor(baseSnapshot: unknown, input: unknown): ModelSnapshot {
   const layout = parseFloorLayout(input);
   const base = validateSnapshot(baseSnapshot);
+  if (base.version === 2) {
+    const level = levels(base).find((item) => item.id === layout.level.id);
+    if (!level) throw new Error('Level reconstruction requires an existing stable level identity.');
+    const shell = compileFloorLayout(layout, { kind: 'building', elevation: level.elevation });
+    const removed = new Set(base.entities.filter((item) => entityLevel(base, item)?.id === level.id
+      && (item.type === 'Level' || item.type === 'Space' || item.type === 'Wall' || item.type === 'Door' || item.type === 'Window')).map((item) => item.id));
+    return validateSnapshot({ version: 2, units: 'm', entities: [...base.entities.filter((item) => !removed.has(item.id)), ...shell.entities],
+      relationships: [...base.relationships.filter((link) => !removed.has(link.source) && !removed.has(link.target)), ...shell.relationships] });
+  }
+  const shell = compileFloorLayout(layout, { kind: 'legacy' });
+  return validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment'
+    || item.type === 'AssetFamily' || item.type === 'AssetInstance'), ...shell.entities],
+    relationships: shell.relationships });
+}
+
+/** Shared shell compiler; whole-building topology is validated after all floors and stairs exist. */
+export function compileFloorLayout(layout: FloorLayout, format: { kind: 'legacy' } | { kind: 'building'; elevation: number }): {
+  entities: unknown[]; relationships: unknown[];
+} {
+  const idFor = (edge: Edge): string => format.kind === 'legacy' ? wallId(edge)
+    : 'building-wall-' + BigInt('0x' + createHash('sha256').update(layout.level.id + ':' + wallId(edge)).digest('hex')).toString(36);
   const rooms = new Map<string, Room>();
   for (const room of layout.rooms) {
     const b = room.boundsMm;
@@ -117,15 +116,15 @@ export function previewFloor(baseSnapshot: unknown, input: unknown): ModelSnapsh
   }
   const walls = wallUnions(layout.rooms);
   const entities: unknown[] = [
-    ...base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment'),
-    { ...layout.level, type: 'Level', elevation: 0 },
+    { ...layout.level, type: 'Level', elevation: format.kind === 'building' ? format.elevation : 0 },
     ...layout.rooms.map((room) => {
       const b = room.boundsMm;
       return { id: room.id, type: 'Space', name: room.name, levelId: layout.level.id,
         bounds: { minX: b.minX / 1000, minY: b.minY / 1000, maxX: b.maxX / 1000, maxY: b.maxY / 1000 } };
     }),
     ...walls.map((wall) => ({
-      id: wallId(wall), type: 'Wall', name: 'Floor wall ' + wallId(wall),
+      id: idFor(wall), type: 'Wall', name: 'Floor wall ' + wallId(wall),
+      ...(format.kind === 'building' ? { levelId: layout.level.id } : {}),
       start: wall.axis === 'h' ? [wall.start / 1000, wall.at / 1000] : [wall.at / 1000, wall.start / 1000],
       end: wall.axis === 'h' ? [wall.end / 1000, wall.at / 1000] : [wall.at / 1000, wall.end / 1000],
       thickness: layout.wallThicknessMm / 1000, height: layout.heightMm / 1000,
@@ -142,8 +141,8 @@ export function previewFloor(baseSnapshot: unknown, input: unknown): ModelSnapsh
     entities.push(item.type === 'Door'
       ? { id: item.id, type: 'Door', name: item.name, width: item.widthMm / 1000, height: item.heightMm / 1000 }
       : { id: item.id, type: 'Window', name: item.name, width: item.widthMm / 1000, height: item.heightMm / 1000, sillHeight: item.sillHeightMm / 1000 });
-    return { id: hostId(item.id), type: 'hosted-by', source: item.id, target: wallId(wall),
+    return { id: hostId(item.id), type: 'hosted-by', source: item.id, target: idFor(wall),
       offset: (edge.start - wall.start + item.offsetMm) / 1000 };
   });
-  return validateSnapshot({ units: 'm', entities, relationships });
+  return { entities, relationships };
 }

@@ -46,7 +46,9 @@ function referenceDetails(source: RequestSource): HTMLElement {
 export function renderSourceContext(host: HTMLElement, projectId: string, context: RequestSourceContext, previews = false): void {
   host.replaceChildren();
   host.hidden = !context.sources?.length && !context.authoringScope;
-  if (context.authoringScope) host.append(node('p', 'Floor layout reconstruction · propose replacing walls, rooms and openings.', 'source-scope-note'));
+  if (context.authoringScope) host.append(node('p', context.authoringScope === 'building-reconstruction'
+    ? 'Whole-building reconstruction · levels, rooms, stairs and roof proposed for review.'
+    : 'One-storey reconstruction · walls, rooms and openings; other levels retained.', 'source-scope-note'));
   if (!context.sources?.length) return;
   host.append(node('h3', 'Request sources'));
   const list = node('ul', undefined, 'source-list');

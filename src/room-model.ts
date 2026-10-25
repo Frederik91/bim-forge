@@ -1,10 +1,15 @@
-import { validateFloorPlan, spaces, spaceForFootprint } from './floor-plan.ts';
+import { validateFloorPlan, spaces, spaceForFootprint, doorClearanceBounds } from './floor-plan.ts';
 import { parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { parseIntentAssessment } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
 import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
 import type { RequestSource, AuthoringScope } from './request-sources.ts';
+import { entityLevel, levelView, levels, roofHeightAt, stairFootprint } from './building-levels.ts';
+import type { AssetFamily, AssetInstance } from './asset-family.ts';
+import { parseAssetEdit, parseAssetFamily, parseAssetInstance } from './asset-family.ts';
+import { validateAssets } from './asset-placement.ts';
+export type { AssetFamily, AssetInstance } from './asset-family.ts';
 
 const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
@@ -87,10 +92,27 @@ export interface Furniture {
 }
 
 export interface Bounds { minX: number; minY: number; maxX: number; maxY: number }
-export interface Level { id: EntityId; type: 'Level'; name: string; elevation: 0 }
+export interface Level { id: EntityId; type: 'Level'; name: string; elevation: number }
 export interface Space { id: EntityId; type: 'Space'; name: string; levelId: EntityId; bounds: Bounds }
 
-export type Entity = Wall | Door | Window | Equipment | Furniture | Level | Space;
+export interface Slab { id: EntityId; type: 'Slab'; name: string; levelId: EntityId; bounds: Bounds; thickness: number }
+export interface Stair {
+  id: EntityId; type: 'Stair'; name: string; fromLevelId: EntityId; toLevelId: EntityId;
+  start: Point; end: Point; width: number; steps: number;
+}
+export type RoofProfile = { kind: 'flat'; height: number }
+  | { kind: 'gable'; eaveHeight: number; ridgeHeight: number; ridgeAxis: 'x' | 'y' };
+export interface Roof {
+  id: EntityId; type: 'Roof'; name: string; levelId: EntityId;
+  bounds: Bounds; thickness: number; profile: RoofProfile;
+}
+export type LegacyEntity = Wall | Door | Window | Equipment | Furniture | Level | Space | AssetFamily | AssetInstance;
+export type BuildingWall = Wall & { levelId: EntityId };
+export type BuildingFurniture = Furniture & { levelId: EntityId };
+export type BuildingEquipment = Equipment & { levelId: EntityId };
+export type BuildingEntity = BuildingWall | BuildingFurniture | BuildingEquipment
+  | Door | Window | Level | Space | Slab | Stair | Roof | AssetFamily | AssetInstance;
+export type Entity = LegacyEntity | BuildingEntity;
 
 export interface HostingRelationship {
   id: EntityId;
@@ -100,10 +122,25 @@ export interface HostingRelationship {
   offset: number;
 }
 
-export interface ModelSnapshot {
+export interface LegacySnapshot {
+  version?: never;
   units: 'm';
-  entities: Entity[];
+  entities: LegacyEntity[];
   relationships: HostingRelationship[];
+}
+export interface SnapshotV2 {
+  version: 2;
+  units: 'm';
+  entities: BuildingEntity[];
+  relationships: HostingRelationship[];
+}
+export type ModelSnapshot = LegacySnapshot | SnapshotV2;
+/** Read views are graphs, not complete snapshots suitable for persistence/validation. */
+export interface ModelGraph {
+  readonly version?: 2;
+  readonly units: 'm';
+  readonly entities: readonly Entity[];
+  readonly relationships: readonly HostingRelationship[];
 }
 
 export interface RoomLayout {
@@ -140,7 +177,7 @@ export interface WorkerEvidence {
 
 type ReviewDecision =
   | { status: 'pending'; decisionId: null; actor: null }
-  | { status: 'accepted' | 'superseded'; decisionId: RequestId; actor: string };
+  | { status: 'accepted' | 'superseded'; decisionId: RequestId; actor: string; appliedRevisionId?: RevisionId };
 
 export interface ProposalReview {
   requestId: RequestId;
@@ -282,7 +319,7 @@ function isEntityId(value: unknown): value is EntityId {
   return typeof value === 'string' && idPattern.test(value);
 }
 
-function identifier(value: unknown): EntityId {
+export function identifier(value: unknown): EntityId {
   if (!isEntityId(value)) fail('Invalid stable identifier.');
   return value;
 }
@@ -435,17 +472,34 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     validateScriptReview(scriptEvidence.scriptExecutions, toolCalls);
   }
   if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
-  fields(review.decision, ['status', 'decisionId', 'actor']);
+  const hasApplied = review.decision !== null && typeof review.decision === 'object' && Object.hasOwn(review.decision, 'appliedRevisionId');
+  fields(review.decision, ['status', 'decisionId', 'actor', ...(hasApplied ? ['appliedRevisionId'] : [])]);
   const decisionStatus = review.decision.status;
   if (decisionStatus !== 'pending' && decisionStatus !== 'accepted' && decisionStatus !== 'superseded') fail('Invalid proposal decision.');
   let decision: ReviewDecision;
   if (decisionStatus === 'pending') {
-    if (review.decision.decisionId !== null || review.decision.actor !== null) fail('Pending proposals cannot contain a decision identity.');
+    if (review.decision.decisionId !== null || review.decision.actor !== null || hasApplied) fail('Pending proposals cannot contain a decision identity.');
     decision = { status: 'pending', decisionId: null, actor: null };
   } else {
     const decisionId = requestIdentifier(review.decision.decisionId);
     const actor = readable(review.decision.actor, 'Decision actor', 80);
-    decision = { status: decisionStatus, decisionId, actor };
+    if (hasApplied) {
+      const appliedRevisionId = revisionIdentifier(review.decision.appliedRevisionId);
+      const applied = revisions.get(appliedRevisionId);
+      const onto = applied?.parentId ? revisions.get(applied.parentId) : undefined;
+      if (!applied || !onto) fail('The applied proposal must retain its accepted predecessor.');
+      let ancestor = onto;
+      while (ancestor.id !== base.id && ancestor.parentId !== null) {
+        const parent = revisions.get(ancestor.parentId);
+        if (!parent) fail('Applied proposal ancestry is incomplete.');
+        ancestor = parent;
+      }
+      if (ancestor.id !== base.id) fail('The applied proposal must share its original base.');
+      if (canonical(mergeSnapshots(base.snapshot, onto.snapshot, proposal.snapshot)) !== canonical(applied.snapshot)) {
+        fail('The applied revision does not match the reviewed proposal delta.');
+      }
+      decision = { status: decisionStatus, decisionId, actor, appliedRevisionId };
+    } else decision = { status: decisionStatus, decisionId, actor };
   }
   return freeze({
     requestId, proposalName, baseRevisionId, proposalRevisionId, selectedObjectIds, instruction, summary, rationale,
@@ -476,8 +530,55 @@ function wallLength(wall: Wall): number {
   ) / 1000;
 }
 
-function parseEntity(input: JsonValue): Entity {
+function parseBounds(input: JsonValue): Bounds {
+  fields(input, ['minX', 'minY', 'maxX', 'maxY']);
+  const bounds = { minX: metres(input.minX, -1000, 1000), minY: metres(input.minY, -1000, 1000),
+    maxX: metres(input.maxX, -1000, 1000), maxY: metres(input.maxY, -1000, 1000) };
+  if (bounds.minX >= bounds.maxX || bounds.minY >= bounds.maxY) fail('Bounds must have positive width and depth.');
+  return bounds;
+}
+
+function parseEntity(input: JsonValue, building = false): Entity {
   if (!input || Array.isArray(input) || typeof input !== 'object') fail('Unexpected model fields.');
+  if (input.type === 'AssetFamily') return parseAssetFamily(input);
+  if (input.type === 'AssetInstance') return parseAssetInstance(input);
+  if (building && (input.type === 'Wall' || input.type === 'Furniture' || input.type === 'Equipment')) {
+    const { levelId: rawLevel, ...geometry } = input;
+    const levelId = identifier(rawLevel);
+    const entity = parseEntity(geometry);
+    if (entity.type !== 'Wall' && entity.type !== 'Furniture' && entity.type !== 'Equipment') fail('Invalid owned geometry.');
+    return { ...entity, levelId };
+  }
+  if (building && input.type === 'Slab') {
+    fields(input, ['id', 'type', 'name', 'levelId', 'bounds', 'thickness']);
+    return { id: identifier(input.id), type: 'Slab', name: label(input.name), levelId: identifier(input.levelId),
+      bounds: parseBounds(input.bounds), thickness: metres(input.thickness, .001, 5) };
+  }
+  if (building && input.type === 'Stair') {
+    fields(input, ['id', 'type', 'name', 'fromLevelId', 'toLevelId', 'start', 'end', 'width', 'steps']);
+    const steps = input.steps;
+    if (typeof steps !== 'number' || !Number.isInteger(steps) || steps < 1 || steps > 100) fail('Stairs require one to one hundred whole steps.');
+    return { id: identifier(input.id), type: 'Stair', name: label(input.name),
+      fromLevelId: identifier(input.fromLevelId), toLevelId: identifier(input.toLevelId),
+      start: point(input.start), end: point(input.end), width: metres(input.width, .1, 5), steps };
+  }
+  if (building && input.type === 'Roof') {
+    fields(input, ['id', 'type', 'name', 'levelId', 'bounds', 'thickness', 'profile']);
+    const profile = input.profile;
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) fail('Unsupported roof profile.');
+    let parsed: RoofProfile;
+    if (profile.kind === 'flat') {
+      fields(profile, ['kind', 'height']);
+      parsed = { kind: 'flat', height: metres(profile.height) };
+    } else if (profile.kind === 'gable') {
+      fields(profile, ['kind', 'eaveHeight', 'ridgeHeight', 'ridgeAxis']);
+      if (profile.ridgeAxis !== 'x' && profile.ridgeAxis !== 'y') fail('Gable ridge axis must be x or y.');
+      parsed = { kind: 'gable', eaveHeight: metres(profile.eaveHeight), ridgeHeight: metres(profile.ridgeHeight), ridgeAxis: profile.ridgeAxis };
+      if (parsed.ridgeHeight <= parsed.eaveHeight) fail('Gable ridge must be higher than its eaves.');
+    } else return fail('Unsupported roof profile.');
+    return { id: identifier(input.id), type: 'Roof', name: label(input.name), levelId: identifier(input.levelId),
+      bounds: parseBounds(input.bounds), thickness: metres(input.thickness, .001, 5), profile: parsed };
+  }
   if (input.type === 'Level') fields(input, ['id', 'type', 'name', 'elevation']);
   else if (input.type === 'Space') fields(input, ['id', 'type', 'name', 'levelId', 'bounds']);
   else if (input.type === 'Wall') fields(input, ['id', 'type', 'name', 'start', 'end', 'thickness', 'height']);
@@ -491,8 +592,8 @@ function parseEntity(input: JsonValue): Entity {
   const id = identifier(input.id);
   const name = label(input.name);
   if (input.type === 'Level') {
-    if (input.elevation !== 0) fail('This prototype supports one level at elevation zero.');
-    return { id, type: 'Level', name, elevation: 0 };
+    if (!building && input.elevation !== 0) fail('This prototype supports one level at elevation zero.');
+    return { id, type: 'Level', name, elevation: building ? metres(input.elevation, -100, 100) : 0 };
   }
   if (input.type === 'Space') {
     fields(input.bounds, ['minX', 'minY', 'maxX', 'maxY']);
@@ -555,7 +656,20 @@ export function furnitureFootprint(item: Furniture): { minX: number; minY: numbe
     minY: item.position[1] - depth / 2, maxY: item.position[1] + depth / 2 };
 }
 
-function validateFurnishings(entities: Entity[], relationships: HostingRelationship[]): void {
+function footprintCorners(bounds: Bounds): Point[] {
+  return [[bounds.minX, bounds.minY], [bounds.minX, bounds.maxY], [bounds.maxX, bounds.minY], [bounds.maxX, bounds.maxY]];
+}
+
+function isLegacyEntity(entity: Entity): entity is LegacyEntity {
+  return entity.type !== 'Slab' && entity.type !== 'Stair' && entity.type !== 'Roof';
+}
+
+function isBuildingEntity(entity: Entity): entity is BuildingEntity {
+  return (entity.type !== 'Wall' && entity.type !== 'Furniture' && entity.type !== 'Equipment')
+    || ('levelId' in entity && typeof entity.levelId === 'string');
+}
+
+function validateFurnishings(entities: readonly Entity[], relationships: readonly HostingRelationship[], graph?: ModelGraph): void {
   const items = entities.filter((item): item is Furniture => item.type === 'Furniture');
   if (!items.length) return;
   if (items.length > 32) fail('The prototype supports at most 32 furnishings.');
@@ -592,6 +706,16 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
       fail(`${item.name} must fit inside the room, clear of wall thickness.`);
     }
     if (item.height > Math.min(...walls.map((wall) => wall.height))) fail('Furniture must fit below the room ceiling.');
+    if (graph?.version === 2) {
+      const level = entityLevel(graph, item);
+      const top = item.height + (device && support?.type === 'Furniture' ? support.height : 0);
+      if (!level || footprintCorners(footprint).some((point) => top > roofHeightAt(graph, level.id, point) + 1e-9)) {
+        fail('Furniture and supported devices must fit below the roof underside.');
+      }
+      if (graph.entities.some((stair) => stair.type === 'Stair' && overlaps(footprint, stairFootprint(stair)))) {
+        fail('Furniture must remain clear of stairs and slab voids.');
+      }
+    }
   }
   for (const item of items) {
     const footprint = furnitureFootprint(item);
@@ -611,20 +735,7 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
       const opening = entities.find((entity) => entity.id === relation.source);
       const wall = walls.find((entity) => entity.id === relation.target);
       if (opening?.type !== 'Door' || !wall) continue;
-      const length = wallLength(wall);
-      const dx = (wall.end[0] - wall.start[0]) / length;
-      const dy = (wall.end[1] - wall.start[1]) / length;
-      const x1 = wall.start[0] + dx * relation.offset;
-      const y1 = wall.start[1] + dy * relation.offset;
-      const x2 = x1 + dx * opening.width; const y2 = y1 + dy * opening.width;
-      const clearance = Math.max(0.9, opening.width);
-      const zone = rooms.length
-        ? dx !== 0
-          ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: y1 - clearance, maxY: y1 + clearance }
-          : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: x1 - clearance, maxX: x1 + clearance }
-        : dx !== 0
-        ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: wall.start[1] === minY ? minY : maxY - clearance, maxY: wall.start[1] === minY ? minY + clearance : maxY }
-        : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: wall.start[0] === minX ? minX : maxX - clearance, maxX: wall.start[0] === minX ? minX + clearance : maxX };
+      const zone = doorClearanceBounds(graph ?? { units: 'm', entities, relationships }, opening);
       if (overlaps(footprint, zone)) fail(`${item.name} blocks the door clearance zone.`);
     }
   }
@@ -634,11 +745,30 @@ function validateFurnishings(entities: Entity[], relationships: HostingRelations
 export function previewFurnishings(baseSnapshot: unknown, input: unknown): ModelSnapshot {
   const base = validateSnapshot(baseSnapshot);
   const value = copy(input);
-  fields(value, ['furnishings']);
+  const hasAssignments = value !== null && typeof value === 'object' && Object.hasOwn(value, 'levelAssignments');
+  fields(value, hasAssignments ? ['furnishings', 'levelAssignments'] : ['furnishings']);
   if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 furnishings.');
-  const furnishings = value.furnishings.map(parseEntity);
+  const furnishings = value.furnishings.map((item) => parseEntity(item));
   if (furnishings.some((item) => item.type !== 'Furniture')) fail('Only furnishings can be changed by this tool.');
-  return validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type !== 'Furniture'), ...furnishings], relationships: base.relationships });
+  const assignments = new Map<EntityId, EntityId>();
+  if (hasAssignments) {
+    if (base.version !== 2) fail('Level assignments require a version-2 building.');
+    if (!Array.isArray(value.levelAssignments) || value.levelAssignments.length > 32) fail('Provide up to 32 level assignments.');
+    for (const assignment of value.levelAssignments) {
+      fields(assignment, ['entityId', 'levelId']);
+      const entityId = identifier(assignment.entityId); const levelId = identifier(assignment.levelId);
+      if (assignments.has(entityId) || !furnishings.some((item) => item.id === entityId)) fail('Level assignments must uniquely identify incoming furnishings.');
+      if (!levels(base).some((level) => level.id === levelId)) fail('Level assignment references an unknown level.');
+      assignments.set(entityId, levelId);
+    }
+  }
+  const owned = base.version !== 2 ? furnishings : furnishings.map((item) => {
+    const existing = base.entities.find((entity) => entity.id === item.id && entity.type === 'Furniture');
+    const levelId = assignments.get(item.id) ?? (existing ? entityLevel(base, existing)?.id : undefined);
+    if (!levelId) fail('New building furnishings require an explicit level assignment.');
+    return { ...item, levelId };
+  });
+  return validateSnapshot({ ...base, entities: [...base.entities.filter((item) => item.type !== 'Furniture'), ...owned] });
 }
 
 /** A room-bounded replacement cannot remove or transfer furnishings in adjacent spaces. */
@@ -649,18 +779,58 @@ export function previewRoomFurnishings(baseSnapshot: unknown, input: unknown): M
   const room = spaces(base).find((item) => item.id === value.roomId);
   if (!room) fail('Choose a room from the bound floor.');
   if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 room furnishings.');
-  const incoming = value.furnishings.map(parseEntity);
+  const incoming = value.furnishings.map((item) => parseEntity(item));
+  const view = base.version === 2 ? levelView(base, room.levelId) : base;
   for (const item of incoming) {
     if (item.type !== 'Furniture') fail('Only furnishings can be changed by this tool.');
-    if (spaceForFootprint(base, furnitureFootprint(item))?.id !== room.id) fail('Room furnishing changes must remain inside the selected room, clear of shared walls. Use the whole-floor tool for explicit transfers.');
+    const existing = base.entities.find((entity) => entity.id === item.id);
+    if (base.version === 2 && existing && entityLevel(base, existing)?.id !== room.levelId) fail('Room furnishing changes cannot transfer objects between levels.');
+    if (spaceForFootprint(view, furnitureFootprint(item))?.id !== room.id) fail('Room furnishing changes must remain inside the selected room, clear of shared walls. Use the whole-floor tool for explicit transfers.');
   }
-  const retained = base.entities.filter((item) => item.type === 'Furniture' && spaceForFootprint(base, furnitureFootprint(item))?.id !== room.id);
-  return previewFurnishings(base, { furnishings: [...retained, ...incoming] });
+  const retained = base.entities.filter((item): item is Furniture => item.type === 'Furniture'
+    && (base.version === 2 && entityLevel(base, item)?.id !== room.levelId || spaceForFootprint(view, furnitureFootprint(item))?.id !== room.id));
+  const unowned = retained.map((item) => { const { id, type, name, kind, position, width, depth, height, rotationDeg, supportId } = item;
+    return { id, type, name, kind, position, width, depth, height, rotationDeg, supportId }; });
+  return previewFurnishings(base, { furnishings: [...unowned, ...incoming], ...(base.version === 2
+    ? { levelAssignments: incoming.map((item) => ({ entityId: item.id, levelId: room.levelId })) } : {}) });
+}
+
+/** Atomically upsert inert recipes/placements; shell geometry and all other entities stay intact. */
+export function previewAssets(baseSnapshot: unknown, input: unknown): ModelSnapshot {
+  const base = validateSnapshot(baseSnapshot);
+  const edit = parseAssetEdit(input);
+  const byId = new Map<EntityId, Entity>(base.entities.map((item) => [item.id, item]));
+  const touched = new Set<EntityId>();
+  for (const family of edit.families) {
+    if (touched.has(family.id)) fail('Asset edit identities must be unique.');
+    touched.add(family.id);
+    const existing = byId.get(family.id);
+    if (existing && (existing.type !== 'AssetFamily' || canonical(existing) !== canonical(family))) {
+      fail('Family IDs are immutable. Register a new family ID for a changed recipe.');
+    }
+    byId.set(family.id, family);
+  }
+  for (const instance of edit.instances) {
+    if (touched.has(instance.id)) fail('Asset edit identities must be unique.');
+    touched.add(instance.id);
+    const existing = byId.get(instance.id);
+    if (existing && existing.type !== 'AssetInstance') fail('Asset edits cannot replace protected model entities.');
+    byId.set(instance.id, instance);
+  }
+  for (const id of edit.removeInstanceIds) {
+    if (touched.has(id)) fail('An instance cannot be removed and upserted in the same edit.');
+    touched.add(id);
+    if (byId.get(id)?.type !== 'AssetInstance') fail('Only existing asset instances can be removed.');
+    byId.delete(id);
+  }
+  return validateSnapshot({ ...base, entities: [...byId.values()] });
 }
 
 export function validateSnapshot(input: unknown): ModelSnapshot {
   const value = copy(input);
-  fields(value, ['units', 'entities', 'relationships']);
+  const building = value !== null && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, 'version');
+  fields(value, building ? ['version', 'units', 'entities', 'relationships'] : ['units', 'entities', 'relationships']);
+  if (building && value.version !== 2) fail('Unsupported model snapshot version.');
   if (value.units !== 'm') fail('Unsupported model snapshot.');
   const entityValues = value.entities;
   const relationshipValues = value.relationships;
@@ -669,7 +839,7 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
   const byEntityId = new Map<EntityId, Entity>();
   const entities: Entity[] = [];
   for (const item of entityValues) {
-    const entity = parseEntity(item);
+    const entity = parseEntity(item, building);
     if (byEntityId.has(entity.id)) fail('Duplicate entity identifier.');
     byEntityId.set(entity.id, entity);
     entities.push(entity);
@@ -694,23 +864,34 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
   if (entities.some((entity) => (entity.type === 'Door' || entity.type === 'Window') && !hosted.has(entity.id))) {
     fail('Every opening must have exactly one host.');
   }
-  validateFloorPlan({ units: 'm', entities, relationships });
-  validateFurnishings(entities, relationships);
+  const graph: ModelGraph = { ...(building ? { version: 2 as const } : {}), units: 'm', entities, relationships };
+  validateFloorPlan(graph);
+  if (building) {
+    if (entities.filter((item) => item.type === 'Furniture').length > 32) fail('The prototype supports at most 32 furnishings.');
+    for (const level of levels(graph)) {
+      const view = levelView(graph, level.id);
+      validateFurnishings(view.entities, view.relationships, view);
+    }
+  } else validateFurnishings(entities, relationships);
+  validateAssets(graph);
   const byId = (a: ModelItem, b: ModelItem): number => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   entities.sort(byId); relationships.sort(byId);
-  return freeze({ units: 'm', entities, relationships });
+  if (building && entities.every(isBuildingEntity)) return freeze({ version: 2, units: 'm', entities, relationships });
+  if (!building && entities.every(isLegacyEntity)) return freeze({ units: 'm', entities, relationships });
+  return fail('Snapshot entity format does not match its version.');
 }
 
 function cloneSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
-  return {
-    units: 'm',
-    entities: snapshot.entities.map((entity): Entity => {
-      if (entity.type === 'Wall') return { ...entity, start: [...entity.start], end: [...entity.end] };
-      if (entity.type === 'Equipment' || entity.type === 'Furniture') return { ...entity, position: [...entity.position] };
-      return { ...entity };
-    }),
-    relationships: snapshot.relationships.map((relationship) => ({ ...relationship })),
-  };
+  return structuredClone(snapshot);
+}
+
+function registerFamilyIdentities(known: Map<EntityId, string>, snapshot: ModelSnapshot): void {
+  for (const entity of snapshot.entities) if (entity.type === 'AssetFamily') {
+    const recipe = canonical(entity);
+    const previous = known.get(entity.id);
+    if (previous !== undefined && previous !== recipe) fail('Family IDs are immutable across repository history. Register a new family ID.');
+    known.set(entity.id, recipe);
+  }
 }
 
 function fixture(): ModelSnapshot {
@@ -849,7 +1030,7 @@ function changes<T extends ModelItem>(before: T[], after: T[]): CollectionChange
 
 export function diffSnapshots(before: unknown, after: unknown): ModelDelta {
   const left = validateSnapshot(before); const right = validateSnapshot(after);
-  return freeze({ entities: changes(left.entities, right.entities), relationships: changes(left.relationships, right.relationships) });
+  return freeze({ entities: changes<Entity>(left.entities, right.entities), relationships: changes(left.relationships, right.relationships) });
 }
 
 function branchMap(branches: Branch[]): Map<BranchName, Branch> {
@@ -878,6 +1059,39 @@ function collectionConflicts<T extends ModelItem>(
     }
   }
   return conflicts;
+}
+
+export class ProposalConflict extends Error {}
+
+function mergeCollection<T extends ModelItem>(base: T[], current: T[], proposed: T[]): T[] {
+  const original = new Map(base.map((item) => [item.id, item]));
+  const incoming = new Map(proposed.map((item) => [item.id, item]));
+  const merged = new Map(current.map((item) => [item.id, item]));
+  for (const id of new Set([...original.keys(), ...incoming.keys()])) {
+    const before = original.get(id); const after = incoming.get(id);
+    if (canonical(before ?? null) === canonical(after ?? null)) continue;
+    if (after) merged.set(id, after); else merged.delete(id);
+  }
+  return [...merged.values()];
+}
+
+function mergeSnapshots(base: ModelSnapshot, current: ModelSnapshot, proposed: ModelSnapshot): ModelSnapshot {
+  if (canonical(base) === canonical(current)) return proposed;
+  if (base.version !== current.version || base.version !== proposed.version) {
+    throw new ProposalConflict('The model representation changed. Revise this proposal against the current model.');
+  }
+  const conflicts = [
+    ...collectionConflicts<Entity>('entity', base.entities, current.entities, proposed.entities),
+    ...collectionConflicts('relationship', base.relationships, current.relationships, proposed.relationships),
+  ];
+  if (conflicts.length) throw new ProposalConflict(`Conflicting changes to ${conflicts.map((item) => item.id).join(', ')}. Revise this proposal against the current model.`);
+  try {
+    return validateSnapshot({ ...current,
+      entities: mergeCollection<Entity>(base.entities, current.entities, proposed.entities),
+      relationships: mergeCollection(base.relationships, current.relationships, proposed.relationships) });
+  } catch (error) {
+    throw new ProposalConflict(`The combined changes fail model validation: ${error instanceof Error ? error.message : 'invalid model'}. Revise this proposal against the current model.`);
+  }
 }
 
 export class RoomRepository {
@@ -937,6 +1151,7 @@ export class RoomRepository {
     const reviewValues = value.version === 2 ? value.reviews : [];
     if (!Array.isArray(reviewValues) || reviewValues.length > 31) fail('Unsupported saved project.');
     const revisions = new Map<RevisionId, Revision>();
+    const familyIdentities = new Map<EntityId, string>();
     for (const item of revisionValues) {
       fields(item, ['id', 'parentId', 'snapshot']);
       const id = revisionIdentifier(item.id);
@@ -944,6 +1159,7 @@ export class RoomRepository {
       if (revisions.has(id)) fail('Invalid revision identity.');
       const validated = await revision(parentId, validateSnapshot(item.snapshot));
       if (validated.id !== id) fail('Saved revision content does not match its hash.');
+      registerFamilyIdentities(familyIdentities, validated.snapshot);
       revisions.set(id, validated);
     }
     const roots = [...revisions.values()].filter((item) => item.parentId === null);
@@ -985,7 +1201,7 @@ export class RoomRepository {
       const mainBranch = branches.get(branchName('main'));
       if (!mainBranch) fail('Saved project has missing or unreachable history.');
       const main = mainBranch.revisionId;
-      if (main !== roots[0].id && !reviews.some((review) => review.proposalRevisionId === main && review.decision.status === 'accepted')) {
+      if (main !== roots[0].id && !reviews.some((review) => review.decision.status === 'accepted' && (review.decision.appliedRevisionId ?? review.proposalRevisionId) === main)) {
         fail('The current model must reference an accepted reviewed proposal.');
       }
     }
@@ -1041,6 +1257,7 @@ export class RoomRepository {
     const decisionId = requestIdentifier(decision.decisionId);
     const actor = readable(decision.actor, 'Decision actor', 80);
     if (this.head('main') === proposal.revisionId && review.decision.status === 'accepted') return this;
+    if (this.head('main') !== review.baseRevisionId) fail('Accepting an older proposal requires reconciliation with the current model.');
     const mainName = branchName('main');
     const branches: Branch[] = this.#state.branches.map((item) => item.name === mainName
       ? { name: mainName, revisionId: proposal.revisionId } : item);
@@ -1055,6 +1272,52 @@ export class RoomRepository {
     };
     if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
     return new RoomRepository(token, state);
+  }
+
+  proposalSnapshot(proposed: RoomRepository, name: string): ModelSnapshot {
+    if (proposed.projectId !== this.projectId || proposed.root() !== this.root()) fail('The proposal belongs to another project.');
+    const review = proposed.review(name);
+    const base = this.#revisions.get(review.baseRevisionId);
+    if (!base) throw new ProposalConflict('This proposal is based on an unaccepted model. Revise it against the current accepted model.');
+    let ancestor = this.view(this.head('main'));
+    while (ancestor.id !== base.id && ancestor.parentId !== null) ancestor = this.view(ancestor.parentId);
+    if (ancestor.id !== base.id) throw new ProposalConflict('This proposal is based on an unaccepted model. Revise it against the current accepted model.');
+    return mergeSnapshots(base.snapshot, this.view(this.head('main')).snapshot, proposed.view(review.proposalRevisionId).snapshot);
+  }
+
+  async acceptFrom(proposed: RoomRepository, name: string, input: unknown): Promise<RoomRepository> {
+    const snapshot = this.proposalSnapshot(proposed, name);
+    const review = proposed.review(name);
+    const decision = copy(input); fields(decision, ['decisionId', 'actor']);
+    const decisionId = requestIdentifier(decision.decisionId); const actor = readable(decision.actor, 'Decision actor', 80);
+    if (review.decision.status !== 'pending') fail('Only a pending reviewed proposal can be accepted.');
+    const previous = this.reviews().find((item) => item.proposalName === review.proposalName);
+    if (previous && previous.decision.status !== 'pending') fail('This proposal already has a decision.');
+    const main = this.head('main');
+    const applied = main === review.baseRevisionId ? proposed.view(review.proposalRevisionId) : await revision(main, snapshot);
+    const revisions = new Map(this.#revisions);
+    for (const item of proposed.#state.revisions) revisions.set(item.id, item);
+    revisions.set(applied.id, applied);
+    const branches = branchMap(this.#state.branches);
+    for (const branch of proposed.branches()) {
+      if (branch.name === 'main') continue;
+      const existing = branches.get(branch.name);
+      if (existing && existing.revisionId !== branch.revisionId) fail('A different proposal already uses that name.');
+      branches.set(branch.name, branch);
+    }
+    branches.set(branchName('main'), { name: branchName('main'), revisionId: applied.id });
+    const reviews = new Map(this.reviews().map((item) => [item.proposalName, item]));
+    for (const item of proposed.reviews()) {
+      const existing = reviews.get(item.proposalName);
+      if (existing && canonical({ ...existing, decision: null }) !== canonical({ ...item, decision: null })) fail('Proposal review evidence changed.');
+      if (!existing) reviews.set(item.proposalName, item);
+    }
+    const state: RepositoryStateV2 = { version: 2, projectId: this.projectId, name: this.name,
+      revisions: [...revisions.values()], branches: [...branches.values()],
+      reviews: [...reviews.values()].map((item): ProposalReview => item.proposalName === review.proposalName
+        ? { ...item, decision: { status: 'accepted', decisionId, actor, ...(main !== review.baseRevisionId ? { appliedRevisionId: applied.id } : {}) } }
+        : item.decision.status === 'accepted' ? { ...item, decision: { ...item.decision, status: 'superseded' } } : item) };
+    return RoomRepository.restore(canonical(state));
   }
 
   async propose(input: unknown): Promise<RoomRepository> {
@@ -1127,6 +1390,9 @@ export class RoomRepository {
   async #commit(name: BranchName, base: Revision, snapshot: unknown): Promise<RoomRepository> {
     if (name === 'main') fail('Choose a proposal name other than main.');
     const updated = validateSnapshot(snapshot);
+    const familyIdentities = new Map<EntityId, string>();
+    for (const revision of this.#state.revisions) registerFamilyIdentities(familyIdentities, revision.snapshot);
+    registerFamilyIdentities(familyIdentities, updated);
     const next = canonical(updated) === canonical(base.snapshot) ? base : await revision(base.id, updated);
     const existing = this.#state.branches.find((item) => item.name === name);
     if (existing) {
@@ -1157,7 +1423,7 @@ export class RoomRepository {
     const base = this.view(validatedBaseId).snapshot;
     const left = this.view(leftId).snapshot; const right = this.view(rightId).snapshot;
     return freeze([
-      ...collectionConflicts('entity', base.entities, left.entities, right.entities),
+      ...collectionConflicts<Entity>('entity', base.entities, left.entities, right.entities),
       ...collectionConflicts('relationship', base.relationships, left.relationships, right.relationships),
     ]);
   }

@@ -1,0 +1,43 @@
+
+> bim-forge@0.1.0 validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+
+
+> bim-forge@0.1.0 lint
+> node scripts/validate-typescript.ts
+
+Strict TypeScript valid. 106 source file(s) checked.
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> bim-forge@0.1.0 typecheck
+> tsc --noEmit
+
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+Policy valid. 0 changed file(s) checked.
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> bim-forge@0.1.0 build:demo
+> node scripts/build-demo.ts
+
+
+  dist/demo/room-app.mjs  2.5mb ⚠️
+
+⚡ Done in 298ms
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+Policy valid. 37 changed file(s) checked.
