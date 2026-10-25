@@ -1,0 +1,9 @@
+# W5 workload controls
+
+Use `node experiments/storage/cli.ts workload <config.json> <new-output-directory>` only in a coordinator-admitted server container. `ConfigSchema` in `experiments/storage/workload.ts` validates the exact shape. Copy the example and replace all provenance/resource placeholders before running. The example is a W0 fixture correctness run; it is not a hospital benchmark. Set `format` to `w4-generator`, `dataset` to the admission JSON and `scale` to the admitted W4 scale for EX-13. W4's generator files must be present in the combined source tree; W5's branch does not include another stream's implementation.
+
+Stages: fixture → smoke → reduced → medium → full, each requiring main's admission based on previous counts, peak memory, WAL and disk. Keep all inputs/output/volumes below `/ssd1/bim-forge-qualification/qvm-20261025`. The 4 CPU / 16 GiB host and initial PostgreSQL 1.5 CPU / 3 GiB container require measured staging; 758 GiB of free data disk alone does not qualify a full load. Use `shared-correctness` only for correctness. Relative performance and full capacity require the exclusive measurement window.
+
+Run a **separate** native-snapshot configuration for the bounded existing-product baseline. Obtain a real native snapshot through `RoomRepository` rather than relabeling W0 or W4 kinds. The integration tests exercise the native validator/delta against the candidate. For alternating measurements use at least five repeats, a declared warm/cache procedure, fixed versions/resources/data, and the immutable raw samples. No cold-cache claim is made. Histories can be requested up to 1,000 revisions, but runtime may hit the statement timeout; retain that evidence.
+
+Outputs are described in [storage README](../../../experiments/storage/README.md). W0/W7 review exact definition coverage. Database-only measurements cannot qualify geometry, hospital inventory or correctness contracts from other streams.

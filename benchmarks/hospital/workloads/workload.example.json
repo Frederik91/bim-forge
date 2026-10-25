@@ -1,0 +1,28 @@
+{
+  "experimentId": "EX-10",
+  "runId": "w5-fixture-REPLACE-RUN-ID",
+  "branch": "w5-fixture-REPLACE-RUN-ID",
+  "dataset": "experiments/fixtures/tiny-building.json",
+  "format": "w0-fixture",
+  "scale": "fixture",
+  "repeats": 5,
+  "historyRevisions": 10,
+  "clients": 2,
+  "mixedOperationsPerClient": 10,
+  "writeEvery": 10,
+  "pageSize": 100,
+  "cacheLabel": "warm: explicit page and historical warmup; OS cache unchanged",
+  "leaseMode": "shared-correctness",
+  "statementTimeoutMs": 30000,
+  "environment": {
+    "nodeImage": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+    "postgresImage": "REPLACE_WITH_INSPECTED_IMAGE_ID",
+    "sourceCommit": "REPLACE_WITH_SOURCE_COMMIT_40_HEX",
+    "nodeCpuLimit": 1,
+    "nodeMemoryLimitBytes": 2147483648,
+    "postgresCpuLimit": 1.5,
+    "postgresMemoryLimitBytes": 3221225472,
+    "diskBudgetBytes": 1073741824,
+    "storageDescription": "/ssd1/bim-forge-qualification/qvm-20261025/postgres; coordinator-owned isolated PG15"
+  }
+}
