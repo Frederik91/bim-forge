@@ -48,9 +48,9 @@ def run_kernel(output, raw):
     from OCP.GeomAbs import GeomAbs_Plane
     from OCP.GProp import GProp_GProps
     from OCP.TopAbs import TopAbs_FACE, TopAbs_IN, TopAbs_ON
-    from OCP.TopExp import TopExp
-    from OCP.TopTools import TopTools_IndexedMapOfShape, TopTools_ListOfShape
+    from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS, TopoDS_Compound
+    from OCP.collections import List_TopoDS_Shape
     from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
 
     tolerance = 1e-7  # Shape dimensions and classifier points are in millimetres.
@@ -60,12 +60,20 @@ def run_kernel(output, raw):
         "vtk": importlib.metadata.version("vtk"),
         "ocpReportedVersion": str(getattr(OCP, "__version__", "unavailable")),
         "toleranceMm": tolerance,
+        "runnerSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     })
 
     def faces(shape):
-        indexed = TopTools_IndexedMapOfShape()
-        TopExp.MapShapes_s(shape, TopAbs_FACE, indexed)
-        return [TopoDS.Face_s(indexed.FindKey(i)) for i in range(1, indexed.Extent() + 1)]
+        explorer = TopExp_Explorer(shape, TopAbs_FACE)
+        unique = []
+        while explorer.More():
+            face = TopoDS.Face(explorer.Current())
+            # A split solid can share a face. Preserve unique topology and the
+            # explorer's first-encounter order using the kernel's identity test.
+            if not any(face.IsSame(previous) for previous in unique):
+                unique.append(face)
+            explorer.Next()
+        return unique
 
     def datum(face):
         surface = BRepAdaptor_Surface(face)
@@ -77,10 +85,12 @@ def run_kernel(output, raw):
     def descriptor(face, index):
         bounds = Bnd_Box()
         BRepBndLib.Add_s(face, bounds, False)
+        low, high = bounds.CornerMin(), bounds.CornerMax()
         props = GProp_GProps()
         BRepGProp.SurfaceProperties_s(face, props)
         center = props.CentreOfMass()
-        return {"indexZeroBased": index, "areaMm2": props.Mass(), "boundsMm": list(bounds.Get()),
+        return {"indexZeroBased": index, "areaMm2": props.Mass(),
+                "boundsMm": [low.X(), low.Y(), low.Z(), high.X(), high.Y(), high.Z()],
                 "centroidMm": [center.X(), center.Y(), center.Z()], "topDatum": datum(face)}
 
     def resolve_indices(indices):
@@ -109,9 +119,9 @@ def run_kernel(output, raw):
     BRepTools.Write_s(box, str(output / "before.brep"))
     before_hash = hashlib.sha256((output / "before.brep").read_bytes()).hexdigest()
     tool = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(5, 0, 0), gp_Dir(1, 0, 0)), -20, 20, -20, 20).Face()
-    arguments = TopTools_ListOfShape()
+    arguments = List_TopoDS_Shape()
     arguments.Append(box)
-    tools = TopTools_ListOfShape()
+    tools = List_TopoDS_Shape()
     tools.Append(tool)
     splitter = BRepAlgoAPI_Splitter()
     splitter.SetArguments(arguments)

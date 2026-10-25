@@ -1,8 +1,8 @@
 # EX-07 dependency evaluation and geometric references
 
-W3, [#126](https://github.com/Frederik91/bim-forge/issues/126), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). Implementation prepared; **not executed or qualified**. No terminal result, registry change, production model change or PR is included.
+W3, [#126](https://github.com/Frederik91/bim-forge/issues/126), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). The coordinator reported passing validation, scoped type checking and 11 Node tests on the first module commit. Real OCP execution passed six bounded assertions on kernel attempt 3 after two binding failures. **This is not a terminal qualification result.** No registry change, production model change or PR is included.
 
-Foundation: W0 `4fb723bc29a0fced971b3f4b2069e0fa31699a68`, PR base `feature/issue-123-qualification-contracts`. `contract.ts` uses W0's observation schema/parser and adds EX-07 identity, cardinality and duplicate checks. `run.ts` emits the frozen observation array, raw artifacts, exact registry assertion coverage, and a dataset manifest. W0 owns terminal record verification/publication and approval remains human.
+Foundation: W0 `1911844` (repository-root normalization follow-up), PR base `feature/issue-123-qualification-contracts`. `contract.ts` uses W0's observation schema/parser and adds EX-07 identity, cardinality and duplicate checks. `run.ts` emits the frozen observation array, raw artifacts, exact registry assertion coverage, and a dataset manifest. W0 owns terminal record verification/publication and approval remains human.
 
 ## Plan and scope
 
@@ -88,6 +88,17 @@ printf 'observation-contract\t%s\n' "$?" >> "$W3_EVIDENCE/check-exits.tsv"
 The runner creates `--out` exclusively; rerunning requires another path and run ID. Missing or invalid OCP observations produce an explicit failed observation. Supplying `--occt` copies and hashes the original observation bytes. Running without `--occt` is useful only for dependency preparation: it exits nonzero with `occt-not-executed` and cannot qualify EX-07. All logs and nonzero statuses must be retained, including failed attempts.
 
 ## Evidence interpretation and handoff
+
+The server debug lease used one `bim-qvm-w3-debug` container, 0.5 CPU, 1 GiB memory and no network, against the pinned tooling image and shared Python 3.11 venv. OCP 8 moved the shape list to `OCP.collections.List_TopoDS_Shape` and the face conversion to the namespace function `TopoDS.Face`. The runner uses actual `TopExp_Explorer` traversal, deduplicating shared faces with `IsSame`, and obtains bounds via `CornerMin`/`CornerMax` to avoid the new overloaded `Get` return. No expectation was weakened.
+
+Retained server evidence under `/ssd1/bim-forge-qualification/qvm-20261025/artifacts/`:
+
+- `w3-first/occt/`: coordinator's attempt 1, failed old `TopTools_IndexedMapOfShape` import.
+- `w3-debug-bindings-20261025/`: installed binding signatures used to diagnose the API changes.
+- `w3-debug-attempt-2/`: exit 1; failed old `TopoDS.Face_s` conversion, with raw observations and traceback retained.
+- `w3-debug-attempt-3/`: exit 0; `occt.log`, `exit-status.txt`, six observations, topology descriptors and four hashed BREP artifacts.
+
+Attempt 3 tested Python source SHA-256 `5626f425916ed87fa9c2edb03c25ec2566ee2686de7124dd45bc1c7f3b19198f`. Actual counts were 6 initial faces and 11 split/reordered faces. The top-face history had successors 2 and 9. Raw index 5 instead referred to a 16 mm² vertical face with no interior anchor. The interior point resolved to face 2, the seam point returned two candidates with no chosen face, and reordering resolved the same physical face at index 1. Baseline BREP bytes were unchanged and both solid shapes passed OCCT validity checks. These bounded observations retain the limitations below.
 
 `node/observations.json` is an array of `{experimentId,caseId,expected,observed,passed,limitations}`. `node/dependency-artifacts.json` contains requested models, baseline snapshots, candidate/full deltas or rollback diagnostics, and assertion errors. `node/coverage.json` uses the four exact EX-07 registry assertion strings. `node/dataset-manifest.json` hashes the shared fixture and W3 extension. `occt/topology-artifacts.json` records topology descriptors, real counts and ambiguity, environment, decisions and BREP hashes. Keep the `occt/*.brep`, source-observation copy, logs and exit statuses alongside them.
 
