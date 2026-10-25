@@ -91,6 +91,7 @@ export async function load(store: Storage, input: AsyncIterable<StoredEntity>, b
     if (fingerprint.count === 0) throw new Error('Cannot publish empty imported dataset');
     const ingestDone = performance.now();
     await store.client.query('ANALYZE w5_load_stage');
+    await store.client.query('ANALYZE qvm_storage.versions');
     const payload = { operation: 'initial-load', branch, fingerprint: fingerprint.value(), countsByKind };
     const revisionId = hash(payload);
     await store.transaction(async () => {
@@ -101,14 +102,13 @@ export async function load(store: Storage, input: AsyncIterable<StoredEntity>, b
       await store.client.query(`INSERT INTO qvm_storage.visibility
         SELECT $1,v.entity_id,v.version_id,v.kind,v.type_id,v.container_id,v.system_id,v.from_id,v.to_id
         FROM w5_load_stage s JOIN qvm_storage.versions v USING(version_id)`, [branch]);
+      await store.client.query('ANALYZE qvm_storage.visibility');
       await store.validateReferences(branch);
       await control?.checkpoint();
       await store.client.query(`UPDATE qvm_storage.branches SET head=$2 WHERE branch=$1`, [branch, revisionId]);
       await store.client.query(`INSERT INTO qvm_storage.receipts VALUES($1,$2,$2)`, [`load:${revisionId}`, revisionId]);
     });
     const published = performance.now();
-    await store.client.query('ANALYZE qvm_storage.versions');
-    await store.client.query('ANALYZE qvm_storage.visibility');
     await store.client.query('ANALYZE qvm_storage.changes');
     await control?.checkpoint();
     return { revisionId, fingerprint: fingerprint.value(), countsByKind, canonicalBytes, propertyValuesByRecordCategory, recordBytesHistogram,

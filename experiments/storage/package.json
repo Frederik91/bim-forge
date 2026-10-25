@@ -6,7 +6,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "typecheck": "tsc -b tsconfig.product-contract.json && tsc --noEmit -p tsconfig.json",
-    "test": "node --test store.test.ts envelope.test.ts validation.test.ts selections.test.ts transport.test.ts prepared.test.ts reference-validation.test.ts",
+    "test": "node --test store.test.ts envelope.test.ts validation.test.ts selections.test.ts transport.test.ts prepared.test.ts reference-validation.test.ts copy-decoder.test.ts",
     "cli": "node cli.ts"
   },
   "dependencies": { "pg": "8.16.3", "typebox": "1.4.3" },

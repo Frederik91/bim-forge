@@ -4,6 +4,15 @@ import { IdSchema, parse } from './contract.ts';
 
 const MissingReference = Type.Object({ entity_id: IdSchema, missing: IdSchema });
 
+// Plan the complete validity check before limiting the diagnostic witness.
+export const fullReferencesSql = `WITH missing AS MATERIALIZED (
+  SELECT v.entity_id,refs.id AS missing FROM qvm_storage.visibility v
+  CROSS JOIN LATERAL (VALUES(v.type_id),(v.container_id),(v.system_id),(v.from_id),(v.to_id)) refs(id)
+  WHERE v.branch=$1 AND refs.id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM qvm_storage.visibility target WHERE target.branch=$1 AND target.entity_id=refs.id
+  )
+) SELECT entity_id,missing FROM missing LIMIT 1`;
+
 export const changedReferencesSql = `
   SELECT v.entity_id,refs.id AS missing
   FROM unnest($2::text[]) changed(id)
