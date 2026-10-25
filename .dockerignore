@@ -1,11 +1,13 @@
 **
 !package.json
+!package-lock.json
 !demo/
 !demo/server.ts
+!demo/change-requests.ts
+!demo/request-source-store.ts
 !src/
 !src/**
 !scripts/
-!scripts/chatgpt-transfer.ts
 !scripts/container-healthcheck.ts
 !deploy/
 !deploy/preview/

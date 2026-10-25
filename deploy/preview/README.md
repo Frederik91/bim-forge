@@ -32,18 +32,16 @@ docker compose --project-directory /opt/bim-preview --file /opt/bim-preview/comp
 docker compose --project-directory /opt/bim-preview --file /opt/bim-preview/compose.yaml up --detach --wait
 ```
 
-Verify `/api/health` through HTTPS and confirm that `/api/auth/session` reports `remote-pairing` before pairing.
+Verify `/api/health` through HTTPS. The public session reports `disconnected`, `pending`, `failed`, or `connected`; it never returns OAuth tokens.
 
 ## Pair a ChatGPT plan
 
-The required OAuth callback is local to the browser computer. From a trusted checkout on that computer, run:
+In the app, choose **Connect ChatGPT → Continue with ChatGPT**. Open the OpenAI link or scan the QR, enter the short code, and complete consent. The app updates automatically. No commands are needed on the browser device.
 
-```sh
-npm run chatgpt:pair -- --remote <user>@<preview-host>
-```
+The container runs the pinned Codex app-server and owns token persistence and refresh.
 
-The SSH user must be able to run `docker exec` and `docker restart` for `bim-preview-app`. The helper fetches the server's stable host ID and saved registration hint, completes OAuth locally, transfers a strict credential document over SSH stdin, restarts only the app container, waits for its Unix-socket health check, verifies the host ID, and deletes its temporary local files. It never transfers or replaces the host ID. Do not copy a laptop `connection.json` over the server file.
+The same persistent directory is mounted at `/var/lib/bim-forge/codex`; existing Codex credentials remain reusable. Prior SIWC `connection.json` files are left intact but are not used by this runtime. Do not mount another app's credentials or copy tokens into the browser. Keep this prototype restricted to trusted users; it has one shared server account. Commercial/hosted service distribution needs the approved Sign in with ChatGPT integration.
 
 ## Roll back
 
-Set `BIM_FORGE_IMAGE` in `/opt/bim-preview/.env` to the previous reviewed image and run `docker compose up --detach --wait`. Restore the previous `compose.yaml` and `nginx.conf` together if their interface changed. The persistent credential directory is not part of an image rollback; do not delete it. To disconnect safely, use the preview's **Disconnect ChatGPT** action so remote revocation is attempted before local credentials are cleared.
+Set `BIM_FORGE_IMAGE` in `/opt/bim-preview/.env` to the previous reviewed image and run `docker compose up --detach --wait`. Restore the previous `compose.yaml` and `nginx.conf` together if their interface changed. The persistent credential directory is not part of an image rollback; do not delete it. Use **Disconnect ChatGPT** to clear this installation's Codex login; manage account access in ChatGPT separately.

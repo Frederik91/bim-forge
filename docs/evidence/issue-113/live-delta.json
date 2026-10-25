@@ -1,0 +1,251 @@
+{
+  "entities": {
+    "added": [
+      {
+        "familyId": "floor-lamp-proxy-v1",
+        "id": "floor-lamp",
+        "name": "Floor lamp",
+        "placement": {
+          "kind": "single-room"
+        },
+        "position": [
+          4.5,
+          2.8
+        ],
+        "rotationDeg": 0,
+        "size": {
+          "width": 0.5,
+          "depth": 0.5,
+          "height": 1.5
+        },
+        "type": "AssetInstance"
+      },
+      {
+        "description": "Independent schematic lamp, not a certified or manufacturer-specific product.",
+        "id": "floor-lamp-proxy-v1",
+        "name": "Floor lamp proxy",
+        "parts": [
+          {
+            "color": "#454952",
+            "id": "base",
+            "kind": "cylinder",
+            "min": [
+              0,
+              0,
+              0
+            ],
+            "size": [
+              1,
+              1,
+              0.06
+            ]
+          },
+          {
+            "color": "#777b84",
+            "id": "stem",
+            "kind": "cylinder",
+            "min": [
+              0.46,
+              0.46,
+              0.06
+            ],
+            "size": [
+              0.08,
+              0.08,
+              0.72
+            ]
+          },
+          {
+            "color": "#e7d8b6",
+            "id": "shade",
+            "kind": "cylinder",
+            "min": [
+              0,
+              0,
+              0.76
+            ],
+            "size": [
+              1,
+              1,
+              0.24
+            ]
+          }
+        ],
+        "type": "AssetFamily"
+      },
+      {
+        "familyId": "standing-person-proxy-v1",
+        "id": "person-1650",
+        "name": "Standing person 1650 mm",
+        "placement": {
+          "kind": "single-room"
+        },
+        "position": [
+          2.7,
+          2.8
+        ],
+        "rotationDeg": 0,
+        "size": {
+          "width": 0.55,
+          "depth": 0.35,
+          "height": 1.65
+        },
+        "type": "AssetInstance"
+      },
+      {
+        "familyId": "standing-person-proxy-v1",
+        "id": "person-1870",
+        "name": "Standing person 1870 mm",
+        "placement": {
+          "kind": "single-room"
+        },
+        "position": [
+          1.2,
+          2.8
+        ],
+        "rotationDeg": 0,
+        "size": {
+          "width": 0.55,
+          "depth": 0.35,
+          "height": 1.87
+        },
+        "type": "AssetInstance"
+      },
+      {
+        "description": "Schematic standing person; no anatomical fidelity or certification.",
+        "id": "standing-person-proxy-v1",
+        "name": "Standing person proxy",
+        "parts": [
+          {
+            "color": "#c99778",
+            "id": "head",
+            "kind": "ellipsoid",
+            "min": [
+              0.3,
+              0.2,
+              0.82
+            ],
+            "size": [
+              0.4,
+              0.6,
+              0.18
+            ]
+          },
+          {
+            "color": "#376798",
+            "id": "torso",
+            "kind": "box",
+            "min": [
+              0.22,
+              0.2,
+              0.44
+            ],
+            "size": [
+              0.56,
+              0.6,
+              0.38
+            ]
+          },
+          {
+            "color": "#c99778",
+            "id": "left-arm",
+            "kind": "box",
+            "min": [
+              0,
+              0.25,
+              0.43
+            ],
+            "size": [
+              0.2,
+              0.5,
+              0.36
+            ]
+          },
+          {
+            "color": "#c99778",
+            "id": "right-arm",
+            "kind": "box",
+            "min": [
+              0.8,
+              0.25,
+              0.43
+            ],
+            "size": [
+              0.2,
+              0.5,
+              0.36
+            ]
+          },
+          {
+            "color": "#303c50",
+            "id": "left-leg",
+            "kind": "box",
+            "min": [
+              0.23,
+              0.25,
+              0.04
+            ],
+            "size": [
+              0.23,
+              0.5,
+              0.4
+            ]
+          },
+          {
+            "color": "#303c50",
+            "id": "right-leg",
+            "kind": "box",
+            "min": [
+              0.54,
+              0.25,
+              0.04
+            ],
+            "size": [
+              0.23,
+              0.5,
+              0.4
+            ]
+          },
+          {
+            "color": "#25282d",
+            "id": "left-foot",
+            "kind": "box",
+            "min": [
+              0.21,
+              0,
+              0
+            ],
+            "size": [
+              0.27,
+              1,
+              0.06
+            ]
+          },
+          {
+            "color": "#25282d",
+            "id": "right-foot",
+            "kind": "box",
+            "min": [
+              0.52,
+              0,
+              0
+            ],
+            "size": [
+              0.27,
+              1,
+              0.06
+            ]
+          }
+        ],
+        "type": "AssetFamily"
+      }
+    ],
+    "removed": [],
+    "modified": []
+  },
+  "relationships": {
+    "added": [],
+    "removed": [],
+    "modified": []
+  }
+}

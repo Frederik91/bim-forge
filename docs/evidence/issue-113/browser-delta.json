@@ -1,0 +1,175 @@
+{
+  "entities": {
+    "added": [
+      {
+        "familyId": "standing-person-proxy-v1",
+        "id": "standing-person-1870",
+        "name": "Standing person 1.87 m",
+        "placement": {
+          "kind": "single-room"
+        },
+        "position": [
+          1,
+          2
+        ],
+        "rotationDeg": 0,
+        "size": {
+          "width": 0.62,
+          "depth": 0.32,
+          "height": 1.87
+        },
+        "type": "AssetInstance"
+      },
+      {
+        "description": "Reusable dimensional primitive human proxy; no anatomical fidelity or certification.",
+        "id": "standing-person-proxy-v1",
+        "name": "Standing person concept proxy",
+        "parts": [
+          {
+            "color": "#d6ad8d",
+            "id": "head",
+            "kind": "ellipsoid",
+            "min": [
+              0.31,
+              0.22,
+              0.86
+            ],
+            "size": [
+              0.38,
+              0.56,
+              0.14
+            ]
+          },
+          {
+            "color": "#d6ad8d",
+            "id": "neck",
+            "kind": "cylinder",
+            "min": [
+              0.41,
+              0.36,
+              0.82
+            ],
+            "size": [
+              0.18,
+              0.28,
+              0.06
+            ]
+          },
+          {
+            "color": "#436a8c",
+            "id": "torso",
+            "kind": "box",
+            "min": [
+              0.2,
+              0.22,
+              0.48
+            ],
+            "size": [
+              0.6,
+              0.56,
+              0.36
+            ]
+          },
+          {
+            "color": "#d6ad8d",
+            "id": "left-arm",
+            "kind": "box",
+            "min": [
+              0,
+              0.28,
+              0.43
+            ],
+            "size": [
+              0.18,
+              0.44,
+              0.39
+            ]
+          },
+          {
+            "color": "#d6ad8d",
+            "id": "right-arm",
+            "kind": "box",
+            "min": [
+              0.82,
+              0.28,
+              0.43
+            ],
+            "size": [
+              0.18,
+              0.44,
+              0.39
+            ]
+          },
+          {
+            "color": "#344454",
+            "id": "left-leg",
+            "kind": "box",
+            "min": [
+              0.23,
+              0.28,
+              0.04
+            ],
+            "size": [
+              0.23,
+              0.44,
+              0.46
+            ]
+          },
+          {
+            "color": "#344454",
+            "id": "right-leg",
+            "kind": "box",
+            "min": [
+              0.54,
+              0.28,
+              0.04
+            ],
+            "size": [
+              0.23,
+              0.44,
+              0.46
+            ]
+          },
+          {
+            "color": "#252b31",
+            "id": "left-foot",
+            "kind": "box",
+            "min": [
+              0.21,
+              0,
+              0
+            ],
+            "size": [
+              0.27,
+              1,
+              0.05
+            ]
+          },
+          {
+            "color": "#252b31",
+            "id": "right-foot",
+            "kind": "box",
+            "min": [
+              0.52,
+              0,
+              0
+            ],
+            "size": [
+              0.27,
+              1,
+              0.05
+            ]
+          }
+        ],
+        "type": "AssetFamily"
+      }
+    ],
+    "removed": [],
+    "modified": []
+  },
+  "relationships": {
+    "added": [],
+    "removed": [],
+    "modified": []
+  }
+}
