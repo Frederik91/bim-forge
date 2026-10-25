@@ -33,7 +33,7 @@ slot and enforce the external resource/disk watchdog before invoking it.
   },
   "repeats": 3,
   "pageSize": 50,
-  "maximumSelectionRows": 1000000,
+  "maximumSelectionRows": 2000000,
   "statementTimeoutMs": 30000,
   "wallTimeMs": 900000
 }
@@ -64,7 +64,8 @@ No schema initialization, import, branch creation, full fingerprint/property sca
 full metrics, recursive historical reconstruction or full branch copies occur in
 the runner. Indexed history queries select at most three known revision rows.
 Selection reads are capped at 1,000 rows/page and the configured total per oracle;
-reaching that cap before exhaustion fails. Interactive pages cap at 100, repeats
+the configurable total may be at most 10,000,000. Reaching that cap before
+exhaustion fails. Interactive pages cap at 100, repeats
 at 5. A conservative SQL query upper bound is recorded (including transaction,
 configuration and receipt statements); concurrency is 1. Each statement has a
 timeout and an overall timer closes the connection at the deadline. Existing
