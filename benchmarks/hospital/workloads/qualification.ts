@@ -18,7 +18,7 @@ const priorFiles = Type.Object({ 'config.json': HashSchema, 'load.json': HashSch
   'property-values.json': HashSchema, 'observations.json': HashSchema, 'errors.json': HashSchema }, { additionalProperties: false });
 const boundFile = Type.Object({ file: Type.String({ minLength: 1 }), sha256: HashSchema }, { additionalProperties: false });
 export const QualificationSchema = Type.Object({
-  runId: IdSchema, branch: IdSchema, scale: Type.Union([Type.Literal('full'), Type.Literal('smoke')]),
+  runId: IdSchema, branch: IdSchema, scale: Type.Union([Type.Literal('full'), Type.Literal('smoke'), Type.Literal('reduced')]),
   sourceCommit: Type.String({ pattern: '^[a-f0-9]{40}$' }), manifest: boundFile, admission: boundFile,
   priorAdmissionDir: Type.String({ minLength: 1 }), priorSha256: priorFiles,
   repeats: Type.Integer({ minimum: 1, maximum: 5 }), pageSize: Type.Integer({ minimum: 1, maximum: 100 }),
@@ -42,6 +42,20 @@ const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).dig
 const json = (bytes: Buffer): unknown => JSON.parse(bytes.toString('utf8'));
 function requireEqual(actual: Json, expected: Json, label: string): void {
   if (canonical(actual) !== canonical(expected)) throw new Error(`${label} mismatch`);
+}
+
+export function manifestKindCounts(manifest: Pick<Static<typeof ManifestSchema>,
+  'countsByKind' | 'relationshipCounts' | 'parameterForms'>): Record<string, number> {
+  const expected: Record<string, number> = {};
+  for (const source of [manifest.countsByKind, manifest.relationshipCounts]) {
+    for (const [kind, n] of Object.entries(source)) {
+      if (n > 0) expected[kind] = (expected[kind] ?? 0) + n;
+    }
+  }
+  for (const [kind, n] of Object.entries(manifest.parameterForms)) {
+    if (n > 0) expected[`parameter:${kind}`] = (expected[`parameter:${kind}`] ?? 0) + n;
+  }
+  return expected;
 }
 
 export async function validatePriorAdmission(config: Config, retain: (name: string, bytes: Buffer) => Promise<void>) {
@@ -80,11 +94,7 @@ export async function validatePriorAdmission(config: Config, retain: (name: stri
   }
   if (config.scale === 'full' && (manifest.inventoryFraction !== 1 || manifest.tables.entities.rows !== 6777445
       || manifest.tables.relationships.rows !== 18742644 || manifest.tables.parameters.rows !== 1500000)) throw new Error('Full inventory required');
-  const expectedKinds: Record<string, number> = {};
-  for (const source of [manifest.countsByKind, manifest.relationshipCounts,
-    Object.fromEntries(Object.entries(manifest.parameterForms).map(([kind, n]) => [`parameter:${kind}`, n]))]) {
-    for (const [kind, n] of Object.entries(source)) expectedKinds[kind] = (expectedKinds[kind] ?? 0) + n;
-  }
+  const expectedKinds = manifestKindCounts(manifest);
   const total = Object.values(manifest.tables).reduce((sum, table) => sum + table.rows, 0);
   if (total < 1 || loaded.fingerprint.count !== total || Object.values(expectedKinds).reduce((a, b) => a + b, 0) !== total) throw new Error('Admission count fidelity mismatch');
   requireEqual(loaded.countsByKind, expectedKinds, 'Manifest kind counts');

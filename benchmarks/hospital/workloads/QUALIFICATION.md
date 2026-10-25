@@ -48,7 +48,7 @@ counts/hashes must match the manifest. Prior expected/actual fingerprint, kind
 counts and property counts must agree with the load and manifest. Both successful
 `source-query-oracle` and `initial-inventory` observations and empty errors are
 required. Full requires exactly 6,777,445 entities, 18,742,644 relationships and
-1,500,000 parameters at inventory fraction 1. `smoke` is only for bounded fixtures.
+1,500,000 parameters at inventory fraction 1. `smoke` and `reduced` retain their actual manifest scale. Empty declared catalog categories represent no rows and are omitted when comparing observed counts; every positive count remains required. The full inventory gate is unchanged.
 
 The published head, initial-load revision payload and its hash must still match.
 The driver then performs independent space/type/system count and ordered-ID hash
