@@ -475,9 +475,9 @@
         "State that database-only synthetic results do not qualify geometry or a real hospital inventory."
       ],
       "preparationNote": "Profile hospital-200k-v1; W4/#127 owns generation. Full measurements require exclusive resource scheduling.",
-      "status": "running",
-      "latestReviewedRun": "docs/experiments/results/EX-13/hospital-reduced-20261025c/result.json",
-      "latestReview": "docs/experiments/decisions/exchange-storage-review-20261025.md",
+      "status": "failed",
+      "latestReviewedRun": "docs/experiments/results/EX-13/hospital-full-20261025a/result.json",
+      "latestReview": "docs/experiments/decisions/full-hospital-review-20261025.md",
       "producerStreams": [
         "W0",
         "W4"

@@ -1,6 +1,6 @@
 # QVM-01 design assessment
 
-Working assessment, 25 October 2026. The full hospital database trial is still running. This document proposes the next design to review; it does not adopt a schema, approve engineering changes or authorize merging.
+Working assessment, 25 October 2026. The first execution round is complete. The full hospital database trial timed out before publication; see the [full-load review](decisions/full-hospital-review-20261025.md). This document proposes the next design to review; it does not adopt a schema, approve engineering changes or authorize merging.
 
 ## Suggested model direction
 
@@ -20,7 +20,7 @@ Acceptance should combine a small atomic database publication with semantic assu
 | Geometric references | Real OCCT face split and traversal permutation; ambiguous anchors remain pending | Curved faces, tolerance sweeps, reload, general topological naming and kernel upgrades |
 | IFC exchange | Real controlled IFC files, geometry/coordinate checks and an actual bounded-property preservation failure | A loss-aware exchange contract, independent vendor/MVD coverage and the latest complete engine rerun |
 | History and recovery | 1,000-revision small-model aging, six real PG recovery cases, portable divergence and partial reader upgrades | Full-model history combinations, old/new kernel execution and independent authentication/host failures |
-| Storage capacity | Verified smoke/reduced admission, full manifest generation and a running fresh full database trial | Completed full admission, qualified working-set latency and the unexecuted branch/client/history matrix |
+| Storage capacity | Verified smoke/reduced admission and full manifest generation; fresh full trial timed out with 13,602,755 unpublished staged versions | Completed full admission, qualified working-set latency and the unexecuted branch/client/history matrix |
 
 Links to original immutable results and separate reviews are in [the registry](registry.json). Each tested capability remains bounded by its fixture, actual source and environment. A passing case does not turn a partially covered experiment into a production qualification.
 
@@ -28,7 +28,7 @@ Links to original immutable results and separate reviews are in [the registry](r
 
 The experimental store preserves complete typed documents and immutable versions with deltas. Its current branch-visibility copy, full-branch reference validation and recursive historical reconstruction still need explicit large-case qualification. A proposal workflow must avoid copying a hospital-sized membership view for every request.
 
-The full trial uses runner `612dd75` unchanged. Profiling and plan inspection already identified repeated interpreted validation and an unbounded reference-join plan; those were corrected before the final preflight. A later transport diagnostic found a duplicate outer document in insert arguments. Its explicit-column fix preserves SQL-visible values and hashes, but awaits post-hold PG readback; the running full trial retains the original transport. No architecture or language-capacity verdict can be drawn from an untuned pipeline.
+The full trial used runner `612dd75` unchanged and failed its two-hour admission target. Profiling and plan inspection already identified repeated interpreted validation and an unbounded reference-join plan; those were corrected before the final preflight. A later transport diagnostic found a duplicate outer document in insert arguments. Its explicit-column fix preserves SQL-visible values and hashes, and passed post-run real PostgreSQL storage checks at integration source `1146065`. The timed-out full trial retained the original transport. No architecture or language-capacity verdict can be drawn from an untuned pipeline.
 
 The next implementation experiment should measure an immutable prepared-record path that reuses one verified canonical serialization/hash across accounting, staging and insertion. Current source computes canonical forms repeatedly. This is a code-review hypothesis for measurement, not a measured speedup, and must preserve the full body/readback oracle.
 
@@ -38,7 +38,7 @@ Bulk import and interactive acceptance should be measured as separate phases. An
 
 1. Combine the semantic prototype and governed policy/evidence checks with actual persistent transactions, replaying the same positive and negative cases.
 2. Specify the loss-aware IFC/property contract and execute the latest complete exchange slice after the retry escalation is reviewed.
-3. Interpret the full database trial, then test only the storage/history/bulk-publication changes justified by its measured limiter.
+3. Measure the prepared-record bulk path and scoped validation, then repeat full admission only after reduced correctness and profiling justify another slot.
 4. Execute pinned old/new kernel interpretation and broader reference cases before claiming historical geometry compatibility.
 
 The renderer, AI service calls, VR interactions, engineering/code compliance, real hospital completeness and production security remain outside this qualification. Existing preview behavior and accepted model data are unchanged by these experiments.

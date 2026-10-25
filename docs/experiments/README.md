@@ -1,6 +1,6 @@
 # Versioned model qualification program
 
-Program: `QVM-01`. Parent tracker: [#122](https://github.com/Frederik91/bim-forge/issues/122). Status: execution in progress. The registry records current work state and reviewed outcomes separately from implementation-test success.
+Program: `QVM-01`. Parent tracker: [#122](https://github.com/Frederik91/bim-forge/issues/122). Status: first execution round reviewed; adoption remains unqualified. The registry records current work state and reviewed outcomes separately from implementation-test success.
 
 Start with the [current design candidate](../design/versioned-model-candidate.md). Read the [research](../research/versioned-bim-data-model.md) for its evidence and alternatives. The [registry](registry.json) assigns stable experiment IDs, definitions, dependencies, work streams, and current reviewed results. The [hospital benchmark](../../benchmarks/hospital/README.md) specifies the confirmed 200,000 m² database workload.
 
@@ -78,7 +78,9 @@ Do not flush shared host caches, change preview data, or weaken validators for a
 | EX-10 | Revision storage growth and working-set queries | W5 | inconclusive |
 | EX-11 | Crash, retry, artifact completeness, and restore | W6 | inconclusive |
 | EX-12 | Disconnected branches, independent copies, and authority | W6 | inconclusive |
-| EX-13 | Detailed 200,000 m² hospital database workload | W5 with W4 generator | running |
+| EX-13 | Detailed 200,000 m² hospital database workload | W5 with W4 generator | failed |
+
+The [design assessment](assessment-20261025.md) and [full-load review](decisions/full-hospital-review-20261025.md) explain the first round. The full trial timed out with 13,602,755 staged records and no published revision. Earlier reduced admission preserved 270,205 records. Full capacity and production adoption remain unqualified.
 
 ## A run and its result
 
