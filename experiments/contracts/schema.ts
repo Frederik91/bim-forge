@@ -30,7 +30,7 @@ const runFields = {
   definition: binding, implementation: Type.Object({ sourceCommit: commit, runnerCommit: commit, validators: strings }, { additionalProperties: false }),
   dataset: Type.Object({ name: text, seed: text, manifestSha256: hash }, { additionalProperties: false }),
   environment, commands: Type.Array(text, { minItems: 1 }), observations: Type.Array(ObservationSchema), coverage: Type.Array(CoverageSchema),
-  evidence: Type.Array(artifact, { minItems: 1 }), errors: strings, limitations: strings, decisionImplications: strings,
+  evidence: Type.Array(artifact, { minItems: 1 }), observationsArtifact: text, errors: strings, limitations: strings, decisionImplications: strings,
 };
 export const RunSchema = Type.Union([
   Type.Object({ ...runFields, executionStatus: Type.Literal('completed'), conclusion: Type.Union([Type.Literal('passed'), Type.Literal('failed'), Type.Literal('inconclusive')]) }, { additionalProperties: false }),
