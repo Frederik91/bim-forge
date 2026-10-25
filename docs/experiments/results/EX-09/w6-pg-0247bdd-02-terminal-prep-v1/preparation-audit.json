@@ -1,0 +1,16 @@
+{
+  "recordKind": "terminal-record-preparation",
+  "experimentId": "EX-09",
+  "sourceCommit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+  "rawObservationsSha256": "4943184977e3d910ae8cb062764a0cee516eb3299bffd6489e24ea6c14261e7c",
+  "executedObservationCount": 2,
+  "exactAssertionCount": 3,
+  "allExecutedGitBindingsVerified": true,
+  "hashedArtifactCount": 14,
+  "observationsArtifact": "postgres/w6-pg-0247bdd-02/observations.json",
+  "publicationReady": false,
+  "blockers": [
+    "Missing recorded environment.diskBudgetBytes; no numeric value has been invented."
+  ],
+  "authority": "Prepared for coordinator review; not a terminal W0 result or approval."
+}
