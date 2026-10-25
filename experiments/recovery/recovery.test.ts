@@ -17,6 +17,8 @@ import { parseFixture } from '../fixtures/fixture.ts';
 import { parseLease, runPackageCrashCases } from './faults.ts';
 import { parseCopyExport, verifyCopyExport } from './exports.ts';
 import { pendingStorageObservations } from './scenarios.ts';
+import { encodeHistory, readHistory, readHistoryV1 } from './history.ts';
+import { canonical } from '../storage/contract.ts';
 
 async function temporary(t: TestContext): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'w6-package-'));
@@ -284,6 +286,23 @@ test('a fresh actual process exports every retained model and its bytes without 
   assert.deepEqual(exported.models.map((item) => item.fixture), [originalModel, changedModel]);
   assert.throws(() => parseCopyExport({ ...exported, manifestSha256: sha256('forged manifest') }), /manifest bytes/);
   assert.throws(() => parseCopyExport({ ...exported, models: exported.models.map((item) => ({ ...item, bytesBase64: Buffer.from('{}').toString('base64') })) }));
+});
+
+test('schema shape, owner dictionary and serialization upgrades keep the original reader and bytes usable', async () => {
+  const raw: unknown = JSON.parse(await readFile(new URL('../fixtures/tiny-building.json', import.meta.url), 'utf8'));
+  const fixture = parseFixture(raw);
+  const before = encodeHistory(fixture, 'v1');
+  const beforeHash = sha256(before);
+  const after = encodeHistory(fixture, 'v2');
+  assert.notEqual(beforeHash, sha256(after));
+  assert.equal(canonical(readHistoryV1(before)), canonical(fixture));
+  assert.equal(canonical(readHistory(before)), canonical(fixture));
+  assert.equal(canonical(readHistory(after)), canonical(fixture));
+  assert.throws(() => readHistoryV1(after), /original format/);
+  assert.equal(sha256(before), beforeHash);
+  assert.ok(after.toString('utf8').includes('mechanicalDiscipline'));
+  assert.ok(before.toString('utf8').includes('mechanicalOwner'));
+  assert.ok(pendingStorageObservations().some((item) => item.caseId === 'pinned-historical-query' && !item.passed));
 });
 
 test('leased actual SIGKILL cases retain complete pointers and never qualify pending database cases', async (t) => {
