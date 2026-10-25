@@ -1,6 +1,8 @@
-# EX-02: verified partial evidence input, failed exchange preservation
+# EX-02: published partial terminal record, failed exchange preservation
 
-`input.json` is a W0 terminal-record **input**, not a published result or engineering approval. W0 `29583f735c1803872ace3fa663dcf6d7a145434a` verified the input, exact committed registry assertions, source/runner Git objects, every retained artifact's byte count/SHA-256, and the required `observationsArtifact` equality. EX-09 is not part of W2.
+`result.json` and `summary.md` were published through W0 `publishRun` after the coordinator requested completion of terminal records. `input.json` remains the original verified pre-publication input. Only the stale input-stage statement that no publication had happened was changed for the terminal record; all observations, failed checks, conclusions, coverage and implementation bindings were preserved exactly. `publication/` records the metadata-only commands, time and result hashes. Publication does not imply result review, registry adoption, PR merge or model approval.
+
+`input.json` is the preserved W0 terminal-record **input**, distinct from the published `result.json`. W0 `29583f735c1803872ace3fa663dcf6d7a145434a` verified exact committed registry assertions, source/runner Git objects, every retained artifact's byte count/SHA-256, and the required `observationsArtifact` equality again during publication. EX-09 is not part of W2.
 
 The record contains 53 EX-02 observations: 33 passed / 20 failed, with `executionStatus: failed` and `conclusion: failed`. The unfamiliar `IfcPropertyBoundedValue` was actually lost from the native scalar/list re-export. That failed preservation check is retained. Other schema-dependent failures report unavailable `_pytest`; they do not establish a schema violation. The original preparation's complete 85-row array remains unchanged: 65 passed / 20 failed across EX-02/EX-08.
 
@@ -31,6 +33,10 @@ Complete, checksummed private evidence is retained on `fun-server`:
   finalize.log
   verify-EX-02.log
   verify-EX-08.log
+  publication/                # metadata-only publication logs and receipt
+  publication-inputs/         # lifecycle wording corrected; observations unchanged
+  published/EX-02/w2-partial-exchange-20261025-01/result.json
+  published/EX-08/w2-partial-coordinates-20261025-01/result.json
 ```
 
 The files committed here are small copies of the inputs, combined observations, metadata and command logs. `input.json` artifact paths resolve against the complete server `evidence/` root, not this Git directory. Each record carries artifact hashes and exact registry coverage; unavailable exact-hash cases in EX-08 are `not-covered`. The original prepare did not record a disk budget; the 1 GiB record value is explicitly the checked evidence-packaging budget defined at finalization, not a historical enforced run quota.
@@ -47,3 +53,13 @@ node experiments/contracts/cli.ts verify "$PACKAGE/inputs/EX-08.input.json" "$PA
 ```
 
 Do not repeat the first command with the existing input directory: creation is exclusive. Actual source-only validation commands are in `latest-source-unit-logs/commands.sh`, with exit statuses in `status.tsv`. Actual downstream commands/status are in `downstream-logs/`. `EX-01-paired-export-contribution.json` describes eight paired controlled-generated exports; W1 owns their interpretation and terminal EX-01 record. These are not vendor/Revit exports or guarantees of vendor identity stability.
+
+The metadata-only publication commands also completed once:
+
+```sh
+PACKAGE=/qualification/w2-runs/w2-terminal-package-20261025-01
+node experiments/contracts/cli.ts publish "$PACKAGE/publication-inputs/EX-02.input.json" "$PACKAGE/evidence" "$PACKAGE/published"
+node experiments/contracts/cli.ts publish "$PACKAGE/publication-inputs/EX-08.input.json" "$PACKAGE/evidence" "$PACKAGE/published"
+```
+
+Do not repeat publication into these immutable directories. No database/performance workload, hospital generation or fourth IFC preparation was executed. The registry and reviewed-result pointers remain coordinator-owned and unchanged.

@@ -1,6 +1,6 @@
-# EX-08: verified partial evidence input, inconclusive
+# EX-08: published partial terminal record, inconclusive
 
-`input.json` is a W0 terminal-record input, not a published result or approval. W0 `29583f735c1803872ace3fa663dcf6d7a145434a` verified exact registry assertions, source/runner Git objects, all artifact hashes and the required `observationsArtifact` equality.
+`result.json` and `summary.md` were published through W0 `publishRun`; `input.json` remains the original verified pre-publication input. W0 `29583f735c1803872ace3fa663dcf6d7a145434a` verified exact registry assertions, source/runner Git objects, all artifact hashes and the required `observationsArtifact` equality again during publication. The actual observations and failed checks were unchanged. This is metadata publication, not reviewed qualification or approval.
 
 The historical run has 36 EX-08 observations: 32 passed / 4 failed. Sixteen independent coordinate cases and sixteen real IfcOpenShell geometry cases passed. Four exact-canonical-hash checks could not execute because unnamed IFC root fields remained STEP sentinels instead of JSON null. Their actual failed observations remain unchanged, and that assertion is `not-covered`. The terminal input has `executionStatus: failed`, `conclusion: inconclusive`. No certified survey, general exchange or viewer-origin behavior is qualified.
 
@@ -19,4 +19,4 @@ PACKAGE=/qualification/w2-runs/w2-terminal-package-20261025-01
 node experiments/contracts/cli.ts verify "$PACKAGE/inputs/EX-08.input.json" "$PACKAGE/evidence"
 ```
 
-No registry, design or terminal result publication was performed. The coordinator owns review and publication of these honest partial inputs.
+Terminal publication completed once at `/qualification/w2-runs/w2-terminal-package-20261025-01/published/EX-08/w2-partial-coordinates-20261025-01/result.json`; the shared EX-02 `publication/` directory contains commands, time and result hashes. No registry or design change was performed. The coordinator owns evidence review and any adoption decision. No engine/database/performance job was relaunched.
