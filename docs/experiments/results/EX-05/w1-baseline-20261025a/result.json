@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-05",
+  "runId": "w1-baseline-20261025a",
+  "executionStatus": "completed",
+  "conclusion": "failed",
+  "startedAt": "2026-10-25T11:52:46Z",
+  "finishedAt": "2026-10-25T11:52:51Z",
+  "hypothesis": "Does the existing native baseline satisfy the declared EX-05 assertions?",
+  "variant": "baseline-room-model",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/experiments/registry.json",
+    "sha256": "c56ab9a7b13d404b76c0e63acef3c48fe4684061dd8f9ccbaa42a6e925802da3"
+  },
+  "implementation": {
+    "sourceCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "runnerCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "validators": [
+      "strict-TypeScript",
+      "W1 behavior tests",
+      "qualification-contract-v1@fb61d97"
+    ]
+  },
+  "dataset": {
+    "name": "W1 deterministic native room and asset fixtures",
+    "seed": "not-randomized",
+    "manifestSha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f"
+  },
+  "environment": {
+    "host": "192.168.1.17",
+    "software": {
+      "node": "v24.22.1"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1610612736,
+    "diskBudgetBytes": 1073741824,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/artifacts",
+    "cacheProcedure": "not a performance measurement",
+    "measurementSlot": "w1-baseline-correctness-20261025a"
+  },
+  "commands": [
+    "node --test experiments/semantic/semantic.test.ts",
+    "node experiments/semantic/cli.ts --artifacts /qualification/artifacts/w1-baseline-20261025a/data"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-05",
+      "caseId": "changed-destination-wall-valid-geometry",
+      "expected": "Moving the destination wall invalidates the 0.4 m placement assumption despite valid combined geometry.",
+      "observed": "{\"originalGap\":0.3999999999999999,\"afterGap\":1.4000000000000004,\"outcome\":{\"kind\":\"returned\",\"repository\":\"{\\\"branches\\\":[{\\\"name\\\":\\\"main\\\",\\\"revisionId\\\":\\\"4428b95606dc7cb90b12d673493dca3b5bd4c643e3209e45364d63b463728ec3\\\"},{\\\"name\\\":\\\"desk-near-north\\\",\\\"revisionId\\\":\\\"c7fdfd9c8bd9110a995520ef15e8d5885ce255a2901662f5c2f726e4846c3c33\\\"},{\\\"name\\\":\\\"move-north-wall\\\",\\\"revisionId\\\":\\\"9f58b98292331c6abc05307a108913e44edeb05ff8b1e53a277fabb1babdc5fb\\\"}],\\\"name\\\":\\\"W1 deterministic baseline\\\",\\\"projectId\\\":\\\"00000000-0000-4000-8000-000000000124\\\",\\\"reviews\\\":[{\\\"baseRevisionId\\\":\\\"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448\\\",\\\"constraints\\\":\\\"Disposable qualification data only; no human approval is represented.\\\",\\\"decision\\\":{\\\"actor\\\":\\\"W1 fixture actor - not human approval\\\",\\\"decisionId\\\":\\\"w1-fixture-move-north-wall\\\",\\\"status\\\":\\\"superseded\\\"},\\\"instruction\\\":\\\"Execute this disposable W1 deterministic fixture operation.\\\",\\\"intent\\\":{\\\"assumptions\\\":[],\\\"basis\\\":\\\"Fixed fixture parameters; certainty is not approval.\\\",\\\"certainty\\\":100,\\\"interpretation\\\":\\\"W1 fixture operation.\\\"},\\\"proposalName\\\":\\\"move-north-wall\\\",\\\"proposalRevisionId\\\":\\\"9f58b98292331c6abc05307a108913e44edeb05ff8b1e53a277fabb1babdc5fb\\\",\\\"rationale\\\":\\\"Observe the real room repository API.\\\",\\\"requestId\\\":\\\"w1-move-north-wall\\\",\\\"selectedObjectIds\\\":[\\\"wall-east\\\",\\\"wall-north\\\",\\\"wall-west\\\"],\\\"summary\\\":\\\"W1 baseline fixture operation.\\\",\\\"toolCalls\\\":[{\\\"error\\\":null,\\\"name\\\":\\\"inspect_model\\\",\\\"status\\\":\\\"accepted\\\"}],\\\"uncertainty\\\":\\\"No external engine or AI worker was executed.\\\",\\\"validator\\\":\\\"room-graph-v1\\\",\\\"worker\\\":{\\\"model\\\":\\\"deterministic-no-ai\\\",\\\"provider\\\":\\\"qualification-fixture\\\",\\\"responseIds\\\":[],\\\"usage\\\":{\\\"inputTokens\\\":0,\\\"outputTokens\\\":0,\\\"totalTokens\\\":0}}},{\\\"baseRevisionId\\\":\\\"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448\\\",\\\"constraints\\\":\\\"Disposable qualification data only; no human approval is represented.\\\",\\\"decision\\\":{\\\"actor\\\":\\\"W1 fixture actor - not human approval\\\",\\\"appliedRevisionId\\\":\\\"4428b95606dc7cb90b12d673493dca3b5bd4c643e3209e45364d63b463728ec3\\\",\\\"decisionId\\\":\\\"w1-fixture-desk-near-north\\\",\\\"status\\\":\\\"accepted\\\"},\\\"instruction\\\":\\\"Execute this disposable W1 deterministic fixture operation.\\\",\\\"intent\\\":{\\\"assumptions\\\":[\\\"Desk north edge remains 0.4 m from wall-north interior.\\\"],\\\"basis\\\":\\\"Fixed fixture parameters; certainty is not approval.\\\",\\\"certainty\\\":100,\\\"interpretation\\\":\\\"W1 fixture operation.\\\"},\\\"proposalName\\\":\\\"desk-near-north\\\",\\\"proposalRevisionId\\\":\\\"c7fdfd9c8bd9110a995520ef15e8d5885ce255a2901662f5c2f726e4846c3c33\\\",\\\"rationale\\\":\\\"Observe the real room repository API.\\\",\\\"requestId\\\":\\\"w1-desk-near-north\\\",\\\"selectedObjectIds\\\":[\\\"desk-one\\\"],\\\"summary\\\":\\\"W1 baseline fixture operation.\\\",\\\"toolCalls\\\":[{\\\"error\\\":null,\\\"name\\\":\\\"inspect_model\\\",\\\"status\\\":\\\"accepted\\\"}],\\\"uncertainty\\\":\\\"No external engine or AI worker was executed.\\\",\\\"validator\\\":\\\"room-graph-v1\\\",\\\"worker\\\":{\\\"model\\\":\\\"deterministic-no-ai\\\",\\\"provider\\\":\\\"qualification-fixture\\\",\\\"responseIds\\\":[],\\\"usage\\\":{\\\"inputTokens\\\":0,\\\"outputTokens\\\":0,\\\"totalTokens\\\":0}}}],\\\"revisions\\\":[{\\\"id\\\":\\\"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448\\\",\\\"parentId\\\":null,\\\"snapshot\\\":{\\\"entities\\\":[{\\\"depth\\\":1.8,\\\"height\\\":0.6,\\\"id\\\":\\\"bed-one\\\",\\\"kind\\\":\\\"bed\\\",\\\"name\\\":\\\"bed\\\",\\\"position\\\":[4.5,2.5],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1.2},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-one\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[1,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-two\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[2.2,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.6,\\\"height\\\":0.8,\\\"id\\\":\\\"desk-one\\\",\\\"kind\\\":\\\"desk\\\",\\\"name\\\":\\\"desk\\\",\\\"position\\\":[1,2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1},{\\\"height\\\":2.1,\\\"id\\\":\\\"door-entry\\\",\\\"name\\\":\\\"Entry door\\\",\\\"type\\\":\\\"Door\\\",\\\"width\\\":0.9},{\\\"end\\\":[6,4],\\\"height\\\":3,\\\"id\\\":\\\"wall-east\\\",\\\"name\\\":\\\"East wall\\\",\\\"start\\\":[6,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,4],\\\"height\\\":3,\\\"id\\\":\\\"wall-north\\\",\\\"name\\\":\\\"North wall\\\",\\\"start\\\":[6,4],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[6,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-south\\\",\\\"name\\\":\\\"South wall\\\",\\\"start\\\":[0,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-west\\\",\\\"name\\\":\\\"West wall\\\",\\\"start\\\":[0,4],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"}],\\\"relationships\\\":[{\\\"id\\\":\\\"host-entry\\\",\\\"offset\\\":2.4,\\\"source\\\":\\\"door-entry\\\",\\\"target\\\":\\\"wall-south\\\",\\\"type\\\":\\\"hosted-by\\\"}],\\\"units\\\":\\\"m\\\"}},{\\\"id\\\":\\\"9f58b98292331c6abc05307a108913e44edeb05ff8b1e53a277fabb1babdc5fb\\\",\\\"parentId\\\":\\\"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448\\\",\\\"snapshot\\\":{\\\"entities\\\":[{\\\"depth\\\":1.8,\\\"height\\\":0.6,\\\"id\\\":\\\"bed-one\\\",\\\"kind\\\":\\\"bed\\\",\\\"name\\\":\\\"bed\\\",\\\"position\\\":[4.5,2.5],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1.2},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-one\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[1,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-two\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[2.2,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.6,\\\"height\\\":0.8,\\\"id\\\":\\\"desk-one\\\",\\\"kind\\\":\\\"desk\\\",\\\"name\\\":\\\"desk\\\",\\\"position\\\":[1,2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1},{\\\"height\\\":2.1,\\\"id\\\":\\\"door-entry\\\",\\\"name\\\":\\\"Entry door\\\",\\\"type\\\":\\\"Door\\\",\\\"width\\\":0.9},{\\\"end\\\":[6,5],\\\"height\\\":3,\\\"id\\\":\\\"wall-east\\\",\\\"name\\\":\\\"East wall\\\",\\\"start\\\":[6,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,5],\\\"height\\\":3,\\\"id\\\":\\\"wall-north\\\",\\\"name\\\":\\\"North wall\\\",\\\"start\\\":[6,5],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[6,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-south\\\",\\\"name\\\":\\\"South wall\\\",\\\"start\\\":[0,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-west\\\",\\\"name\\\":\\\"West wall\\\",\\\"start\\\":[0,5],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"}],\\\"relationships\\\":[{\\\"id\\\":\\\"host-entry\\\",\\\"offset\\\":2.4,\\\"source\\\":\\\"door-entry\\\",\\\"target\\\":\\\"wall-south\\\",\\\"type\\\":\\\"hosted-by\\\"}],\\\"units\\\":\\\"m\\\"}},{\\\"id\\\":\\\"c7fdfd9c8bd9110a995520ef15e8d5885ce255a2901662f5c2f726e4846c3c33\\\",\\\"parentId\\\":\\\"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448\\\",\\\"snapshot\\\":{\\\"entities\\\":[{\\\"depth\\\":1.8,\\\"height\\\":0.6,\\\"id\\\":\\\"bed-one\\\",\\\"kind\\\":\\\"bed\\\",\\\"name\\\":\\\"bed\\\",\\\"position\\\":[4.5,2.5],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1.2},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-one\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[1,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-two\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[2.2,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.6,\\\"height\\\":0.8,\\\"id\\\":\\\"desk-one\\\",\\\"kind\\\":\\\"desk\\\",\\\"name\\\":\\\"desk\\\",\\\"position\\\":[3.3,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1},{\\\"height\\\":2.1,\\\"id\\\":\\\"door-entry\\\",\\\"name\\\":\\\"Entry door\\\",\\\"type\\\":\\\"Door\\\",\\\"width\\\":0.9},{\\\"end\\\":[6,4],\\\"height\\\":3,\\\"id\\\":\\\"wall-east\\\",\\\"name\\\":\\\"East wall\\\",\\\"start\\\":[6,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,4],\\\"height\\\":3,\\\"id\\\":\\\"wall-north\\\",\\\"name\\\":\\\"North wall\\\",\\\"start\\\":[6,4],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[6,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-south\\\",\\\"name\\\":\\\"South wall\\\",\\\"start\\\":[0,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-west\\\",\\\"name\\\":\\\"West wall\\\",\\\"start\\\":[0,4],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"}],\\\"relationships\\\":[{\\\"id\\\":\\\"host-entry\\\",\\\"offset\\\":2.4,\\\"source\\\":\\\"door-entry\\\",\\\"target\\\":\\\"wall-south\\\",\\\"type\\\":\\\"hosted-by\\\"}],\\\"units\\\":\\\"m\\\"}},{\\\"id\\\":\\\"4428b95606dc7cb90b12d673493dca3b5bd4c643e3209e45364d63b463728ec3\\\",\\\"parentId\\\":\\\"9f58b98292331c6abc05307a108913e44edeb05ff8b1e53a277fabb1babdc5fb\\\",\\\"snapshot\\\":{\\\"entities\\\":[{\\\"depth\\\":1.8,\\\"height\\\":0.6,\\\"id\\\":\\\"bed-one\\\",\\\"kind\\\":\\\"bed\\\",\\\"name\\\":\\\"bed\\\",\\\"position\\\":[4.5,2.5],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1.2},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-one\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[1,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.4,\\\"height\\\":0.8,\\\"id\\\":\\\"chair-two\\\",\\\"kind\\\":\\\"chair\\\",\\\"name\\\":\\\"chair\\\",\\\"position\\\":[2.2,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":0.4},{\\\"depth\\\":0.6,\\\"height\\\":0.8,\\\"id\\\":\\\"desk-one\\\",\\\"kind\\\":\\\"desk\\\",\\\"name\\\":\\\"desk\\\",\\\"position\\\":[3.3,3.2],\\\"rotationDeg\\\":0,\\\"supportId\\\":null,\\\"type\\\":\\\"Furniture\\\",\\\"width\\\":1},{\\\"height\\\":2.1,\\\"id\\\":\\\"door-entry\\\",\\\"name\\\":\\\"Entry door\\\",\\\"type\\\":\\\"Door\\\",\\\"width\\\":0.9},{\\\"end\\\":[6,5],\\\"height\\\":3,\\\"id\\\":\\\"wall-east\\\",\\\"name\\\":\\\"East wall\\\",\\\"start\\\":[6,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,5],\\\"height\\\":3,\\\"id\\\":\\\"wall-north\\\",\\\"name\\\":\\\"North wall\\\",\\\"start\\\":[6,5],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[6,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-south\\\",\\\"name\\\":\\\"South wall\\\",\\\"start\\\":[0,0],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"},{\\\"end\\\":[0,0],\\\"height\\\":3,\\\"id\\\":\\\"wall-west\\\",\\\"name\\\":\\\"West wall\\\",\\\"start\\\":[0,5],\\\"thickness\\\":0.2,\\\"type\\\":\\\"Wall\\\"}],\\\"relationships\\\":[{\\\"id\\\":\\\"host-entry\\\",\\\"offset\\\":2.4,\\\"source\\\":\\\"door-entry\\\",\\\"target\\\":\\\"wall-south\\\",\\\"type\\\":\\\"hosted-by\\\"}],\\\"units\\\":\\\"m\\\"}}],\\\"version\\\":2}\"}}",
+      "passed": false,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Wall distance is an independent oracle; baseline review text is not an executable dependency."
+      ]
+    },
+    {
+      "experimentId": "EX-05",
+      "caseId": "unrelated-change-approval-equivalence",
+      "expected": "Approval reuse after unrelated changes records an explicit equivalence rule and new application evidence.",
+      "observed": "{\"review\":{\"requestId\":\"w1-move-bed\",\"proposalName\":\"move-bed\",\"baseRevisionId\":\"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448\",\"proposalRevisionId\":\"66e7ab8872994c7cc4e69afb5eea641249d69c3e6d4debe6851366f2b388921a\",\"selectedObjectIds\":[\"bed-one\"],\"instruction\":\"Execute this disposable W1 deterministic fixture operation.\",\"summary\":\"W1 baseline fixture operation.\",\"rationale\":\"Observe the real room repository API.\",\"constraints\":\"Disposable qualification data only; no human approval is represented.\",\"uncertainty\":\"No external engine or AI worker was executed.\",\"worker\":{\"provider\":\"qualification-fixture\",\"model\":\"deterministic-no-ai\",\"responseIds\":[],\"usage\":{\"inputTokens\":0,\"outputTokens\":0,\"totalTokens\":0}},\"toolCalls\":[{\"name\":\"inspect_model\",\"status\":\"accepted\",\"error\":null}],\"intent\":{\"interpretation\":\"W1 fixture operation.\",\"assumptions\":[],\"certainty\":100,\"basis\":\"Fixed fixture parameters; certainty is not approval.\"},\"validator\":\"room-graph-v1\",\"decision\":{\"status\":\"accepted\",\"decisionId\":\"w1-fixture-move-bed\",\"actor\":\"W1 fixture actor - not human approval\",\"appliedRevisionId\":\"3846a57da4b49091a2f81dacc6d382f6a79003f9120d06f0c65c2c2ca3b2ea65\"}},\"appliedRevision\":{\"id\":\"3846a57da4b49091a2f81dacc6d382f6a79003f9120d06f0c65c2c2ca3b2ea65\",\"parentId\":\"b72503292f54b9355b16dc00570800c9836f55b8ad6b483b78dd86d04f5614ec\",\"snapshot\":{\"units\":\"m\",\"entities\":[{\"id\":\"bed-one\",\"type\":\"Furniture\",\"name\":\"bed\",\"kind\":\"bed\",\"position\":[4.2,2.5],\"width\":1.2,\"depth\":1.8,\"height\":0.6,\"rotationDeg\":0,\"supportId\":null},{\"id\":\"chair-one\",\"type\":\"Furniture\",\"name\":\"chair\",\"kind\":\"chair\",\"position\":[1,3.2],\"width\":0.4,\"depth\":0.4,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null},{\"id\":\"chair-two\",\"type\":\"Furniture\",\"name\":\"chair\",\"kind\":\"chair\",\"position\":[2.2,3.2],\"width\":0.4,\"depth\":0.4,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null},{\"id\":\"desk-one\",\"type\":\"Furniture\",\"name\":\"desk\",\"kind\":\"desk\",\"position\":[1.4,2],\"width\":1,\"depth\":0.6,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null},{\"id\":\"door-entry\",\"type\":\"Door\",\"name\":\"Entry door\",\"width\":0.9,\"height\":2.1},{\"id\":\"wall-east\",\"type\":\"Wall\",\"name\":\"East wall\",\"start\":[6,0],\"end\":[6,4],\"thickness\":0.2,\"height\":3},{\"id\":\"wall-north\",\"type\":\"Wall\",\"name\":\"North wall\",\"start\":[6,4],\"end\":[0,4],\"thickness\":0.2,\"height\":3},{\"id\":\"wall-south\",\"type\":\"Wall\",\"name\":\"South wall\",\"start\":[0,0],\"end\":[6,0],\"thickness\":0.2,\"height\":3},{\"id\":\"wall-west\",\"type\":\"Wall\",\"name\":\"West wall\",\"start\":[0,4],\"end\":[0,0],\"thickness\":0.2,\"height\":3}],\"relationships\":[{\"id\":\"host-entry\",\"type\":\"hosted-by\",\"source\":\"door-entry\",\"target\":\"wall-south\",\"offset\":2.4}]}},\"delta\":{\"entities\":{\"added\":[],\"removed\":[],\"modified\":[{\"id\":\"bed-one\",\"before\":{\"id\":\"bed-one\",\"type\":\"Furniture\",\"name\":\"bed\",\"kind\":\"bed\",\"position\":[4.5,2.5],\"width\":1.2,\"depth\":1.8,\"height\":0.6,\"rotationDeg\":0,\"supportId\":null},\"after\":{\"id\":\"bed-one\",\"type\":\"Furniture\",\"name\":\"bed\",\"kind\":\"bed\",\"position\":[4.2,2.5],\"width\":1.2,\"depth\":1.8,\"height\":0.6,\"rotationDeg\":0,\"supportId\":null}},{\"id\":\"desk-one\",\"before\":{\"id\":\"desk-one\",\"type\":\"Furniture\",\"name\":\"desk\",\"kind\":\"desk\",\"position\":[1,2],\"width\":1,\"depth\":0.6,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null},\"after\":{\"id\":\"desk-one\",\"type\":\"Furniture\",\"name\":\"desk\",\"kind\":\"desk\",\"position\":[1.4,2],\"width\":1,\"depth\":0.6,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null}}]},\"relationships\":{\"added\":[],\"removed\":[],\"modified\":[]}}}",
+      "passed": false,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "New applied revision and exact deltas exist; the baseline review schema has no approval-equivalence record.",
+        "The test actor supplies a decision. This case does not create or reuse a real human approval."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Moving the destination wall rechecks the proposal's wall relationship.",
+      "caseIds": [
+        "changed-destination-wall-valid-geometry"
+      ],
+      "coverage": "covered"
+    },
+    {
+      "assertion": "Geometrically valid but intent-invalid candidates do not reuse approval silently.",
+      "caseIds": [
+        "changed-destination-wall-valid-geometry"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Unrelated accepted changes retain approval only under declared equivalence rules.",
+      "caseIds": [
+        "unrelated-change-approval-equivalence"
+      ],
+      "coverage": "partial"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "w1-baseline-20261025a/data/raw.json",
+      "sha256": "38ef2a5601ce2d69bd7e84392780ed880d64913e91d2a6f1562d35a3b4442325",
+      "bytes": 343378,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/coverage.json",
+      "sha256": "07f03cc978709a45ae03159db04d66cf5dca3b642917114016a7d7ea8e0b8ee0",
+      "bytes": 4039,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/manifest.json",
+      "sha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f",
+      "bytes": 1454,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/observations.json",
+      "sha256": "3f50435205e2919e5d85ee565007fe3ccf9385488e659850849ece9eb01eeb0b",
+      "bytes": 69099,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/tests.log",
+      "sha256": "6a2dc7497752b519008eee656c291b1b352a5a5b3e093aaaca19a83f165f2467",
+      "bytes": 884,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/started-at.txt",
+      "sha256": "9315a458a0ad8e07178c1ac689e07ef7622429efe307cf7bf82aa3e2a47b3ffe",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/finished-at.txt",
+      "sha256": "e11db90a59a432ef5edab7af1f02a1afea17e042e444a36efa66e436497582d7",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    }
+  ],
+  "observationsArtifact": "w1-baseline-20261025a/observations.json",
+  "errors": [],
+  "limitations": [
+    "Baseline-only execution of the existing native model. This does not qualify an unimplemented VM-C1 candidate.",
+    "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+    "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+    "New applied revision and exact deltas exist; the baseline review schema has no approval-equivalence record.",
+    "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+    "The test actor supplies a decision. This case does not create or reuse a real human approval.",
+    "Wall distance is an independent oracle; baseline review text is not an executable dependency."
+  ],
+  "decisionImplications": [
+    "Retain supported baseline behavior and actual counterexamples. Evaluate the isolated candidate against the same assertions before adoption."
+  ]
+}

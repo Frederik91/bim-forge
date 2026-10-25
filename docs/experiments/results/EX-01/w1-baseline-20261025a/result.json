@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-01",
+  "runId": "w1-baseline-20261025a",
+  "executionStatus": "completed",
+  "conclusion": "failed",
+  "startedAt": "2026-10-25T11:52:46Z",
+  "finishedAt": "2026-10-25T11:52:51Z",
+  "hypothesis": "Does the existing native baseline satisfy the declared EX-01 assertions?",
+  "variant": "baseline-room-model",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/experiments/registry.json",
+    "sha256": "c56ab9a7b13d404b76c0e63acef3c48fe4684061dd8f9ccbaa42a6e925802da3"
+  },
+  "implementation": {
+    "sourceCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "runnerCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "validators": [
+      "strict-TypeScript",
+      "W1 behavior tests",
+      "qualification-contract-v1@fb61d97"
+    ]
+  },
+  "dataset": {
+    "name": "W1 deterministic native room and asset fixtures",
+    "seed": "not-randomized",
+    "manifestSha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f"
+  },
+  "environment": {
+    "host": "192.168.1.17",
+    "software": {
+      "node": "v24.22.1"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1610612736,
+    "diskBudgetBytes": 1073741824,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/artifacts",
+    "cacheProcedure": "not a performance measurement",
+    "measurementSlot": "w1-baseline-correctness-20261025a"
+  },
+  "commands": [
+    "node --test experiments/semantic/semantic.test.ts",
+    "node experiments/semantic/cli.ts --artifacts /qualification/artifacts/w1-baseline-20261025a/data"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-01",
+      "caseId": "native-identity-restore",
+      "expected": "Rename preserves all native IDs, immutable base, ancestry, exact one-object delta, and restore bytes.",
+      "observed": "{\"stable\":true,\"immutableBase\":true,\"delta\":{\"entities\":{\"added\":[],\"removed\":[],\"modified\":[{\"id\":\"desk-one\",\"before\":{\"id\":\"desk-one\",\"type\":\"Furniture\",\"name\":\"desk\",\"kind\":\"desk\",\"position\":[1,2],\"width\":1,\"depth\":0.6,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null},\"after\":{\"id\":\"desk-one\",\"type\":\"Furniture\",\"name\":\"Renamed occurrence\",\"kind\":\"desk\",\"position\":[1,2],\"width\":1,\"depth\":0.6,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null}}]},\"relationships\":{\"added\":[],\"removed\":[],\"modified\":[]}},\"parent\":\"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448\",\"restoredExactly\":true}",
+      "passed": true,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence."
+      ]
+    },
+    {
+      "experimentId": "EX-01",
+      "caseId": "identical-chair-occurrences",
+      "expected": "Chairs with identical shape and metadata retain distinct native occurrence IDs and local placements.",
+      "observed": "{\"identicalContent\":true,\"one\":{\"id\":\"chair-one\",\"type\":\"Furniture\",\"name\":\"chair\",\"kind\":\"chair\",\"position\":[1,3.2],\"width\":0.4,\"depth\":0.4,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null},\"two\":{\"id\":\"chair-two\",\"type\":\"Furniture\",\"name\":\"chair\",\"kind\":\"chair\",\"position\":[2.2,3.2],\"width\":0.4,\"depth\":0.4,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null}}",
+      "passed": true,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Positions differ to keep both real occurrences valid; shared mesh deduplication is not implemented."
+      ]
+    },
+    {
+      "experimentId": "EX-01",
+      "caseId": "duplicate-native-id",
+      "expected": "A duplicated native ID is rejected.",
+      "observed": "{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"Duplicate entity identifier.\"}}",
+      "passed": true,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Native ID rejection does not qualify duplicate external source IDs."
+      ]
+    },
+    {
+      "experimentId": "EX-01",
+      "caseId": "native-id-churn-lineage",
+      "expected": "Replacement of a geometrically identical occurrence has explicit old/new identity lineage.",
+      "observed": "{\"entities\":{\"added\":[{\"id\":\"chair-recreated\",\"type\":\"Furniture\",\"name\":\"chair\",\"kind\":\"chair\",\"position\":[1,3.2],\"width\":0.4,\"depth\":0.4,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null}],\"removed\":[{\"id\":\"chair-one\",\"type\":\"Furniture\",\"name\":\"chair\",\"kind\":\"chair\",\"position\":[1,3.2],\"width\":0.4,\"depth\":0.4,\"height\":0.8,\"rotationDeg\":0,\"supportId\":null}],\"modified\":[]},\"relationships\":{\"added\":[],\"removed\":[],\"modified\":[]}}",
+      "passed": false,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Baseline records removal and addition; no object-lineage field exists. Revision ancestry is not object lineage."
+      ]
+    },
+    {
+      "experimentId": "EX-01",
+      "caseId": "native-split-merge-lineage",
+      "expected": "Applied split and merge operations retain explicit source-to-result object lineage.",
+      "observed": "{\"splitDelta\":{\"entities\":{\"added\":[{\"familyId\":\"standing-person\",\"id\":\"person-split-a\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,1.7],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"},{\"familyId\":\"standing-person\",\"id\":\"person-split-b\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2.4],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"}],\"removed\":[{\"familyId\":\"standing-person\",\"id\":\"person-187\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"}],\"modified\":[]},\"relationships\":{\"added\":[],\"removed\":[],\"modified\":[]}},\"mergeDelta\":{\"entities\":{\"added\":[{\"familyId\":\"standing-person\",\"id\":\"person-merged\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"}],\"removed\":[{\"familyId\":\"standing-person\",\"id\":\"person-split-a\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,1.7],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"},{\"familyId\":\"standing-person\",\"id\":\"person-split-b\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2.4],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"}],\"modified\":[]},\"relationships\":{\"added\":[],\"removed\":[],\"modified\":[]}},\"lineageInputOutcome\":{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"Unexpected model fields.\"}}}",
+      "passed": false,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Split and merge execute as asset removal/addition; baseline rejects explicit lineage metadata."
+      ]
+    },
+    {
+      "experimentId": "EX-01",
+      "caseId": "paired-real-exports-not-covered",
+      "expected": "W2 paired real exports demonstrate unchanged, duplicate, and churned source identities.",
+      "observed": "Not covered: no paired real export artifacts have been supplied to W1.",
+      "passed": false,
+      "limitations": [
+        "W2 artifact dependency pending. No IFC parser, exporter, or simulated engine is substituted."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Unchanged objects retain identity across snapshots and paired real exports.",
+      "caseIds": [
+        "native-identity-restore",
+        "paired-real-exports-not-covered"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Two identical occurrences remain distinct.",
+      "caseIds": [
+        "identical-chair-occurrences"
+      ],
+      "coverage": "covered"
+    },
+    {
+      "assertion": "Duplicate/churned source IDs and split/merge lineage are explicit.",
+      "caseIds": [
+        "duplicate-native-id",
+        "native-id-churn-lineage",
+        "native-split-merge-lineage",
+        "paired-real-exports-not-covered"
+      ],
+      "coverage": "partial"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "w1-baseline-20261025a/data/raw.json",
+      "sha256": "38ef2a5601ce2d69bd7e84392780ed880d64913e91d2a6f1562d35a3b4442325",
+      "bytes": 343378,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/coverage.json",
+      "sha256": "07f03cc978709a45ae03159db04d66cf5dca3b642917114016a7d7ea8e0b8ee0",
+      "bytes": 4039,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/manifest.json",
+      "sha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f",
+      "bytes": 1454,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/observations.json",
+      "sha256": "3f50435205e2919e5d85ee565007fe3ccf9385488e659850849ece9eb01eeb0b",
+      "bytes": 69099,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/tests.log",
+      "sha256": "6a2dc7497752b519008eee656c291b1b352a5a5b3e093aaaca19a83f165f2467",
+      "bytes": 884,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/started-at.txt",
+      "sha256": "9315a458a0ad8e07178c1ac689e07ef7622429efe307cf7bf82aa3e2a47b3ffe",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/finished-at.txt",
+      "sha256": "e11db90a59a432ef5edab7af1f02a1afea17e042e444a36efa66e436497582d7",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    }
+  ],
+  "observationsArtifact": "w1-baseline-20261025a/observations.json",
+  "errors": [],
+  "limitations": [
+    "Baseline-only execution of the existing native model. This does not qualify an unimplemented VM-C1 candidate.",
+    "Baseline records removal and addition; no object-lineage field exists. Revision ancestry is not object lineage.",
+    "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+    "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+    "Native ID rejection does not qualify duplicate external source IDs.",
+    "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+    "Positions differ to keep both real occurrences valid; shared mesh deduplication is not implemented.",
+    "Split and merge execute as asset removal/addition; baseline rejects explicit lineage metadata.",
+    "W2 artifact dependency pending. No IFC parser, exporter, or simulated engine is substituted."
+  ],
+  "decisionImplications": [
+    "Retain supported baseline behavior and actual counterexamples. Evaluate the isolated candidate against the same assertions before adoption."
+  ]
+}

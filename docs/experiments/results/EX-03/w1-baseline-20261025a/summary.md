@@ -1,0 +1,22 @@
+# EX-03: w1-baseline-20261025a
+
+Outcome: inconclusive. Execution: completed.
+
+Does the existing native baseline satisfy the declared EX-03 assertions?
+
+Variant: baseline-room-model.
+
+- occurrence-edit-isolation: passed; expected Resize one occurrence without changing the shared family, other occurrence, or old snapshot.; observed {"entities":{"added":[],"removed":[],"modified":[{"id":"person-187","before":{"familyId":"standing-person","id":"person-187","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"},"after":{"familyId":"standing-person","id":"person-187","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.9},"type":"AssetInstance"}}]},"relationships":{"added":[],"removed":[],"modified":[]}}
+- explicit-family-fork-scope: passed; expected In-place family rewrite is rejected; explicit new family ID rebinds exactly the declared instances.; observed {"rewrite":{"kind":"rejected","error":{"name":"Error","message":"Family IDs are immutable across repository history. Register a new family ID."}},"affected":["person-187","person-165"],"typeDelta":{"entities":{"added":[{"description":"AI-authored conceptual standing figure from normalized primitives; no anatomical or ergonomic certification.","id":"standing-person-revised","name":"Revised shared family","parts":[{"color":"#507a92","id":"torso","kind":"box","min":[0.2,0.2,0.35],"size":[0.6,0.6,0.4]},{"color":"#c99d7e","id":"head","kind":"ellipsoid","min":[0.3,0.2,0.75],"size":[0.4,0.6,0.25]},{"color":"#507a92","id":"left-arm","kind":"cylinder","min":[0,0.35,0.35],"size":[0.2,0.3,0.4]},{"color":"#507a92","id":"right-arm","kind":"cylinder","min":[0.8,0.35,0.35],"size":[0.2,0.3,0.4]},{"color":"#334454","id":"left-leg","kind":"box","min":[0.2,0,0],"size":[0.25,1,0.35]},{"color":"#334454","id":"right-leg","kind":"box","min":[0.55,0,0],"size":[0.25,1,0.35]}],"type":"AssetFamily"}],"removed":[],"modified":[{"id":"person-165","before":{"familyId":"standing-person","id":"person-165","name":"Person 1.65 m","placement":{"kind":"single-room"},"position":[2,2.2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.65},"type":"AssetInstance"},"after":{"familyId":"standing-person-revised","id":"person-165","name":"Person 1.65 m","placement":{"kind":"single-room"},"position":[2,2.2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.65},"type":"AssetInstance"}},{"id":"person-187","before":{"familyId":"standing-person","id":"person-187","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"},"after":{"familyId":"standing-person-revised","id":"person-187","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"}}]},"relationships":{"added":[],"removed":[],"modified":[]}}}
+- general-shared-properties-not-covered: failed; expected Shared property definitions retain units and dictionary versions, and content deduplication permits isolated future edits.; observed {"propertyDefinitionInput":{"kind":"rejected","error":{"name":"Error","message":"Asset family requires exact fields and one to sixteen bounded primitives."}}}
+
+Limitations:
+
+- Baseline-only execution of the existing native model. This does not qualify an unimplemented VM-C1 candidate.
+- Asset family recipes stand in for existing shared definitions; general typed property dictionaries are absent.
+- Baseline family schema rejects general property definitions. Asset recipe isolation does not qualify shared property dictionaries or deduplication.
+- Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.
+- Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.
+- Immutable recipes and explicit rebinds qualify this narrow path only; shared property sets and content deduplication remain unqualified.
+- Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.
+- The declared affected list is built from fixture membership and compared with the actual delta; no product-level type-edit declaration protocol exists.

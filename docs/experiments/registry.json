@@ -29,8 +29,8 @@
       ],
       "preparationNote": "Native cases can execute before W2 supplies paired exports.",
       "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "latestReviewedRun": "docs/experiments/results/EX-01/w1-baseline-20261025a/result.json",
+      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -104,8 +104,8 @@
       ],
       "preparationNote": null,
       "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "latestReviewedRun": "docs/experiments/results/EX-03/w1-baseline-20261025a/result.json",
+      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -137,8 +137,8 @@
       ],
       "preparationNote": null,
       "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "latestReviewedRun": "docs/experiments/results/EX-04/w1-baseline-20261025a/result.json",
+      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -169,8 +169,8 @@
       ],
       "preparationNote": null,
       "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "latestReviewedRun": "docs/experiments/results/EX-05/w1-baseline-20261025a/result.json",
+      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -202,8 +202,8 @@
       ],
       "preparationNote": null,
       "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "latestReviewedRun": "docs/experiments/results/EX-06/w1-baseline-20261025a/result.json",
+      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
