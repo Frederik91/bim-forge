@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { Transform } from 'node:stream';
 import { Type } from 'typebox';
-import { entity, parse, JsonSchema, HashSchema } from './contract.ts';
+import { entity, parse, JsonSchema, JsonObjectSchema, HashSchema } from './contract.ts';
 import type { Json, StoredEntity } from './contract.ts';
 import { fileHash } from './load.ts';
 import { boundedLines } from './lines.ts';
@@ -39,7 +39,7 @@ function json(value: string | null): Json {
   return parse(JsonSchema, document, 'W4 JSON cell');
 }
 function properties(value: string | null): Record<string, Json> {
-  return parse(Type.Record(Type.String(), JsonSchema), json(value), 'W4 typed property object');
+  return parse(JsonObjectSchema, json(value), 'W4 typed property object');
 }
 
 export function decodeCopyCell(value: string): string | null {
