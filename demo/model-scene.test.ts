@@ -12,6 +12,7 @@ import { Ray } from '@babylonjs/core/Culling/ray.js';
 import { viewerBuilding } from './building-viewer-fixture.ts';
 import { roofHeightAt } from '../src/building-levels.ts';
 import { validateSnapshot } from '../src/room-model.ts';
+import type { SpatialReference } from '../src/visual-request.ts';
 
 const furnishings = [
   { id: 'desk-test', type: 'Furniture', name: 'Desk', kind: 'desk', position: [3, 3], width: 1.8, depth: .8, height: .75, rotationDeg: 0, supportId: null },
@@ -183,6 +184,22 @@ test('a residential floor renders shared walls once, frames a room without editi
   assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:office-plant')));
   assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:living-sofa')), false);
   assert.equal(JSON.stringify(before), original);
+});
+
+test('legacy floor references stay visible on an isolated residential level without changing their wire shape or model', async (t) => {
+  const { residentialFloor } = await import('../src/residential-floor.ts');
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const snapshot = residentialFloor(); const saved = JSON.stringify(snapshot);
+  const reference: SpatialReference = { kind: 'floor-point', positionMm: [10000, 1000] };
+  const savedReference = JSON.stringify(reference);
+  viewer.setModel(snapshot); viewer.setMode('basic'); viewer.setLevel('level-ground'); viewer.select('office-plant');
+  viewer.mark(reference); viewer.scene.render();
+  for (const name of ['request-marker-not-geometry', 'request-reference-line']) {
+    const mesh = viewer.scene.meshes.find((item) => item.name === name); assert.ok(mesh);
+    assert.equal(mesh.isEnabled(), true, `${name} remains visible on the legacy level`);
+  }
+  assert.equal(JSON.stringify(reference), savedReference);
+  assert.equal(JSON.stringify(snapshot), saved);
 });
 
 test('stacked geometry applies each floor elevation once, including supported furniture, openings and equipment', (t) => {

@@ -492,6 +492,10 @@ export class ModelScene {
     const target = referencePosition(reference, this.snapshot);
     this.markerLevelId = reference.kind === 'wall-point' ? entityLevel(this.snapshot, reference.wallId)?.id ?? null
       : 'levelId' in reference ? reference.levelId : null;
+    if (reference.kind === 'floor-point' && !('levelId' in reference) && this.snapshot.version !== 2) {
+      const storeys = levels(this.snapshot);
+      if (storeys.length === 1) this.markerLevelId = storeys[0].id;
+    }
     this.marker = MeshBuilder.CreateTorus('request-marker-not-geometry', { diameter: .34, thickness: .025, tessellation: 32 }, this.scene);
     this.marker.position.copyFrom(target); this.marker.material = this.markerMaterial; this.marker.isPickable = false;
     const source = this.snapshot.entities.find((item) => item.id === this.selectedId);
