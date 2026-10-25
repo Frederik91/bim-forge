@@ -84,7 +84,7 @@ export async function load(store: Storage, input: AsyncIterable<StoredEntity>, b
       const upperBound = String(2 ** Math.ceil(Math.log2(Math.max(1, bytes))));
       recordBytesHistogram[upperBound] = (recordBytesHistogram[upperBound] ?? 0) + 1;
       batch.push(record); batchBytes += bytes;
-      if (batch.length >= 250 || batchBytes >= 4 * 1024 * 1024) await flush();
+      if (batch.length >= 5000 || batchBytes >= 4 * 1024 * 1024) await flush();
     }
     await flush();
     await control?.checkpoint();
