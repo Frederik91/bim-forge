@@ -40,6 +40,8 @@ Use `DATABASE_URL` and a coordinator-issued `QVM_EXECUTION_LEASE` string. CLI op
 
 Runner output is the frozen array `{experimentId:"EX-10"|"EX-13",caseId,expected,observed,passed,limitations:string[]}` plus raw artifacts. No shared registry update or terminal W0 record is synthesized. The coordinator supplies W0 bindings and reviews evidence.
 
+Independent selection CLI: `verify-selections <manifest.json> <correctness-branch> [page-size<=1000] [max-rows] [statement-timeout-ms] [wall-time-ms]`. It verifies exactly the three W4 hot-space/shared-type/system-including-ports selections using source-owned parameterized projection SQL in a read-only repeatable-read snapshot. Manifest SQL strings are checked against fixed templates and are never executed. Numeric ID COPY hashes use unpadded decimal IDs plus LF. Result binds manifest hash and branch revision; incomplete/bad counts or hashes cannot pass. Main must supply a correctness lease and retain stdout/stderr. No database test/run is implied by source/type validation.
+
 ## Implementation and acceptance plan
 
 Files: `schema.sql`, `contract.ts`, `store.ts`, `cli.ts`, `load.ts`, `workload.ts`, `store.test.ts`, experimental pinned package/tsconfig, `benchmarks/hospital/workloads/README.md` and sample configuration. Model entities: disposable full entity/relationship documents and immutable revision deltas. Validators: TypeBox wire/command/config/result validation, database constraints, semantic CAS, checksums against the same source data, real PostgreSQL integration tests. Evidence: raw timings/errors, actual counts/content checksums, node/OS/process/PG/settings, heap/index/TOAST/WAL measurements and immutable files. Server-only commands will accompany the final code commit.

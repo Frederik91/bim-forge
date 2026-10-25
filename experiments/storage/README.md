@@ -81,6 +81,22 @@ Artifacts include configuration/source/input bindings, OS/node/cgroup/process se
 
 Unsupported: geometry/IFC fidelity, engineering authority, approval equivalence, read predicates, checkpoint acceleration, multi-parent merging, source pin/artifact completeness, role security, production deployment, 64-client traffic, independently swept branch/churn matrices, real shared-type regeneration and paced offered-load/latency budgets. Full 6,777,445-entity admission is not established by this implementation; relationships/parameters add millions more records. Initial publication, per-acceptance full-branch reference scans and history reconstruction can exceed this host's envelope. The runner emits an explicitly unqualified capacity observation even if executed SQL operations succeed. W0 must not mark EX-10/13 passed on partial coverage.
 
+## Independent W4 selection verification
+
+After an admitted load completes, main may run this read-only utility under its own correctness lease on the selected correctness branch. It does not initialize schema, fork a branch, publish revisions or change data. No database run was performed while implementing the utility.
+
+```bash
+node experiments/storage/cli.ts verify-selections /evidence/manifest.json CORRECTNESS_BRANCH 1000 1000000 30000 900000 > /evidence/NEW_RUN-selection-oracles.json
+```
+
+Arguments after branch: page size (default/max 1,000), maximum rows per oracle (default 1,000,000; CLI max 100,000,000), per-statement timeout in ms (default 30,000), total wall bound in ms (default 900,000). Timeout CLI limits are at most one hour. Increase row bounds explicitly if the manifest expects a larger selection. `DATABASE_URL` and `QVM_EXECUTION_LEASE` are required. Main must schedule execution; do not run during a competing load or exclusive performance window without its lease.
+
+The input manifest is read once and hashed from those exact bytes. The three required cases are `hot-space-members`, `shared-type-members`, and `system-members-including-ports`. Each must occur once and carry a valid expected count/hash. The manifest's count predicate and ordered COPY predicate must match the exact supported W4 template and the same canonical positive bigint target. Those strings are **never executed**: source-owned definitions select `container_id`, `type_id`, or `system_id` with parameterized target/branch/cursor/limit values. Unsupported ordered-ID cases fail. Unrelated scalar count oracles are not reclassified as selection checks.
+
+A repeatable-read **read-only** transaction pins branch head and all three selections. It reads only current visible `entity:` identities, excluding relationship/parameter namespaces even if they share projection targets. Index keyset pages contain at most 1,000 IDs and are hashed as ascending unpadded positive decimal IDs, each followed by LF, exactly matching W4 ordered numeric-ID COPY hashes. No full bodies, arbitrary SQL, sorting buffers or result-set arrays are materialized. Duplicate, malformed or out-of-order IDs are errors. The row bound produces an explicitly incomplete prefix, never a verified count/hash. Statement/wall timeouts are checked on each page.
+
+Output includes manifest hash, branch revision, selected projection/target, declared limits, exact observed count/hash, completion flag, elapsed time, three W0-compatible observations and aggregate pass/fail. Count/hash mismatches and truncation exit nonzero with the result on stdout; query/parse errors exit nonzero with error JSON on stderr. Main retains both outputs and binds the runner commit in its terminal result. This verifies database selections only; full EX-13 and performance assertions remain separate.
+
 ## Backup/restore handoff to W6
 
 Main/W6 own execution and admission. Measure backup/restore against a newly named database, retain timings, and compare `fingerprint` on the same branch before/after. Do not replace `qvm` or touch other services. Example **server host** commands, only after a main-issued recovery slot:
