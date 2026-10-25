@@ -93,15 +93,21 @@ export function fixture(variant: NativeModel['variant'], revision: NativeModel['
 }
 
 const InventorySchema = Type.Array(Type.Object({ ownerId: id, properties: Type.Array(PropertySchema) }, { additionalProperties: false }));
+type Inventory = Static<typeof InventorySchema>;
+
+function parseInventory(input: unknown): Inventory {
+  if (!Check(InventorySchema, input)) throw new Error('Invalid independent reader inventory');
+  return input;
+}
 
 // Narrow import overlays properties onto retained authored inputs. It does not infer authoring intent from a solid.
 export function importProperties(model: NativeModel, inventory: unknown): NativeModel {
-  if (!Check(InventorySchema, inventory)) throw new Error('Invalid independent reader inventory');
+  const entries = parseInventory(inventory);
   const expectedOwners = [model.wallType.id, ...model.walls.map(wall => wall.id)];
-  if (inventory.length !== expectedOwners.length || new Set(inventory.map(item => item.ownerId)).size !== expectedOwners.length
-      || inventory.some(item => !expectedOwners.includes(item.ownerId))) throw new Error('Incomplete property inventory');
+  if (entries.length !== expectedOwners.length || new Set(entries.map(item => item.ownerId)).size !== expectedOwners.length
+      || entries.some(item => !expectedOwners.includes(item.ownerId))) throw new Error('Incomplete property inventory');
   function properties(ownerId: string): Property[] {
-    const item = inventory.find(entry => entry.ownerId === ownerId);
+    const item = entries.find(entry => entry.ownerId === ownerId);
     if (!item) throw new Error(`Missing property owner ${ownerId}`);
     return item.properties;
   }
