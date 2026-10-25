@@ -1,0 +1,71 @@
+{
+  "status": "ready",
+  "accepted": false,
+  "originalPreserved": true,
+  "familyCount": 2,
+  "instanceCount": 3,
+  "personPartCount": 8,
+  "instances": [
+    {
+      "id": "floor-lamp",
+      "familyId": "floor-lamp-proxy-v1",
+      "dimensions": {
+        "width": 0.5,
+        "depth": 0.5,
+        "height": 1.5
+      },
+      "bounds": {
+        "minX": 4.25,
+        "maxX": 4.75,
+        "minY": 2.55,
+        "maxY": 3.05,
+        "minZ": 0,
+        "maxZ": 1.5
+      },
+      "placement": {
+        "kind": "single-room"
+      }
+    },
+    {
+      "id": "person-1650",
+      "familyId": "standing-person-proxy-v1",
+      "dimensions": {
+        "width": 0.55,
+        "depth": 0.35,
+        "height": 1.65
+      },
+      "bounds": {
+        "minX": 2.4250000000000003,
+        "maxX": 2.975,
+        "minY": 2.625,
+        "maxY": 2.9749999999999996,
+        "minZ": 0,
+        "maxZ": 1.65
+      },
+      "placement": {
+        "kind": "single-room"
+      }
+    },
+    {
+      "id": "person-1870",
+      "familyId": "standing-person-proxy-v1",
+      "dimensions": {
+        "width": 0.55,
+        "depth": 0.35,
+        "height": 1.87
+      },
+      "bounds": {
+        "minX": 0.9249999999999999,
+        "maxX": 1.475,
+        "minY": 2.625,
+        "maxY": 2.9749999999999996,
+        "minZ": 0,
+        "maxZ": 1.87
+      },
+      "placement": {
+        "kind": "single-room"
+      }
+    }
+  ],
+  "directory": "/candidate-state/evaluation"
+}

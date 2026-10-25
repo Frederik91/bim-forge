@@ -488,7 +488,8 @@ export class CodexAccountConnection {
       this.#runs.set(threadId, run);
       const starting = this.#rpc.request('turn/start', {
         threadId,
-        input: [{ type: 'text', text: JSON.stringify(session.input), text_elements: [] }],
+        input: [{ type: 'text', text: JSON.stringify(session.input), text_elements: [] },
+          ...(session.images ?? []).map((image) => ({ type: 'localImage', path: image.path }))],
       }).then((turnResponse) => {
         if (!isRecord(turnResponse) || !isRecord(turnResponse.turn)) fail('Codex app-server did not start a proposal turn.');
         turnId = text(turnResponse.turn.id, 'turn identifier', 128);
