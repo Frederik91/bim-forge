@@ -18,7 +18,7 @@ const priorFiles = Type.Object({ 'config.json': HashSchema, 'load.json': HashSch
   'property-values.json': HashSchema, 'observations.json': HashSchema, 'errors.json': HashSchema }, { additionalProperties: false });
 const boundFile = Type.Object({ file: Type.String({ minLength: 1 }), sha256: HashSchema }, { additionalProperties: false });
 export const QualificationSchema = Type.Object({
-  runId: IdSchema, branch: IdSchema, scale: Type.Union([Type.Literal('full'), Type.Literal('smoke')]),
+  runId: IdSchema, branch: IdSchema, scale: Type.Union([Type.Literal('full'), Type.Literal('smoke'), Type.Literal('reduced')]),
   sourceCommit: Type.String({ pattern: '^[a-f0-9]{40}$' }), manifest: boundFile, admission: boundFile,
   priorAdmissionDir: Type.String({ minLength: 1 }), priorSha256: priorFiles,
   repeats: Type.Integer({ minimum: 1, maximum: 5 }), pageSize: Type.Integer({ minimum: 1, maximum: 100 }),
@@ -48,10 +48,12 @@ export function manifestKindCounts(manifest: Pick<Static<typeof ManifestSchema>,
   'countsByKind' | 'relationshipCounts' | 'parameterForms'>): Record<string, number> {
   const expected: Record<string, number> = {};
   for (const source of [manifest.countsByKind, manifest.relationshipCounts]) {
-    for (const [kind, n] of Object.entries(source)) expected[kind] = (expected[kind] ?? 0) + n;
+    for (const [kind, n] of Object.entries(source)) {
+      if (n > 0) expected[kind] = (expected[kind] ?? 0) + n;
+    }
   }
   for (const [kind, n] of Object.entries(manifest.parameterForms)) {
-    expected[`parameter:${kind}`] = (expected[`parameter:${kind}`] ?? 0) + n;
+    if (n > 0) expected[`parameter:${kind}`] = (expected[`parameter:${kind}`] ?? 0) + n;
   }
   return expected;
 }
