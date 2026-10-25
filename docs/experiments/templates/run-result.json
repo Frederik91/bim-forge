@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "template",
+  "experimentId": "EX-XX",
+  "runId": null,
+  "executionStatus": "not-run",
+  "conclusion": "not-run",
+  "issue": null,
+  "pullRequest": null,
+  "supersedesRun": null,
+  "startedAt": null,
+  "finishedAt": null,
+  "hypothesis": null,
+  "variant": null,
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": null,
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": null
+  },
+  "definition": {
+    "commit": null,
+    "registryPath": "docs/experiments/registry.json",
+    "sha256": null,
+    "budgets": null
+  },
+  "implementation": {
+    "sourceCommit": null,
+    "runnerCommit": null,
+    "generatorCommit": null,
+    "schemaHash": null,
+    "indexDefinitionHash": null,
+    "validatorVersions": [],
+    "containerImageDigests": []
+  },
+  "dataset": {
+    "profile": null,
+    "profileSha256": null,
+    "seed": null,
+    "manifestSha256": null,
+    "initialStateHash": null,
+    "actualCounts": null,
+    "historyScenario": null
+  },
+  "environment": {
+    "host": null,
+    "softwareVersions": null,
+    "cpuLimit": null,
+    "memoryLimitBytes": null,
+    "diskBudgetBytes": null,
+    "storageDescription": null,
+    "databaseSettingsHash": null,
+    "cacheProcedure": null,
+    "measurementSlot": null
+  },
+  "reproduction": {
+    "commands": [],
+    "artifactReferences": []
+  },
+  "assertions": [],
+  "modelDelta": null,
+  "metrics": null,
+  "errors": [],
+  "evidence": [],
+  "coverageLimitations": [],
+  "decisionImplications": []
+}
