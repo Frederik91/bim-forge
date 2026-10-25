@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { Type } from 'typebox';
 import { Check } from 'typebox/value';
 import { parseObservations } from '../contracts/schema.ts';
@@ -30,6 +31,7 @@ export function coverageFor(experimentId: 'EX-02' | 'EX-08', observations: Obser
   });
 }
 
+async function main(): Promise<void> {
 const [input, output] = process.argv.slice(2);
 if (!input || !output) throw new Error('Usage: observations.ts ALL_OBSERVATIONS NEW_REVIEW_BUNDLE');
 const raw: unknown = JSON.parse(await readFile(input, 'utf8'));
@@ -47,3 +49,6 @@ const experiments = (['EX-02', 'EX-08'] satisfies ('EX-02' | 'EX-08')[]).map(exp
 });
 await writeFile(output, `${JSON.stringify({ authoritativeResult: false, experiments,
   publication: 'Coordinator binds actual metadata and artifacts using W0 records.ts; this bundle is not a terminal run.' }, null, 2)}\n`, { flag: 'wx' });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) await main();

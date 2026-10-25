@@ -1,6 +1,6 @@
 # W2: narrow IFC exchange and coordinates
 
-Tracking: [#125](https://github.com/Frederik91/bim-forge/issues/125), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). W0 foundation: `19118447930f41218bc732466b55442e5d83adf5`. [Server debug evidence](../../docs/experiments/results/EX-02/w2-debug-be6e71b-20261025/README.md) records passing compilation/unit checks and a failed qualification run. **No experiment is qualified.** Draft PR remains withheld. No preview, production model or deployment changes.
+Tracking: [#125](https://github.com/Frederik91/bim-forge/issues/125), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). Current W0 foundation: `29583f735c1803872ace3fa663dcf6d7a145434a`. [Historical server debug evidence](../../docs/experiments/results/EX-02/w2-debug-be6e71b-20261025/README.md) records passing compilation/unit checks and a failed qualification run. **No experiment is qualified.** No preview, production model or deployment changes.
 
 Plan and owned files:
 
@@ -11,6 +11,7 @@ Plan and owned files:
 | `step_reader.py`, `test_checks.py` | Independent stdlib STEP parsing, typed property inventory, spatial/type/void/boundary graph, nested placements and map conversion; corruption sensitivity checks |
 | `run.py` | EX-02/EX-08 observations, EXPRESS validation, actual geometry kernel, immutable raw artifacts, deltas and loss inventory |
 | `observations.ts` | W0 observation validation, experiment separation and exact registry-assertion coverage accounting; no terminal result or approval |
+| `finalize-partial.ts` | Build and verify EX-02/EX-08 W0 input records against retained observations/artifact hashes; no publication |
 | `requirements.txt`, `Dockerfile` | Pinned server Python wheel environment; optional standalone Python container |
 
 ## Fixture and comparison
@@ -80,7 +81,17 @@ W0 `parseObservations` validates the final array. `observations.ts` creates a re
 
 At tested source `be6e71b2cc641d669de9f2e57dec49623744100a`, server `npm run validate` checked 117 sources; W2 strict typechecking, 3 TS tests and 7 Python tests passed. Generation emitted 85 observations: 65 passed and 20 failed. All 16 real-kernel checks, 16 coordinate checks, 16 semantic checks and 8 successive-export checks passed. EXPRESS validation did not execute because IfcOpenShell's rule executor imports `_pytest`; four exact-hash cases failed because optional unnamed root fields still held a STEP sentinel instead of JSON null. Roundtrip stages did not execute. Both failed IFC attempt directories remain on the server; the linked evidence directory contains raw logs, observations and the server artifact manifest.
 
-The follow-up pins pytest and its dependencies, maps absent root names to JSON null, and adds a real-export hash/physical-equivalence regression check. **Those final changes are unvalidated.** Execution stopped under the retry cap; the leased container was stopped. The worker initially treated stages as separate retry items; the coordinator must authorize another attempt before resuming the full pipeline. The bounded-property full-preservation assertion remains unchanged and must emit a false observation if the loss occurs; no such observation has been fabricated for the unexecuted roundtrip.
+The follow-up pins pytest and its dependencies, maps absent root names to JSON null, and adds a real-export hash/physical-equivalence regression check. The failed preparation item remains escalated: **no fourth preparation attempt is authorized or claimed**. The coordinator separately authorized latest-source compilation/unit validation and one downstream property roundtrip using complete retained artifacts.
+
+The downstream task verified all 74 artifacts against the original manifest and copied them to a fresh output root. It used historical source `be6e71b2cc641d669de9f2e57dec49623744100a`, retaining the missing-pytest environment. Both TS property imports succeeded. Roundtrip executed once and emitted four actual failed observations: the native bounded value was lost on re-export, and three schema-dependent checks were unavailable because `_pytest` was missing. The combined array retains the original 85 observations unchanged and appends four rows: 65 passed / 24 failed. This is distinct downstream evidence; prepare was not repeated.
+
+`finalize-partial.ts` uses W0 `29583f7` including `observationsArtifact`, exact committed registry assertions, actual historical source/runner commits, SHA-256 artifact descriptions and `verifyRun`. Metadata requires actual successful latest-source unit checks before record inputs can be built. It records EX-02 as failed for actual bounded-property loss and EX-08 as inconclusive for unavailable exact-hash cases, preserving every failed observation. Unavailable hashing coverage remains `not-covered`. It also prepares an EX-01 paired-export contribution pointer without taking over W1's terminal record.
+
+```sh
+node experiments/ifc/finalize-partial.ts /qualification/sources/w2-debug EVIDENCE_ROOT NEW_INPUT_DIRECTORY
+```
+
+The result is input JSON for coordinator review, not a published terminal result. Source-only validation does not validate the latest full preparation or EXPRESS path. Do not repeat the failed preparation item to obtain green evidence.
 
 No external vendor model, Revit, arbitrary IFC ingestion, closed space shell, complex B-rep, multi-engine geometry agreement, global geodesy, UI viewport rebasing, production model mutation or deployment is qualified. The comparison exposes this slice's loss and mapping costs; it cannot select a complete authoring architecture on its own.
 
