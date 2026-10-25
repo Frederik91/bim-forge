@@ -309,9 +309,9 @@
         "An upgraded reader does not silently replace a historical accepted representation."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-09/w6-pg-0247bdd-02-terminal-v1/result.json",
+      "latestReview": "docs/experiments/decisions/recovery-authority-review-20261025.md",
       "producerStreams": [
         "W0",
         "W5"
@@ -393,9 +393,9 @@
         "Missing artifacts preserve the last complete usable revision."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-11/w6-pg-0247bdd-02-terminal-v1/result.json",
+      "latestReview": "docs/experiments/decisions/recovery-authority-review-20261025.md",
       "producerStreams": [
         "W0",
         "W5"
@@ -433,9 +433,9 @@
         "Reconciliation checks semantic conflicts and all required discipline decisions."
       ],
       "preparationNote": "Portable package exchange is sufficient for this experiment; a full network sync service is outside scope.",
-      "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-12/w6-pg-0247bdd-02-terminal-v1/result.json",
+      "latestReview": "docs/experiments/decisions/recovery-authority-review-20261025.md",
       "producerStreams": [
         "W0",
         "W5"
