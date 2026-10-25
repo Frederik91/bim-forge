@@ -59,7 +59,7 @@ function pdf(pages = 1, encrypted = false, repetitions = 0): Buffer {
   for (let page = 0; page < pages; page += 1) {
     const streamId = 4 + page * 2;
     objects.push(Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 160] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${streamId} 0 R >>`));
-    let content = Buffer.from(`BT /F1 10 Tf 10 140 Td (Two rooms 6000 x 4000 mm, page ${page + 1}) Tj ET\n10 10 180 120 re S\n100 10 m 100 130 l S\n${'10 10 1 1 re S\n'.repeat(repetitions)}`);
+    let content: Buffer = Buffer.from(`BT /F1 10 Tf 10 140 Td (Two rooms 6000 x 4000 mm, page ${page + 1}) Tj ET\n10 10 180 120 re S\n100 10 m 100 130 l S\n${'10 10 1 1 re S\n'.repeat(repetitions)}`);
     if (encrypted) {
       const objectKey = md5(Buffer.concat([key, Buffer.from([streamId & 255, (streamId >> 8) & 255, (streamId >> 16) & 255, 0, 0])])).subarray(0, 10);
       content = rc4(objectKey, content);
