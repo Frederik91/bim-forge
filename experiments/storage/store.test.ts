@@ -126,7 +126,7 @@ test('existing product snapshot and delta oracles agree within unchanged native 
     assert.deepEqual((await store.delta(second.revisionId)).map((row) => row.entity_id).sort(), nativeDeltaIds(before.snapshot, after.snapshot));
     assert.deepEqual(await snapshotAt(store, first.revisionId), before.snapshot);
     const oversized = { units: 'm', entities: Array.from({ length: 101 }, (_, index) => ({ id: `wall-${index}`, type: 'Wall' })), relationships: [] };
-    assert.throws(() => nativeEnvelopes(oversized), /Unsupported/);
+    assert.throws(() => nativeEnvelopes(oversized), { name: 'Error', message: 'Model arrays must be dense and bounded.' });
   });
 });
 
