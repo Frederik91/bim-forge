@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import { RoomRepository } from '../src/room-model.ts';
+import { RoomRepository, ProposalConflict } from '../src/room-model.ts';
 import type { Point } from '../src/room-model.ts';
 import { prepareModelProposal, validateModelProposalRequest } from '../src/model-proposal.ts';
 import { parseRequestActivity } from '../src/request-activity.ts';
@@ -36,6 +36,21 @@ interface Ticket {
 }
 export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity'>;
 export class BacklogConflict extends Error {}
+
+type ProposalReadiness = { state: 'ready'; error: null } | { state: 'needs-input'; error: string };
+function proposalReadiness(current: RoomRepository, proposed: RoomRepository, name: string): ProposalReadiness {
+  try { current.proposalSnapshot(proposed, name); return { state: 'ready', error: null }; }
+  catch (error) {
+    if (!(error instanceof ProposalConflict)) throw error;
+    return { state: 'needs-input', error: error.message.slice(0, 1000) };
+  }
+}
+
+function assessedTicket(ticket: Ticket, readiness: ProposalReadiness): Ticket {
+  if (ticket.state === readiness.state && ticket.error === readiness.error) return ticket;
+  return recordActivity({ ...ticket, ...readiness }, { stage: readiness.state,
+    message: readiness.error?.slice(0, 300) ?? 'Proposal is compatible with the current model. Unrelated accepted changes will be retained.' });
+}
 
 interface ActiveAttempt {
   requestId: string;
@@ -183,6 +198,20 @@ export class ChangeRequests {
     const row = this.#db.prepare('SELECT body FROM requests WHERE id=?').get(identifier(id));
     if (!row || typeof row.body !== 'string') throw new Error('Unknown change request.');
     return parseStored(row.body);
+  }
+  async refreshProposal(id: string): Promise<Ticket> {
+    for (;;) {
+      this.#assertOpen();
+      const ticket = this.get(id);
+      if ((ticket.state !== 'ready' && ticket.state !== 'needs-input') || ticket.result?.status !== 'ready') return ticket;
+      const text = this.project(ticket.projectId);
+      const [current, proposed] = await Promise.all([RoomRepository.restore(text), RoomRepository.restore(ticket.result.project)]);
+      this.#assertOpen();
+      if (this.project(ticket.projectId) !== text || JSON.stringify(this.get(id)) !== JSON.stringify(ticket)) continue;
+      const next = assessedTicket(ticket, proposalReadiness(current, proposed, ticket.request.proposalName));
+      if (next !== ticket) this.#put(next);
+      return next;
+    }
   }
   executions(id: string): StoredExecution[] {
     this.get(id);
@@ -374,14 +403,11 @@ export class ChangeRequests {
       } });
       if (evidenceError) throw evidenceError;
       if (!this.#isWorking(ticket)) return;
-      const currentText = this.project(ticket.projectId);
-      const current = await RoomRepository.restore(currentText);
-      if (!this.#isWorking(ticket)) return;
-      const stale = current.head('main') !== ticket.request.baseRevisionId || this.project(ticket.projectId) !== currentText;
-      this.#put(recordActivity({ ...this.get(ticket.id), state: result.status === 'ready' && !stale ? 'ready' : 'needs-input',
-        error: stale ? 'The accepted model changed. Revise this request against the current model before accepting.' : null, updatedAt: Date.now(),
+      this.#put(recordActivity({ ...this.get(ticket.id), state: result.status === 'ready' ? 'ready' : 'needs-input',
+        error: null, updatedAt: Date.now(),
         result: { status: result.status, project: result.repository.serialize(), review: result.review } },
-        { stage: result.status === 'ready' && !stale ? 'ready' : 'needs-input', message: stale ? 'The accepted model changed. Revise this proposal against its current revision.' : result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.' }));
+        { stage: result.status === 'ready' ? 'ready' : 'needs-input', message: result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.' }));
+      if (result.status === 'ready') await this.refreshProposal(ticket.id);
     } catch (error) {
       this.#attempts.get(ticket.id)?.controller.abort();
       if (!this.#isWorking(ticket)) return;
@@ -422,26 +448,30 @@ export class ChangeRequests {
       if (action === 'cancel' && active?.requestId === ticket.request.requestId && active.attempt === ticket.attempts) active.controller.abort();
       return { ticket: next, project: text };
     }
-    if (action === 'accept' && ticket.state === 'needs-input' && ticket.result?.status === 'ready') throw new BacklogConflict('This proposal is based on an older or unaccepted model. Revise it against the current accepted model.');
-    if (action !== 'accept' || ticket.state !== 'ready' || ticket.result?.status !== 'ready') throw new BacklogConflict('Only a ready proposal can be accepted.');
+    if (action !== 'accept' || (ticket.state !== 'ready' && ticket.state !== 'needs-input') || ticket.result?.status !== 'ready') throw new BacklogConflict('Only a ready proposal can be accepted.');
     const current = await RoomRepository.restore(text);
-    if (current.head('main') !== ticket.request.baseRevisionId) throw new BacklogConflict('This proposal is based on an older or unaccepted model. Request a revision against the current accepted model; accepting it would overwrite intervening work.');
     const proposed = await RoomRepository.restore(ticket.result.project);
     this.#assertOpen();
-    if (proposed.projectId !== current.projectId || proposed.root() !== current.root()) throw new Error('The proposal belongs to another project.');
-    const accepted = proposed.accept(ticket.request.proposalName, { decisionId, actor: 'preview-human' });
+    const readiness = proposalReadiness(current, proposed, ticket.request.proposalName);
+    if (readiness.state === 'needs-input') throw new BacklogConflict(readiness.error);
+    const accepted = await current.acceptFrom(proposed, ticket.request.proposalName, { decisionId, actor: 'preview-human' });
     const acceptedText = accepted.serialize();
     const next: Ticket = recordActivity({ ...ticket, state: 'completed', decisionId, decisionAction: action }, { stage: 'completed', message: 'Proposal explicitly accepted and saved as the current model.' });
+    const assessments = await Promise.all(this.#all(ticket.projectId).filter((other) => other.id !== ticket.id
+      && (other.state === 'ready' || other.state === 'needs-input') && other.result?.status === 'ready').map(async (other) => {
+      const otherProposal = await RoomRepository.restore(other.result?.project);
+      return { before: other, after: assessedTicket(other, proposalReadiness(accepted, otherProposal, other.request.proposalName)) };
+    }));
+    this.#assertOpen();
     this.#transaction(() => {
       // Async validation above may have overlapped another decision.
       const latest = this.get(id);
       if (latest.decisionId === decisionId && latest.decisionAction === action) return;
-      if (this.project(ticket.projectId) !== text || this.get(id).updatedAt !== ticket.updatedAt || this.get(id).state !== 'ready') throw new BacklogConflict('The model or ticket changed while reviewing. Refresh before deciding.');
+      if (this.project(ticket.projectId) !== text || JSON.stringify(latest) !== JSON.stringify(ticket)) throw new BacklogConflict('The model or ticket changed while reviewing. Refresh before deciding.');
       this.#db.prepare('UPDATE projects SET body=? WHERE id=?').run(acceptedText, ticket.projectId);
       this.#put(next);
-      for (const other of this.#withState('ready')) {
-        if (other.projectId === ticket.projectId && other.id !== ticket.id) this.#put(recordActivity({ ...other, state: 'needs-input',
-          error: 'The accepted model changed. Revise this request against the current model before accepting.' }, { stage: 'needs-input', message: 'Another proposal was accepted. This proposal now needs revision against the current model.' }));
+      for (const assessment of assessments) {
+        if (assessment.after !== assessment.before && JSON.stringify(this.get(assessment.before.id)) === JSON.stringify(assessment.before)) this.#put(assessment.after);
       }
     });
     return { ticket: this.get(id), project: this.project(ticket.projectId) ?? acceptedText };
