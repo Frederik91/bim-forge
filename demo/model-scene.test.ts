@@ -311,12 +311,13 @@ test('roof changes derive clipped-wall deltas and flat roofs have physical thick
 test('before slab ghosts stay inspectable but cannot intercept a current-floor reference ray', (t) => {
   const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
   const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
-  const before = viewerBuilding();
-  const after = validateSnapshot({ ...before, entities: before.entities.map((item) => item.id === 'attic' ? { ...item, elevation: 2.5 } : item) });
+  const initial = viewerBuilding();
+  const before = validateSnapshot({ ...initial, entities: initial.entities.map((item) => item.id === 'attic' ? { ...item, elevation: 3.5 } : item) });
+  const after = validateSnapshot({ ...before, entities: before.entities.map((item) => item.id === 'attic' ? { ...item, elevation: 3 } : item) });
   viewer.setModel(after, before); viewer.setMode('basic'); viewer.setLevel('attic'); viewer.setRoofVisible(false); viewer.setCutaway(true);
   viewer.camera.beta = .08; viewer.scene.render();
   assert.ok(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:attic-slab') && mesh.isEnabled()));
-  const screen = Vector3.Project(modelPoint(4.5, 1, 2.5), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+  const screen = Vector3.Project(modelPoint(4.5, 1, 3), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
   const reference = viewer.referenceAt(screen.x, screen.y);
   assert.ok(reference?.kind === 'floor-point'); assert.equal(reference.levelId, 'attic');
   assert.ok(Math.abs(reference.positionMm[0] - 4500) <= 2); assert.ok(Math.abs(reference.positionMm[1] - 1000) <= 2);
