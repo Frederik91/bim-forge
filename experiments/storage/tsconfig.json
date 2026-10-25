@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noUncheckedIndexedAccess": true, "disableSourceOfProjectReferenceRedirect": true },
+  "references": [{ "path": "./tsconfig.product-contract.json" }],
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"]
+}

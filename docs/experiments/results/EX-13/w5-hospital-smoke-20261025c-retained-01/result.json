@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "w5-hospital-smoke-20261025c-retained-01",
+  "startedAt": "2026-10-25T12:19:44.824Z",
+  "finishedAt": "2026-10-25T12:20:03.903Z",
+  "hypothesis": "The declared bounded persistence workload preserves source/query/history behavior within its admitted fixture and exploratory limits.",
+  "variant": "w4-generator; smoke; history=2; original hospital-smoke-20261025c",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "runnerCommit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "validators": [
+      "TypeBox boundary schemas",
+      "PostgreSQL constraints/reference validation",
+      "Executed source fingerprints and property-count oracle where completed",
+      "Retained run observations without modification"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1/smoke",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "5c923eb039c879f9fcd3e2efded1091a4817c7074791134bae7aa1327b9ada9d"
+  },
+  "environment": {
+    "host": "frederik@192.168.1.17; container 6d525345c887",
+    "software": {
+      "node": "v24.22.1",
+      "postgres": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/postgres; coordinator-owned isolated PG15",
+    "cacheProcedure": "warm: explicit page and historical warmup; OS cache unchanged",
+    "measurementSlot": "shared-correctness; shared correctness, no exclusive performance claim"
+  },
+  "commands": [
+    "\"/usr/local/bin/node\" \"/app/experiments/storage/cli.ts\" \"workload\" \"/qualification/artifacts/hospital-20261025c/config-smoke.json\" \"/qualification/artifacts/hospital-20261025c/smoke\""
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "source-query-oracle",
+      "expected": "All source documents, counts by kind and canonical hashes survive load",
+      "observed": "{\"fingerprint\":{\"count\":27075,\"sum\":\"3be02dac0a0cafa8fd2a49756d3307fac8d9788a2b24d218263d7aab2f00c6c5\",\"xor\":\"f57f282b26eb408243242204a0696107e414af45c21410122b03e62f589542a7\"},\"countsByKind\":{\"site\":1,\"building\":1,\"level\":1,\"space\":10,\"zone\":1,\"system\":3,\"typeDefinition\":27,\"wall\":80,\"stud\":1400,\"slab\":10,\"roof\":1,\"door\":25,\"window\":15,\"chair\":60,\"desk\":20,\"bed\":5,\"cabinet\":30,\"otherFurnishing\":35,\"electricalOutlet\":180,\"switch\":40,\"luminaire\":140,\"electricalPanel\":5,\"circuit\":50,\"cableSegment\":300,\"ductSegment\":180,\"ductFitting\":240,\"pipeSegment\":250,\"pipeFitting\":300,\"pump\":5,\"valve\":100,\"terminal\":80,\"sensor\":80,\"containmentSegment\":100,\"equipment\":30,\"connectionPort\":3000,\"parameter:dimension\":378,\"parameter:typeReference\":300,\"parameter:dependencyInput\":300,\"parameter:recipe\":300,\"parameter:hostOffset\":222,\"containedIn\":3804,\"instanceOf\":3761,\"hostedBy\":1745,\"supportedBy\":1020,\"memberOfSystem\":2080,\"boundsSpace\":160,\"hasPort\":3000,\"connectedTo\":1500,\"parameterDependsOn\":1500,\"externalBinding\":100,\"provenance\":100}}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "bounded-baseline",
+      "expected": "Five or more alternating repetitions at existing validated snapshot bounds",
+      "observed": "No native product snapshot supplied; relative baseline comparison not executed",
+      "passed": false,
+      "limitations": [
+        "Hospital/W0 entity kinds are outside the existing product snapshot contract. Run native-snapshot separately."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "immutable-reconstruction",
+      "expected": "Initial revision remains identical after aged bounded edits",
+      "observed": "036c68df0277ea9d7dc08e92a0d28ecf273978e9b8416c688ccbceca20bb4779",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "workload-errors",
+      "expected": "Every executed database operation completes without unexpected errors",
+      "observed": "[]",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "capacity-scope",
+      "expected": "Full hospital capacity requires admitted full inventory and complete workload coverage",
+      "observed": "smoke: 27075 records; 2 requested history revisions",
+      "passed": false,
+      "limitations": [
+        "Partial storage workload only: no geometry, solver, predicate conflicts, artifact bytes, backup/restore, offered-rate pacing, deletion churn or engineering validity claim.",
+        "Graph and fanout queries are explicitly capped; reference validation scans the entire branch per acceptance.",
+        "Historical reconstruction scans ancestry deltas without checkpoints. Current visibility is copied per branch.",
+        "Type fanout is an indexed instance lookup, not evaluated regeneration. No independently varied 8/32-branch or 64-client matrix is implemented.",
+        "Global PG metrics can include other correctness streams. Full measurements require exclusive scheduling."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-entity-detail",
+      "expected": "Predeclared exploratory p95 <= 300 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"entity-detail\",\"budgetMs\":300,\"n\":5,\"errors\":0,\"p95Ms\":1.851686999998492,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-page-query",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"page-query\",\"budgetMs\":1000,\"n\":5,\"errors\":0,\"p95Ms\":76.02945600000021,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-one-hop",
+      "expected": "Predeclared exploratory p95 <= 1000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"one-hop\",\"budgetMs\":1000,\"n\":5,\"errors\":0,\"p95Ms\":0.8531919999986712,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-bounded-delta",
+      "expected": "Predeclared exploratory p95 <= 2000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-delta\",\"budgetMs\":2000,\"n\":1,\"errors\":0,\"p95Ms\":0.48345399999743677,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "exploratory-p95-bounded-acceptance",
+      "expected": "Predeclared exploratory p95 <= 4000 ms; successful single-client samples required",
+      "observed": "{\"operation\":\"bounded-acceptance\",\"budgetMs\":4000,\"n\":1,\"errors\":0,\"p95Ms\":136.88723000000027,\"passed\":true}",
+      "passed": true,
+      "limitations": []
+    }
+  ],
+  "observationsArtifact": "hospital-20261025c/smoke/observations.json",
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "caseIds": [
+        "source-query-oracle",
+        "immutable-reconstruction"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "caseIds": [
+        "source-query-oracle",
+        "capacity-scope"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "caseIds": [
+        "workload-errors",
+        "immutable-reconstruction"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "caseIds": [
+        "workload-errors",
+        "exploratory-p95-page-query"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "caseIds": [
+        "capacity-scope"
+      ],
+      "coverage": "partial"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "hospital-20261025c/smoke/artifact-checksums.json",
+      "bytes": 618,
+      "sha256": "10466a88daa0e901254a0c66374ef8e0fe7ea13b20c6991cb724cea4af456291",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/config.json",
+      "bytes": 2007,
+      "sha256": "1e82658c65f01f8fdc1686b73b1e1fdb19ca3eb40f3f265dbdc7bc9cfa27ee8d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/environment.json",
+      "bytes": 38545,
+      "sha256": "1f9e2bd644f841f6777fc196a787548eef448501b80bae1366cbd8f4543a299d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/errors.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/execution-envelope.json",
+      "bytes": 1260,
+      "sha256": "c7c65aa729c3be85ad3e7ba3a0eaa70c476ca61b7ca10509e5a8997a2453aeb5",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/exploratory-budgets.json",
+      "bytes": 937,
+      "sha256": "9a2000a7fc1c68e2da587b3dd5b955e6112a2d587aa301c4ce0130e01070a457",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/growth.json",
+      "bytes": 984,
+      "sha256": "045b0342fecbff478f868a2eb2358cfdb908d514cbcb7179ee885ca198ec1b64",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/load.json",
+      "bytes": 2004,
+      "sha256": "064e3e4b48dd4fa8b1dcfba4fabd6223bdb059d06d4feaa825ffc8f4ba4ccd0a",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/metrics-after.json",
+      "bytes": 16507,
+      "sha256": "e1f9ad73465345bb1d510619eb0af817e98f28679e2ff177d861e872dd5bd4cc",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/metrics-aged.json",
+      "bytes": 16508,
+      "sha256": "3c0ca9ad2d38eb21e0dbfe019ae9b105a120112d184c524dc7d4676a4f4461db",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/metrics-before.json",
+      "bytes": 16510,
+      "sha256": "8574685c6b1807b080606342e18a86e0eb7b960ae4d632edc8def12e75a7781b",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/metrics-ready.json",
+      "bytes": 16507,
+      "sha256": "5bc6f0ccd0e5f788a9c38c65246990f1c97c329635451a51b3cf50efd2655e75",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/observations.json",
+      "bytes": 5112,
+      "sha256": "46c00805920c1f119f128a835043fd9bc9a3411da84263b233259696e9cd5035",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/oracle.json",
+      "bytes": 3019,
+      "sha256": "4d0bad2ad4db9ed55be4b53c356366bbac28397bdff3b4a5b4e8243c197a2008",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/property-values.json",
+      "bytes": 191,
+      "sha256": "d1716725a9b5b2a2074be88548e093750913857a9ce4e0d2ce0fba097a10e689",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/sample-summary.json",
+      "bytes": 2110,
+      "sha256": "ef0b4a1924621e0405aee7d8de56b928634e614c809fe41ca0afff9b2cdda7e8",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/smoke/samples.ndjson",
+      "bytes": 44524,
+      "sha256": "8150fec80ab4aa97ba5957668ff2cd169792226a442353752dfdceac65487a7c",
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "hospital-20261025c/smoke/traffic.json",
+      "bytes": 377,
+      "sha256": "9a81875533fd5ceba01c651c429c8527b199bbba6662726d358f5324b1ac5fa8",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/manifest-smoke.json",
+      "bytes": 76978,
+      "sha256": "5c923eb039c879f9fcd3e2efded1091a4817c7074791134bae7aa1327b9ada9d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "hospital-20261025c/admission-smoke.json",
+      "bytes": 819,
+      "sha256": "87426eb4f9a626bb2f0b14d3560e6522397ae4bc66d97087b82d321d42ec9027",
+      "mediaType": "application/json"
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "Retrospective metadata publication only; the original experiments were not rerun.",
+    "Original invocation ID hospital-smoke-20261025c; record ID adds a retained-01 suffix without replacing prior attempts.",
+    "Evidence root is /ssd1/bim-forge-qualification/qvm-20261025/artifacts; paths and SHA-256 bind retained private artifacts.",
+    "Every definition assertion is conservatively partial or not-covered. Full hospital load and independent selection verification are not included in this record.",
+    "Database-only synthetic metadata does not qualify geometry, a real hospital inventory, engineering approvals or production adoption.",
+    "Global PG/WAL metrics include other correctness activity; no comparative speedup, isolated capacity result or product SLO is claimed.",
+    "Run start is the retained environment timestamp; finish is observation-file persistence time, not a fabricated benchmark clock.",
+    "Runner CPU/memory fields describe the Node container; exact PostgreSQL limits/settings are separately retained in config and metrics artifacts.",
+    "Hospital/W0 entity kinds are outside the existing product snapshot contract. Run native-snapshot separately.",
+    "Partial storage workload only: no geometry, solver, predicate conflicts, artifact bytes, backup/restore, offered-rate pacing, deletion churn or engineering validity claim.",
+    "Graph and fanout queries are explicitly capped; reference validation scans the entire branch per acceptance.",
+    "Historical reconstruction scans ancestry deltas without checkpoints. Current visibility is copied per branch.",
+    "Type fanout is an indexed instance lookup, not evaluated regeneration. No independently varied 8/32-branch or 64-client matrix is implemented.",
+    "Global PG metrics can include other correctness streams. Full measurements require exclusive scheduling."
+  ],
+  "decisionImplications": [
+    "Partial retained evidence only. Preserve failed/cancelled attempts; do not infer full capacity, a comparative winner, engineering correctness or adoption approval."
+  ],
+  "executionStatus": "completed",
+  "conclusion": "inconclusive"
+}
