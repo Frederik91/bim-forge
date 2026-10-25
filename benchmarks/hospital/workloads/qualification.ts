@@ -134,7 +134,7 @@ export async function runQualification(rawConfig: unknown, directory: string) {
   };
   const sample = async <T extends Json>(store: Storage, operation: string, repeat: number, work: () => Promise<T>): Promise<T> => {
     const started = performance.now(); let result: Json = null; let error: string | null = null;
-    try { await prepare(store); result = await work(); return result; }
+    try { await prepare(store); const value = await work(); result = value; return value; }
     catch (failure) { error = errorMessage(failure); throw failure; }
     finally {
       const totals = sampleCounts[operation] ?? { attempted: 0, succeeded: 0, errors: 0 };
