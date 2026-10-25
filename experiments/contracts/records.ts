@@ -4,11 +4,12 @@ import { mkdir, readFile, rename, stat, writeFile, link, unlink } from 'node:fs/
 import { relative, resolve, dirname, isAbsolute } from 'node:path';
 import { Check } from 'typebox/value';
 import { Type } from 'typebox';
-import { parseRun } from './schema.ts';
+import { parseRun, parseObservations } from './schema.ts';
 import type { Run } from './schema.ts';
 
 export const sha256 = (bytes: string | Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 export async function bindingFor(root: string, path: string): Promise<{ commit: string; path: string; sha256: string }> {
+  root = resolve(root);
   const commit = execFileSync('git', ['-c', `safe.directory=${root}`, 'rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   const bytes = await readFile(resolve(root, path));
   const committed = execFileSync('git', ['-c', `safe.directory=${root}`, 'show', `${commit}:${path}`], { cwd: root });
@@ -29,7 +30,11 @@ export async function describeArtifact(root: string, path: string, mediaType: st
 }
 
 export async function verifyRun(run: Run, roots: { repository: string; evidence: string }): Promise<void> {
+  roots = { ...roots, repository: resolve(roots.repository), evidence: resolve(roots.evidence) };
   parseRun(run);
+  for (const commit of [run.implementation.sourceCommit, run.implementation.runnerCommit]) {
+    execFileSync('git', ['-c', `safe.directory=${roots.repository}`, 'cat-file', '-e', `${commit}^{commit}`], { cwd: roots.repository });
+  }
   for (const binding of [run.design, run.definition]) {
     const bytes = execFileSync('git', ['-c', `safe.directory=${roots.repository}`, 'show', `${binding.commit}:${binding.path}`], { cwd: roots.repository });
     if (sha256(bytes) !== binding.sha256) throw new Error('Historical design or definition hash mismatch.');
@@ -46,6 +51,10 @@ export async function verifyRun(run: Run, roots: { repository: string; evidence:
     const bytes = await readFile(target);
     if ((await stat(target)).size !== artifact.bytes || sha256(bytes) !== artifact.sha256) throw new Error('Artifact integrity mismatch.');
   }
+  if (!run.evidence.some(item => item.path === run.observationsArtifact && item.mediaType === 'application/json')) throw new Error('An observations artifact is required.');
+  const raw: unknown = JSON.parse(await readFile(inside(roots.evidence, run.observationsArtifact), 'utf8'));
+  const observed = parseObservations(raw).filter(item => item.experimentId === run.experimentId);
+  if (JSON.stringify(observed) !== JSON.stringify(run.observations)) throw new Error('Recorded observations differ from their executed artifact.');
 }
 
 export async function publishRun(input: unknown, roots: { repository: string; evidence: string; results: string }): Promise<string> {
