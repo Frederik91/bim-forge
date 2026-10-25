@@ -148,7 +148,7 @@ export class Storage {
   }
 
   async accept(input: unknown): Promise<{ revisionId: string; replayed: boolean }> {
-    const proposal: Command = command(input);
+    const proposal: Command = structuredClone(command(input));
     const payloadHash = hash(proposal);
     const revisionId = payloadHash;
     const prepared = proposal.puts.map((item) => PreparedEntity.from(item));

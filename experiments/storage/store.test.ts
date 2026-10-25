@@ -180,6 +180,28 @@ test('accept rejects incoming references on deletion and permits atomic retarget
   });
 });
 
+test('accept owns the validated command while waiting for the branch lock', async () => {
+  await withStore(async (store, branch) => {
+    const locker = connection(); await locker.connect();
+    try {
+      await locker.query('BEGIN');
+      await locker.query('SELECT head FROM qvm_storage.branches WHERE branch=$1 FOR UPDATE', [branch]);
+      const original = object('owned');
+      const proposal = { branch, commandId: `${branch}:owned`, expectedHead: null,
+        assumptions: [{ entityId: 'owned', versionId: null }], puts: [original], deletes: [] };
+      const owned = structuredClone(proposal);
+      const accepting = store.accept(proposal);
+      original.document.properties = ['changed after submission'];
+      proposal.commandId = `${branch}:mutated`;
+      await locker.query('COMMIT');
+      const result = await accepting;
+      assert.equal(result.revisionId, hash(owned));
+      assert.deepEqual((await store.detail({ branch, entityId: 'owned' }))?.entity, owned.puts[0]);
+      assert.deepEqual(await store.accept(owned), { revisionId: result.revisionId, replayed: true });
+    } finally { await locker.query('ROLLBACK'); await locker.end(); }
+  });
+});
+
 test('W4 COPY decoder preserves typed properties, escaped content and independent bigint namespaces', () => {
   assert.equal(decodeCopyCell('\\N'), null);
   assert.equal(decodeCopyCell('\\\\N'), '\\N');
