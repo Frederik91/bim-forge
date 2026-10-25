@@ -12,7 +12,10 @@ import { parseScriptExecutionEvidence, MAX_SCRIPT_HOST_CALLS } from './script-ev
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { MODEL_INTENT_GUIDANCE, parseIntentAssessment } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
-import { FloorLayoutSchema, previewFloor } from './floor-layout.ts';
+import { previewFloor } from './floor-layout.ts';
+import { previewBuilding } from './building-layout.ts';
+import { FloorLayoutSchema, BuildingLayoutSchema } from './building-schema.ts';
+import { levels, entityLevel, entityElevation, levelView } from './building-levels.ts';
 import type { AuthoringScope } from './request-sources.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
@@ -28,26 +31,50 @@ const furniture = Type.Object({
   width: Type.Number({ minimum: .05, maximum: 5 }), depth: Type.Number({ minimum: .05, maximum: 5 }),
   height: Type.Number({ minimum: .02, maximum: 3 }), rotationDeg: rotation, supportId: Type.Union([identifier, Type.Null()]),
 });
-const furnishingSet = Type.Object({ furnishings: Type.Array(furniture, { maxItems: 32 }) });
+const furnishingSet = Type.Object({ furnishings: Type.Array(furniture, { maxItems: 32 }),
+  levelAssignments: Type.Optional(Type.Array(Type.Object({ entityId: identifier, levelId: identifier }, { additionalProperties: false }), { maxItems: 32 })) });
 const roomFurnishingSet = Type.Object({ roomId: identifier, furnishings: Type.Array(furniture, { maxItems: 32 }) });
 const space = Type.Object({ id: identifier, type: Type.Literal('Space'), name, levelId: identifier, bounds });
 const door = Type.Object({ id: identifier, type: Type.Literal('Door'), name, width: Type.Number(), height: Type.Number() });
+const wall = Type.Object({ id: identifier, type: Type.Literal('Wall'), name, start: point, end: point, thickness: Type.Number(), height: Type.Number() });
+const equipment = Type.Object({ id: identifier, type: Type.Literal('Equipment'), name, category: Type.Union([Type.Literal('mechanical'), Type.Literal('electrical')]),
+  position: point, elevation: Type.Number(), width: Type.Number(), depth: Type.Number(), height: Type.Number() });
+const window = Type.Object({ id: identifier, type: Type.Literal('Window'), name, width: Type.Number(), height: Type.Number(), sillHeight: Type.Number() });
 const entity = Type.Union([
-  Type.Object({ id: identifier, type: Type.Literal('Wall'), name, start: point, end: point, thickness: Type.Number(), height: Type.Number() }),
+  wall,
   door,
-  Type.Object({ id: identifier, type: Type.Literal('Window'), name, width: Type.Number(), height: Type.Number(), sillHeight: Type.Number() }),
-  Type.Object({ id: identifier, type: Type.Literal('Equipment'), name, category: Type.Union([Type.Literal('mechanical'), Type.Literal('electrical')]),
-    position: point, elevation: Type.Number(), width: Type.Number(), depth: Type.Number(), height: Type.Number() }),
+  window, equipment,
   furniture, space, Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Literal(0) }),
 ], { title: 'ModelEntity' });
-const snapshot = Type.Object({ units: Type.Literal('m'), entities: Type.Array(entity, { maxItems: 100 }), relationships: Type.Array(Type.Object({
+const relationships = Type.Array(Type.Object({
   id: identifier, type: Type.Literal('hosted-by'), source: identifier, target: identifier, offset: Type.Number(),
-}), { maxItems: 100 }) }, { title: 'ModelSnapshot' });
+}), { maxItems: 100 });
+const buildingEntity = Type.Union([
+  Type.Object({ ...wall.properties, levelId: identifier }),
+  Type.Object({ ...equipment.properties, levelId: identifier }),
+  Type.Object({ ...furniture.properties, levelId: identifier }),
+  door, window, space,
+  Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
+  Type.Object({ id: identifier, type: Type.Literal('Slab'), name, levelId: identifier, bounds, thickness: Type.Number() }),
+  Type.Object({ id: identifier, type: Type.Literal('Stair'), name, fromLevelId: identifier, toLevelId: identifier,
+    start: point, end: point, width: Type.Number(), steps: Type.Integer() }),
+  Type.Object({ id: identifier, type: Type.Literal('Roof'), name, levelId: identifier, bounds, thickness: Type.Number(), profile: Type.Union([
+    Type.Object({ kind: Type.Literal('flat'), height: Type.Number() }),
+    Type.Object({ kind: Type.Literal('gable'), eaveHeight: Type.Number(), ridgeHeight: Type.Number(), ridgeAxis: Type.Union([Type.Literal('x'), Type.Literal('y')]) }),
+  ]) }),
+], { title: 'BuildingEntity' });
+const snapshot = Type.Union([
+  Type.Object({ units: Type.Literal('m'), entities: Type.Array(entity, { maxItems: 100 }), relationships }, { additionalProperties: false }),
+  Type.Object({ version: Type.Literal(2), units: Type.Literal('m'), entities: Type.Array(buildingEntity, { maxItems: 100 }), relationships }, { additionalProperties: false }),
+], { title: 'ModelSnapshot' });
 const collectionChanges = Type.Object({ added: Type.Array(identifier), removed: Type.Array(identifier), modified: Type.Array(identifier) });
 const changes = Type.Object({ entities: collectionChanges, relationships: collectionChanges });
 const inspection = Type.Object({
   revisionId: Type.String(), selectedObjectIds: Type.Array(identifier), model: snapshot,
   placement: Type.Object({
+    levels: Type.Array(Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() })),
+    selectedLevelId: Type.Union([identifier, Type.Null()]),
+    entities: Type.Array(Type.Object({ entityId: identifier, levelId: Type.Union([identifier, Type.Null()]), elevation: Type.Number() })),
     layout: Type.Union([layout, Type.Null()]), floorBounds: bounds,
     rooms: Type.Array(Type.Object({ ...space.properties, clearBounds: bounds, entityIds: Type.Array(identifier) })),
     doorConnections: Type.Array(Type.Object({ door, roomIds: Type.Array(identifier), exterior: Type.Boolean() })),
@@ -154,17 +181,46 @@ function stage(draft: Draft, operation: () => ModelSnapshot, revoked: () => void
   return { model: candidate, changes: summarizeModelDelta(diffSnapshots(draft.base, candidate)) };
 }
 
+function selectedLevel(draft: Draft) {
+  const current = draft.snapshot;
+  const selected = current.entities.filter((item) => draft.binding.selectedObjectIds.includes(item.id));
+  const explicit = selected.filter((item) => item.type === 'Level');
+  if (explicit.length) return explicit.length === 1 ? explicit[0] : null;
+  const visual = draft.binding.visualIntent;
+  if (visual.kind === 'spatial-reference') {
+    const target = visual.destination;
+    if (target.kind === 'floor-point' && 'levelId' in target && typeof target.levelId === 'string') {
+      return levels(current).find((level) => level.id === target.levelId) ?? null;
+    }
+    if (target.kind === 'wall-point') return entityLevel(current, target.wallId);
+  }
+  const owners = new Map(selected.flatMap((item) => {
+    const level = entityLevel(current, item);
+    return level ? [[level.id, level] as const] : [];
+  }));
+  if (owners.size) return owners.size === 1 ? owners.values().next().value ?? null : null;
+  const available = levels(current);
+  return available.length === 1 ? available[0] : null;
+}
+
 const api = createApiKit<Draft>();
 const model = api.namespace({ name: 'model', description: 'Read a bound model and stage validated changes in this script only. Nothing here accepts or saves a project.', methods: {
   inspect: api.method({ summary: 'Inspect the current draft, selected identities, room membership and placement constraints.', effect: 'read', result: inspection,
     handler: (_args, call) => {
       const draft = call.context; const current = draft.snapshot;
+      const available = levels(current);
+      const selected = selectedLevel(draft);
+      const plans = available.length ? available.map((level) => levelView(current, level.id)) : [current];
+      const boundPlan = selected ? levelView(current, selected.id) : current;
       draft.onActivity({ stage: 'inspecting', message: 'Inspecting the bound model, selected identities and room relationships from the script.' });
       return { revisionId: draft.binding.baseRevisionId, selectedObjectIds: [...draft.binding.selectedObjectIds], model: current,
-        placement: { layout: spaces(current).length ? null : rectangleLayout(current), floorBounds: floorBounds(current),
-          rooms: spaces(current).map((room) => ({ ...room, clearBounds: clearSpaceBounds(current, room), entityIds: current.entities.filter((item) => entitySpace(current, item)?.id === room.id).map((item) => item.id) })),
-          doorConnections: spaces(current).length ? doorConnections(current) : [],
-          coordinates: 'Metres. X east, Y north. Furniture centred on position; keep clear of wall thickness and connecting doors.',
+        placement: { levels: available, selectedLevelId: selected?.id ?? null,
+          entities: current.entities.map((item) => ({ entityId: item.id, levelId: entityLevel(current, item)?.id ?? null, elevation: entityElevation(current, item) })),
+          layout: spaces(current).length || current.version === 2 ? null : rectangleLayout(current), floorBounds: floorBounds(boundPlan),
+          rooms: plans.flatMap((plan) => spaces(plan).map((room) => ({ ...room, clearBounds: clearSpaceBounds(plan, room),
+            entityIds: plan.entities.filter((item) => entitySpace(plan, item)?.id === room.id).map((item) => item.id) }))),
+          doorConnections: plans.flatMap((plan) => spaces(plan).length ? doorConnections(plan) : []),
+          coordinates: 'Metres. X east, Y north; elevations are world floor bases. Ownership and room membership are level-bound, never inferred from overlapping XY. Furniture is centred on position; keep clear of walls, doors, stairs and roof undersides.',
           suggestedDimensions: { desk: [1.8, .8, .75], monitor: [.6, .2, .45], laptop: [.35, .25, .24], chair: [.6, .6, 1], table: [.6, .6, .55], plant: [.5, .5, 1.1] } } };
     } }),
   previewRectangle: api.method({ summary: 'Stage a single-room rectangular shell and entry door layout, in millimetres.',
@@ -174,31 +230,56 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
       return previewRectangle(call.context.snapshot, input);
     }, () => call.throwIfRevoked()) }),
   previewFurnishings: api.method({ summary: 'Replace the complete furnishing set, preserving shell, openings, equipment and hosting.',
-    description: 'Metres on a 1 mm grid. Retain unrelated items and their identities. Supported devices require a desk/table supportId. Use only for explicit whole-model or cross-room work.',
+    description: 'Metres on a 1 mm grid. Retain unrelated items, identities and existing levels. Furnishing DTOs omit the stored levelId; the host preserves ownership by identity. New or transferred building furnishings require levelAssignments:[{entityId,levelId}]. Supported devices require a desk/table supportId on the same level. Use only for explicit whole-model or cross-room work.',
     effect: 'draft-write', params: { input: furnishingSet }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context,
       () => previewFurnishings(call.context.snapshot, input), () => call.throwIfRevoked()) }),
   previewFloor: api.method({ summary: 'Compile a rectangular multi-room floor shell from rooms and hosted openings, in whole millimetres.',
-    description: 'Requires explicit floor-plan-reconstruction scope. Replaces the prior shell; retains current draft furniture/equipment exactly and fails if they no longer fit. Rooms tile one rectangle; shared walls are generated once. Door/Window offsets run from each room side minimum X (north/south) or Y (east/west).',
+    description: 'Requires explicit floor-plan-reconstruction or building-reconstruction scope. Reconstructs one stable level, retaining its elevation, slab, roof, incident stairs, all contents and every other level. Rooms tile one rectangle; shared walls are generated once. Door/Window offsets run from each room side minimum X (north/south) or Y (east/west).',
     effect: 'draft-write', params: { input: FloorLayoutSchema }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context, () => {
-      if (call.context.binding.authoringScope !== 'floor-plan-reconstruction') throw new Error('Floor reconstruction requires explicit authoring scope.');
+      const scope = call.context.binding.authoringScope;
+      if (scope !== 'floor-plan-reconstruction' && scope !== 'building-reconstruction') throw new Error('Floor reconstruction requires explicit authoring scope.');
+      if (scope === 'floor-plan-reconstruction' && call.context.snapshot.version === 2 && selectedLevel(call.context)?.id !== input.level.id) {
+        throw new Error('Floor reconstruction must target the bound level. Select one Level for this request.');
+      }
       return previewFloor(call.context.snapshot, input);
     }, () => call.throwIfRevoked()) }),
+  previewBuilding: api.method({ summary: 'Compile basement, ground and attic levels, slabs, straight stairs and a flat or gabled roof into a version-2 building proposal.',
+    description: 'Requires explicit building-reconstruction scope. Supply BuildingLayout levels and stairs; level elevations and geometry inputs use whole millimetres. Retains contents and their ownership. Stair slab voids are derived. No complex roofs, multi-flight stairs or code certification. Changes remain private until a separate human acceptance.',
+    effect: 'draft-write', params: { input: BuildingLayoutSchema }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context, () => {
+      if (call.context.binding.authoringScope !== 'building-reconstruction') throw new Error('Building reconstruction requires explicit authoring scope.');
+      return previewBuilding(call.context.snapshot, input);
+    }, () => call.throwIfRevoked()) }),
   previewRoomFurnishings: api.method({ summary: 'Replace the complete furnishing set in one named room, preserving all other rooms exactly.',
-    description: 'Include existing room furnishings to retain. No cross-room transfers. Metres, same placement and support rules as previewFurnishings.',
+    description: 'Include existing room furnishings to retain. Ownership derives from roomId, including for new items on stacked floors. No cross-room transfers. Metres, same placement and support rules as previewFurnishings.',
     effect: 'draft-write', params: { input: roomFurnishingSet }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context,
       () => previewRoomFurnishings(call.context.snapshot, input), () => call.throwIfRevoked()) }),
 } });
 
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
   'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base. ' +
+  'placement.levels lists stable levels and world elevations; placement.selectedLevelId binds a selected Level, spatial reference or unambiguous selected-object owner. ' +
+  'placement.entities supplies entityId, levelId and world floor-base elevation. placement.rooms supplies levelId and entityIds computed within that level. ' +
+  'Coincident XY coordinates on different levels never imply shared room membership. A null selectedLevelId means the context does not identify one level. ' +
   'previewRectangle uses millimetres; furnishing positions and sizes use metres on a 1 mm grid. ' +
-  'previewRoomFurnishings retains all other rooms. previewFurnishings replaces the complete whole-model furniture set. ' +
-  'previewFloor(input:FloorLayout) requires floor-plan-reconstruction scope and replaces only the shell. ' +
+  'previewRoomFurnishings derives ownership from roomId and retains all other rooms and levels. previewFurnishings replaces the complete whole-model furniture set. ' +
+  'Retain existing furnishing levels; new or transferred whole-building items require optional levelAssignments:[{entityId,levelId}]. Never assign levels by XY overlap. ' +
+  'When reusing inspected V2 Furniture, omit stored levelId from the furnishing DTO; the host retains ownership by identity. Use the separate levelAssignments only to assign new or transferred items. ' +
+  'previewFloor(input:FloorLayout) requires floor-plan-reconstruction or building-reconstruction scope and replaces one level shell using its stable level ID. ' +
+  'On a building it retains that level elevation, slab, roof, incident stairs, all contents and every other level. Floor-only scope must target the bound level. ' +
   'Supply level:{id,name}, 2..12 rooms:{id,name,boundsMm:{minX,minY,maxX,maxY}}, wallThicknessMm, heightMm and openings. ' +
   'Each opening has type:Door|Window, id,name,roomId,side:north|south|east|west,offsetMm,widthMm,heightMm; Windows also require sillHeightMm. ' +
   'All floor values are whole millimetres. Room bounds are wall centrelines; offsets run from the side minimum X for north/south or Y for east/west. ' +
-  'Rooms must tile one rectangle with a doorway path outside. Shared walls and opening hosts are compiled automatically. ' +
-  'Current draft Furniture/Equipment are retained exactly. If they do not fit, reconstruction fails; explicitly move/remove requested furnishings with previewFurnishings in the same script before rebuilding. Equipment cannot be removed by furnishing tools. ' +
+  'Rooms tile each level rectangle; doors and stairs together must provide a path to a real exterior exit. Basement and attic do not each need an exterior door. Shared walls and opening hosts are compiled automatically. ' +
+  'previewBuilding(input:BuildingLayout) requires building-reconstruction scope ONLY. Selection, spatial references and attached files never grant building authority. ' +
+  'BuildingLayout contains levels and stairs. Each level supplies the floor layout fields, level:{id,name,elevationMm}, slabThicknessMm and roof (or null). ' +
+  'roof supplies boundsMm, thicknessMm and profile:{kind:"flat",heightMm} or {kind:"gable",eaveHeightMm,ridgeHeightMm,ridgeAxis:"x"|"y"}. ' +
+  'Each stair supplies id,name,fromLevelId,toLevelId,startMm:[x,y],endMm:[x,y],widthMm and integer steps. ' +
+  'Use negative basement elevation, zero ground elevation and positive attic elevation. At most six levels and twelve rooms per level, subject to the bounded complete graph. ' +
+  'The highest level may have a flat or gabled roof. Stairs are straight, axis aligned, connect adjacent levels, and fit rooms at both endpoints; slab voids are derived. Complex roofs and multi-flight stairs are unsupported. ' +
+  'New building reconstruction creates version 2 with explicit level ownership. Historical inspection and edits retain their format and hashes; no defaults are persisted during restore. ' +
+  'Current draft Furniture/Equipment and their ownership are retained. If they do not fit, reconstruction fails; explicitly move/remove requested furnishings with previewFurnishings in the same script before rebuilding. Equipment cannot be removed by furnishing tools. ' +
+  'For multiple images or PDF pages, map each source/page to its separate level and document elevations, dimensions, roof/stair assumptions and omitted features in review. Never flatten basement and attic into one floor. ' +
+  'Roof clearance and stair geometry are concept evidence, never structural, headroom or building-code certification. ' +
   'Monitor/laptop supportId must refer to a desk/table. No implicit workstation or proximity group exists. ' +
   'Return {kind:"observe",observation:value}, {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}}, ' +
   'or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
@@ -212,7 +293,7 @@ export class ModelScripts {
   constructor(limits: Partial<Pick<ExecutionLimits, 'timeoutMs' | 'hostCalls' | 'sourceBytes' | 'resultBytes'>> = {}) { this.#limits = limits; }
   #get(): Promise<ScriptBoxRuntime<Draft>> {
     if (this.#disposed) throw new Error('The model script runtime is disposed.');
-    this.#runtime ??= createRuntime<Draft>({ apis: [model], docs: [guide], contractVersion: 'bim-model-scripts-v1', policyVersion: 'proposal-intent-v1',
+    this.#runtime ??= createRuntime<Draft>({ apis: [model], docs: [guide], contractVersion: 'bim-model-scripts-v2', policyVersion: 'proposal-intent-v1',
       sealResults: true, compilerWorkers: 1,
       limits: { memoryBytes: 64 * 1024 * 1024, compilerHeapMb: 256, sourceBytes: 32 * 1024, resultBytes: 64 * 1024,
         hostCalls: MAX_SCRIPT_HOST_CALLS, evidenceRecords: MAX_SCRIPT_HOST_CALLS, ...this.#limits },
@@ -230,7 +311,8 @@ export class ModelScripts {
     const draft: Draft = { base: input.base, snapshot: input.base, binding: input.binding, signal: input.signal, onActivity: input.onActivity };
     const session = runtime.createSession({ context: draft,
       capabilities: ['model.inspect', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings',
-        ...(input.binding.authoringScope === 'floor-plan-reconstruction' ? ['model.previewFloor'] : [])],
+        ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
+        ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
       limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },
       // Awaited audit callbacks fail closed. Never forward guest logs or raw handler errors to product activity.
       audit: (event: ExecutionEvent) => {

@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { RoomRepository } from '../src/room-model.ts';
+import type { Point } from '../src/room-model.ts';
 import { prepareModelProposal, validateModelProposalRequest } from '../src/model-proposal.ts';
 import { parseRequestActivity } from '../src/request-activity.ts';
 import type { RequestActivity, ActivityUpdate } from '../src/request-activity.ts';
@@ -105,6 +106,12 @@ function storedVisual(value: Record<string, unknown>): RequestInput['visualInten
     const d = value.destination;
     if (d.kind === 'floor-point' && Array.isArray(d.positionMm) && d.positionMm.length === 2
         && typeof d.positionMm[0] === 'number' && typeof d.positionMm[1] === 'number') {
+      if (Object.hasOwn(d, 'levelId')) {
+        if (typeof d.levelId !== 'string') throw new Error('Invalid stored floor level.');
+        const positionMm: Point = [d.positionMm[0], d.positionMm[1]];
+        const destination = { kind: 'floor-point' as const, levelId: d.levelId, positionMm };
+        return { kind: 'spatial-reference', destination };
+      }
       return { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [d.positionMm[0], d.positionMm[1]] } };
     }
     if (d.kind === 'wall-point' && typeof d.wallId === 'string' && typeof d.alongWallMm === 'number') {

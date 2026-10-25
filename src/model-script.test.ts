@@ -250,6 +250,9 @@ test('inspection retains room memberships, doorway connections, coordinates and 
       if (!furnishings.some(item => item.id === 'office-plant')) throw new Error('Typed entity arrays lost furnishing data.');
       const room = view.placement.rooms.find(room => room.id === 'room-office');
       if (!room?.entityIds.includes('office-plant')) throw new Error('Missing actual room membership.');
+      if (view.placement.levels.length !== 1 || view.placement.selectedLevelId !== room.levelId) throw new Error('Missing bound legacy floor context.');
+      const plant = view.placement.entities.find(item => item.entityId === 'office-plant');
+      if (plant?.levelId !== room.levelId || plant.elevation !== 0) throw new Error('Missing legacy ownership inspection.');
       if (view.placement.layout !== null) throw new Error('Multi-room floor cannot be resized as one rectangle.');
       const guide = await docs.read('/guides/model.md');
       if (!JSON.stringify(guide).includes('millimetres')) throw new Error('Missing API guide.');
