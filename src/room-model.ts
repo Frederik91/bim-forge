@@ -1064,6 +1064,17 @@ export class RoomRepository {
     return value;
   }
 
+  reviewAt(revisionId: string): { review: ProposalReview; comparisonBaseRevisionId: RevisionId } | null {
+    this.view(revisionId);
+    for (const review of this.reviews()) {
+      if (review.proposalRevisionId === revisionId) return freeze({ review, comparisonBaseRevisionId: review.baseRevisionId });
+      if (review.decision.status !== 'pending' && review.decision.application?.appliedRevisionId === revisionId) {
+        return freeze({ review, comparisonBaseRevisionId: review.decision.application.ontoRevisionId });
+      }
+    }
+    return null;
+  }
+
   accept(name: string, input: unknown): RoomRepository {
     const proposalName = branchName(name);
     if (proposalName === 'main') fail('Choose a proposal to accept.');

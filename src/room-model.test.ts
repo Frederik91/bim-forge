@@ -721,6 +721,9 @@ test('conflict-aware acceptance preserves independent chair changes and immutabl
   assert.ok(review.decision.status === 'accepted');
   assert.deepEqual(review.decision.application, { ontoRevisionId: firstAccepted.head('main'), appliedRevisionId: current.id });
   assert.equal(final.review('first-chair').decision.status, 'superseded');
+  assert.deepEqual(final.reviewAt(current.id), { review, comparisonBaseRevisionId: firstAccepted.head('main') });
+  assert.deepEqual(final.reviewAt(originalProposal.id), { review, comparisonBaseRevisionId: originalReview.baseRevisionId });
+  assert.deepEqual(diffSnapshots(final.view(firstAccepted.head('main')).snapshot, current.snapshot).entities.modified.map(item => item.id), ['office-chair']);
   assert.equal((await RoomRepository.restore(final.serialize())).serialize(), final.serialize());
   const forged = parseRecord(final.serialize());
   const forgedReview = recordArray(forged, 'reviews').find(item => item.proposalName === 'second-chair');
