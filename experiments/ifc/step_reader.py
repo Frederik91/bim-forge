@@ -313,7 +313,7 @@ class Reader:
 
     def snapshot(self):
         root_pattern = re.compile(r"^[0-3][0-9A-Za-z_$]{21}$")
-        roots = [{"guid": x.args[0], "kind": x.kind, "name": x.args[2]} for x in self.entities.values()
+        roots = [{"guid": x.args[0], "kind": x.kind, "name": None if x.args[2] == Atom("$") else x.args[2]} for x in self.entities.values()
                  if len(x.args) >= 4 and isinstance(x.args[0], str) and root_pattern.fullmatch(x.args[0])]
         guids = [x["guid"] for x in roots]
         if len(guids) != len(set(guids)):

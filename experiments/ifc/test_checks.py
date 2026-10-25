@@ -10,7 +10,7 @@ import ifcopenshell
 import jsonschema
 
 from ifc_model import add_unfamiliar_bounded_property, direct_inputs, export_model, successive_direct_export
-from run import coordinate_errors, paired_errors, semantic_errors, validate_input
+from run import canonical_hash, close, coordinate_errors, paired_errors, semantic_errors, validate_input
 from step_reader import Reader, parse
 
 
@@ -44,6 +44,17 @@ class ReaderChecks(unittest.TestCase):
         second = self.path.with_name("second.ifc")
         successive_direct_export(self.path, second)
         self.assertEqual(paired_errors(Reader.open(self.path).snapshot(), Reader.open(second).snapshot()), [])
+
+    def test_exact_snapshot_hashes_accept_unnamed_roots_and_remain_distinct_from_physical_equivalence(self):
+        millimetres = Reader.open(self.path).snapshot()
+        metres_path = self.path.with_name("metres.ifc")
+        export_model(direct_inputs("rotated-m"), "ifc-native", metres_path)
+        metres = Reader.open(metres_path).snapshot()
+        self.assertTrue(any(root["name"] is None for root in millimetres["roots"]))
+        self.assertEqual(canonical_hash(millimetres), canonical_hash(json.loads(json.dumps(millimetres))))
+        self.assertNotEqual(canonical_hash(millimetres), canonical_hash(metres))
+        for key in metres["products"]:
+            self.assertTrue(close(metres["products"][key]["cornersMetres"], millimetres["products"][key]["cornersMetres"], 1e-6))
 
     def test_independent_checks_detect_real_serialized_unit_map_and_property_corruption(self):
         for mutation in ("unit", "map", "property", "host"):

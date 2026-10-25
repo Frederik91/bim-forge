@@ -1,6 +1,6 @@
 # W2: narrow IFC exchange and coordinates
 
-Tracking: [#125](https://github.com/Frederik91/bim-forge/issues/125), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). Implementation only; **no execution evidence is claimed**. W0 foundation: `4fb723bc29a0fced971b3f4b2069e0fa31699a68`. Draft PR waits for coordinator-supplied server validation. No preview, production model or deployment changes.
+Tracking: [#125](https://github.com/Frederik91/bim-forge/issues/125), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). W0 foundation: `19118447930f41218bc732466b55442e5d83adf5`. [Server debug evidence](../../docs/experiments/results/EX-02/w2-debug-be6e71b-20261025/README.md) records passing compilation/unit checks and a failed qualification run. **No experiment is qualified.** Draft PR remains withheld. No preview, production model or deployment changes.
 
 Plan and owned files:
 
@@ -35,13 +35,14 @@ The STEP reader imports no IfcOpenShell code. It handles this ASCII IFC4 rectang
 
 ## Coordinator server commands
 
-No commands below have been run by this worker. The coordinator allocates a disposable server container/slot and retains stdout, stderr, exit statuses, exact source Git metadata and image identity. The prepared tools image is `bim-qvm-tools:20261025`, reported image ID `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`. Main owns verification of that image and mounts. Use its Node/dependency setup and Python 3.11 venv on `/ssd1`, mounted at `/qualification`; no root package-script changes are needed. `Dockerfile` is an optional Python 3.12 alternative, not a requirement to rebuild main's tools image.
+The coordinator allocates a disposable server container/slot and retains stdout, stderr, exit statuses, exact source Git metadata and image identity. The debug lease used `bim-qvm-tools:20261025`, verified image ID `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`, 0.5 CPU and 1536 MiB memory. Main owns future scheduling. Use its Node/dependency setup and Python 3.11 venv on `/ssd1`, mounted at `/qualification`; no root package-script changes are needed. `Dockerfile` is an optional Python 3.12 alternative, not a requirement to rebuild main's tools image.
 
 Run in the server tools container, with the exact source clone at `/workspace`, root Node dependencies available, and an exclusive fresh run path. Install once as requested by the coordinator:
 
 ```sh
-/qualification/venv/bin/python -m pip install --only-binary=:all: -r experiments/ifc/requirements.txt
-/qualification/venv/bin/python -m pip freeze
+export PYTHONPATH=/qualification/w2-deps-REPLACE-WITH-UNIQUE-RUN-ID
+/qualification/python/bin/python -m pip install --only-binary=:all: --target "$PYTHONPATH" -r experiments/ifc/requirements.txt
+/qualification/python/bin/python -m pip list --path "$PYTHONPATH" --format=freeze
 ```
 
 If main uses another venv path, substitute it for `PY` below. Commands are sequential; retain a nonzero experiment exit and inspect its observations. Do not turn a failed capability into a successful assertion.
@@ -49,7 +50,7 @@ If main uses another venv path, substitute it for `PY` below. Commands are seque
 ```sh
 cd /workspace
 export PYTHONDONTWRITEBYTECODE=1
-PY=/qualification/venv/bin/python
+PY=/qualification/python/bin/python
 RUN=/qualification/w2-runs/w2-125-REPLACE-WITH-UNIQUE-RUN-ID
 SOURCE_COMMIT=$(git rev-parse HEAD)
 
@@ -77,6 +78,10 @@ W0 `parseObservations` validates the final array. `observations.ts` creates a re
 
 ## Limits before review
 
-Not run by this worker: dependency installation, TypeScript validation/tests, IFC generation, EXPRESS rules, kernel evaluation and server containers. All behavior above is implemented intent awaiting those checks. A real failure is valid failed evidence. No external vendor model, Revit, arbitrary IFC ingestion, closed space shell, complex B-rep, multi-engine geometry agreement, global geodesy, UI viewport rebasing, production model mutation or deployment is qualified. The comparison is sufficient to expose this slice's loss and mapping costs; it cannot select a complete authoring architecture on its own.
+At tested source `be6e71b2cc641d669de9f2e57dec49623744100a`, server `npm run validate` checked 117 sources; W2 strict typechecking, 3 TS tests and 7 Python tests passed. Generation emitted 85 observations: 65 passed and 20 failed. All 16 real-kernel checks, 16 coordinate checks, 16 semantic checks and 8 successive-export checks passed. EXPRESS validation did not execute because IfcOpenShell's rule executor imports `_pytest`; four exact-hash cases failed because optional unnamed root fields still held a STEP sentinel instead of JSON null. Roundtrip stages did not execute. Both failed IFC attempt directories remain on the server; the linked evidence directory contains raw logs, observations and the server artifact manifest.
+
+The follow-up pins pytest and its dependencies, maps absent root names to JSON null, and adds a real-export hash/physical-equivalence regression check. **Those final changes are unvalidated.** Execution stopped under the retry cap; the leased container was stopped. The worker initially treated stages as separate retry items; the coordinator must authorize another attempt before resuming the full pipeline. The bounded-property full-preservation assertion remains unchanged and must emit a false observation if the loss occurs; no such observation has been fabricated for the unexecuted roundtrip.
+
+No external vendor model, Revit, arbitrary IFC ingestion, closed space shell, complex B-rep, multi-engine geometry agreement, global geodesy, UI viewport rebasing, production model mutation or deployment is qualified. The comparison exposes this slice's loss and mapping costs; it cannot select a complete authoring architecture on its own.
 
 Primary references: [released IFC4 ADD2 TC1 EXPRESS, buildingSMART](https://github.com/buildingSMART/IFC4.3.x-development/blob/master/reference_schemas/IFC4_ADD2_TC1.exp), [IfcOpenShell 0.9.0.post1 wheel metadata](https://pypi.org/project/ifcopenshell/0.9.0.post1/), [IfcOpenShell validation](https://docs.ifcopenshell.org/ifcopenshell-python/validation.html), [geometry settings](https://docs.ifcopenshell.org/ifcopenshell/geometry_settings.html). The EXPRESS attribute positions and IFC class semantics are attributed to buildingSMART International; no custom/pre-release IFC schema is used.

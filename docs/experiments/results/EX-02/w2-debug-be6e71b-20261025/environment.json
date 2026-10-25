@@ -1,0 +1,26 @@
+{
+  "contractCommit": "19118447930f41218bc732466b55442e5d83adf5",
+  "limitations": [
+    "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+    "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+    "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+    "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+    "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+    "Standalone observations require W0 validation and independent review; no engineering approval."
+  ],
+  "packages": {
+    "ifcopenshell": "0.9.0.post1",
+    "jsonschema": "4.24.0",
+    "numpy": "2.2.6"
+  },
+  "platform": "Linux-6.8.0-111-generic-x86_64-with-glibc2.36",
+  "provenance": "controlled-generated",
+  "python": "3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]",
+  "schema": "IFC4 ADD2 TC1",
+  "sourceCommit": "be6e71b2cc641d669de9f2e57dec49623744100a",
+  "tolerances": {
+    "geometryM": 1e-06,
+    "surveyM": 1e-06,
+    "volumeM3": 1e-06
+  }
+}
