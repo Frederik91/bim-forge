@@ -1,0 +1,143 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+import { Type } from 'typebox';
+import { Check } from 'typebox/value';
+import { RoomRepository } from '../../src/room-model.ts';
+import { concurrencyCases, emptyReservedRegion, northWallGap } from './concurrency.ts';
+import { current, entity, fixture } from './fixture.ts';
+import { coverageFor } from './coverage.ts';
+import { identityCases } from './identity.ts';
+import { parseObservations } from './protocol.ts';
+import type { CaseResult, Observation } from './protocol.ts';
+import { runSemanticCases } from './runner.ts';
+
+function caseById(cases: CaseResult[], caseId: string): CaseResult {
+  const value = cases.find((item) => item.observation.caseId === caseId);
+  assert.ok(value, `Missing ${caseId}`);
+  return value;
+}
+
+test('native identity, distinct chairs, and occurrence isolation retain exact real baseline evidence', async () => {
+  const cases = await identityCases();
+  for (const id of ['native-identity-restore', 'identical-chair-occurrences', 'duplicate-native-id',
+    'occurrence-edit-isolation', 'explicit-family-fork-scope']) {
+    assert.equal(caseById(cases, id).observation.passed, true, id);
+    assert.ok(caseById(cases, id).artifact.operations.length > 0);
+  }
+  for (const id of ['native-id-churn-lineage', 'native-split-merge-lineage', 'paired-real-exports-not-covered', 'general-shared-properties-not-covered']) {
+    assert.equal(caseById(cases, id).observation.passed, false, id);
+    assert.ok(caseById(cases, id).observation.limitations.length > 0);
+  }
+  const gap = caseById(cases, 'native-split-merge-lineage');
+  assert.match(gap.observation.observed, /person-split-a/);
+  assert.match(gap.observation.observed, /person-merged/);
+  assert.match(gap.observation.observed, /Unexpected model fields/);
+});
+
+test('concurrency evidence distinguishes supported rejection from qualification gaps', async () => {
+  const cases = await concurrencyCases();
+  for (const id of ['independent-desk-then-bed', 'independent-bed-then-desk',
+    'cross-object-overlap-desk-meeting', 'cross-object-overlap-chair-meeting',
+    'divergent-same-property', 'units-and-dependent-values']) {
+    assert.equal(caseById(cases, id).observation.passed, true, id);
+  }
+  for (const id of ['phantom-empty-region-assumption', 'acceptance-command-payload-retry',
+    'changed-destination-wall-valid-geometry', 'unrelated-change-approval-equivalence', 'declared-independent-metadata-fields']) {
+    assert.equal(caseById(cases, id).observation.passed, false, id);
+  }
+  assert.match(caseById(cases, 'declared-independent-metadata-fields').observation.observed, /Conflicting changes to chair-one/);
+  assert.match(caseById(cases, 'acceptance-command-payload-retry').observation.observed, /already has a decision/);
+});
+
+const AppliedRawSchema = Type.Object({ applied: Type.String() });
+const OutcomeRawSchema = Type.Object({ outcome: Type.Object({ kind: Type.Literal('returned'), repository: Type.String() }) });
+
+test('both orders contain actual desk and bed values while stale assumptions remain geometrically valid', async () => {
+  const cases = await concurrencyCases();
+  const snapshots = [];
+  for (const id of ['independent-desk-then-bed', 'independent-bed-then-desk']) {
+    const raw = caseById(cases, id).artifact.raw;
+    assert.ok(Check(AppliedRawSchema, raw));
+    const restored = await RoomRepository.restore(raw.applied);
+    const snapshot = current(restored);
+    const desk = entity(snapshot, 'desk-one'); const bed = entity(snapshot, 'bed-one');
+    assert.ok(desk.type === 'Furniture' && bed.type === 'Furniture');
+    assert.deepEqual(desk.position, [1.4, 2]); assert.deepEqual(bed.position, [4.2, 2.5]);
+    assert.equal(restored.reviews().length, 2);
+    assert.ok(restored.reviews().every((item) => item.decision.status !== 'pending'));
+    snapshots.push(snapshot);
+  }
+  assert.deepEqual(snapshots[0], snapshots[1]);
+  const phantom = caseById(cases, 'phantom-empty-region-assumption').artifact.raw;
+  assert.ok(Check(OutcomeRawSchema, phantom));
+  const phantomApplied = await RoomRepository.restore(phantom.outcome.repository);
+  assert.equal(emptyReservedRegion(current(phantomApplied)), false);
+  assert.deepEqual(phantomApplied.review('reserved-desk').intent?.assumptions,
+    ['Region x=[0.6,2.0], y=[0.7,2.5] remains empty except desk-one.']);
+  const wall = caseById(cases, 'changed-destination-wall-valid-geometry').artifact.raw;
+  assert.ok(Check(OutcomeRawSchema, wall));
+  const wallApplied = await RoomRepository.restore(wall.outcome.repository);
+  assert.ok(Math.abs(northWallGap(current(wallApplied)) - 1.4) < 1e-9);
+});
+
+test('fixture and complete case observations are deterministic across independent runs', async () => {
+  const a = await fixture(); const b = await fixture();
+  assert.equal(a.serialize(), b.serialize());
+  assert.equal(emptyReservedRegion(current(a)), true);
+  const first = await runSemanticCases(); const second = await runSemanticCases();
+  assert.deepEqual(first, second);
+  assert.equal(new Set(first.observations.map((item) => item.experimentId)).size, 5);
+  assert.deepEqual(first.observations.map((item) => item.caseId), first.artifacts.map((item) => item.caseId));
+  assert.ok(first.observations.some((item) => item.passed));
+  assert.ok(first.observations.some((item) => !item.passed));
+});
+
+test('observation boundary rejects forged fields, non-booleans and duplicate case identities', () => {
+  const observation: Observation = { experimentId: 'EX-01', caseId: 'native', expected: 'stable', observed: 'stable', passed: true, limitations: [] };
+  assert.deepEqual(parseObservations([observation]), [observation]);
+  assert.throws(() => parseObservations([{ ...observation, approved: true }]), /Invalid/);
+  assert.throws(() => parseObservations([{ ...observation, passed: 'true' }]), /Invalid/);
+  assert.throws(() => parseObservations([{ ...observation, experimentId: 'EX-13' }]), /Invalid/);
+  assert.throws(() => parseObservations([observation, observation]), /unique/);
+});
+
+test('coverage accounts for exact W0 definition assertions and refuses stale definitions or unobserved cases', async () => {
+  const registry: unknown = JSON.parse(await readFile(new URL('../../docs/experiments/registry.json', import.meta.url), 'utf8'));
+  const { observations } = await runSemanticCases();
+  const coverage = coverageFor(registry, observations);
+  assert.equal(coverage.length, 5);
+  assert.equal(coverage.find((item) => item.experimentId === 'EX-01')?.coverage[0]?.coverage, 'partial');
+  assert.equal(coverage.find((item) => item.experimentId === 'EX-03')?.coverage[2]?.coverage, 'not-covered');
+  assert.throws(() => coverageFor({ experiments: [] }, observations), /stale/);
+  assert.throws(() => coverageFor(registry, observations.filter((item) => item.caseId !== 'native-identity-restore')), /unobserved/);
+});
+
+test('CLI emits the protocol array, binds raw bytes by hash, and refuses to overwrite a run directory', async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), 'bim-forge-w1-'));
+  const output = path.join(parent, 'run');
+  const cli = fileURLToPath(new URL('./cli.ts', import.meta.url));
+  const execute = promisify(execFile);
+  try {
+    const first = await execute(process.execPath, [cli, '--artifacts', output], { maxBuffer: 4 * 1024 * 1024 });
+    const parsed: unknown = JSON.parse(first.stdout);
+    const observations = parseObservations(parsed);
+    assert.ok(observations.some((item) => !item.passed));
+    const raw = await readFile(path.join(output, 'raw.json'), 'utf8');
+    const manifest: unknown = JSON.parse(await readFile(path.join(output, 'manifest.json'), 'utf8'));
+    const ManifestSchema = Type.Object({ sha256: Type.String(), bytes: Type.Integer(), caseIds: Type.Array(Type.String()) });
+    assert.ok(Check(ManifestSchema, manifest));
+    assert.equal(manifest.sha256, createHash('sha256').update(raw).digest('hex'));
+    assert.equal(manifest.bytes, Buffer.byteLength(raw));
+    assert.deepEqual(manifest.caseIds, observations.map((item) => item.caseId));
+    await assert.rejects(execute(process.execPath, [cli, '--artifacts', output]), /EEXIST/);
+    assert.equal(await readFile(path.join(output, 'raw.json'), 'utf8'), raw);
+    await assert.rejects(execute(process.execPath, [cli, '--artifacts', path.join(parent, 'other'), '--approve']), /Usage/);
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
