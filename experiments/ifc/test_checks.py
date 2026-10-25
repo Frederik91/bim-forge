@@ -1,12 +1,16 @@
 """Server-only sensitivity checks against real generated IFC, not a mocked engine."""
 import tempfile
 import unittest
+import copy
+import json
+import subprocess
 from pathlib import Path
 
 import ifcopenshell
+import jsonschema
 
 from ifc_model import add_unfamiliar_bounded_property, direct_inputs, export_model, successive_direct_export
-from run import coordinate_errors, paired_errors, semantic_errors
+from run import coordinate_errors, paired_errors, semantic_errors, validate_input
 from step_reader import Reader, parse
 
 
@@ -22,6 +26,19 @@ class ReaderChecks(unittest.TestCase):
         snapshot = Reader.open(self.path).snapshot()
         self.assertEqual(semantic_errors(snapshot, self.model), [])
         self.assertEqual(coordinate_errors(snapshot, self.model), [])
+
+    def test_actual_ts_json_boundary_accepts_valid_3d_input_and_rejects_malformed_coordinates(self):
+        output = Path(self.temp.name) / "native-inputs"
+        subprocess.run(["node", "experiments/ifc/native.ts", "generate", str(output)], check=True, capture_output=True, text=True)
+        schema = json.loads((output / "native-model.schema.json").read_text())
+        model = json.loads((output / "m-r1.json").read_text())
+        self.assertEqual(validate_input(model, schema), model)
+        for coordinates in ([10, 20], [10, 20, 3, 0], [10, "20", 3]):
+            with self.subTest(coordinates=coordinates):
+                invalid = copy.deepcopy(model)
+                invalid["storey"]["origin"] = coordinates
+                with self.assertRaises(jsonschema.ValidationError):
+                    validate_input(invalid, schema)
 
     def test_successive_exports_have_stable_ids_and_one_changed_occurrence(self):
         second = self.path.with_name("second.ifc")
