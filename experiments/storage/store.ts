@@ -75,6 +75,13 @@ export class Storage {
     return row.head;
   }
 
+  async detail(input: { branch: string; entityId: string }): Promise<VersionedEntity | null> {
+    parse(IdSchema, input.branch, 'branch'); parse(IdSchema, input.entityId, 'entity id');
+    const [row] = await this.rows(BodyRow, `SELECT v.body,v.version_id FROM qvm_storage.visibility c
+      JOIN qvm_storage.versions v USING(version_id) WHERE c.branch=$1 AND c.entity_id=$2`, [input.branch, input.entityId]);
+    return row ? { entity: entity(row.body), versionId: row.version_id } : null;
+  }
+
   async createBranch(input: { branch: string; revisionId: string | null }): Promise<void> {
     parse(IdSchema, input.branch, 'branch');
     if (input.revisionId !== null) parse(HashSchema, input.revisionId, 'revision');

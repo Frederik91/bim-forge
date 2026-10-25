@@ -36,7 +36,7 @@ mkdir -p "$QVM_DEPS" "$QVM_EVIDENCE"
 docker inspect bim-qvm-db > "$QVM_EVIDENCE/postgres-container.json"
 docker image inspect pgvector/pgvector:0.8.0-pg15-trixie > "$QVM_EVIDENCE/postgres-image.json"
 docker run --rm --name bim-qvm-w5-checks --network bim-qvm-20261025 \
-  --cpus=1 --memory=2g \
+  --cpus=1 --memory=1g \
   -e DATABASE_URL=postgresql://qvm@bim-qvm-db/qvm \
   -e QVM_EXECUTION_LEASE="$QVM_EXECUTION_LEASE" \
   -v "$QVM_SOURCE:/work" -v "$QVM_DEPS:/deps" -v "$QVM_EVIDENCE:/evidence" \
@@ -58,6 +58,14 @@ node experiments/storage/cli.ts workload /evidence/workload-config.json /evidenc
 ```
 
 The workload output directory must not exist; its parent must exist. The database must be initialized; workload branches must be new. `QVM_EXECUTION_LEASE` records main's authorization, not a distributed lease implementation. Main enforces scheduling; a string alone cannot establish resource exclusivity. No heavy jobs have been prepared as an automatic continuation.
+
+For the predeclared 2026-10-25 envelope, workload configuration now **requires** `execution`, binding the coordinator's decision file and SHA-256. Use the updated example. Mount the shared `/ssd1` qualification directory at `execution.space.dataPath` and the host root filesystem read-only at `execution.space.hostRootPath` (for example `-v /:/host-root:ro`). The runner checks the 100 GiB data / 4 GiB root reserves before load batches and measured operations. Node plus generator share a container capped at 1 CPU / 1 GiB; PostgreSQL remains 1.5 CPU / 3 GiB. The shared 200 GiB data/WAL/tmp/artifact allocation is enforced by main's watchdog, named in `monitorEvidence`; free-space checks cannot account for each stream's directory consumption. The supplied debug-test lease is a separate correctness allocation, not the benchmark envelope.
+
+Full execution is staged: first `execution.mode={"kind":"load-only"}`, `purpose="initial-inventory"`, `historyRevisions=1`; later use `mode={"kind":"measure-existing","loadRecord":".../load.json"}`, `purpose="bounded-updates"`, and a predeclared `maxBoundedUpdates` on the same branch. The branch must still match the saved initial revision. An existing-branch measurement verifies source fingerprints/property counts again. A 1,000-revision run uses `purpose="smaller-fixture-history"` at a smaller scale. No full Cartesian inventory/history claim is supported. Bare loader/API calls remain low-level integration operations; use the workload configuration and main's watchdog for admitted full runs.
+
+`loadWallTimeLimitMs` cannot exceed 7,200,000 ms. Batch/publication checkpoints reject an expired load deadline and cap SQL statement timeouts by the remaining time. Main must enforce the hard two-hour limit externally as well, for example `timeout --signal=TERM --kill-after=30s 2h docker run ...`. Cooperative checks cannot interrupt a stalled producer immediately. Failure during statistics/finalization can leave a complete published initial revision; inspect the recorded branch head before any recovery. Do not label that failure a completed run.
+
+The runner writes `exploratory-budgets.json` and observations against predeclared warm single-client p95 limits: detail 300 ms, page/one-hop 1,000 ms, bounded delta 2,000 ms, small acceptance 4,000 ms. Detail and one-hop have separate samples; bounded-delta timing is separate from acceptance. Missing samples, errors and budget breaches cannot pass. Non-exploratory scenarios retain budgets as unqualified. These thresholds are exploratory, not product SLOs. Five alternating repetitions and an exclusive slot are required for comparative configurations only. No winner is emitted without limiter/tuning evidence.
 
 ## Measurement and supported conclusions
 

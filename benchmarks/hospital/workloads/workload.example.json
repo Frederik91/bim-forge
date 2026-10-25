@@ -7,22 +7,40 @@
   "scale": "fixture",
   "repeats": 5,
   "historyRevisions": 10,
-  "clients": 2,
+  "clients": 1,
   "mixedOperationsPerClient": 10,
   "writeEvery": 10,
   "pageSize": 100,
   "cacheLabel": "warm: explicit page and historical warmup; OS cache unchanged",
   "leaseMode": "shared-correctness",
   "statementTimeoutMs": 30000,
+  "execution": {
+    "decisionPath": "docs/experiments/decisions/execution-envelope-20261025.md",
+    "decisionSha256": "REPLACE_WITH_PREDECLARED_DECISION_SHA256",
+    "mode": { "kind": "load-and-measure" },
+    "purpose": "bounded-updates",
+    "measurement": "warm-single-client-exploratory",
+    "maxBoundedUpdates": 10,
+    "loadWallTimeLimitMs": 7200000,
+    "space": {
+      "dataPath": "/qualification",
+      "hostRootPath": "/host-root",
+      "dataBudgetBytes": 214748364800,
+      "dataReserveBytes": 107374182400,
+      "rootReserveBytes": 4294967296,
+      "monitorEvidence": "REPLACE_WITH_COORDINATOR_SHARED_BUDGET_WATCHDOG_EVIDENCE"
+    },
+    "exploratoryP95Ms": { "detail": 300, "page": 1000, "oneHop": 1000, "boundedDelta": 2000, "smallAccept": 4000 }
+  },
   "environment": {
     "nodeImage": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
     "postgresImage": "REPLACE_WITH_INSPECTED_IMAGE_ID",
     "sourceCommit": "REPLACE_WITH_SOURCE_COMMIT_40_HEX",
     "nodeCpuLimit": 1,
-    "nodeMemoryLimitBytes": 2147483648,
+    "nodeMemoryLimitBytes": 1073741824,
     "postgresCpuLimit": 1.5,
     "postgresMemoryLimitBytes": 3221225472,
-    "diskBudgetBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
     "storageDescription": "/ssd1/bim-forge-qualification/qvm-20261025/postgres; coordinator-owned isolated PG15"
   }
 }

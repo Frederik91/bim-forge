@@ -4,23 +4,25 @@ import path from 'node:path';
 import { Client } from 'pg';
 import { Type } from 'typebox';
 import type { Static } from 'typebox';
-import { canonical, errorMessage, hash, IdSchema, parse, JsonSchema } from './contract.ts';
+import { errorMessage, hash, HashSchema, IdSchema, parse, JsonSchema } from './contract.ts';
 import type { Json, Observation, StoredEntity } from './contract.ts';
 import { Storage } from './store.ts';
 import { envelopes, fileHash, Fingerprint, inspectBranch, load, walDifference } from './load.ts';
 import { fixtureEnvelopes, fromArray } from './fixture.ts';
 import { nativeEnvelopes, rebuildNative, saveSnapshot, snapshotAt } from './baseline.ts';
 import { w4Input, w4Generator } from './w4.ts';
+import { ExecutionSchema, assessBudgets, spaceSnapshot, validateExecution } from './envelope.ts';
 
 export const ConfigSchema = Type.Object({
   experimentId: Type.Union([Type.Literal('EX-10'), Type.Literal('EX-13')]), runId: IdSchema, branch: IdSchema,
   dataset: Type.String({ minLength: 1 }), format: Type.Union([Type.Literal('envelopes'), Type.Literal('w0-fixture'), Type.Literal('native-snapshot'), Type.Literal('w4-copy'), Type.Literal('w4-generator')]),
   scale: Type.Union([Type.Literal('fixture'), Type.Literal('smoke'), Type.Literal('reduced'), Type.Literal('medium'), Type.Literal('full'), Type.Literal('detail-stress')]),
-  repeats: Type.Integer({ minimum: 5, maximum: 100 }), historyRevisions: Type.Integer({ minimum: 1, maximum: 1000 }),
+  repeats: Type.Integer({ minimum: 1, maximum: 100 }), historyRevisions: Type.Integer({ minimum: 1, maximum: 1000 }),
   clients: Type.Integer({ minimum: 1, maximum: 32 }), mixedOperationsPerClient: Type.Integer({ minimum: 2, maximum: 1000 }),
   writeEvery: Type.Integer({ minimum: 2, maximum: 10 }), pageSize: Type.Integer({ minimum: 1, maximum: 1000 }),
   cacheLabel: Type.String({ minLength: 1 }), leaseMode: Type.Union([Type.Literal('shared-correctness'), Type.Literal('exclusive-measurement')]),
   statementTimeoutMs: Type.Integer({ minimum: 1000, maximum: 3600000 }),
+  execution: ExecutionSchema,
   environment: Type.Object({
     nodeImage: Type.String({ minLength: 1 }), postgresImage: Type.String({ minLength: 1 }), sourceCommit: Type.String({ pattern: '^[a-f0-9]{40}$' }),
     nodeCpuLimit: Type.Number({ exclusiveMinimum: 0 }), nodeMemoryLimitBytes: Type.Integer({ minimum: 1 }),
@@ -44,12 +46,14 @@ export async function inputFor(config: Pick<Config, 'dataset' | 'format'>): Prom
 
 export async function runWorkload(store: Storage, rawConfig: unknown, directory: string): Promise<Observation[]> {
   const config = parse(ConfigSchema, rawConfig, 'workload config');
+  validateExecution(config);
+  if (await fileHash(config.execution.decisionPath) !== config.execution.decisionSha256) throw new Error('Predeclared execution decision hash mismatch');
   if (!process.env.QVM_EXECUTION_LEASE) throw new Error('Coordinator execution lease is required');
   if ((config.scale === 'full' || config.scale === 'detail-stress') && config.leaseMode !== 'exclusive-measurement') {
     throw new Error('Full capacity measurements require an exclusive coordinator lease');
   }
   const free = await statfs(path.dirname(directory));
-  if (free.bavail * free.bsize < config.environment.diskBudgetBytes) throw new Error('Insufficient admitted disk budget');
+  await spaceSnapshot(config.execution);
   await mkdir(directory);
   const observations: Observation[] = [];
   const errors: string[] = [];
@@ -62,6 +66,7 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     observations.push({ experimentId: config.experimentId, caseId, expected, observed, passed, limitations });
   };
   const sample = async (operation: string, repeat: number, variant: string, work: () => Promise<Json>): Promise<void> => {
+    await spaceSnapshot(config.execution);
     const startedAt = new Date().toISOString();
     const start = performance.now();
     let result: Json = null;
@@ -75,6 +80,9 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
   try {
     await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
     await artifact('config.json', config);
+    await artifact('execution-envelope.json', { ...config.execution, spaceBefore: await spaceSnapshot(config.execution),
+      enforcement: 'Client checks reserves and cooperative load deadline; coordinator watchdog enforces total shared 200 GiB allocation and hard wall timeout.',
+      claim: 'Exploratory budgets, not product SLOs; no winner without limiter and tuning evidence.' });
     await artifact('environment.json', {
       timestamp: new Date().toISOString(), host: hostname(), osRelease: release(), cpus: cpus().map((cpu) => cpu.model), totalmem: totalmem(),
       node: process.version, versions: process.versions, argv: process.argv, execArgv: process.execArgv,
@@ -85,8 +93,25 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     await artifact('metrics-before.json', await store.metrics());
     const [lsn] = await store.rows(Type.Object({ lsn: Type.String() }), `SELECT pg_current_wal_lsn()::text AS lsn`);
     if (!lsn) throw new Error('Missing start WAL LSN');
-    const loaded = await load(store, await inputFor(config), config.branch);
-    await artifact('load.json', { ...loaded, fileSha256: await fileHash(config.dataset) });
+    const loadStart = performance.now();
+    const checkpoint = async (): Promise<void> => {
+      const remaining = config.execution.loadWallTimeLimitMs - (performance.now() - loadStart);
+      if (remaining <= 0) throw new Error('Predeclared load wall-time limit exceeded');
+      await spaceSnapshot(config.execution);
+      await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(Math.max(1, Math.floor(Math.min(config.statementTimeoutMs, remaining))))]);
+    };
+    const LoadSummary = Type.Object({ revisionId: HashSchema,
+      fingerprint: Type.Object({ count: Type.Integer({ minimum: 1 }), sum: HashSchema, xor: HashSchema }),
+      countsByKind: Type.Record(Type.String(), Type.Integer({ minimum: 0 })),
+      propertyValuesByRecordCategory: Type.Record(Type.String(), Type.Integer({ minimum: 0 })),
+    });
+    const mode = config.execution.mode;
+    const loaded = mode.kind === 'measure-existing'
+      ? parse(LoadSummary, JSON.parse(await readFile(mode.loadRecord, 'utf8')), 'preserved load artifact')
+      : await load(store, await inputFor(config), config.branch, { checkpoint });
+    if (await store.head(config.branch) !== loaded.revisionId) throw new Error('Measured branch must start at the pinned initial load revision');
+    await store.client.query(`SELECT set_config('statement_timeout',$1,false)`, [String(config.statementTimeoutMs)]);
+    await artifact('load.json', { ...loaded, fileSha256: await fileHash(config.dataset), reused: mode.kind === 'measure-existing' });
     const actual = await inspectBranch(store, config.branch);
     const propertyValues = await store.propertyCounts(config.branch);
     await artifact('property-values.json', { expected: loaded.propertyValuesByRecordCategory, actual: propertyValues });
@@ -95,6 +120,12 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
       && hash(propertyValues) === hash(loaded.propertyValuesByRecordCategory);
     observe('source-query-oracle', 'All source documents, counts by kind and canonical hashes survive load', JSON.stringify(actual), oracle);
     if (!oracle) throw new Error('Load checksum/count oracle failed; refusing timings');
+    if (mode.kind === 'load-only') {
+      await artifact('metrics-loaded.json', await store.metrics());
+      observe('initial-inventory', 'Initial inventory published at one revision before bounded updates',
+        JSON.stringify({ revisionId: loaded.revisionId, records: loaded.fingerprint.count }), true);
+      return observations;
+    }
     const firstPage = await store.page({ branch: config.branch, after: '', limit: config.pageSize });
     const first = firstPage[0];
     if (!first) throw new Error('No workload entity');
@@ -111,6 +142,8 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     // Explicit warmup; neither OS page cache nor PostgreSQL shared buffers are flushed.
     await store.page({ branch: config.branch, after: '', limit: config.pageSize });
     await store.historical({ revisionId: loaded.revisionId, after: '', limit: config.pageSize });
+    await store.detail({ branch: config.branch, entityId: first.entity.entityId });
+    await store.projection({ branch: config.branch, field: 'from_id', id: graphSeed?.id ?? first.entity.entityId, limit: config.pageSize });
     for (let repeat = 0; repeat < config.repeats; repeat += 1) {
       const variants = repeat % 2 === 0 ? ['candidate', 'snapshot'] : ['snapshot', 'candidate'];
       for (const variant of variants) {
@@ -133,6 +166,15 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
         const checksum = hash(page.map((row) => row.entity));
         if (checksum !== workingSetHash) throw new Error('Working set checksum changed before edits');
         return { count: page.length, checksum };
+      });
+      await sample('entity-detail', repeat, 'candidate', async () => {
+        const detail = await store.detail({ branch: config.branch, entityId: first.entity.entityId });
+        if (detail?.versionId !== first.versionId) throw new Error('Detail oracle mismatch');
+        return { versionId: detail.versionId, checksum: hash(detail.entity) };
+      });
+      await sample('one-hop', repeat, 'candidate', async () => {
+        const edges = await store.projection({ branch: config.branch, field: 'from_id', id: graphSeed?.id ?? first.entity.entityId, limit: config.pageSize });
+        return { count: edges.length, checksum: hash(edges.map((row) => row.entity)), capped: edges.length === config.pageSize };
       });
       await sample('historical-page', repeat, 'candidate', async () => {
         const page = await store.historical({ revisionId: loaded.revisionId, after: '', limit: config.pageSize });
@@ -185,10 +227,13 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
           ...(nativeSnapshot === null ? { qualificationRevision: index } : { name: `W5 revision ${index}` }) } };
         const accepted = await store.accept({ branch: config.branch, commandId: `${config.runId}:history:${index}`, expectedHead: head,
           assumptions: [{ entityId: current.entityId, versionId: currentHash }], puts: [changed], deletes: [] });
-        const delta = await store.delta(accepted.revisionId);
-        if (delta.length !== 1 || delta[0]?.entity_id !== changed.entityId || delta[0].version_id !== hash(changed)) throw new Error('Delta oracle mismatch');
         head = accepted.revisionId; current = changed; currentHash = hash(changed);
-        return { head, changedId: current.entityId, versionId: currentHash, delta };
+        return { head, changedId: current.entityId, versionId: currentHash };
+      });
+      await sample('bounded-delta', index, 'candidate', async () => {
+        const delta = await store.delta(head);
+        if (delta.length !== 1 || delta[0]?.entity_id !== current.entityId || delta[0].version_id !== currentHash) throw new Error('Delta oracle mismatch');
+        return { revisionId: head, delta };
       });
       if (nativeSnapshot !== null) {
         const all = await store.page({ branch: config.branch, after: '', limit: 1000 });
@@ -227,10 +272,17 @@ export async function runWorkload(store: Storage, rawConfig: unknown, directory:
     observe('execution-failure', 'Admitted workload completes', errorMessage(error), false, ['Failed behavior is retained as evidence.']);
   } finally {
     await samples.close();
+    const budgets = assessBudgets(config.execution, sampleRows);
+    await artifact('exploratory-budgets.json', budgets);
+    if (config.execution.mode.kind !== 'load-only') {
+      for (const result of budgets.operations) observe(`exploratory-p95-${result.operation}`,
+        `Predeclared exploratory p95 <= ${result.budgetMs} ms; successful single-client samples required`,
+        JSON.stringify(result), result.passed, budgets.eligible ? [] : ['Run is not the warm single-client exploratory scenario; budget qualification is unavailable.']);
+    }
     await artifact('observations.json', observations);
     await artifact('errors.json', errors);
     await artifact('sample-summary.json', summarize(sampleRows));
-    const files = ['samples.ndjson', 'observations.json', 'errors.json', 'sample-summary.json'];
+    const files = ['samples.ndjson', 'observations.json', 'errors.json', 'sample-summary.json', 'exploratory-budgets.json'];
     await artifact('artifact-checksums.json', await Promise.all(files.map(async (file) => ({ file, sha256: await fileHash(path.join(directory, file)) }))));
     await Promise.all(files.map((file) => chmod(path.join(directory, file), 0o444)));
   }
