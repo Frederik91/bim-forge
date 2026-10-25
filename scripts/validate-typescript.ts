@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const sourceRoots = ['demo', 'factory', 'scripts', 'src'];
+const sourceRoots = ['demo', 'factory', 'scripts', 'src', 'experiments', 'benchmarks'];
 const javascriptExtensions = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 const suppressionPattern = new RegExp(`${'@'}${'ts'}-(?:ignore|expect-error|nocheck)|${'eslint'}-${'disable'}`);
 const forbiddenTypePattern = new RegExp(`\\b${'any'}\\b`, 'g');
