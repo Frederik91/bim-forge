@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "draft",
+  "experimentId": "EX-12",
+  "runId": "w6-pg-0247bdd-02-terminal-prep-v1",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T12:05:27.832Z",
+  "finishedAt": "2026-10-25T12:05:45.629Z",
+  "hypothesis": "The disposable W5 candidate and governed W6 wrapper preserve immutable history, complete publication, retry receipts and review evidence through the declared recovery cases.",
+  "variant": "VM-C1; W5 PostgreSQL 15 candidate plus W6 portable packages and explicitly simulated discipline policy; tiny W0 fixture only.",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "path": "docs/experiments/registry.json",
+    "sha256": "c56ab9a7b13d404b76c0e63acef3c48fe4684061dd8f9ccbaa42a6e925802da3"
+  },
+  "implementation": {
+    "sourceCommit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "runnerCommit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "validators": [
+      "W0 observation parser and evidence/Git verifier",
+      "W5 canonical hashes and PostgreSQL constraints",
+      "W6 case assertions and TypeBox boundaries"
+    ]
+  },
+  "dataset": {
+    "name": "W0 qvm-tiny-building-v1 with deterministic W6 changes",
+    "seed": "No random generator used.",
+    "manifestSha256": "65923d59dfc1014f2a4790113dee7c41dabf75fd0e5912f7303ddfe7efb3df7f"
+  },
+  "environment": {
+    "host": "fun-server; client 9bcfcf92062a",
+    "software": {
+      "node": "v24.22.1",
+      "postgres": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "fsync": "on",
+      "synchronous_commit": "on",
+      "full_page_writes": "on"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff"
+    ],
+    "cpuLimit": 0.5,
+    "memoryLimitBytes": 1610612736,
+    "diskBudgetBytes": null,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/artifacts/w6-0247bdd-postgres-02; independent qvm_w5_recovery databases and artifact roots.",
+    "cacheProcedure": "No shared cache flush; correctness execution only; no performance claim.",
+    "measurementSlot": "coordinator-authorized-w6-correctness-20261025"
+  },
+  "commands": [
+    "node experiments/recovery/postgres.ts /evidence/postgres-input.json /evidence/database-lease.json"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-12",
+      "caseId": "disconnected-database-branches",
+      "expected": "Two independent databases continue from a common ancestor, exchange packages and retain both divergent contributions and evidence. Query retained data without source keys, credentials or artifact access.",
+      "observed": "Independent databases created divergent pump changes from 2e0c847c1798942b016aa7029a0b6e8324465dadcaae870e427e45a652327efc. Portable exchange and governed replay preserved both branch tips 2b96cec9bb39b6c5249f19f88ea73a9bb152743ceee3bfb514d962f1a65daa1e and 29136c61134a17754834f591a00c41537363743b2beb4b42acf70bc07fafc8cd, full documents and both disciplines' evidence.",
+      "passed": true,
+      "limitations": [
+        "Replay exchanges declared commands and portable artifacts. W5 retains single-parent database ancestry; this is not a full synchronization service or a multi-parent database merge."
+      ]
+    },
+    {
+      "experimentId": "EX-12",
+      "caseId": "discipline-atomic-acceptance",
+      "expected": "Unresolved semantic conflicts, host-only authority, one discipline, stale approvals and a racing head each block acceptance. A resolved candidate with two distinct simulated authorized discipline decisions commits its delta, evidence, receipt and head atomically.",
+      "observed": "Actual divergent same-property values required reconciliation. Unresolved conflict, one discipline, host-only authority, stale candidate and racing head were rejected; two distinct simulated discipline decisions, model delta, three evidence records, receipt and head committed together as 09d58c43bcc6cf64edb5d560751888e7a678161d580d65b4f87f50955b725526.",
+      "passed": true,
+      "limitations": [
+        "Actors and decisions are explicitly simulated test policy. Conflict detection covers this scalar fixture property; no geometry solver, identity federation or cryptographic review authentication is claimed."
+      ]
+    }
+  ],
+  "observationsArtifact": "postgres/w6-pg-0247bdd-02/observations.json",
+  "coverage": [
+    {
+      "assertion": "A retained project package opens without the original host's keys or authentication.",
+      "caseIds": [
+        "disconnected-database-branches"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Disconnected edits preserve both branches, ancestry and evidence.",
+      "caseIds": [
+        "disconnected-database-branches"
+      ],
+      "coverage": "covered"
+    },
+    {
+      "assertion": "Reconciliation checks semantic conflicts and all required discipline decisions.",
+      "caseIds": [
+        "discipline-atomic-acceptance"
+      ],
+      "coverage": "covered"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "MANIFEST.sha256",
+      "bytes": 86265,
+      "sha256": "486338154349660e799fb0e1decbefb66349a26cbafe39d71030722493dfd1a7",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-input.json",
+      "bytes": 300,
+      "sha256": "0e25221bd022dc88df362bf14c2e6b6a78636b09106c3fc412ad8bc46e5760a2",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "database-lease.json",
+      "bytes": 286,
+      "sha256": "bb8efc94163443ac26fba79210dc04aa8f592145b380130f54429430b3537b0f",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "database-post-run-state.txt",
+      "bytes": 72,
+      "sha256": "889615bb1ae62ca9309ae5e2c0281431aece396ee4bdc3494b96d8863ed1af9f",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-image-id.txt",
+      "bytes": 72,
+      "sha256": "3b40641dd3b5c804e2559d92a01d435ee68e2f6825361260b4820a640493440e",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "runner.exit-code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/source-bindings.json",
+      "bytes": 1770,
+      "sha256": "d38f391ef532884e29d4c073fcaeda3f356e27fcd200ced3290be66bd6f20bc8",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/environment.json",
+      "bytes": 645,
+      "sha256": "44aaa7992d9479e78584a37c832e7739ace87c0dba094285fab0505e41750423",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/execution-input.json",
+      "bytes": 704,
+      "sha256": "37272b8a61921d98f6dc5dc0b810a7563078737163031206537cdf8c50f4342a",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/observations.json",
+      "bytes": 6073,
+      "sha256": "4943184977e3d910ae8cb062764a0cee516eb3299bffd6489e24ea6c14261e7c",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/divergence-source.json",
+      "bytes": 485469,
+      "sha256": "caba75f1ffa92a19bfe2123b2636bd27bac86e9491f49390b1934b9fd2ae577c",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/divergence-restored.json",
+      "bytes": 485476,
+      "sha256": "8e4e654133c1873033fb496e9cdab11f8d7539c00766b86b79527c3b34766a4d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/denied-authority-inputs.json",
+      "bytes": 7024,
+      "sha256": "fce1988e9c2c48eb1957f6a3d91745d8cd5d89689142bf65ae84f64ebca2379a",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-before.json",
+      "bytes": 485469,
+      "sha256": "caba75f1ffa92a19bfe2123b2636bd27bac86e9491f49390b1934b9fd2ae577c",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-denied.json",
+      "bytes": 485469,
+      "sha256": "caba75f1ffa92a19bfe2123b2636bd27bac86e9491f49390b1934b9fd2ae577c",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-accepted.json",
+      "bytes": 609022,
+      "sha256": "ee5e3d951c8154d04425f06aa6291b9f8bee9003fa2db64e4267b31eecd1481d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-0-rejected.txt",
+      "bytes": 749,
+      "sha256": "94b18577dba27722f85a1d6cbabe7536e570890ccfe4e0587e37cb65e72dbfe3",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-1-rejected.txt",
+      "bytes": 694,
+      "sha256": "3fb8c4f8bc629dbb4d53c8ac6c9beb93d693acda622588ede4cdc0572344e8e4",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-2-rejected.txt",
+      "bytes": 740,
+      "sha256": "307c52097f5997faa0440237e22f98317fca17ea44c4e84c9cd5e3b3299be765",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-3-rejected.txt",
+      "bytes": 1145,
+      "sha256": "b9790ecc1017f8316662f1819fe6439df77d6dbe56ae2c86b7d0666bb96ff5c3",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/authority-4-rejected.txt",
+      "bytes": 969,
+      "sha256": "48bfc1fc5560f6359dc3979c7c4757a728fbeb47be8405bc490ca65fef4a26ea",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/racing-head-rejected.txt",
+      "bytes": 718,
+      "sha256": "bb313960af4f58e199928721ee3970c0a4fa1abd70e1247779b889aea0574298",
+      "mediaType": "text/plain"
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "Terminal interpretation is retrospective; no database or correctness test was rerun to prepare this record.",
+    "Times use retained source-binding and final-observation file mtimes as execution bounds, not instrumented process timings.",
+    "Client limits were 0.5 CPU and 1536 MiB. Separate databases and artifact roots used one PostgreSQL server and test role.",
+    "Replay exchanges declared commands and portable artifacts. W5 retains single-parent database ancestry; this is not a full synchronization service or a multi-parent database merge.",
+    "Actors and decisions are explicitly simulated test policy. Conflict detection covers this scalar fixture property; no geometry solver, identity federation or cryptographic review authentication is claimed.",
+    "No numeric disk budget was recorded in the correctness execution lease. The required W0 environment field remains unknown; publication is blocked."
+  ],
+  "decisionImplications": [
+    "No registry update, architecture adoption or review approval is implied.",
+    "EX-09 lacks a real geometry-engine upgrade; EX-12 does not qualify independent identity/key services or a multi-parent/network synchronization service.",
+    "W7 must assess scope and limitations against the exact assertion coverage."
+  ]
+}
