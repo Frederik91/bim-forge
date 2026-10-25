@@ -262,7 +262,7 @@ export function createDemoServer({
             send(response, 200, await backlog.decide(id, await readJson(request, 2048)));
           } else {
             if (request.method !== 'GET') { send(response, 405, { error: 'A request requires GET.' }); return; }
-            send(response, 200, { ticket: { ...backlog.get(id), executions: backlog.executions(id) } });
+            send(response, 200, { ticket: { ...await backlog.refreshProposal(id), executions: backlog.executions(id) } });
           }
         }
       } catch (error) { send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Backlog unavailable.' }); }

@@ -177,7 +177,7 @@ export interface WorkerEvidence {
 
 type ReviewDecision =
   | { status: 'pending'; decisionId: null; actor: null }
-  | { status: 'accepted' | 'superseded'; decisionId: RequestId; actor: string };
+  | { status: 'accepted' | 'superseded'; decisionId: RequestId; actor: string; appliedRevisionId?: RevisionId };
 
 export interface ProposalReview {
   requestId: RequestId;
@@ -472,17 +472,34 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     validateScriptReview(scriptEvidence.scriptExecutions, toolCalls);
   }
   if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
-  fields(review.decision, ['status', 'decisionId', 'actor']);
+  const hasApplied = review.decision !== null && typeof review.decision === 'object' && Object.hasOwn(review.decision, 'appliedRevisionId');
+  fields(review.decision, ['status', 'decisionId', 'actor', ...(hasApplied ? ['appliedRevisionId'] : [])]);
   const decisionStatus = review.decision.status;
   if (decisionStatus !== 'pending' && decisionStatus !== 'accepted' && decisionStatus !== 'superseded') fail('Invalid proposal decision.');
   let decision: ReviewDecision;
   if (decisionStatus === 'pending') {
-    if (review.decision.decisionId !== null || review.decision.actor !== null) fail('Pending proposals cannot contain a decision identity.');
+    if (review.decision.decisionId !== null || review.decision.actor !== null || hasApplied) fail('Pending proposals cannot contain a decision identity.');
     decision = { status: 'pending', decisionId: null, actor: null };
   } else {
     const decisionId = requestIdentifier(review.decision.decisionId);
     const actor = readable(review.decision.actor, 'Decision actor', 80);
-    decision = { status: decisionStatus, decisionId, actor };
+    if (hasApplied) {
+      const appliedRevisionId = revisionIdentifier(review.decision.appliedRevisionId);
+      const applied = revisions.get(appliedRevisionId);
+      const onto = applied?.parentId ? revisions.get(applied.parentId) : undefined;
+      if (!applied || !onto) fail('The applied proposal must retain its accepted predecessor.');
+      let ancestor = onto;
+      while (ancestor.id !== base.id && ancestor.parentId !== null) {
+        const parent = revisions.get(ancestor.parentId);
+        if (!parent) fail('Applied proposal ancestry is incomplete.');
+        ancestor = parent;
+      }
+      if (ancestor.id !== base.id) fail('The applied proposal must share its original base.');
+      if (canonical(mergeSnapshots(base.snapshot, onto.snapshot, proposal.snapshot)) !== canonical(applied.snapshot)) {
+        fail('The applied revision does not match the reviewed proposal delta.');
+      }
+      decision = { status: decisionStatus, decisionId, actor, appliedRevisionId };
+    } else decision = { status: decisionStatus, decisionId, actor };
   }
   return freeze({
     requestId, proposalName, baseRevisionId, proposalRevisionId, selectedObjectIds, instruction, summary, rationale,
@@ -1044,6 +1061,39 @@ function collectionConflicts<T extends ModelItem>(
   return conflicts;
 }
 
+export class ProposalConflict extends Error {}
+
+function mergeCollection<T extends ModelItem>(base: T[], current: T[], proposed: T[]): T[] {
+  const original = new Map(base.map((item) => [item.id, item]));
+  const incoming = new Map(proposed.map((item) => [item.id, item]));
+  const merged = new Map(current.map((item) => [item.id, item]));
+  for (const id of new Set([...original.keys(), ...incoming.keys()])) {
+    const before = original.get(id); const after = incoming.get(id);
+    if (canonical(before ?? null) === canonical(after ?? null)) continue;
+    if (after) merged.set(id, after); else merged.delete(id);
+  }
+  return [...merged.values()];
+}
+
+function mergeSnapshots(base: ModelSnapshot, current: ModelSnapshot, proposed: ModelSnapshot): ModelSnapshot {
+  if (canonical(base) === canonical(current)) return proposed;
+  if (base.version !== current.version || base.version !== proposed.version) {
+    throw new ProposalConflict('The model representation changed. Revise this proposal against the current model.');
+  }
+  const conflicts = [
+    ...collectionConflicts<Entity>('entity', base.entities, current.entities, proposed.entities),
+    ...collectionConflicts('relationship', base.relationships, current.relationships, proposed.relationships),
+  ];
+  if (conflicts.length) throw new ProposalConflict(`Conflicting changes to ${conflicts.map((item) => item.id).join(', ')}. Revise this proposal against the current model.`);
+  try {
+    return validateSnapshot({ ...current,
+      entities: mergeCollection<Entity>(base.entities, current.entities, proposed.entities),
+      relationships: mergeCollection(base.relationships, current.relationships, proposed.relationships) });
+  } catch (error) {
+    throw new ProposalConflict(`The combined changes fail model validation: ${error instanceof Error ? error.message : 'invalid model'}. Revise this proposal against the current model.`);
+  }
+}
+
 export class RoomRepository {
   #state: RepositoryState;
   #revisions: Map<RevisionId, Revision>;
@@ -1151,7 +1201,7 @@ export class RoomRepository {
       const mainBranch = branches.get(branchName('main'));
       if (!mainBranch) fail('Saved project has missing or unreachable history.');
       const main = mainBranch.revisionId;
-      if (main !== roots[0].id && !reviews.some((review) => review.proposalRevisionId === main && review.decision.status === 'accepted')) {
+      if (main !== roots[0].id && !reviews.some((review) => review.decision.status === 'accepted' && (review.decision.appliedRevisionId ?? review.proposalRevisionId) === main)) {
         fail('The current model must reference an accepted reviewed proposal.');
       }
     }
@@ -1207,6 +1257,7 @@ export class RoomRepository {
     const decisionId = requestIdentifier(decision.decisionId);
     const actor = readable(decision.actor, 'Decision actor', 80);
     if (this.head('main') === proposal.revisionId && review.decision.status === 'accepted') return this;
+    if (this.head('main') !== review.baseRevisionId) fail('Accepting an older proposal requires reconciliation with the current model.');
     const mainName = branchName('main');
     const branches: Branch[] = this.#state.branches.map((item) => item.name === mainName
       ? { name: mainName, revisionId: proposal.revisionId } : item);
@@ -1221,6 +1272,52 @@ export class RoomRepository {
     };
     if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
     return new RoomRepository(token, state);
+  }
+
+  proposalSnapshot(proposed: RoomRepository, name: string): ModelSnapshot {
+    if (proposed.projectId !== this.projectId || proposed.root() !== this.root()) fail('The proposal belongs to another project.');
+    const review = proposed.review(name);
+    const base = this.#revisions.get(review.baseRevisionId);
+    if (!base) throw new ProposalConflict('This proposal is based on an unaccepted model. Revise it against the current accepted model.');
+    let ancestor = this.view(this.head('main'));
+    while (ancestor.id !== base.id && ancestor.parentId !== null) ancestor = this.view(ancestor.parentId);
+    if (ancestor.id !== base.id) throw new ProposalConflict('This proposal is based on an unaccepted model. Revise it against the current accepted model.');
+    return mergeSnapshots(base.snapshot, this.view(this.head('main')).snapshot, proposed.view(review.proposalRevisionId).snapshot);
+  }
+
+  async acceptFrom(proposed: RoomRepository, name: string, input: unknown): Promise<RoomRepository> {
+    const snapshot = this.proposalSnapshot(proposed, name);
+    const review = proposed.review(name);
+    const decision = copy(input); fields(decision, ['decisionId', 'actor']);
+    const decisionId = requestIdentifier(decision.decisionId); const actor = readable(decision.actor, 'Decision actor', 80);
+    if (review.decision.status !== 'pending') fail('Only a pending reviewed proposal can be accepted.');
+    const previous = this.reviews().find((item) => item.proposalName === review.proposalName);
+    if (previous && previous.decision.status !== 'pending') fail('This proposal already has a decision.');
+    const main = this.head('main');
+    const applied = main === review.baseRevisionId ? proposed.view(review.proposalRevisionId) : await revision(main, snapshot);
+    const revisions = new Map(this.#revisions);
+    for (const item of proposed.#state.revisions) revisions.set(item.id, item);
+    revisions.set(applied.id, applied);
+    const branches = branchMap(this.#state.branches);
+    for (const branch of proposed.branches()) {
+      if (branch.name === 'main') continue;
+      const existing = branches.get(branch.name);
+      if (existing && existing.revisionId !== branch.revisionId) fail('A different proposal already uses that name.');
+      branches.set(branch.name, branch);
+    }
+    branches.set(branchName('main'), { name: branchName('main'), revisionId: applied.id });
+    const reviews = new Map(this.reviews().map((item) => [item.proposalName, item]));
+    for (const item of proposed.reviews()) {
+      const existing = reviews.get(item.proposalName);
+      if (existing && canonical({ ...existing, decision: null }) !== canonical({ ...item, decision: null })) fail('Proposal review evidence changed.');
+      if (!existing) reviews.set(item.proposalName, item);
+    }
+    const state: RepositoryStateV2 = { version: 2, projectId: this.projectId, name: this.name,
+      revisions: [...revisions.values()], branches: [...branches.values()],
+      reviews: [...reviews.values()].map((item): ProposalReview => item.proposalName === review.proposalName
+        ? { ...item, decision: { status: 'accepted', decisionId, actor, ...(main !== review.baseRevisionId ? { appliedRevisionId: applied.id } : {}) } }
+        : item.decision.status === 'accepted' ? { ...item, decision: { ...item.decision, status: 'superseded' } } : item) };
+    return RoomRepository.restore(canonical(state));
   }
 
   async propose(input: unknown): Promise<RoomRepository> {

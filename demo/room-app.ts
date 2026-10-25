@@ -1178,7 +1178,7 @@ function renderBacklog(): void {
     const sources = element('section', undefined, 'retained-sources');
     renderSourceContext(sources, item.projectId, item.request); card.append(sources);
     if (item.error) card.append(element('p', item.error, 'ticket-error'));
-    if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Based on a different revision. Revise against the current model before accepting.', 'ticket-warning'));
+    if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Prepared on an earlier revision. Acceptance will retain unrelated changes and validate the combined model.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
     const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
     add(item.state === 'queued' || item.state === 'working' ? 'View progress' : 'View activity', () => { void perform(() => openActivity(item.id)); });
@@ -1253,6 +1253,7 @@ async function openTicket(id: string): Promise<void> {
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = parseBacklogItem(value.ticket);
   if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
+  backlogItems = backlogItems.map((item) => item.id === ticket.id ? ticket : item);
   if (!isRecord(value.ticket.request)) throw new Error('Missing request binding.');
   const result = parseProposalResponse(value.ticket.result ?? { status: 'declined', project: value.ticket.project, review: {
     ...value.ticket.request, proposalRevisionId: null, summary: 'No model proposal is available for this attempt.',
