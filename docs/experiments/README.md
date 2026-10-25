@@ -1,6 +1,6 @@
 # Versioned model qualification program
 
-Program: `QVM-01`. Parent tracker: [#122](https://github.com/Frederik91/bim-forge/issues/122). Initial status: definitions prepared, experiments not run.
+Program: `QVM-01`. Parent tracker: [#122](https://github.com/Frederik91/bim-forge/issues/122). Status: execution in progress. The registry records current work state and reviewed outcomes separately from implementation-test success.
 
 Start with the [current design candidate](../design/versioned-model-candidate.md). Read the [research](../research/versioned-bim-data-model.md) for its evidence and alternatives. The [registry](registry.json) assigns stable experiment IDs, definitions, dependencies, work streams, and current reviewed results. The [hospital benchmark](../../benchmarks/hospital/README.md) specifies the confirmed 200,000 m² database workload.
 
