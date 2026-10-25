@@ -41,7 +41,7 @@ const propose = 'return {kind:"propose",review:{summary:"Reconstruct two connect
   + 'uncertainty:"Concept dimensions need human review.",intent:{interpretation:"Reconstruct the floor from the sketch.",'
   + 'assumptions:["Use 150 mm walls."],certainty:80,basis:"The fixture has a 6 by 4 metre envelope and one partition."}}};';
 function floorScript(layout = twoRooms()): string {
-  return 'await model.previewFloor({input:' + JSON.stringify(layout) + '});';
+  return 'await model.previewFloor(' + JSON.stringify(layout) + ');';
 }
 
 async function run(t: TestContext, base: ModelSnapshot, source: string, scoped = true) {
@@ -207,7 +207,7 @@ test('existing entity limits still apply to the compiled graph', async () => {
     id: 'window-' + index, type: 'Window', name: 'Window', roomId: 'room-west', side: 'north',
     offsetMm: index * 2, widthMm: 1, heightMm: 1000, sillHeightMm: 900,
   }));
-  assert.throws(() => previewFloor(base, { ...layout, openings: [...layout.openings, ...windows] }), /Unsupported model snapshot/);
+  assert.throws(() => previewFloor(base, { ...layout, openings: [...layout.openings, ...windows] }), /Model arrays must be dense and bounded/);
 });
 
 test('furniture and equipment survive exactly and an incompatible floor cannot silently discard either', async () => {
@@ -232,7 +232,7 @@ test('only an explicitly scoped script can author a floor, with real execution e
   const base = await original(); const saved = JSON.stringify(base);
   const denied = await run(t, base, floorScript() + propose, false);
   assert.equal(denied.kind, 'failed');
-  assert.ok(denied.evidence.calls.some((call) => call.method === 'model.previewFloor' && call.disposition !== 'completed'));
+  assert.ok(denied.evidence.calls.some((call) => call.method === 'model.previewFloor' && call.disposition === 'denied'));
   const allowed = await run(t, base, floorScript() + propose);
   assert.equal(allowed.kind, 'proposal', JSON.stringify(allowed));
   if (allowed.kind !== 'proposal') assert.fail('Expected a scoped floor proposal.');

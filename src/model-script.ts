@@ -193,7 +193,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base. ' +
   'previewRectangle uses millimetres; furnishing positions and sizes use metres on a 1 mm grid. ' +
   'previewRoomFurnishings retains all other rooms. previewFurnishings replaces the complete whole-model furniture set. ' +
-  'previewFloor({input:FloorLayout}) requires floor-plan-reconstruction scope and replaces only the shell. ' +
+  'previewFloor(input:FloorLayout) requires floor-plan-reconstruction scope and replaces only the shell. ' +
   'Supply level:{id,name}, 2..12 rooms:{id,name,boundsMm:{minX,minY,maxX,maxY}}, wallThicknessMm, heightMm and openings. ' +
   'Each opening has type:Door|Window, id,name,roomId,side:north|south|east|west,offsetMm,widthMm,heightMm; Windows also require sillHeightMm. ' +
   'All floor values are whole millimetres. Room bounds are wall centrelines; offsets run from the side minimum X for north/south or Y for east/west. ' +
