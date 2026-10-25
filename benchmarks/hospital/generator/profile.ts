@@ -122,6 +122,22 @@ export function mix(value: number): number {
   return (hash ^ (hash >>> 16)) >>> 0;
 }
 
+// Profile decimal fractions are exact allocation controls, not binary64 estimates.
+// Compute once per cohort/kind; keep BigInt and decimal parsing out of row generation.
+export function cohortUpperBounds(count: number, fractions: readonly number[]): readonly number[] {
+  let upper = 0;
+  return fractions.map((fraction, index) => {
+    if (index === fractions.length - 1) return count;
+    const [significand = '0', exponent = '0'] = fraction.toString().split('e');
+    const [integer = '0', decimal = ''] = significand.split('.');
+    const numerator = BigInt(count) * BigInt(`${integer}${decimal}`);
+    const power = Number(exponent) - decimal.length;
+    const allocation = power >= 0 ? numerator * 10n ** BigInt(power) : numerator / 10n ** BigInt(-power);
+    upper += Number(allocation);
+    return upper;
+  });
+}
+
 export class Dataset {
   readonly profile: Profile;
   readonly profileSha256: string;
@@ -134,6 +150,8 @@ export class Dataset {
   readonly occurrenceCount: number;
   readonly parameterCount: number;
   readonly payloadPermutationStride: number;
+  readonly propertyCohortBounds: ReadonlyMap<Kind, readonly number[]>;
+  readonly payloadCohortBounds: readonly number[];
   constructor(profile: Profile, profileSha256: string, options: Options) {
     this.profile = profile;
     this.profileSha256 = profileSha256;
@@ -155,6 +173,11 @@ export class Dataset {
     for (const kind of KINDS) { ranges.set(kind, { kind, start, count: counts[kind] }); start += counts[kind]; }
     this.ranges = ranges;
     this.entityCount = start - 1;
+    const propertyCohorts = new Map<Kind, readonly number[]>();
+    const propertyFractions = profile.properties.otherEntityCohorts.map((cohort) => cohort.fraction);
+    for (const kind of KINDS) propertyCohorts.set(kind, cohortUpperBounds(counts[kind], propertyFractions));
+    this.propertyCohortBounds = propertyCohorts;
+    this.payloadCohortBounds = cohortUpperBounds(this.entityCount, profile.geometryAndArtifacts.payloadCohorts.map((cohort) => cohort.fraction));
     this.occurrenceCount = OCCURRENCE_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
     this.parameterCount = Math.min(this.occurrenceCount, Math.max(1, Math.floor(profile.parametricData.targetConstraintRecordCount * this.fraction)));
     const gcd = (a: number, b: number): number => {
