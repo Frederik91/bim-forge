@@ -28,9 +28,9 @@
         "Duplicate/churned source IDs and split/merge lineage are explicit."
       ],
       "preparationNote": "Native cases can execute before W2 supplies paired exports.",
-      "status": "running",
-      "latestReviewedRun": "docs/experiments/results/EX-01/w1-baseline-20261025a/result.json",
-      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-01/w1-candidate-20261025b/result.json",
+      "latestReview": "docs/experiments/decisions/semantic-kernel-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -136,9 +136,9 @@
         "Acceptance retries preserve command/payload identity and exact decision records."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": "docs/experiments/results/EX-04/w1-baseline-20261025a/result.json",
-      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-04/w1-candidate-20261025b/result.json",
+      "latestReview": "docs/experiments/decisions/semantic-kernel-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -168,9 +168,9 @@
         "Unrelated accepted changes retain approval only under declared equivalence rules."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": "docs/experiments/results/EX-05/w1-baseline-20261025a/result.json",
-      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-05/w1-candidate-20261025b/result.json",
+      "latestReview": "docs/experiments/decisions/semantic-kernel-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -201,9 +201,9 @@
         "Units, authored inputs and dependent derived values cannot merge as independent text fields."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": "docs/experiments/results/EX-06/w1-baseline-20261025a/result.json",
-      "latestReview": "docs/experiments/decisions/w1-baseline-review-20261025.md",
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-06/w1-candidate-20261025b/result.json",
+      "latestReview": "docs/experiments/decisions/semantic-kernel-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -237,9 +237,9 @@
         "A bounded real-kernel case is required for any claim about B-rep reference stability."
       ],
       "preparationNote": null,
-      "status": "running",
-      "latestReviewedRun": null,
-      "latestReview": null,
+      "status": "inconclusive",
+      "latestReviewedRun": "docs/experiments/results/EX-07/w3-915138a-20261025-terminal01/result.json",
+      "latestReview": "docs/experiments/decisions/semantic-kernel-review-20261025.md",
       "producerStreams": [
         "W0"
       ],
