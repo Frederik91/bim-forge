@@ -46,7 +46,8 @@ const definitions: Record<ExperimentId, Coverage[]> = {
 export function coverageFor(input: unknown, observations: Observation[], variant: CaseArtifact['variant'] = 'baseline-room-model'):
   Array<{ experimentId: ExperimentId; variant: CaseArtifact['variant']; coverage: Coverage[] }> {
   if (!Check(RegistrySchema, input)) throw new Error('Invalid bound experiment registry.');
-  return EXPERIMENT_IDS.map((experimentId) => {
+  const experimentIds = variant === 'VM-C1-shared-properties-prototype' ? EXPERIMENT_IDS.filter((id) => id === 'EX-03') : EXPERIMENT_IDS;
+  return experimentIds.map((experimentId) => {
     const definition = input.experiments.find((item) => item.id === experimentId);
     const coverage = definitions[experimentId];
     if (!definition || definition.assertions.length !== coverage.length
@@ -54,6 +55,15 @@ export function coverageFor(input: unknown, observations: Observation[], variant
       throw new Error(`W1 coverage is stale for ${experimentId}; review every bound assertion.`);
     }
     const caseIds = new Set(observations.filter((item) => item.experimentId === experimentId).map((item) => item.caseId));
+    if (variant === 'VM-C1-shared-properties-prototype') {
+      const sharedCases = ['vmc1-shared-property-occurrence-override', 'vmc1-shared-property-type-impact', 'vmc1-shared-property-dedup-isolation'];
+      const mapped = coverage.map((item, index): Coverage => {
+        const caseId = sharedCases[index];
+        return { assertion: item.assertion, caseIds: caseId && caseIds.has(caseId) ? [caseId] : [],
+          coverage: caseId && caseIds.has(caseId) ? 'covered' : 'not-covered' };
+      });
+      return { experimentId, variant, coverage: mapped };
+    }
     if (variant === 'baseline-room-model') {
       if (coverage.some((item) => item.caseIds.some((caseId) => !caseIds.has(caseId)))) throw new Error('Coverage references an unobserved case.');
       return { experimentId, variant, coverage: structuredClone(coverage) };

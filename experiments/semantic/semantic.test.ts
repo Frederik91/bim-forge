@@ -16,8 +16,9 @@ import { coverageFor } from './coverage.ts';
 import { identityCases } from './identity.ts';
 import { parseObservations } from './protocol.ts';
 import type { CaseResult, Observation } from './protocol.ts';
-import { runCandidateCases, runSemanticCases } from './runner.ts';
-import { SemanticCandidate, canonical } from './candidate.ts';
+import { runCandidateCases, runSemanticCases, runSharedPropertyCases } from './runner.ts';
+import { SemanticCandidate, SharedPropertyCandidate, canonical } from './candidate.ts';
+import { parseFixture } from '../fixtures/fixture.ts';
 import type { Predicate } from './candidate.ts';
 import { candidateCases, candidateCommand, candidateDraft } from './candidate-cases.ts';
 
@@ -309,5 +310,132 @@ test('CLI emits the protocol array, binds raw bytes by hash, and refuses to over
     await assert.rejects(execute(process.execPath, [cli, '--artifacts', output]), /EEXIST/);
     assert.equal(await readFile(path.join(output, 'raw.json'), 'utf8'), raw);
     await assert.rejects(execute(process.execPath, [cli, '--artifacts', path.join(parent, 'other'), '--approve']), /Usage/);
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+async function sharedSetup() {
+  const input: unknown = JSON.parse(await readFile(new URL('../fixtures/tiny-building.json', import.meta.url), 'utf8'));
+  const fixture = parseFixture(input);
+  const root = SharedPropertyCandidate.fromFixture(fixture);
+  const definition = root.view().definitions[0];
+  assert.ok(definition);
+  const ids = root.view().occurrences.filter((item) => item.definitionId === definition.id).map((item) => item.id).sort();
+  const first = ids[0]; const second = ids[1];
+  assert.ok(first && second); assert.equal(ids.length, 2);
+  const key = Object.keys(definition.slots).find((key) => definition.slots[key] === 'number');
+  assert.ok(key);
+  const initial = root.effective(first)[key];
+  assert.ok(initial?.kind === 'number');
+  return { fixture, root, definition, ids, first, second, key, initial };
+}
+
+test('EX-03 shared collector exercises all three exact assertions against W0 type membership', async () => {
+  const { fixture } = await sharedSetup();
+  const { observations, artifacts } = runSharedPropertyCases(fixture);
+  assert.equal(observations.length, 3);
+  assert.ok(observations.every((item) => item.experimentId === 'EX-03' && item.passed && item.limitations.length > 0));
+  assert.ok(artifacts.every((item) => item.variant === 'VM-C1-shared-properties-prototype' && item.operations.length > 0));
+  const registry: unknown = JSON.parse(await readFile(new URL('../../docs/experiments/registry.json', import.meta.url), 'utf8'));
+  const coverage = coverageFor(registry, observations, 'VM-C1-shared-properties-prototype');
+  assert.equal(coverage.length, 1);
+  assert.equal(coverage[0]?.experimentId, 'EX-03');
+  assert.deepEqual(coverage[0]?.coverage.map((item) => item.assertion), observations.map((item) => item.expected));
+  assert.ok(coverage[0]?.coverage.every((item) => item.coverage === 'covered' && item.caseIds.length === 1));
+});
+
+test('EX-03 shared occurrence overrides preserve the source fixture, shared definition and other chair', async () => {
+  const { fixture, root, first, second, key, initial } = await sharedSetup();
+  const before = root.serialize(); const source = canonical(fixture);
+  const override = { kind: 'number', value: initial.value + .25 };
+  const changed = root.apply({ kind: 'occurrence-override', occurrenceId: first, values: { [key]: override } });
+  assert.equal(root.serialize(), before); assert.equal(canonical(fixture), source);
+  assert.deepEqual(changed.state.view().definitions, root.view().definitions);
+  assert.deepEqual(changed.state.view().contents, root.view().contents);
+  assert.deepEqual(changed.state.effective(second), root.effective(second));
+  assert.deepEqual(changed.state.effective(first)[key], override);
+  assert.deepEqual(changed.delta.impactedInstanceIds, [first]);
+  assert.equal(changed.delta.occurrences.modified[0]?.id, first);
+  assert.equal(changed.delta.effectiveChanges[0]?.id, first);
+  assert.throws(() => Object.defineProperty(changed.state.effective(first)[key], 'value', { value: 999 }), TypeError);
+});
+
+test('EX-03 shared type edits require all impacted IDs including masked occurrences and reject wrong types atomically', async () => {
+  const { root, definition, ids, first, second, key, initial } = await sharedSetup();
+  const override = { kind: 'number', value: initial.value + .25 };
+  const changed = root.apply({ kind: 'occurrence-override', occurrenceId: first, values: { [key]: override } });
+  const before = changed.state.serialize();
+  const command = { kind: 'type-edit', definitionId: definition.id, values: { [key]: { kind: 'number', value: initial.value + .125 } }, impactedInstanceIds: ids };
+  for (const impactedInstanceIds of [[second], [...ids, second], [...ids, 'unbound-occurrence'], []]) {
+    assert.throws(() => changed.state.apply({ ...command, impactedInstanceIds }), /every impacted occurrence exactly once/);
+  }
+  assert.throws(() => changed.state.apply({ ...command, values: { [key]: { kind: 'string', value: 'coerced' } } }), /declared keys and value types/);
+  assert.throws(() => changed.state.apply({ ...command, values: { 'missing-property': { kind: 'number', value: 1 } } }), /declared keys/);
+  assert.equal(changed.state.serialize(), before);
+  const applied = changed.state.apply(command);
+  assert.deepEqual(applied.delta.impactedInstanceIds, ids);
+  assert.equal(applied.delta.definitions.modified[0]?.id, definition.id);
+  assert.equal(applied.delta.occurrences.modified.length, 0);
+  assert.deepEqual(applied.delta.effectiveChanges.map((item) => item.id), [second]);
+  assert.deepEqual(applied.state.effective(first)[key], override);
+  assert.deepEqual(applied.state.effective(second)[key], command.values[key]);
+});
+
+test('EX-03 shared equal content is interned once while logical definitions and future edits stay independent', async () => {
+  const { root, definition, first, second, key, initial } = await sharedSetup();
+  const forkId = `copy-${definition.id}`;
+  const fork = root.apply({ kind: 'fork-definition', sourceDefinitionId: definition.id, targetDefinitionId: forkId, occurrenceIds: [second] });
+  assert.equal(fork.state.view().contents.length, root.view().contents.length);
+  assert.equal(fork.state.view().definitions.find((item) => item.id === forkId)?.contentHash, definition.contentHash);
+  assert.equal(fork.delta.contentAdded.length, 0); assert.equal(fork.delta.effectiveChanges.length, 0);
+  const before = fork.state.serialize();
+  const edited = fork.state.apply({ kind: 'type-edit', definitionId: forkId,
+    values: { [key]: { kind: 'number', value: initial.value + .5 } }, impactedInstanceIds: [second] });
+  assert.equal(fork.state.serialize(), before);
+  assert.equal(edited.state.view().contents.length, root.view().contents.length + 1);
+  assert.equal(edited.state.view().definitions.find((item) => item.id === definition.id)?.contentHash, definition.contentHash);
+  assert.deepEqual(edited.state.effective(first), root.effective(first));
+  assert.notDeepEqual(edited.state.effective(second)[key], root.effective(second)[key]);
+  assert.deepEqual(edited.delta.effectiveChanges.map((item) => item.id), [second]);
+  assert.throws(() => root.apply({ kind: 'fork-definition', sourceDefinitionId: definition.id, targetDefinitionId: forkId,
+    occurrenceIds: [second, second] }), /unique existing source occurrences/);
+});
+
+test('EX-03 shared operations use generic IDs and property keys and reject duplicate occurrence ownership', async () => {
+  const { fixture, first, definition } = await sharedSetup();
+  const renamed = { ...fixture, entities: fixture.entities.map((item) => ({ ...item, id: `generic-${item.id}`,
+    properties: Object.fromEntries(Object.entries(item.properties).map(([key, value]) => [`property-${key}`, value])) })),
+  relationships: fixture.relationships.map((item) => ({ ...item, id: `generic-${item.id}`, source: `generic-${item.source}`, target: `generic-${item.target}` })) };
+  const observations = runSharedPropertyCases(renamed).observations;
+  assert.ok(observations.every((item) => item.passed && item.observed.includes('generic-') && item.observed.includes('property-')));
+  assert.throws(() => SharedPropertyCandidate.fromFixture({ ...fixture, relationships: [...fixture.relationships,
+    { id: 'duplicate-instance-link', kind: 'instanceOf', source: first, target: definition.id }] }), /unique occurrence ownership/);
+});
+
+test('EX-03 shared CLI emits only new shared-property observations and hashed EX-03 coverage', async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), 'bim-forge-w1-ex03-'));
+  const output = path.join(parent, 'run');
+  const execute = promisify(execFile);
+  const cli = fileURLToPath(new URL('./cli.ts', import.meta.url));
+  try {
+    const executed = await execute(process.execPath, [cli, '--shared-properties-only', '--artifacts', output], { maxBuffer: 4 * 1024 * 1024 });
+    const parsed: unknown = JSON.parse(executed.stdout);
+    const observations = parseObservations(parsed);
+    assert.equal(observations.length, 3); assert.ok(observations.every((item) => item.experimentId === 'EX-03' && item.passed));
+    assert.deepEqual(JSON.parse(await readFile(path.join(output, 'observations.json'), 'utf8')), observations);
+    const coverage: unknown = JSON.parse(await readFile(path.join(output, 'coverage.json'), 'utf8'));
+    const CoverageSchema = Type.Array(Type.Object({ experimentId: Type.Literal('EX-03'), variant: Type.Literal('VM-C1-shared-properties-prototype'),
+      coverage: Type.Array(Type.Object({ assertion: Type.String(), caseIds: Type.Array(Type.String()), coverage: Type.Literal('covered') })) }));
+    assert.ok(Check(CoverageSchema, coverage)); assert.equal(coverage.length, 1);
+    const manifest: unknown = JSON.parse(await readFile(path.join(output, 'manifest.json'), 'utf8'));
+    const ManifestSchema = Type.Object({ observationsArtifact: Type.Literal('observations.json'),
+      evidence: Type.Array(Type.Object({ path: Type.String(), bytes: Type.Integer(), sha256: Type.String() })) });
+    assert.ok(Check(ManifestSchema, manifest));
+    for (const artifact of manifest.evidence) {
+      const bytes = await readFile(path.join(output, artifact.path));
+      assert.equal(bytes.length, artifact.bytes);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), artifact.sha256);
+    }
+    assert.ok(!manifest.evidence.some((item) => item.path === 'baseline-reference.json'));
+    await assert.rejects(execute(process.execPath, [cli, '--shared-properties-only', '--artifacts', output]), /EEXIST/);
   } finally { await rm(parent, { recursive: true, force: true }); }
 });

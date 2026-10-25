@@ -8,19 +8,21 @@ import { bindingFor, describeArtifact } from '../contracts/records.ts';
 import { parseFixture } from '../fixtures/fixture.ts';
 import { coverageFor } from './coverage.ts';
 import { W0_CONTRACT_COMMIT } from './protocol.ts';
-import { runCandidateCases, runSemanticCases } from './runner.ts';
+import { runCandidateCases, runSemanticCases, runSharedPropertyCases } from './runner.ts';
 
 const ArgumentsSchema = Type.Union([
   Type.Tuple([Type.Literal('--artifacts'), Type.String({ minLength: 1 })]),
   Type.Tuple([Type.Literal('--candidate-only'), Type.Literal('--baseline-observations'), Type.String({ minLength: 1 }),
     Type.Literal('--artifacts'), Type.String({ minLength: 1 })]),
+  Type.Tuple([Type.Literal('--shared-properties-only'), Type.Literal('--artifacts'), Type.String({ minLength: 1 })]),
 ]);
 
 async function main(): Promise<void> {
   const args: unknown = process.argv.slice(2);
-  if (!Check(ArgumentsSchema, args)) throw new Error('Usage: cli.ts [--candidate-only --baseline-observations <retained-file>] --artifacts <new-directory>');
+  if (!Check(ArgumentsSchema, args)) throw new Error('Usage: cli.ts [--shared-properties-only | --candidate-only --baseline-observations <retained-file>] --artifacts <new-directory>');
   const candidateOnly = args[0] === '--candidate-only';
-  const output = path.resolve(args[0] === '--candidate-only' ? args[4] : args[1]);
+  const sharedOnly = args[0] === '--shared-properties-only';
+  const output = path.resolve(args[0] === '--candidate-only' ? args[4] : args[0] === '--shared-properties-only' ? args[2] : args[1]);
   const baselineBytes = args[0] === '--candidate-only' ? await readFile(args[2], 'utf8') : null;
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const bindings = {
@@ -38,16 +40,19 @@ async function main(): Promise<void> {
   // Reserve before execution; an existing run directory is never overwritten.
   await mkdir(output);
   const baselineInput: unknown = baselineBytes === null ? null : JSON.parse(baselineBytes);
-  const { observations, artifacts } = candidateOnly ? await runCandidateCases(baselineInput) : await runSemanticCases();
-  const coverage = [...(candidateOnly ? [] : coverageFor(registry, observations)), ...coverageFor(registry, observations, 'VM-C1-semantic-prototype')];
+  const { observations, artifacts } = sharedOnly ? runSharedPropertyCases(referenceFixture)
+    : candidateOnly ? await runCandidateCases(baselineInput) : await runSemanticCases();
+  const coverage = sharedOnly ? coverageFor(registry, observations, 'VM-C1-shared-properties-prototype')
+    : [...(candidateOnly ? [] : coverageFor(registry, observations)), ...coverageFor(registry, observations, 'VM-C1-semantic-prototype')];
   const raw = JSON.stringify({ format: 'w1-standalone-raw-v2',
-    variants: candidateOnly ? ['VM-C1-semantic-prototype'] : ['baseline-room-model', 'VM-C1-semantic-prototype'],
+    variants: sharedOnly ? ['VM-C1-shared-properties-prototype'] : candidateOnly ? ['VM-C1-semantic-prototype'] : ['baseline-room-model', 'VM-C1-semantic-prototype'],
     baselineReferenceCommit: 'f6a7db7c1366eea48a3c677e518efe0f2816383b',
     authoritativeW0ContractCommit: W0_CONTRACT_COMMIT, bindings,
     sourceGit: { commit: bindings.runner.commit, repositoryRoot: root,
       verification: 'bindingFor verified committed bytes using the available Git object database.' },
     sharedFixture: { fixture: referenceFixture,
-      difference: 'W0 fixture is parsed and bound for comparison; operation cases execute the existing native single-room fixtures, not an adapter of the W0 multilevel graph.' },
+      difference: sharedOnly ? 'EX-03 executes typed shared-property mutations on W0 instanceOf/type bindings; geometry, containment and other relationships are retained as immutable source context, not regenerated.'
+        : 'W0 fixture is parsed and bound for comparison; operation cases execute the existing native single-room fixtures, not an adapter of the W0 multilevel graph.' },
     artifacts }, null, 2) + '\n';
   await writeFile(path.join(output, 'raw.json'), raw, { flag: 'wx' });
   await writeFile(path.join(output, 'coverage.json'), JSON.stringify(coverage, null, 2) + '\n', { flag: 'wx' });

@@ -1,6 +1,6 @@
 import { concurrencyCases } from './concurrency.ts';
 import { identityCases } from './identity.ts';
-import { candidateCases } from './candidate-cases.ts';
+import { candidateCases, sharedPropertyCases } from './candidate-cases.ts';
 import { parseObservations } from './protocol.ts';
 import type { CaseArtifact, Observation } from './protocol.ts';
 
@@ -15,5 +15,10 @@ export async function runCandidateCases(input: unknown): Promise<{ observations:
   const baseline = parseObservations(input);
   if (baseline.some((item) => item.caseId.startsWith('vmc1-'))) throw new Error('Candidate-only mode requires baseline observations.');
   const cases = await candidateCases(baseline);
+  return { observations: parseObservations(cases.map((item) => item.observation)), artifacts: cases.map((item) => item.artifact) };
+}
+
+export function runSharedPropertyCases(input: unknown): { observations: Observation[]; artifacts: CaseArtifact[] } {
+  const cases = sharedPropertyCases(input);
   return { observations: parseObservations(cases.map((item) => item.observation)), artifacts: cases.map((item) => item.artifact) };
 }

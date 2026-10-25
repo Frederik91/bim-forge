@@ -1,6 +1,6 @@
 # W1 semantic qualification
 
-This source slice belongs to [#124](https://github.com/Frederik91/bim-forge/issues/124), under [#122](https://github.com/Frederik91/bim-forge/issues/122). Its module commit is rebased onto W0 contract v1, `29583f735c1803872ace3fa663dcf6d7a145434a`, on `feature/issue-124-qualification-semantic`. The intended draft PR base is `feature/issue-123-qualification-contracts`.
+This source slice belongs to [#124](https://github.com/Frederik91/bim-forge/issues/124), under [#122](https://github.com/Frederik91/bim-forge/issues/122). Its module commit is rebased onto W0 contract v1, `a98b6cd49c637f40dd7431196bd98349bcc4a466`, on `feature/issue-124-qualification-semantic`. The intended draft PR base is `feature/issue-123-qualification-contracts`.
 
 The coordinator reported that the corrected baseline server run passed semantic tests and CLI collection: 20 observations, 11 expectations met and 9 gaps. Its retained artifacts are `/ssd1/bim-forge-qualification/qvm-20261025/artifacts/w1-baseline-20261025a`. Baseline publication is separate. Candidate-only execution reuses that observation file and does not repeat the baseline run. No local builds or tests are authorized. The coordinator allocates server containers and supplies validation evidence before a draft PR opens.
 
@@ -58,6 +58,25 @@ Candidate case IDs prefix the matching baseline ID with `vmc1-` and reuse its ex
 
 The prototype is synchronous and in memory. It has no persistence adapter, restored receipt replay, concurrent writers, compare-and-swap publication, crash recovery, complete version index, configurable property dictionary, or general geometry engine. Predicate retirement is deliberately absent, so accepted constraints can over-restrict later intentional changes. Retain these limitations in the W0 run records even if the bounded comparison cases pass.
 
+## Execute the bounded EX-03 shared-property extension
+
+`SharedPropertyCandidate` in `candidate.ts` consumes W0's actual `type` entities and `instanceOf` bindings. It retains the full source fixture and separates logical definitions, typed property slots, immutable content addressed by hash, and per-occurrence overrides. IDs and property keys come from the graph. Tagged number, string, boolean, and literal null values preserve fixture types without introducing unneeded unknown, not-applicable, or cleared states. External property dictionaries and property-specific units remain outside the experiment.
+
+`sharedPropertyCases` records three real mutation sequences. An occurrence override changes one effective instance and leaves the other instance, shared definition, and content unchanged. A shared-type edit requires the complete impacted occurrence list, including a masked occurrence whose override keeps its effective value unchanged. A logical type fork reuses one immutable content record, then a subsequent type edit creates new content for only the fork. The deltas show changed logical rows, new content hashes, the impacted membership and the actual effective-property differences. Source and earlier candidate states stay immutable.
+
+The dedicated collector emits only EX-03 and labels its variant `VM-C1-shared-properties-prototype`. Its coverage names all three exact registry assertions. Prior native baseline and candidate cases are retained; this execution does not rerun them or amend their published records. Geometry, containment and other W0 relationships are immutable source context, not regenerated state.
+
+The new run declares its budget before execution: at most 600 seconds, 0.5 CPU, 1 GiB memory, and 64 MiB evidence output, with no network, database, generator, or performance work. CPU and memory are container limits, wall time is bounded by `timeout`, and the evidence budget is checked against retained file sizes rather than represented as a filesystem quota. Retain that declaration and actual resource inspection in the new run directory.
+
+```sh
+npm run validate
+node --test --test-name-pattern='^EX-03 shared' experiments/semantic/semantic.test.ts
+node experiments/semantic/cli.ts --shared-properties-only --artifacts /evidence/data
+node experiments/contracts/cli.ts observations /evidence/data/observations.json
+```
+
+Publish only a new EX-03 terminal record using W0, with the hashed `observationsArtifact` and the predeclared budget. Keep the conclusion inconclusive even if these three bounded checks pass, because the model is in memory and has no production persistence, concurrency, external dictionary contract, or engineering regeneration qualification.
+
 ## Run in the coordinator's server slot
 
 Use the coordinator's disposable `bim-qvm-tools:20261025` container, image ID `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`, capped at 0.5 CPU and 1 GiB memory with no database or network. Supply the committed Git bundle clone on `/ssd1`, then `cp -R /source/. /app` to retain image dependencies and create container-owned source files. Mount an isolated writable `/evidence` directory and the retained baseline directory at `/baseline` read-only. The full Git object database is required by `bindingFor`; a source-only archive is insufficient. The raw artifact includes `sourceGit` metadata. Run from `/app`:
@@ -78,15 +97,15 @@ The default collector still supports a combined comparison when explicitly reque
 The coordinator can inspect the scoped source policy without changing shared scripts:
 
 ```sh
-git diff --name-only 29583f735c1803872ace3fa663dcf6d7a145434a HEAD
-git -c core.whitespace=cr-at-eol diff --check 29583f735c1803872ace3fa663dcf6d7a145434a HEAD
+git diff --name-only a98b6cd49c637f40dd7431196bd98349bcc4a466 HEAD
+git -c core.whitespace=cr-at-eol diff --check a98b6cd49c637f40dd7431196bd98349bcc4a466 HEAD
 ```
 
 W0 extends the root lint and TypeScript config to include `experiments` and `benchmarks`. The explicit stream typecheck is an additional focused check; `npm run validate` covers W1 too. No shared package script changes are part of this module.
 
 ## Integrate W0 and W2
 
-The collector imports W0's observation schema and type from `experiments/contracts/schema.ts` and its binding and artifact functions from `records.ts`. `authoritativeW0ContractCommit` records `29583f735c1803872ace3fa663dcf6d7a145434a`. It does not invent a parallel terminal-result contract. Actual environment, execution times, and run IDs must come from the coordinator's server run before W0's `verifyRun` and `publishRun` can produce an authoritative result. This source slice creates no terminal result, registry update, or review record.
+The collector imports W0's observation schema and type from `experiments/contracts/schema.ts` and its binding and artifact functions from `records.ts`. `authoritativeW0ContractCommit` records `a98b6cd49c637f40dd7431196bd98349bcc4a466`. It does not invent a parallel terminal-result contract. Actual environment, execution times, and run IDs must come from the coordinator's server run before W0's `verifyRun` and `publishRun` can produce an authoritative result. This source slice creates no terminal result, registry update, or review record.
 
 For each experiment and variant, the coordinator binds only that variant's matching observations, `coverage.json` entry, and raw artifacts into W0's result record, with a unique `docs/experiments/results/<EX-ID>/<run-id>/` destination. Preserve raw hashes and failed observations. Missing W2 exports, partial coverage, and case limitations prevent a passed conclusion. W0 refuses a passed run with limited observations. Do not combine baseline failures with candidate results or convert process success or passing unit tests into an experiment approval.
 

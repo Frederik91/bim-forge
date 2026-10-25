@@ -1,7 +1,7 @@
 import { personInstance } from '../../src/asset-fixture.ts';
 import { identifier, previewAssets, previewRectangle, rectangleLayout, validateSnapshot } from '../../src/room-model.ts';
 import type { ModelSnapshot } from '../../src/room-model.ts';
-import { SemanticCandidate, canonical } from './candidate.ts';
+import { SemanticCandidate, SharedPropertyCandidate, canonical } from './candidate.ts';
 import type { Draft, Lineage, Predicate } from './candidate.ts';
 import { attempt, change, current, entity, fixture, furniture, move } from './fixture.ts';
 import type { Attempt } from './fixture.ts';
@@ -160,4 +160,74 @@ export async function candidateCases(baseline: Observation[]): Promise<CaseResul
     merge, merged: mergeApplied.state.serialize(), mergeReceipt: mergeApplied.receipt },
   ['candidate.apply split with validated lineage endpoints', 'candidate.apply merge with validated lineage endpoints']);
   return results;
+}
+
+export function sharedPropertyCases(input: unknown): CaseResult[] {
+  const root = SharedPropertyCandidate.fromFixture(input);
+  const original = root.serialize();
+  const definition = root.view().definitions.find((item) => root.view().occurrences.filter((instance) => instance.definitionId === item.id).length === 2);
+  if (!definition) throw new Error('EX-03 needs one W0 definition with exactly two occurrences.');
+  const occurrences = root.view().occurrences.filter((item) => item.definitionId === definition.id).map((item) => item.id).sort();
+  const [first, second] = occurrences;
+  if (!first || !second) throw new Error('Missing paired shared occurrences.');
+  const numericKey = Object.keys(definition.slots).find((key) => definition.slots[key] === 'number');
+  if (!numericKey) throw new Error('EX-03 needs a numeric shared property.');
+  const value = root.effective(first)[numericKey];
+  if (!value || value.kind !== 'number') throw new Error('Numeric property binding is inconsistent.');
+  const overrideValue = { kind: 'number', value: value.value + .25 } satisfies typeof value;
+  const typeValue = { kind: 'number', value: value.value + .125 } satisfies typeof value;
+  const override = root.apply({ kind: 'occurrence-override', occurrenceId: first, values: { [numericKey]: overrideValue } });
+  const typeEdit = override.state.apply({ kind: 'type-edit', definitionId: definition.id,
+    values: { [numericKey]: typeValue }, impactedInstanceIds: occurrences });
+  const forkId = `dedup-${definition.id}`;
+  const deduplicated = root.apply({ kind: 'fork-definition', sourceDefinitionId: definition.id, targetDefinitionId: forkId, occurrenceIds: [second] });
+  const fork = deduplicated.state.view().definitions.find((item) => item.id === forkId);
+  const independent = deduplicated.state.apply({ kind: 'type-edit', definitionId: forkId,
+    values: { [numericKey]: overrideValue }, impactedInstanceIds: [second] });
+  const changedFork = independent.state.view().definitions.find((item) => item.id === forkId);
+  const originalTypeAfter = independent.state.view().definitions.find((item) => item.id === definition.id);
+  const limitations = [
+    'Bounded in-memory shared-property candidate over the W0 fixture; no persistence, concurrent reconciliation or production adoption.',
+    'Primitive value kinds are inferred from fixture definitions; external dictionaries, property-specific units and richer value-status semantics are not qualified.',
+    'This mutates typed property state and records effective deltas; it does not regenerate or validate engineering geometry.',
+  ];
+  const record = (caseId: string, expected: string, passed: boolean, raw: unknown, operations: string[]): CaseResult => ({
+    observation: { experimentId: 'EX-03', caseId, expected, observed: JSON.stringify(raw), passed, limitations },
+    artifact: { caseId, variant: 'VM-C1-shared-properties-prototype', operations, raw },
+  });
+  return [
+    record('vmc1-shared-property-occurrence-override', 'An occurrence edit leaves other instances and shared definitions unchanged.',
+      root.serialize() === original && canonical(root.view().definitions) === canonical(override.state.view().definitions)
+        && canonical(root.view().contents) === canonical(override.state.view().contents)
+        && canonical(root.effective(second)) === canonical(override.state.effective(second))
+        && canonical(override.state.effective(first)[numericKey]) === canonical(overrideValue)
+        && override.delta.occurrences.modified.length === 1 && override.delta.occurrences.modified[0]?.id === first
+        && override.delta.definitions.modified.length === 0 && override.delta.effectiveChanges.length === 1,
+      { before: original, after: override.state.serialize(), delta: override.delta, propertyKey: numericKey,
+        firstBefore: root.effective(first), firstAfter: override.state.effective(first),
+        secondBefore: root.effective(second), secondAfter: override.state.effective(second) },
+      ['parse W0 fixture', 'apply occurrence override', 'compare immutable definitions/content and both effective occurrence values']),
+    record('vmc1-shared-property-type-impact', 'An explicit type edit lists all affected instances.',
+      canonical(typeEdit.delta.impactedInstanceIds) === canonical(occurrences) && typeEdit.delta.definitions.modified.length === 1
+        && typeEdit.delta.definitions.modified[0]?.id === definition.id && typeEdit.delta.occurrences.modified.length === 0
+        && canonical(typeEdit.state.effective(first)[numericKey]) === canonical(overrideValue)
+        && canonical(typeEdit.state.effective(second)[numericKey]) === canonical(typeValue)
+        && typeEdit.delta.effectiveChanges.length === 1 && typeEdit.delta.effectiveChanges[0]?.id === second,
+      { before: override.state.serialize(), after: typeEdit.state.serialize(), delta: typeEdit.delta,
+        fullImpactedInstanceIds: occurrences, maskedByOverride: first, propertyKey: numericKey },
+      ['declare full shared-type membership including masked occurrence', 'apply shared type property edit', 'record authored and effective deltas']),
+    record('vmc1-shared-property-dedup-isolation', 'Content deduplication does not couple future edits.',
+      fork?.contentHash === definition.contentHash && deduplicated.state.view().contents.length === root.view().contents.length
+        && deduplicated.delta.contentAdded.length === 0 && deduplicated.delta.definitions.added.length === 1
+        && deduplicated.delta.occurrences.modified.length === 1 && deduplicated.delta.effectiveChanges.length === 0
+        && changedFork?.contentHash !== definition.contentHash && originalTypeAfter?.contentHash === definition.contentHash
+        && independent.state.view().contents.length === root.view().contents.length + 1
+        && canonical(independent.state.effective(first)) === canonical(root.effective(first))
+        && canonical(independent.state.effective(second)[numericKey]) === canonical(overrideValue)
+        && independent.delta.effectiveChanges.length === 1 && independent.delta.effectiveChanges[0]?.id === second,
+      { before: original, afterDeduplication: deduplicated.state.serialize(), deduplicationDelta: deduplicated.delta,
+        afterIndependentEdit: independent.state.serialize(), editDelta: independent.delta, propertyKey: numericKey,
+        originalContentHash: definition.contentHash, deduplicatedHash: fork?.contentHash, editedHash: changedFork?.contentHash },
+      ['fork logical definition and rebind one occurrence', 'intern equal content once', 'edit only forked definition', 'compare both effective occurrences and content hashes']),
+  ];
 }

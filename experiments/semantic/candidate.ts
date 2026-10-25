@@ -2,6 +2,8 @@ import { Type } from 'typebox';
 import type { Static } from 'typebox';
 import { Check } from 'typebox/value';
 import { sha256 } from '../contracts/records.ts';
+import { parseFixture } from '../fixtures/fixture.ts';
+import type { Fixture } from '../fixtures/fixture.ts';
 import { diffSnapshots, furnitureFootprint, rectangleLayout, validateSnapshot } from '../../src/room-model.ts';
 import type { Entity, Furniture, ModelDelta, ModelSnapshot } from '../../src/room-model.ts';
 
@@ -233,5 +235,185 @@ export class SemanticCandidate {
     const state = new SemanticCandidate({ revisions: [...this.#state.revisions, applied],
       receipts: [...this.#state.receipts, receipt] });
     return { state, receipt };
+  }
+}
+
+const sharedId = Type.String({ minLength: 1, maxLength: 128 });
+const propertyKey = Type.String({ pattern: '^(?!__proto__$|constructor$|prototype$).{1,128}$' });
+const sharedValueSchema = Type.Union([
+  Type.Object({ kind: Type.Literal('number'), value: Type.Number() }, exact),
+  Type.Object({ kind: Type.Literal('string'), value: Type.String() }, exact),
+  Type.Object({ kind: Type.Literal('boolean'), value: Type.Boolean() }, exact),
+  Type.Object({ kind: Type.Literal('null'), value: Type.Null() }, exact),
+]);
+export type SharedValue = Static<typeof sharedValueSchema>;
+const sharedBagSchema = Type.Record(propertyKey, sharedValueSchema);
+export type SharedBag = Static<typeof sharedBagSchema>;
+const sharedDefinitionSchema = Type.Object({ id: sharedId, contentHash: hash,
+  slots: Type.Record(propertyKey, Type.Union([Type.Literal('number'), Type.Literal('string'), Type.Literal('boolean'), Type.Literal('null')])),
+}, exact);
+type SharedDefinition = Static<typeof sharedDefinitionSchema>;
+const sharedOccurrenceSchema = Type.Object({ id: sharedId, definitionId: sharedId, own: sharedBagSchema, overrides: sharedBagSchema }, exact);
+type SharedOccurrence = Static<typeof sharedOccurrenceSchema>;
+const sharedCommandSchema = Type.Union([
+  Type.Object({ kind: Type.Literal('occurrence-override'), occurrenceId: sharedId, values: sharedBagSchema }, exact),
+  Type.Object({ kind: Type.Literal('type-edit'), definitionId: sharedId, values: sharedBagSchema,
+    impactedInstanceIds: Type.Array(sharedId, { maxItems: 256 }) }, exact),
+  Type.Object({ kind: Type.Literal('fork-definition'), sourceDefinitionId: sharedId, targetDefinitionId: sharedId,
+    occurrenceIds: Type.Array(sharedId, { minItems: 1, maxItems: 256 }) }, exact),
+]);
+type SharedCommand = Static<typeof sharedCommandSchema>;
+interface SharedState {
+  fixture: Fixture;
+  definitions: SharedDefinition[];
+  occurrences: SharedOccurrence[];
+  contents: Array<{ hash: string; values: SharedBag }>;
+}
+export interface SharedPropertyDelta {
+  command: SharedCommand;
+  beforeRevisionId: string;
+  afterRevisionId: string;
+  impactedInstanceIds: string[];
+  definitions: ReturnType<typeof sharedChanges<SharedDefinition>>;
+  occurrences: ReturnType<typeof sharedChanges<SharedOccurrence>>;
+  contentAdded: string[];
+  effectiveChanges: Array<{ id: string; before: SharedBag; after: SharedBag }>;
+}
+function sharedChanges<T extends { id: string }>(before: T[], after: T[]) {
+  return { added: after.filter((item) => !before.some((old) => old.id === item.id)),
+    modified: after.flatMap((item) => {
+      const old = before.find((value) => value.id === item.id);
+      return old && !equal(old, item) ? [{ id: item.id, before: old, after: item }] : [];
+    }) };
+}
+export function sharedValue(value: Fixture['entities'][number]['properties'][string]): SharedValue {
+  if (value === null) return { kind: 'null', value };
+  switch (typeof value) {
+    case 'number': return { kind: 'number', value };
+    case 'string': return { kind: 'string', value };
+    case 'boolean': return { kind: 'boolean', value };
+    default: { const unreachable: never = value; return unreachable; }
+  }
+}
+function sharedBag(properties: Fixture['entities'][number]['properties']): SharedBag {
+  const bag = Object.fromEntries(Object.entries(properties).map(([key, value]) => [key, sharedValue(value)]));
+  if (!Check(sharedBagSchema, bag) || Object.keys(bag).length > 64) throw new Error('Invalid or oversized typed property bag.');
+  return bag;
+}
+function sharedDefinition(state: SharedState, id: string): SharedDefinition {
+  const definition = state.definitions.find((item) => item.id === id);
+  if (!definition) throw new Error(`Unknown shared definition: ${id}`);
+  return definition;
+}
+function sharedContent(state: SharedState, definition: SharedDefinition): SharedBag {
+  const content = state.contents.find((item) => item.hash === definition.contentHash);
+  if (!content) throw new Error('Missing immutable shared content.');
+  return content.values;
+}
+function effectiveProperties(state: SharedState, occurrence: SharedOccurrence): SharedBag {
+  const definition = sharedDefinition(state, occurrence.definitionId);
+  return { ...sharedContent(state, definition), ...occurrence.own, ...occurrence.overrides };
+}
+function internSharedContent(contents: SharedState['contents'], values: SharedBag): string {
+  const hash = sha256(canonical(values));
+  const previous = contents.find((item) => item.hash === hash);
+  if (previous && !equal(previous.values, values)) throw new Error('Shared content hash collision.');
+  if (!previous) contents.push({ hash, values });
+  return hash;
+}
+function validateSharedPatch(definition: SharedDefinition, values: SharedBag): void {
+  const keys = Object.keys(values);
+  if (keys.length === 0 || keys.length > 64 || keys.some((key) => !Object.hasOwn(definition.slots, key)
+    || definition.slots[key] !== values[key]?.kind)) throw new Error('Shared-property patch must use declared keys and value types.');
+}
+
+/** W0 property-graph experiment only. The native geometry candidate above is unchanged. */
+export class SharedPropertyCandidate {
+  #state: SharedState;
+  readonly revisionId: string;
+  private constructor(state: SharedState, parentId: string | null) {
+    this.#state = freeze(state);
+    this.revisionId = sha256(canonical({ parentId, state }));
+    Object.freeze(this);
+  }
+  static fromFixture(input: unknown): SharedPropertyCandidate {
+    const fixture = parseFixture(structuredClone(input));
+    const contents: SharedState['contents'] = [];
+    const definitions = fixture.entities.filter((item) => item.kind === 'type').map((item): SharedDefinition => {
+      const values = sharedBag(item.properties);
+      return { id: item.id, slots: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.kind])),
+        contentHash: internSharedContent(contents, values) };
+    });
+    const occurrences = fixture.relationships.filter((item) => item.kind === 'instanceOf').map((relation): SharedOccurrence => {
+      const instance = fixture.entities.find((item) => item.id === relation.source);
+      const definition = definitions.find((item) => item.id === relation.target);
+      if (!instance || !definition) throw new Error('Invalid shared occurrence binding.');
+      const own = sharedBag(instance.properties);
+      for (const [key, value] of Object.entries(own)) if (Object.hasOwn(definition.slots, key) && definition.slots[key] !== value.kind) {
+        throw new Error('Authored occurrence property disagrees with its shared definition type.');
+      }
+      return { id: instance.id, definitionId: definition.id, own, overrides: {} };
+    });
+    if (definitions.length < 1 || definitions.length > 64 || occurrences.length > 256
+      || new Set(occurrences.map((item) => item.id)).size !== occurrences.length) throw new Error('Shared fixture needs bounded definitions and unique occurrence ownership.');
+    return new SharedPropertyCandidate({ fixture, definitions, occurrences, contents }, null);
+  }
+  view(): SharedState { return this.#state; }
+  serialize(): string { return canonical({ revisionId: this.revisionId, state: this.#state }); }
+  effective(id: string): SharedBag {
+    const occurrence = this.#state.occurrences.find((item) => item.id === id);
+    if (!occurrence) throw new Error(`Unknown shared occurrence: ${id}`);
+    return freeze(effectiveProperties(this.#state, occurrence));
+  }
+  apply(input: unknown): { state: SharedPropertyCandidate; delta: SharedPropertyDelta } {
+    if (!Check(sharedCommandSchema, input)) throw new Error('Invalid shared-property command boundary.');
+    const command = structuredClone(input);
+    const before = this.#state;
+    let definitions = [...before.definitions]; let occurrences = [...before.occurrences];
+    const contents = [...before.contents];
+    let impactedInstanceIds: string[];
+    switch (command.kind) {
+      case 'occurrence-override': {
+        const occurrence = occurrences.find((item) => item.id === command.occurrenceId);
+        if (!occurrence) throw new Error('Unknown shared occurrence.');
+        validateSharedPatch(sharedDefinition(before, occurrence.definitionId), command.values);
+        occurrences = occurrences.map((item) => item.id === occurrence.id ? { ...item, overrides: { ...item.overrides, ...command.values } } : item);
+        impactedInstanceIds = [occurrence.id];
+        break;
+      }
+      case 'type-edit': {
+        const definition = sharedDefinition(before, command.definitionId);
+        validateSharedPatch(definition, command.values);
+        impactedInstanceIds = occurrences.filter((item) => item.definitionId === definition.id).map((item) => item.id).sort();
+        if (!equal([...command.impactedInstanceIds].sort(), impactedInstanceIds)) throw new Error('Type edit must declare every impacted occurrence exactly once, including overridden occurrences.');
+        const contentHash = internSharedContent(contents, { ...sharedContent(before, definition), ...command.values });
+        definitions = definitions.map((item) => item.id === definition.id ? { ...item, contentHash } : item);
+        break;
+      }
+      case 'fork-definition': {
+        const definition = sharedDefinition(before, command.sourceDefinitionId);
+        if (before.fixture.entities.some((item) => item.id === command.targetDefinitionId)
+          || definitions.some((item) => item.id === command.targetDefinitionId)) throw new Error('Definition identity is already in use.');
+        const selected = new Set(command.occurrenceIds);
+        if (selected.size !== command.occurrenceIds.length || command.occurrenceIds.some((id) => !occurrences.some((item) => item.id === id && item.definitionId === definition.id))) {
+          throw new Error('Definition fork must select unique existing source occurrences.');
+        }
+        definitions.push({ ...definition, id: command.targetDefinitionId });
+        occurrences = occurrences.map((item) => selected.has(item.id) ? { ...item, definitionId: command.targetDefinitionId } : item);
+        impactedInstanceIds = [...selected].sort();
+        break;
+      }
+      default: { const unreachable: never = command; return unreachable; }
+    }
+    if (definitions.length > 64 || contents.length > 256) throw new Error('Shared candidate capacity limit reached.');
+    const state = new SharedPropertyCandidate({ ...before, definitions, occurrences, contents }, this.revisionId);
+    const delta: SharedPropertyDelta = { command, beforeRevisionId: this.revisionId, afterRevisionId: state.revisionId, impactedInstanceIds,
+      definitions: sharedChanges(before.definitions, definitions), occurrences: sharedChanges(before.occurrences, occurrences),
+      contentAdded: contents.filter((item) => !before.contents.some((old) => old.hash === item.hash)).map((item) => item.hash),
+      effectiveChanges: occurrences.flatMap((item) => {
+        const old = this.effective(item.id); const after = state.effective(item.id);
+        return equal(old, after) ? [] : [{ id: item.id, before: old, after }];
+      }) };
+    return { state, delta: freeze(delta) };
   }
 }

@@ -3,7 +3,7 @@ import type { Observation } from '../contracts/schema.ts';
 export { ObservationSchema } from '../contracts/schema.ts';
 export type { Observation } from '../contracts/schema.ts';
 
-export const W0_CONTRACT_COMMIT = '29583f735c1803872ace3fa663dcf6d7a145434a';
+export const W0_CONTRACT_COMMIT = 'a98b6cd49c637f40dd7431196bd98349bcc4a466';
 export type ExperimentId = 'EX-01' | 'EX-03' | 'EX-04' | 'EX-05' | 'EX-06';
 export const EXPERIMENT_IDS: ExperimentId[] = ['EX-01', 'EX-03', 'EX-04', 'EX-05', 'EX-06'];
 
@@ -20,7 +20,7 @@ export function parseObservations(input: unknown): Observation[] {
 
 export interface CaseArtifact {
   caseId: string;
-  variant: 'baseline-room-model' | 'VM-C1-semantic-prototype';
+  variant: 'baseline-room-model' | 'VM-C1-semantic-prototype' | 'VM-C1-shared-properties-prototype';
   operations: string[];
   raw: unknown;
 }
