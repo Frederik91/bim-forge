@@ -14,6 +14,8 @@ import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pi
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
 import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
 import type { RequestState } from './change-requests.ts';
+import { parseIntentAssessment } from '../src/model-intent.ts';
+import type { IntentAssessment } from '../src/model-intent.ts';
 
 type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
@@ -47,6 +49,7 @@ interface ActiveReview {
   rationale: string;
   constraints: string;
   uncertainty: string;
+  intent?: IntentAssessment;
   status?: 'ready' | 'declined';
   worker: { provider: string; model: string } | undefined;
   validator: string | undefined;
@@ -961,6 +964,7 @@ function parseProposalResponse(value: unknown): ProposalResponse {
       rationale: requiredText(reviewValue, 'rationale'),
       constraints: requiredText(reviewValue, 'constraints'),
       uncertainty: requiredText(reviewValue, 'uncertainty'),
+      ...(Object.hasOwn(reviewValue, 'intent') ? { intent: parseIntentAssessment(reviewValue.intent) } : {}),
       status: value.status,
       worker,
       validator: typeof reviewValue.validator === 'string' ? reviewValue.validator : undefined,
@@ -1218,6 +1222,13 @@ function renderReview() {
   ui['review-rationale'].textContent = review.rationale;
   ui['review-constraints'].textContent = review.constraints;
   ui['review-uncertainty'].textContent = review.uncertainty;
+  const intent = review.intent;
+  generic('review-intent').hidden = !intent;
+  generic('review-interpretation').textContent = intent?.interpretation ?? '';
+  generic('review-certainty').textContent = intent ? `AI certainty: ${intent.certainty} / 100. Self-rated, not a calibrated probability.` : '';
+  generic('review-intent-basis').textContent = intent?.basis ?? '';
+  generic('review-assumptions').replaceChildren(...(intent ? intent.assumptions.length
+    ? intent.assumptions.map(assumption => element('li', assumption)) : [element('li', 'No additional assumptions reported.')] : []));
   const evidence = review.worker ? ` · ${review.worker.provider}/${review.worker.model} · ${review.validator}` : '';
   ui['review-binding'].textContent = `Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}${evidence}`;
   updateControls();

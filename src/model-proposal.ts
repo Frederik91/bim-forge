@@ -8,6 +8,8 @@ import { ModelScripts, summarizeModelDelta } from './model-script.ts';
 import type { ModelScriptResult } from './model-script.ts';
 import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
+import { MODEL_INTENT_GUIDANCE } from './model-intent.ts';
+import type { IntentAssessment } from './model-intent.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
@@ -49,7 +51,7 @@ interface DeclinedResult {
   review: Readonly<{
     requestId: string; proposalName: string; baseRevisionId: string; proposalRevisionId: null;
     selectedObjectIds: readonly EntityId[]; instruction: string; summary: string; rationale: string;
-    constraints: string; uncertainty: string; changes: null;
+    constraints: string; uncertainty: string; changes: null; intent?: IntentAssessment;
   }>;
 }
 export type ModelProposalResult = Readonly<ReadyResult | DeclinedResult>;
@@ -118,7 +120,8 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([Object.freeze({
 const instructions = `You prepare BIM model proposals for human review using run_model_script only. The source is an async function body with await and return, with no imports, shell, network, filesystem or credentials. Call the typed model API directly, never other tool names.
 Each execution starts from the same bound base revision with a fresh private draft. Changes do NOT persist between scripts. Inspect and compose all changes for a proposal in ONE script. You can return {kind:"observe",observation:await model.inspect()} to inspect without proposing; replay the needed operations in the final script.
 Return {kind:"propose",review:{summary,rationale,constraints,uncertainty}} only after model operations succeed. The host independently validates the draft and computes its delta. Return {kind:"decline",reason,uncertainty} for a specific clarification. Never return a replacement snapshot, fabricated evidence or approval. Finish only after the tool returns done:true.
-Inspect first. Selection and spatial references are context, not a move command, group or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. Another desk creates ONLY that desk unless companions are requested. Retain unrelated objects and identities. A freestanding point does not imply wall attachment. For moving a setup, reason about supported devices and nearby furniture; proximity is not an explicit relationship or permission. Never leave devices without valid support. If desk-only movement leaves device destinations unclear, decline with a specific question.
+Inspect first. Selection and spatial references are context, not a move command, group or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. Retain unrelated objects and identities. A freestanding point does not imply wall attachment. Never leave devices without valid support.
+${MODEL_INTENT_GUIDANCE}
 A selected Space is room context and a selected Level is whole-floor context, never permission to change all contents. Use model.previewRoomFurnishings for one-room work, retaining existing room furnishings and every other room. model.inspect().placement.rooms includes entityIds for room membership. Use model.previewFurnishings only for explicitly requested whole-floor or cross-room work; it replaces the COMPLETE furnishing set, so preserve every unrelated item. Positions/dimensions are metres on a 1 mm grid. Rotation 0 faces north, 90 west. Monitor/laptop supportId references a desk/table; floor items use null. Keep circulation and doors clear.
 model.previewRectangle is only for explicitly requested single-room shell changes. Spatial references cannot authorize shell edits. Multi-room shell editing is unsupported: explain the limitation rather than resizing the whole floor.
 Catch ModelValidationError if you can correct invalid geometry in the same script. Failed scripts discard every staged write. Runtime, integrity and resource failures cannot be used to submit partial changes. Read API docs with docs.ls/read/search when needed. Explain the interpreted operation, changed/added objects, preserved objects, dependencies and destination adjustments. Never claim construction, code, accessibility or coordination approval.`;
@@ -226,7 +229,8 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     if (result.kind === 'declined') return { status: 'declined', repository, review: {
       requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id, proposalRevisionId: null,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, summary: 'No model proposal was prepared.',
-      rationale: result.reason, constraints: 'The bounded model API could not safely represent this request.', uncertainty: result.uncertainty, changes: null,
+      rationale: result.reason, constraints: 'No model change was prepared. The accepted model remains unchanged.', uncertainty: result.uncertainty, changes: null,
+      ...(result.intent ? { intent: result.intent } : {}),
     } };
     const next = await repository.proposeReviewedModel({ name: bound.proposalName, from: bound.base.id, snapshot: result.snapshot,
       review: { requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,

@@ -7,6 +7,7 @@ import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
 import { RoomRepository, rectangleLayout, diffSnapshots } from './room-model.ts';
 import { createResidentialProject } from './residential-floor.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
+import { MODEL_INTENT_GUIDANCE, parseIntentAssessment } from './model-intent.ts';
 
 const review = { summary: 'Widen the entry.', rationale: 'The requested door fits its existing host.',
   constraints: 'Retain the shell, hosted objects and unaffected furniture.', uncertainty: 'Concept model requiring human review.' };
@@ -47,6 +48,60 @@ test('the only executable tool uses real typed scripts; evidence, delta and expl
   const accepted = result.repository.accept('script-acceptance', { decisionId: 'accept-script', actor: 'Human reviewer' });
   assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
   assert.equal(rectangleLayout(accepted.view(accepted.head('main')).snapshot).door.widthMm, 1200);
+});
+
+test('intent assumptions and self-rated certainty survive script review, acceptance and exact restore without approval authority', async () => {
+  const repo = await RoomRepository.create('Interpreted intent');
+  const intent = { interpretation: 'Use the requested wider entry.', assumptions: ['Keep the existing door height.'],
+    certainty: 35, basis: 'The width is explicit, but the reason for the change is not.' };
+  const result = await prepareModelProposal(repo, request(repo, 'intent-review'), worker(async session => {
+    assert.ok(session.instructions.includes(MODEL_INTENT_GUIDANCE));
+    const output = await session.executeTool('run_model_script', { language: 'typescript', source:
+      `${widen()} return {kind:'propose',review:${JSON.stringify({ ...review, intent })}};` });
+    assert.equal(output.ok, true, JSON.stringify(output));
+  }));
+  assert.equal(result.status, 'ready', 'a low self-rated score does not block a valid reviewable proposal');
+  assert.deepEqual(result.repository.review('intent-review').intent, intent);
+  assert.equal(result.repository.head('main'), repo.head('main'), 'a score never authorizes acceptance');
+  const accepted = result.repository.accept('intent-review', { decisionId: 'human-intent-decision', actor: 'reviewer' });
+  const restored = await RoomRepository.restore(accepted.serialize());
+  assert.equal(restored.serialize(), accepted.serialize());
+  assert.deepEqual(restored.review('intent-review').intent, intent);
+  const tampered: unknown = JSON.parse(accepted.serialize());
+  assert.ok(object(tampered) && Array.isArray(tampered.reviews));
+  const altered = tampered.reviews.find((item: unknown) => object(item) && item.proposalName === 'intent-review');
+  assert.ok(object(altered) && object(altered.intent)); altered.intent.certainty = 101;
+  await assert.rejects(RoomRepository.restore(JSON.stringify(tampered)), /Intent certainty/);
+});
+
+test('certainty is bounded plain review data rather than an approval threshold', () => {
+  const assessment = { interpretation: 'Move the selected item.', assumptions: ['Keep unrelated items unchanged.'], certainty: 50, basis: 'Selection and local geometry support this interpretation.' };
+  for (const certainty of [0, 35, 100]) assert.equal(parseIntentAssessment({ ...assessment, certainty }).certainty, certainty);
+  for (const certainty of [-1, 101, 50.5, NaN, Infinity, '80', null]) assert.throws(() => parseIntentAssessment({ ...assessment, certainty }));
+  for (const invalid of [{ ...assessment, extra: true }, { ...assessment, assumptions: Array(9).fill('Assumed.') },
+    { ...assessment, assumptions: ['a'.repeat(161)] }, { ...assessment, interpretation: '' }, { ...assessment, basis: '\u0085hidden' }]) assert.throws(() => parseIntentAssessment(invalid));
+  const accessor = { ...assessment };
+  Object.defineProperty(accessor, 'certainty', { get() { throw new Error('Accessor must not run.'); }, enumerable: true });
+  assert.throws(() => parseIntentAssessment(accessor), /plain data/);
+  const sparse = new Array<string>(1);
+  assert.throws(() => parseIntentAssessment({ ...assessment, assumptions: sparse }));
+  const source = { ...assessment, assumptions: ['A bounded choice.'] };
+  const parsed = parseIntentAssessment(source); source.assumptions[0] = 'Changed outside the boundary.';
+  assert.deepEqual(parsed.assumptions, ['A bounded choice.']); assert.ok(Object.isFrozen(parsed)); assert.ok(Object.isFrozen(parsed.assumptions));
+});
+
+test('high intent certainty cannot bypass geometry validation and decline metadata never mutates the model', async () => {
+  const repo = await RoomRepository.create('Certainty is not authority');
+  const intent = { interpretation: 'Use the requested entry width.', assumptions: [], certainty: 100, basis: 'The instruction explicitly names the width.' };
+  const result = await prepareModelProposal(repo, request(repo, 'intent-boundaries'), worker(async session => {
+    const failed = await session.executeTool('run_model_script', { language: 'typescript', source:
+      `${widen(100000)} return {kind:'propose',review:${JSON.stringify({ ...review, intent })}};` });
+    assert.equal(failed.ok, false);
+    const declined = await session.executeTool('run_model_script', { language: 'typescript', source:
+      `await model.inspect(); return {kind:'decline',reason:'The requested width cannot fit its host.',uncertainty:'Geometry is invalid, regardless of intent certainty.',intent:${JSON.stringify(intent)}};` });
+    assert.equal(declined.ok, true);
+  }));
+  assert.equal(result.status, 'declined'); assert.equal(result.repository.serialize(), repo.serialize()); assert.deepEqual(result.review.intent, intent);
 });
 
 test('write then throw rolls back; the next observation and corrected script start from the immutable base', async () => {

@@ -10,6 +10,8 @@ import type { VisualRequest } from './visual-request.ts';
 import type { ActivityUpdate } from './request-activity.ts';
 import { parseScriptExecutionEvidence, MAX_SCRIPT_HOST_CALLS } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
+import { MODEL_INTENT_GUIDANCE, parseIntentAssessment } from './model-intent.ts';
+import type { IntentAssessment } from './model-intent.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -57,12 +59,12 @@ export interface ModelScriptBinding {
   selectedObjectIds: readonly EntityId[];
   visualIntent: VisualRequest;
 }
-export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string }
+export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string; intent?: IntentAssessment }
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
   | { kind: 'proposal'; snapshot: ModelSnapshot; review: ScriptReviewText; evidence: ScriptExecutionEvidence }
-  | { kind: 'declined'; reason: string; uncertainty: string; evidence: ScriptExecutionEvidence }
+  | { kind: 'declined'; reason: string; uncertainty: string; intent?: IntentAssessment; evidence: ScriptExecutionEvidence }
   | { kind: 'failed'; diagnostic: ScriptDiagnostic; evidence: ScriptExecutionEvidence };
 
 interface Draft {
@@ -106,7 +108,7 @@ function text(value: unknown, maximum: number): string {
 function decision(value: unknown):
   | { kind: 'observe'; observation: JsonValue }
   | { kind: 'propose'; review: ScriptReviewText }
-  | { kind: 'decline'; reason: string; uncertainty: string } {
+  | { kind: 'decline'; reason: string; uncertainty: string; intent?: IntentAssessment } {
   if (!record(value)) throw new Error('Return an observe, propose or decline decision.');
   if (value.kind === 'observe') {
     fields(value, ['kind', 'observation']);
@@ -114,13 +116,18 @@ function decision(value: unknown):
     return { kind: 'observe', observation: jsonValue(value.observation) };
   }
   if (value.kind === 'propose') {
-    fields(value, ['kind', 'review']); fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty']);
+    fields(value, ['kind', 'review']);
+    const hasIntent = record(value.review) && Object.hasOwn(value.review, 'intent');
+    fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', ...(hasIntent ? ['intent'] : [])]);
     return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
-      constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400) } };
+      constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
+      ...(hasIntent ? { intent: parseIntentAssessment(value.review.intent) } : {}) } };
   }
   if (value.kind === 'decline') {
-    fields(value, ['kind', 'reason', 'uncertainty']);
-    return { kind: 'decline', reason: text(value.reason, 800), uncertainty: text(value.uncertainty, 400) };
+    const hasIntent = Object.hasOwn(value, 'intent');
+    fields(value, ['kind', 'reason', 'uncertainty', ...(hasIntent ? ['intent'] : [])]);
+    return { kind: 'decline', reason: text(value.reason, 800), uncertainty: text(value.uncertainty, 400),
+      ...(hasIntent ? { intent: parseIntentAssessment(value.intent) } : {}) };
   }
   throw new Error('Return {kind:"observe",observation}, {kind:"propose",review} or {kind:"decline",reason,uncertainty}.');
 }
@@ -181,7 +188,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'Monitor/laptop supportId must refer to a desk/table. No implicit workstation or proximity group exists. ' +
   'Return {kind:"observe",observation:value}, {kind:"propose",review:{summary,rationale,constraints,uncertainty}}, ' +
   'or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
-  'Only trusted application code validates the proposal, and only a separate human decision accepts it.');
+  'Only trusted application code validates the proposal, and only a separate human decision accepts it. ' + MODEL_INTENT_GUIDANCE);
 
 /** One runtime per queue/server, with one fresh, private draft and session for each execution. */
 export class ModelScripts {
@@ -191,7 +198,7 @@ export class ModelScripts {
   constructor(limits: Partial<Pick<ExecutionLimits, 'timeoutMs' | 'hostCalls' | 'sourceBytes' | 'resultBytes'>> = {}) { this.#limits = limits; }
   #get(): Promise<ScriptBoxRuntime<Draft>> {
     if (this.#disposed) throw new Error('The model script runtime is disposed.');
-    this.#runtime ??= createRuntime<Draft>({ apis: [model], docs: [guide], contractVersion: 'bim-model-scripts-v1', policyVersion: 'proposal-only-v1',
+    this.#runtime ??= createRuntime<Draft>({ apis: [model], docs: [guide], contractVersion: 'bim-model-scripts-v1', policyVersion: 'proposal-intent-v1',
       sealResults: true, compilerWorkers: 1,
       limits: { memoryBytes: 64 * 1024 * 1024, compilerHeapMb: 256, sourceBytes: 32 * 1024, resultBytes: 64 * 1024,
         hostCalls: MAX_SCRIPT_HOST_CALLS, evidenceRecords: MAX_SCRIPT_HOST_CALLS, ...this.#limits },
@@ -238,7 +245,8 @@ export class ModelScripts {
     try {
       const result = decision(outcome.value);
       if (result.kind === 'observe') return { kind: 'observation', observation: result.observation, evidence: evidence('observation', 'not-run', null) };
-      if (result.kind === 'decline') return { kind: 'declined', reason: result.reason, uncertainty: result.uncertainty, evidence: evidence('declined', 'not-run', null) };
+      if (result.kind === 'decline') return { kind: 'declined', reason: result.reason, uncertainty: result.uncertainty,
+        ...(result.intent ? { intent: result.intent } : {}), evidence: evidence('declined', 'not-run', null) };
       const candidate = validateSnapshot(draft.snapshot);
       const delta = summarizeModelDelta(diffSnapshots(input.base, candidate));
       if (!Object.values(delta).some((collection) => Object.values(collection).some((ids) => ids.length))) throw new Error('The proposed model is identical to the bound revision.');

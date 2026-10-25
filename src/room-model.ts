@@ -1,6 +1,8 @@
 import { validateFloorPlan, spaces, spaceForFootprint } from './floor-plan.ts';
 import { parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
+import { parseIntentAssessment } from './model-intent.ts';
+import type { IntentAssessment } from './model-intent.ts';
 
 const MAX_BYTES = 256 * 1024;
 const token = Symbol('validated room repository');
@@ -152,6 +154,7 @@ export interface ProposalReview {
   worker: WorkerEvidence;
   toolCalls: ToolCallEvidence[];
   scriptExecutions?: ScriptExecutionEvidence[];
+  intent?: IntentAssessment;
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
@@ -369,9 +372,10 @@ function validateScriptReview(executions: ScriptExecutionEvidence[], toolCalls: 
 function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, branches: Map<BranchName, Branch>): ProposalReview {
   const review = copy(input);
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
+  const hasIntent = review !== null && typeof review === 'object' && Object.hasOwn(review, 'intent');
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
     'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
-    ...(hasScripts ? ['scriptExecutions'] : [])]);
+    ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
   const baseRevisionId = revisionIdentifier(review.baseRevisionId);
@@ -439,7 +443,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   return freeze({
     requestId, proposalName, baseRevisionId, proposalRevisionId, selectedObjectIds, instruction, summary, rationale,
     constraints, uncertainty, worker: { provider, model, responseIds, usage: { inputTokens, outputTokens, totalTokens } },
-    toolCalls, ...scriptEvidence, validator: 'room-graph-v1', decision,
+    toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}), validator: 'room-graph-v1', decision,
   });
 }
 
@@ -1078,8 +1082,9 @@ export class RoomRepository {
     if (typeof from !== 'string') fail('Unknown revision.');
     const details = proposal.review;
     const hasScripts = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scriptExecutions');
+    const hasIntent = details !== null && typeof details === 'object' && Object.hasOwn(details, 'intent');
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
-      'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : [])]);
+      'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : [])]);
     const base = this.view(from);
     const next = await this.#commit(proposalName, base, proposal.snapshot);
     if (next === this) fail('The reviewed proposal must change the bound revision.');
@@ -1090,6 +1095,7 @@ export class RoomRepository {
       constraints: details.constraints, uncertainty: details.uncertainty, worker: details.worker,
       toolCalls: details.toolCalls, validator: details.validator,
       ...(hasScripts ? { scriptExecutions: details.scriptExecutions } : {}),
+      ...(hasIntent ? { intent: details.intent } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches));
     const reviews = [...next.reviews(), record];
