@@ -50,7 +50,7 @@ test('another desk adds only a desk while the original devices and chair remain 
     const next = { ...newDesk, id: 'new-desk' };
     assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
       await model.previewFurnishings(${JSON.stringify({ furnishings: [...furnishings, next] })});
-      return {kind:'propose',review:{summary:'Create one freestanding desk.',rationale:'Selection is a reference, not a move command.',
+      return {kind:'propose',review:{intent:{interpretation:'Create one freestanding desk.',assumptions:[],certainty:90,basis:'The fixture requests another desk without companions.'},summary:'Create one freestanding desk.',rationale:'Selection is a reference, not a move command.',
         constraints:'All original objects retained exactly.',uncertainty:'Concept-only placement.'}};
     ` })).ok, true);
   } });
@@ -73,7 +73,7 @@ test('freestanding setup relocation resolves explicit supports without requiring
     assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
       await model.inspect();
       await model.previewFurnishings(${JSON.stringify({ furnishings: moved })});
-      return {kind:'propose',review:{summary:'Relocate desk, screen, laptop and chair.',rationale:'Explicitly requested setup companions; no assembly is required.',
+      return {kind:'propose',review:{intent:{interpretation:'Relocate the requested items.',assumptions:[],certainty:90,basis:'The fixture explicitly names the companions.'},summary:'Relocate desk, screen, laptop and chair.',rationale:'Explicitly requested setup companions; no assembly is required.',
         constraints:'Shell, corner table, plant and supports preserved.',uncertainty:'Circulation requires design review.'}};
     ` })).ok, true);
   } });

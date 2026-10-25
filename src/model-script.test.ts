@@ -10,7 +10,8 @@ import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { MODEL_INTENT_GUIDANCE, parseIntentAssessment } from './model-intent.ts';
 
 const review = { summary: 'Widen the entry.', rationale: 'The requested door fits its existing host.',
-  constraints: 'Retain the shell, hosted objects and unaffected furniture.', uncertainty: 'Concept model requiring human review.' };
+  constraints: 'Retain the shell, hosted objects and unaffected furniture.', uncertainty: 'Concept model requiring human review.',
+  intent: { interpretation: 'Widen the selected entry.', assumptions: [], certainty: 90, basis: 'The deterministic test request specifies the width.' } };
 const propose = `return {kind:'propose',review:${JSON.stringify(review)}};`;
 const observe = "return {kind:'observe',observation:await model.inspect()};";
 function request(repo: RoomRepository, id: string) {
@@ -56,6 +57,9 @@ test('intent assumptions and self-rated certainty survive script review, accepta
     certainty: 35, basis: 'The width is explicit, but the reason for the change is not.' };
   const result = await prepareModelProposal(repo, request(repo, 'intent-review'), worker(async session => {
     assert.ok(session.instructions.includes(MODEL_INTENT_GUIDANCE));
+    const { intent: omitted, ...withoutIntent } = review; assert.ok(omitted);
+    assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source:
+      `${widen()} return {kind:'propose',review:${JSON.stringify(withoutIntent)}};` })).ok, false, 'fresh proposals must not silently omit intent assessment');
     const output = await session.executeTool('run_model_script', { language: 'typescript', source:
       `${widen()} return {kind:'propose',review:${JSON.stringify({ ...review, intent })}};` });
     assert.equal(output.ok, true, JSON.stringify(output));

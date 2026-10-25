@@ -59,7 +59,7 @@ export interface ModelScriptBinding {
   selectedObjectIds: readonly EntityId[];
   visualIntent: VisualRequest;
 }
-export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string; intent?: IntentAssessment }
+export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment }
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
@@ -117,11 +117,10 @@ function decision(value: unknown):
   }
   if (value.kind === 'propose') {
     fields(value, ['kind', 'review']);
-    const hasIntent = record(value.review) && Object.hasOwn(value.review, 'intent');
-    fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', ...(hasIntent ? ['intent'] : [])]);
+    fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', 'intent']);
     return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
       constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
-      ...(hasIntent ? { intent: parseIntentAssessment(value.review.intent) } : {}) } };
+      intent: parseIntentAssessment(value.review.intent) } };
   }
   if (value.kind === 'decline') {
     const hasIntent = Object.hasOwn(value, 'intent');
@@ -186,7 +185,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'previewRectangle uses millimetres; furnishing positions and sizes use metres on a 1 mm grid. ' +
   'previewRoomFurnishings retains all other rooms. previewFurnishings replaces the complete whole-model furniture set. ' +
   'Monitor/laptop supportId must refer to a desk/table. No implicit workstation or proximity group exists. ' +
-  'Return {kind:"observe",observation:value}, {kind:"propose",review:{summary,rationale,constraints,uncertainty}}, ' +
+  'Return {kind:"observe",observation:value}, {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}}, ' +
   'or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
   'Only trusted application code validates the proposal, and only a separate human decision accepts it. ' + MODEL_INTENT_GUIDANCE);
 

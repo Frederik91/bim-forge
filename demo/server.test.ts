@@ -197,6 +197,7 @@ test('proposal endpoint binds request to revision and returns a validated separa
         await model.inspect();
         await model.previewRectangle(${JSON.stringify(visualIntent.layout)});
         return { kind: 'propose', review: {
+          intent: {interpretation:'Apply the requested entry edit.',assumptions:[],certainty:90,basis:'The fixture supplies the entry layout.'},
           summary: 'Entrance widened to 1200 mm.',
           rationale: 'The visual request fits the hosted wall and preserves stable object identities.',
           constraints: 'The host relationship, wall properties and stable identifiers remain unchanged.',

@@ -670,7 +670,7 @@ test('accepting an AI proposal advances main while preserving the original and p
         language: 'typescript', source: `
           await model.inspect();
           await model.previewRectangle(${JSON.stringify(layout)});
-          return { kind: 'propose', review: ${JSON.stringify(review)} };
+          return { kind: 'propose', review: ${JSON.stringify({ ...review, intent: { interpretation: 'Apply the requested room edit.', assumptions: [], certainty: 90, basis: 'The deterministic fixture specifies the layout.' } })} };
         `,
       });
     },
@@ -746,7 +746,7 @@ test('model-working AI receives bounded tools and saves only its validated propo
         language: 'typescript', source: `
           await model.inspect();
           await model.previewRectangle(${JSON.stringify(visualIntent.layout)});
-          return { kind: 'propose', review: ${JSON.stringify(review)} };
+          return { kind: 'propose', review: ${JSON.stringify({ ...review, intent: { interpretation: 'Apply the requested room edit.', assumptions: [], certainty: 90, basis: 'The deterministic fixture specifies the layout.' } })} };
         `,
       });
       assert.equal(submitted.ok, true);
@@ -825,7 +825,7 @@ test('proposal requests reject stale identities before calling AI and let AI rec
           }
           if (!rejected) throw new Error('Invalid geometry was unexpectedly accepted.');
           await model.previewRectangle(${JSON.stringify(valid)});
-          return { kind: 'propose', review: ${JSON.stringify(review)} };
+          return { kind: 'propose', review: ${JSON.stringify({ ...review, intent: { interpretation: 'Apply the requested room edit.', assumptions: [], certainty: 90, basis: 'The deterministic fixture specifies the layout.' } })} };
         `,
       });
       assert.equal(submitted.ok, true);

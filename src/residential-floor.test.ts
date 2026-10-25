@@ -79,7 +79,7 @@ test('room-scoped AI proposal preserves every other room and remains separate un
     assert.equal(error.ok, false, 'script cannot place room furnishings into another room');
     assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: `
       await model.previewRoomFurnishings(${JSON.stringify({ roomId: 'room-office', furnishings: changed })});
-      return {kind:'propose',review:{summary:'Office plant moved south.',rationale:'Only the requested plant changes.',
+      return {kind:'propose',review:{intent:{interpretation:'Move the office plant south.',assumptions:[],certainty:90,basis:'The fixture specifies the plant and location.'},summary:'Office plant moved south.',rationale:'Only the requested plant changes.',
         constraints:'Other rooms and shared walls preserved.',uncertainty:'Concept clearance only.'}};
     ` })).ok, true);
   } });

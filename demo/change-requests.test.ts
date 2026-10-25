@@ -24,6 +24,7 @@ const worker: ModelWorker = { identity: { provider: 'test', model: 'backlog-agen
     await model.inspect();
     await model.previewRectangle(${JSON.stringify(visual.layout)});
     return { kind: 'propose', review: {
+      intent: {interpretation:'Widen the entry.',assumptions:[],certainty:90,basis:'The fixture request specifies the width.'},
       summary: 'Widen the entry.', rationale: 'Requested width fits the host.',
       constraints: 'Keep the room shell and hosting.', uncertainty: 'Concept model, not construction approval.'
     } };
