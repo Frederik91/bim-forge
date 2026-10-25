@@ -39,7 +39,7 @@ function resourceConfig() {
 }
 
 test('both opt-in variants propagate through the complete workload configuration schema', () => {
-  const example = parse(ConfigSchema, JSON.parse(readFileSync('benchmarks/hospital/workloads/workload.example.json', 'utf8')
+  const example = parse(ConfigSchema, JSON.parse(readFileSync(new URL('../../benchmarks/hospital/workloads/workload.example.json', import.meta.url), 'utf8')
     .replace('REPLACE_WITH_PREDECLARED_DECISION_SHA256', 'a'.repeat(64))
     .replace('REPLACE_WITH_SOURCE_COMMIT_40_HEX', 'a'.repeat(40))), 'existing workload example');
   validateExecution(example);

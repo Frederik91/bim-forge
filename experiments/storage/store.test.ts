@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 import { Type } from 'typebox';
 import { RoomRepository, previewRectangle } from '../../src/room-model.ts';
@@ -130,7 +131,7 @@ test('tiny load-only policy fixture retains its remaining load timeout through e
     const branch = `phase-${randomUUID()}`;
     const output = path.join(directory, 'load-only');
     const observations = await runWorkload(store, {
-      experimentId: 'EX-13', runId: branch, branch, dataset: path.resolve('experiments/fixtures/tiny-building.json'),
+      experimentId: 'EX-13', runId: branch, branch, dataset: fileURLToPath(new URL('../fixtures/tiny-building.json', import.meta.url)),
       format: 'w0-fixture', scale: 'fixture', historyRevisions: 1, clients: 1, repeats: 1,
       mixedOperationsPerClient: 2, writeEvery: 2, pageSize: 10, cacheLabel: 'tiny policy fixture',
       leaseMode: 'shared-correctness', statementTimeoutMs: 1000, materializationDiagnostic: false,
