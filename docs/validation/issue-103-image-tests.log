@@ -1,0 +1,20 @@
+✔ the only executable tool uses real typed scripts; evidence, delta and explicit human acceptance survive restore (705.934797ms)
+✔ write then throw rolls back; the next observation and corrected script start from the immutable base (733.267487ms)
+✔ a caught invalid geometry operation leaves no partial write and can be repaired in the same script (586.561638ms)
+✔ observation and decline discard staged geometry rather than persisting an implicit checkpoint (633.828231ms)
+✔ caught forbidden host access poisons the attempt and cannot be followed by a proposal (45.462453ms)
+✔ an ordinary guest exception cannot hide a caught forbidden call or restore proposal authority (44.975251ms)
+✔ hostile method names and diagnostic controls still produce bounded durable failure evidence (121.117197ms)
+✔ a resource limit after a write discards it and prevents ready publication through the proposal application (43.253729ms)
+✔ cancelling one execution cannot affect another pending request sharing the runtime (627.299449ms)
+✔ provider failure after a valid scripted proposal still publishes nothing (586.98501ms)
+✔ inspection retains room memberships, doorway connections, coordinates and generated docs in the real package (621.446712ms)
+✔ returned snapshots, forged evidence, empty deltas and legacy executable authoring tools are rejected (601.952989ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5684.631065

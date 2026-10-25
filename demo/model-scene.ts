@@ -16,46 +16,76 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator.js';
 import '@babylonjs/core/Rendering/outlineRenderer.js';
+import { modelChanges } from '../src/model-delta-view.ts';
 import { furnitureFaces } from '../src/furniture-geometry.ts';
-import { rectangleLayout } from '../src/room-model.ts';
-import type { Entity, ModelSnapshot, Point, Wall } from '../src/room-model.ts';
+import { assetGeometry } from '../src/asset-family.ts';
+import { floorBounds, boundsMm, spaces } from '../src/floor-plan.ts';
+import { entityElevation, entityLevel, levels, levelView, roofHeightAt } from '../src/building-levels.ts';
+import { slabPieces, wallSections } from '../src/viewer-geometry.ts';
+import type { Bounds, Entity, ModelSnapshot, Point, Roof, Slab, Stair, Wall } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 
 RegisterFileTools();
 RegisterRay();
 
 export type RenderingMode = 'basic' | 'realistic';
-type Surface = 'floor' | 'wall' | 'wood' | 'metal' | 'glass' | 'screen' | 'fabric' | 'leaf' | 'pot';
-interface RenderPart { mesh: Mesh; objectId: string | null; wallId: string | null; surface: Surface; color: string }
+type Surface = 'floor' | 'roof' | 'stair' | 'asset' | 'wall' | 'wood' | 'metal' | 'glass' | 'screen' | 'fabric' | 'leaf' | 'pot';
+interface RenderPart {
+  mesh: Mesh; objectId: string | null; wallId: string | null; surface: Surface; color: string; before: boolean;
+  levelIds: readonly string[];
+}
 
 /** Model coordinates are X east, Y north, Z elevation; Babylon uses Y up. */
 export function modelPoint(x: number, y: number, elevation = 0): Vector3 { return new Vector3(x, elevation, y); }
 
 export function entityAnchor(item: Entity, snapshot: ModelSnapshot): Vector3 {
+  if (item.type === 'AssetFamily') throw new Error('Asset family definitions are non-spatial.');
+  const base = entityElevation(snapshot, item);
+  if (item.type === 'AssetInstance') {
+    const { bounds } = assetGeometry(snapshot, item);
+    return modelPoint((bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, base + bounds.maxZ + .15);
+  }
+  if (item.type === 'Space' || item.type === 'Level') {
+    const b = item.type === 'Space' ? item.bounds : floorBounds(levelView(snapshot, item.id));
+    return modelPoint((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, base + .15);
+  }
+  if (item.type === 'Slab' || item.type === 'Roof') {
+    const b = item.bounds; const x = (b.minX + b.maxX) / 2; const y = (b.minY + b.maxY) / 2;
+    return modelPoint(x, y, base + (item.type === 'Roof' ? roofHeightAt(snapshot, item.levelId, [x, y]) + item.thickness : 0) + .15);
+  }
+  if (item.type === 'Stair') {
+    return modelPoint((item.start[0] + item.end[0]) / 2, (item.start[1] + item.end[1]) / 2,
+      (base + entityElevation(snapshot, item.toLevelId)) / 2 + .15);
+  }
   if (item.type === 'Furniture') {
     const support = snapshot.entities.find((candidate) => candidate.id === item.supportId);
-    return modelPoint(...item.position, item.height + (support?.type === 'Furniture' ? support.height : 0) + .15);
+    return modelPoint(...item.position, base + item.height + (support?.type === 'Furniture' ? support.height : 0) + .15);
   }
-  if (item.type === 'Equipment') return modelPoint(...item.position, item.elevation + item.height + .15);
-  if (item.type === 'Wall') return modelPoint((item.start[0] + item.end[0]) / 2, (item.start[1] + item.end[1]) / 2, .6);
+  if (item.type === 'Equipment') return modelPoint(...item.position, base + item.elevation + item.height + .15);
+  if (item.type === 'Wall') return modelPoint((item.start[0] + item.end[0]) / 2, (item.start[1] + item.end[1]) / 2, base + .6);
   const host = snapshot.relationships.find((link) => link.source === item.id);
   const wall = snapshot.entities.find((candidate) => candidate.id === host?.target);
   if (!host || wall?.type !== 'Wall') throw new Error('Opening has no validated wall host.');
   const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
   const t = (host.offset + item.width / 2) / length;
-  return modelPoint(wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t, .6);
+  return modelPoint(wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t, base + .6);
 }
 
 export function referencePosition(reference: SpatialReference, snapshot: ModelSnapshot): Vector3 {
-  if (reference.kind === 'floor-point') return modelPoint(reference.positionMm[0] / 1000, reference.positionMm[1] / 1000, .025);
+  if (reference.kind === 'floor-point') {
+    if (snapshot.version === 2 && !('levelId' in reference)) throw new Error('A building floor reference requires its level.');
+    const level = 'levelId' in reference ? levels(snapshot).find((item) => item.id === reference.levelId) : null;
+    if ('levelId' in reference && !level) throw new Error('Reference level is absent.');
+    return modelPoint(reference.positionMm[0] / 1000, reference.positionMm[1] / 1000, (level?.elevation ?? 0) + .025);
+  }
   const wall = snapshot.entities.find((item) => item.id === reference.wallId);
   if (wall?.type !== 'Wall') throw new Error('Reference wall is absent.');
   const t = reference.alongWallMm / (Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000);
-  return modelPoint(wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t, .08);
+  return modelPoint(wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t, entityElevation(snapshot, wall) + .08);
 }
 
 /** Projects a ray hit to a domain annotation, never a model edit. */
-export function referenceFromHit(snapshot: ModelSnapshot, point: Vector3, wallId: string | null): SpatialReference | null {
+export function referenceFromHit(snapshot: ModelSnapshot, point: Vector3, wallId: string | null, levelId?: string | null): SpatialReference | null {
   if (wallId) {
     const wall = snapshot.entities.find((item) => item.id === wallId);
     if (wall?.type !== 'Wall') return null;
@@ -64,10 +94,12 @@ export function referenceFromHit(snapshot: ModelSnapshot, point: Vector3, wallId
     const along = ((point.x - wall.start[0]) * dx + (point.z - wall.start[1]) * dy) / length;
     return { kind: 'wall-point', wallId, alongWallMm: Math.round(Math.max(0, Math.min(length, along)) * 1000) };
   }
-  const b = rectangleLayout(snapshot).boundsMm;
+  const level = levelId ? levels(snapshot).find((item) => item.id === levelId) : null;
+  if (levelId && !level || snapshot.version === 2 && !level) return null;
+  const b = boundsMm(floorBounds(level ? levelView(snapshot, level.id) : snapshot));
   const positionMm: Point = [Math.round(point.x * 1000), Math.round(point.z * 1000)];
   if (positionMm[0] < b.minX || positionMm[0] > b.maxX || positionMm[1] < b.minY || positionMm[1] > b.maxY) return null;
-  return { kind: 'floor-point', positionMm };
+  return snapshot.version === 2 && level ? { kind: 'floor-point', levelId: level.id, positionMm } : { kind: 'floor-point', positionMm };
 }
 
 function woodTexture(scene: Scene): RawTexture {
@@ -95,11 +127,18 @@ export class ModelScene {
   private readonly parts: RenderPart[] = [];
   private readonly materials = new Map<string, StandardMaterial | PBRMaterial>();
   private readonly walls = new Map<string, Wall>();
+  private focusId: string | null = null;
   private signature = '';
   private snapshot: ModelSnapshot | null = null;
+  private comparison: ModelSnapshot | null = null;
+  private readonly changes = new Map<string, ReturnType<typeof modelChanges>[number]>();
+  private readonly comparisonLines: { mesh: Mesh; levelIds: readonly string[] }[] = [];
   private mode: RenderingMode = 'realistic';
   private selectedId = '';
   private cutaway = true;
+  private levelId: string | null = null;
+  private roofVisible = true;
+  private markerLevelId: string | null = null;
   private marker: Mesh | null = null;
   private markerLine: Mesh | null = null;
   private readonly markerMaterial: StandardMaterial;
@@ -151,32 +190,92 @@ export class ModelScene {
     this.materials.set(key, material); return material;
   }
 
-  private register(mesh: Mesh, objectId: string | null, wallId: string | null, surface: Surface, color: string): void {
+  private register(mesh: Mesh, objectId: string | null, wallId: string | null, surface: Surface, color: string, snapshot: ModelSnapshot): void {
     mesh.material = this.material(surface, color); mesh.receiveShadows = true;
     mesh.outlineColor = Color3.FromHexString('#007e70'); mesh.outlineWidth = .012;
-    this.parts.push({ mesh, objectId, wallId, surface, color });
+    const item = snapshot.entities.find((entity) => entity.id === objectId);
+    const level = item ? entityLevel(snapshot, item) : null;
+    const levelIds = item?.type === 'Stair' ? [item.fromLevelId, item.toLevelId] : level ? [level.id] : [];
+    this.parts.push({ mesh, objectId, wallId, surface, color, before: false, levelIds });
     if (surface !== 'floor') this.shadow.addShadowCaster(mesh);
   }
 
-  private box(name: string, size: Vector3, position: Vector3, objectId: string | null, wallId: string | null, surface: Surface, color: string, angle = 0): Mesh {
+  private box(snapshot: ModelSnapshot, name: string, size: Vector3, position: Vector3, objectId: string | null, wallId: string | null, surface: Surface, color: string, angle = 0): Mesh {
     const mesh = MeshBuilder.CreateBox(name, { width: size.x, height: size.y, depth: size.z }, this.scene);
     mesh.position.copyFrom(position); mesh.rotation.y = -angle;
-    this.register(mesh, objectId, wallId, surface, color); return mesh;
+    this.register(mesh, objectId, wallId, surface, color, snapshot); return mesh;
+  }
+
+  private solid(snapshot: ModelSnapshot, name: string, faces: Vector3[][], item: Entity, wallId: string | null, surface: Surface, color: string): void {
+    const positions: number[] = []; const indices: number[] = [];
+    for (const face of faces) {
+      const offset = positions.length / 3;
+      for (const point of face) positions.push(point.x, point.y, point.z);
+      for (let i = 1; i < face.length - 1; i += 1) indices.push(offset, offset + i, offset + i + 1);
+    }
+    const normals: number[] = []; VertexData.ComputeNormals(positions, indices, normals);
+    const data = new VertexData(); data.positions = positions; data.indices = indices; data.normals = normals;
+    data.uvs = positions.flatMap((_, i) => i % 3 === 0 ? [positions[i] * .4, positions[i + 2] * .4] : []);
+    const mesh = new Mesh(name, this.scene); data.applyToMesh(mesh);
+    this.register(mesh, item.id, wallId, surface, color, snapshot);
+  }
+
+  private slab(slab: Slab, snapshot: ModelSnapshot): void {
+    for (const [i, b] of slabPieces(snapshot, slab).entries()) {
+      this.box(snapshot, `${slab.id}-solid-${i}`, new Vector3(b.maxX - b.minX, slab.thickness, b.maxY - b.minY),
+        modelPoint((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, entityElevation(snapshot, slab) - slab.thickness / 2), slab.id, null, 'floor', '#d1c3a9');
+    }
+  }
+
+  private stair(stair: Stair, snapshot: ModelSnapshot): void {
+    const base = entityElevation(snapshot, stair); const rise = entityElevation(snapshot, stair.toLevelId) - base;
+    const dx = stair.end[0] - stair.start[0]; const dy = stair.end[1] - stair.start[1];
+    const run = Math.hypot(dx, dy); const angle = Math.atan2(dy, dx);
+    for (let i = 0; i < stair.steps; i += 1) {
+      const t = (i + .5) / stair.steps; const height = rise * (i + 1) / stair.steps;
+      this.box(snapshot, `${stair.id}-step-${i + 1}`, new Vector3(run / stair.steps, height, stair.width),
+        modelPoint(stair.start[0] + dx * t, stair.start[1] + dy * t, base + height / 2), stair.id, null, 'stair', '#c69a73', angle);
+    }
+  }
+
+  private roof(roof: Roof, snapshot: ModelSnapshot): void {
+    const b = roof.bounds; const profile = roof.profile;
+    const rectangles: Bounds[] = profile.kind === 'flat' ? [b] : profile.ridgeAxis === 'x'
+      ? [{ ...b, maxY: (b.minY + b.maxY) / 2 }, { ...b, minY: (b.minY + b.maxY) / 2 }]
+      : [{ ...b, maxX: (b.minX + b.maxX) / 2 }, { ...b, minX: (b.minX + b.maxX) / 2 }];
+    for (const [i, r] of rectangles.entries()) {
+      const xy: Point[] = [[r.minX, r.minY], [r.maxX, r.minY], [r.maxX, r.maxY], [r.minX, r.maxY]];
+      const underside = xy.map(([x, y]) => modelPoint(x, y, entityElevation(snapshot, roof) + roofHeightAt(snapshot, roof.levelId, [x, y])));
+      const upper = underside.map((point) => point.add(new Vector3(0, roof.thickness, 0)));
+      const faces = [underside, [...upper].reverse()];
+      for (let j = 0; j < 4; j += 1) faces.push([underside[j], upper[j], upper[(j + 1) % 4], underside[(j + 1) % 4]]);
+      this.solid(snapshot, `${roof.id}-pitch-${i}`, faces, roof, null, 'roof', '#64727c');
+    }
   }
 
   private wall(wall: Wall, snapshot: ModelSnapshot): void {
     this.walls.set(wall.id, wall);
     const dx = wall.end[0] - wall.start[0]; const dy = wall.end[1] - wall.start[1];
     const length = Math.hypot(dx, dy); const angle = Math.atan2(dy, dx);
+    const base = entityElevation(snapshot, wall);
     const openings = snapshot.relationships.filter((link) => link.target === wall.id).flatMap((link) => {
       const item = snapshot.entities.find((candidate) => candidate.id === link.source);
       return item?.type === 'Door' || item?.type === 'Window' ? [{ item, offset: link.offset, bottom: item.type === 'Window' ? item.sillHeight : 0 }] : [];
     }).sort((a, b) => a.offset - b.offset);
     const segment = (start: number, end: number, bottom: number, top: number): void => {
       if (end - start < .001 || top - bottom < .001) return;
-      const mid = (start + end) / 2;
-      this.box(`${wall.id}-solid-${this.parts.length}`, new Vector3(end - start, top - bottom, wall.thickness),
-        modelPoint(wall.start[0] + dx * mid / length, wall.start[1] + dy * mid / length, (bottom + top) / 2), wall.id, wall.id, 'wall', '#eeeae1', angle);
+      for (const section of wallSections(snapshot, wall, start, end, bottom, top)) {
+        const at = (along: number, height: number, side: number): Vector3 => modelPoint(
+          wall.start[0] + dx * along / length - dy / length * side,
+          wall.start[1] + dy * along / length + dx / length * side, base + height);
+        const half = wall.thickness / 2;
+        const a = at(section.start, bottom, -half); const b = at(section.end, bottom, -half);
+        const c = at(section.end, section.endTop, -half); const d = at(section.start, section.startTop, -half);
+        const e = at(section.start, bottom, half); const f = at(section.end, bottom, half);
+        const g = at(section.end, section.endTop, half); const h = at(section.start, section.startTop, half);
+        this.solid(snapshot, `${wall.id}-solid-${this.parts.length}`,
+          [[a, b, c, d], [f, e, h, g], [e, a, d, h], [b, f, g, c], [d, c, g, h], [e, f, b, a]].map((face) => face.reverse()), wall, wall.id, 'wall', '#eeeae1');
+      }
     };
     let cursor = 0;
     for (const { item, offset, bottom } of openings) {
@@ -184,27 +283,40 @@ export class ModelScene {
       segment(offset, offset + item.width, 0, bottom);
       segment(offset, offset + item.width, bottom + item.height, wall.height);
       const centre = offset + item.width / 2;
-      const at = (along: number, elevation: number): Vector3 => modelPoint(wall.start[0] + dx * along / length, wall.start[1] + dy * along / length, elevation);
-      this.box(`${item.id}-leaf`, new Vector3(item.width - .04, item.height - .03, item.type === 'Door' ? .045 : .018),
+      const at = (along: number, elevation: number): Vector3 => modelPoint(wall.start[0] + dx * along / length, wall.start[1] + dy * along / length, base + elevation);
+      this.box(snapshot, `${item.id}-leaf`, new Vector3(item.width - .04, item.height - .03, item.type === 'Door' ? .045 : .018),
         at(centre, bottom + item.height / 2), item.id, wall.id, item.type === 'Door' ? 'wood' : 'glass', item.type === 'Door' ? '#be946d' : '#a8d2df', angle);
-      for (const along of [offset + .02, offset + item.width - .02]) this.box(`${item.id}-jamb-${along}`, new Vector3(.04, item.height, wall.thickness + .025), at(along, bottom + item.height / 2), item.id, wall.id, 'wall', '#faf8f1', angle);
-      this.box(`${item.id}-header`, new Vector3(item.width, .04, wall.thickness + .025), at(centre, bottom + item.height - .02), item.id, wall.id, 'wall', '#faf8f1', angle);
+      for (const along of [offset + .02, offset + item.width - .02]) this.box(snapshot, `${item.id}-jamb-${along}`, new Vector3(.04, item.height, wall.thickness + .025), at(along, bottom + item.height / 2), item.id, wall.id, 'wall', '#faf8f1', angle);
+      this.box(snapshot, `${item.id}-header`, new Vector3(item.width, .04, wall.thickness + .025), at(centre, bottom + item.height - .02), item.id, wall.id, 'wall', '#faf8f1', angle);
       cursor = offset + item.width;
     }
     segment(cursor, length, 0, wall.height);
   }
 
-  setModel(snapshot: ModelSnapshot): boolean {
-    const signature = JSON.stringify(snapshot);
-    if (signature === this.signature) return false;
-    const first = !this.snapshot; this.clearModel();
-    this.snapshot = snapshot; this.signature = signature;
-    const b = rectangleLayout(snapshot).boundsMm;
+  private addSnapshot(snapshot: ModelSnapshot): void {
+    const b = boundsMm(floorBounds(snapshot));
     const width = (b.maxX - b.minX) / 1000; const depth = (b.maxY - b.minY) / 1000;
-    this.box('room-floor', new Vector3(width + .16, .12, depth + .16), modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, -.07), null, null, 'floor', '#d1c3a9');
+    const rooms = spaces(snapshot);
+    if (!rooms.length && snapshot.version !== 2) this.box(snapshot, 'room-floor', new Vector3(width + .16, .12, depth + .16), modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, -.07), null, null, 'floor', '#d1c3a9');
+    for (const room of rooms) {
+      if (snapshot.entities.some((item) => item.type === 'Slab' && item.levelId === room.levelId)) continue;
+      const r = room.bounds;
+      this.box(snapshot, room.id + '-floor', new Vector3(r.maxX - r.minX, .12, r.maxY - r.minY), modelPoint((r.minX + r.maxX) / 2, (r.minY + r.maxY) / 2, entityElevation(snapshot, room) - .07), room.id, null, 'floor', '#d1c3a9');
+    }
     for (const item of snapshot.entities) {
       if (item.type === 'Wall') this.wall(item, snapshot);
-      else if (item.type === 'Equipment') this.box(item.id, new Vector3(item.width, item.height, item.depth), modelPoint(...item.position, item.elevation + item.height / 2), item.id, null, 'metal', '#8aabb1');
+      else if (item.type === 'Slab') this.slab(item, snapshot);
+      else if (item.type === 'Stair') this.stair(item, snapshot);
+      else if (item.type === 'Roof') this.roof(item, snapshot);
+      else if (item.type === 'AssetInstance') {
+        const geometry = assetGeometry(snapshot, item); const base = entityElevation(snapshot, item);
+        for (const color of new Set(geometry.faces.map((face) => face.fill))) {
+          const faces = geometry.faces.filter((face) => face.fill === color)
+            .map((face) => face.points.map(([x, y, z]) => modelPoint(x, y, base + z)).reverse());
+          this.solid(snapshot, `${item.id}-${color}`, faces, item, null, 'asset', color);
+        }
+      }
+      else if (item.type === 'Equipment') this.box(snapshot, item.id, new Vector3(item.width, item.height, item.depth), modelPoint(...item.position, entityElevation(snapshot, item) + item.elevation + item.height / 2), item.id, null, 'metal', '#8aabb1');
       else if (item.type === 'Furniture') {
         const faces = furnitureFaces(item, snapshot);
         const colors = new Set(faces.map((face) => face.fill));
@@ -212,7 +324,7 @@ export class ModelScene {
           const positions: number[] = []; const indices: number[] = [];
           for (const face of faces.filter((part) => part.fill === color)) {
             const offset = positions.length / 3;
-            for (const [x, y, z] of face.points) positions.push(x, z, y);
+            for (const [x, y, z] of face.points) positions.push(x, z + entityElevation(snapshot, item), y);
             for (let i = 1; i < face.points.length - 1; i += 1) indices.push(offset, offset + i + 1, offset + i);
           }
           const normals: number[] = []; VertexData.ComputeNormals(positions, indices, normals);
@@ -220,15 +332,71 @@ export class ModelScene {
           for (let i = 0; i < positions.length; i += 3) uvs.push(positions[i] * .4, positions[i + 2] * .4);
           const data = new VertexData(); data.positions = positions; data.indices = indices; data.normals = normals; data.uvs = uvs;
           const mesh = new Mesh(`${item.id}-${color}`, this.scene); data.applyToMesh(mesh);
-          const surface: Surface = item.kind === 'plant' ? color === '#bb8165' ? 'pot' : 'leaf' : item.kind === 'chair' ? 'fabric'
+          const surface: Surface = item.kind === 'plant' ? color === '#bb8165' ? 'pot' : 'leaf' : item.kind === 'chair' || item.kind === 'bed' || item.kind === 'sofa' ? 'fabric'
             : color === '#d6b58c' || color === '#c69a73' ? 'wood' : color === '#69b7d0' || color === '#8ccbd4' ? 'screen' : 'metal';
-          this.register(mesh, item.id, null, surface, color);
+          this.register(mesh, item.id, null, surface, color, snapshot);
         }
       }
     }
-    this.select(this.selectedId);
+  }
+
+  setModel(snapshot: ModelSnapshot, comparison: ModelSnapshot | null = null): boolean {
+    const signature = JSON.stringify([snapshot, comparison]);
+    if (signature === this.signature) return false;
+    const first = !this.snapshot; this.clearModel();
+    this.snapshot = snapshot; this.comparison = comparison; this.signature = signature;
+    this.changes.clear();
+    if (comparison) for (const change of modelChanges(comparison, snapshot)) this.changes.set(change.id, change);
+    this.addSnapshot(snapshot);
+    if (comparison) {
+      const afterCount = this.parts.length;
+      this.addSnapshot(comparison);
+      for (let i = this.parts.length - 1; i >= afterCount; i -= 1) {
+        const part = this.parts[i]; const change = part.objectId ? this.changes.get(part.objectId) : null;
+        this.shadow.removeShadowCaster(part.mesh);
+        if (!change || change.status === 'added') { part.mesh.dispose(); this.parts.splice(i, 1); continue; }
+        part.before = true; part.mesh.name = 'before:' + part.mesh.name;
+      }
+      this.walls.clear();
+      for (const item of snapshot.entities) if (item.type === 'Wall') this.walls.set(item.id, item);
+      for (const change of this.changes.values()) {
+        if (change.status !== 'modified') continue;
+        if (change.before.type === 'AssetFamily' || change.after.type === 'AssetFamily') continue;
+        const a = entityAnchor(change.before, comparison); const b = entityAnchor(change.after, snapshot);
+        if (Vector3.Distance(a, b) < .002) continue;
+        const line = MeshBuilder.CreateDashedLines('change-path:' + change.id, { points: [a, b], dashSize: 2, gapSize: 1, dashNb: 24 }, this.scene);
+        line.color = Color3.FromHexString('#a85a00'); line.isPickable = false;
+        const owners = [entityLevel(comparison, change.before), entityLevel(snapshot, change.after)].flatMap((level) => level ? [level.id] : []);
+        if (change.before.type === 'Stair') owners.push(change.before.toLevelId);
+        if (change.after.type === 'Stair') owners.push(change.after.toLevelId);
+        this.comparisonLines.push({ mesh: line, levelIds: owners });
+      }
+    }
+    this.applyAppearance(); this.select(this.selectedId);
     if (first) this.frame();
+    this.updateCutaway();
     return true;
+  }
+
+  private applyAppearance(): void {
+    for (const part of this.parts) {
+      if (!this.comparison) { part.mesh.material = this.material(part.surface, part.color); continue; }
+      const change = part.objectId ? this.changes.get(part.objectId) : null;
+      const kind = part.before ? change?.status === 'removed' ? 'removed-before' : 'modified-before' : change?.status ?? 'context';
+      const key = 'delta:' + kind;
+      let material = this.materials.get(key);
+      if (!material) {
+        const paint = new StandardMaterial(key, this.scene);
+        paint.diffuseColor = Color3.FromHexString(kind.startsWith('removed') ? '#c63f54' : kind.startsWith('modified') ? '#df972c' : kind === 'added' ? '#149e76' : '#bcc9c7');
+        paint.specularColor = Color3.Black();
+        paint.alpha = kind === 'context' ? .22 : part.before ? .7 : 1;
+        paint.wireframe = part.before; paint.backFaceCulling = false;
+        paint.disableDepthWrite = part.before || kind === 'context';
+        if (part.before) { paint.emissiveColor = paint.diffuseColor.scale(.4); paint.zOffset = -2; }
+        this.materials.set(key, paint); material = paint;
+      }
+      part.mesh.material = material;
+    }
   }
 
   setMode(mode: RenderingMode): void {
@@ -238,7 +406,7 @@ export class ModelScene {
     this.scene.imageProcessingConfiguration.exposure = mode === 'realistic' ? 1.15 : 1;
     this.sun.intensity = mode === 'realistic' ? 2.2 : .35;
     this.ambient.intensity = mode === 'realistic' ? .85 : .8;
-    for (const part of this.parts) part.mesh.material = this.material(part.surface, part.color);
+    this.applyAppearance();
   }
 
   select(id: string): void {
@@ -246,12 +414,29 @@ export class ModelScene {
     for (const part of this.parts) part.mesh.renderOutline = part.objectId === id;
   }
 
-  frame(): void {
+  frame(focusId: string | null = this.focusId): void {
+    this.focusId = focusId;
     if (!this.snapshot) return;
-    const b = rectangleLayout(this.snapshot).boundsMm;
-    this.camera.setTarget(modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, .6));
+    const focused = spaces(this.snapshot).find((room) => room.id === focusId && (this.levelId === null || room.levelId === this.levelId));
+    const after = boundsMm(floorBounds(this.snapshot));
+    const before = this.comparison ? boundsMm(floorBounds(this.comparison)) : after;
+    let b = focused ? boundsMm(focused.bounds) : { minX: Math.min(before.minX, after.minX), minY: Math.min(before.minY, after.minY), maxX: Math.max(before.maxX, after.maxX), maxY: Math.max(before.maxY, after.maxY) };
+    let minZ = 0; let maxZ = 0; let targetZ = .6;
+    if (this.snapshot.version === 2 || this.comparison?.version === 2) {
+      const owner = this.levelId ?? focused?.levelId ?? null;
+      const boxes = this.parts.filter((part) => (owner === null || part.levelIds.includes(owner)) && (this.roofVisible || part.surface !== 'roof')).map((part) => {
+        part.mesh.computeWorldMatrix(true); return part.mesh.getBoundingInfo().boundingBox;
+      });
+      if (boxes.length) {
+        minZ = Math.min(...boxes.map((box) => box.minimumWorld.y)); maxZ = Math.max(...boxes.map((box) => box.maximumWorld.y));
+        targetZ = (minZ + maxZ) / 2;
+        if (!focused) b = { minX: Math.min(...boxes.map((box) => box.minimumWorld.x)) * 1000, maxX: Math.max(...boxes.map((box) => box.maximumWorld.x)) * 1000,
+          minY: Math.min(...boxes.map((box) => box.minimumWorld.z)) * 1000, maxY: Math.max(...boxes.map((box) => box.maximumWorld.z)) * 1000 };
+      }
+    }
+    this.camera.setTarget(modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, targetZ));
     this.camera.alpha = -Math.PI / 2.4; this.camera.beta = .86;
-    const span = Math.max(b.maxX - b.minX, b.maxY - b.minY) / 1000;
+    const span = Math.max((b.maxX - b.minX) / 1000, (b.maxY - b.minY) / 1000, maxZ - minZ);
     this.camera.radius = Math.max(4, span * 1.65);
     this.camera.lowerRadiusLimit = Math.max(.4, span * .12); this.camera.upperRadiusLimit = Math.max(20, span * 8);
     this.camera.inertialAlphaOffset = 0; this.camera.inertialBetaOffset = 0; this.camera.inertialRadiusOffset = 0;
@@ -260,20 +445,42 @@ export class ModelScene {
 
   setCutaway(enabled: boolean): void { this.cutaway = enabled; this.updateCutaway(); }
 
+  setLevel(levelId: string | null): void {
+    if (levelId === this.levelId) return;
+    if (levelId !== null && this.snapshot && ![...levels(this.snapshot), ...(this.comparison ? levels(this.comparison) : [])].some((level) => level.id === levelId)) throw new Error('Unknown viewer level.');
+    this.levelId = levelId; this.focusId = null; this.updateCutaway(); this.frame(null);
+  }
+
+  setRoofVisible(visible: boolean): void { this.roofVisible = visible; this.updateCutaway(); }
+
+  private contextBounds(): Bounds {
+    if (!this.snapshot) throw new Error('No model to frame.');
+    const focused = spaces(this.snapshot).find((room) => room.id === this.focusId && (this.levelId === null || room.levelId === this.levelId));
+    if (focused) return focused.bounds;
+    for (const snapshot of [this.snapshot, this.comparison]) {
+      if (snapshot && this.levelId && levels(snapshot).some((level) => level.id === this.levelId)) return floorBounds(levelView(snapshot, this.levelId));
+    }
+    return floorBounds(this.snapshot);
+  }
+
   private updateCutaway(): void {
     if (!this.snapshot) return;
-    const b = rectangleLayout(this.snapshot).boundsMm;
+    const b = boundsMm(this.contextBounds());
     const centre = modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000);
     for (const part of this.parts) {
       const wall = part.wallId ? this.walls.get(part.wallId) : null;
-      let visible = true;
-      if (this.cutaway && wall) {
+      let visible = (this.levelId === null || part.levelIds.includes(this.levelId)) && (this.roofVisible || part.surface !== 'roof');
+      const changedWallPart = this.comparison && part.objectId && this.changes.has(part.objectId);
+      if (visible && this.cutaway && wall && !part.before && !changedWallPart) {
         const midpoint = modelPoint((wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2);
-        const outward = midpoint.subtract(centre); outward.y = 0;
+        const outward = wall.start[1] === wall.end[1] ? new Vector3(0, 0, midpoint.z - centre.z) : new Vector3(midpoint.x - centre.x, 0, 0);
         visible = Vector3.Dot(outward, this.camera.position.subtract(midpoint)) <= 0;
       }
       part.mesh.setEnabled(visible);
     }
+    for (const line of this.comparisonLines) line.mesh.setEnabled(this.levelId === null || line.levelIds.includes(this.levelId));
+    const markerVisible = this.levelId === null || this.markerLevelId === this.levelId;
+    this.marker?.setEnabled(markerVisible); this.markerLine?.setEnabled(markerVisible);
   }
 
   objectAt(x: number, y: number): string | null {
@@ -283,30 +490,45 @@ export class ModelScene {
 
   referenceAt(x: number, y: number): SpatialReference | null {
     if (!this.snapshot) return null;
-    const hit = this.scene.pick(x, y, (mesh) => mesh.isEnabled() && mesh.isVisible && this.parts.some((part) => part.mesh === mesh && (part.surface === 'floor' || part.wallId !== null)));
+    const hit = this.scene.pick(x, y, (mesh) => mesh.isEnabled() && mesh.isVisible && this.parts.some((part) => part.mesh === mesh && !part.before && (part.surface === 'floor' || part.wallId !== null)));
     if (!hit?.pickedPoint) return null;
     const part = this.parts.find((candidate) => candidate.mesh === hit.pickedMesh);
-    return referenceFromHit(this.snapshot, hit.pickedPoint, part?.wallId ?? null);
+    if (this.snapshot.version === 2 && part?.surface === 'floor') {
+      const level = part.levelIds[0];
+      if (!level || Math.abs(hit.pickedPoint.y - entityElevation(this.snapshot, level)) > .03) return null;
+    }
+    return referenceFromHit(this.snapshot, hit.pickedPoint, part?.wallId ?? null, part?.levelIds[0]);
   }
 
   mark(reference: SpatialReference | null): void {
     this.marker?.dispose(); this.markerLine?.dispose(); this.marker = null; this.markerLine = null;
+    this.markerLevelId = null;
     if (!reference || !this.snapshot) return;
     const target = referencePosition(reference, this.snapshot);
+    this.markerLevelId = reference.kind === 'wall-point' ? entityLevel(this.snapshot, reference.wallId)?.id ?? null
+      : 'levelId' in reference ? reference.levelId : null;
+    if (reference.kind === 'floor-point' && !('levelId' in reference) && this.snapshot.version !== 2) {
+      const storeys = levels(this.snapshot);
+      if (storeys.length === 1) this.markerLevelId = storeys[0].id;
+    }
     this.marker = MeshBuilder.CreateTorus('request-marker-not-geometry', { diameter: .34, thickness: .025, tessellation: 32 }, this.scene);
     this.marker.position.copyFrom(target); this.marker.material = this.markerMaterial; this.marker.isPickable = false;
     const source = this.snapshot.entities.find((item) => item.id === this.selectedId);
-    if (source) {
+    if (source && source.type !== 'AssetFamily') {
       const line = MeshBuilder.CreateDashedLines('request-reference-line', { points: [entityAnchor(source, this.snapshot), target], dashSize: 2, gapSize: 1, dashNb: 30 }, this.scene);
       line.color = Color3.FromHexString('#087e70'); line.isPickable = false; this.markerLine = line;
     }
+    this.updateCutaway();
   }
 
   anchorOnScreen(id: string, width: number, height: number): Point | null {
-    const item = this.snapshot?.entities.find((candidate) => candidate.id === id);
-    if (!item || !this.snapshot) return null;
+    const after = this.snapshot?.entities.find((candidate) => candidate.id === id);
+    const item = after ?? this.comparison?.entities.find((candidate) => candidate.id === id);
+    const source = after ? this.snapshot : this.comparison;
+    if (!item || !source || item.type === 'AssetFamily' || this.levelId !== null && entityLevel(source, item)?.id !== this.levelId
+      && !(item.type === 'Stair' && item.toLevelId === this.levelId) || !this.roofVisible && item.type === 'Roof') return null;
     const engine = this.scene.getEngine();
-    const projected = Vector3.Project(entityAnchor(item, this.snapshot), Matrix.IdentityReadOnly, this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
+    const projected = Vector3.Project(entityAnchor(item, source), Matrix.IdentityReadOnly, this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
     if (projected.z < 0 || projected.z > 1) return null;
     return [projected.x / engine.getRenderWidth() * width, projected.y / engine.getRenderHeight() * height];
   }
@@ -315,6 +537,8 @@ export class ModelScene {
     this.mark(null);
     for (const part of this.parts) { this.shadow.removeShadowCaster(part.mesh); part.mesh.dispose(); }
     this.parts.length = 0; this.walls.clear();
+    for (const line of this.comparisonLines) line.mesh.dispose();
+    this.comparisonLines.length = 0;
   }
 
   dispose(): void { this.clearModel(); this.scene.dispose(); }
