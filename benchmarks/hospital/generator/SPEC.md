@@ -2,7 +2,8 @@
 
 W4 / issue #127, stacked on W0 contract foundation
 `4fb723bc29a0fced971b3f4b2069e0fa31699a68`.
-This is synthetic qualification input. Source is prepared; server validation is pending.
+This is synthetic qualification input. W4 generator correctness checks pass on the
+server; full generation, database ingestion and qualification remain pending.
 
 ## Invocation and transport
 
@@ -80,6 +81,25 @@ estimated property total because small kinds round cohorts independently).
 These are analytical expectations awaiting server verification. Count logical property values
 exactly, rather than asserting the profile's 145,118,240 estimate is measured.
 
+Cohort sizes use exact decimal arithmetic before flooring. In particular, 70% of
+1,400,000 studs is 980,000, and 70% of each 180,000-kind inventory is 126,000.
+Binary64 multiplication incorrectly rounds these products below their integers;
+flooring that result inflates the 176-value remainder by one per kind. That bug
+added 160 values each for studs, outlets and duct segments, explaining the failed
+145,118,992 oracle. Exact decimal allocation restores 145,118,512: the only excess
+over the profile estimate is site rounding (+144) and building rounding (+128).
+The independent test uses integer ratios 7/10 and 1/4; the generator precomputes
+decimal cohort boundaries once per kind. The same correction applies to payload
+cohort boundaries. Previously generated hashes must be regenerated from this source.
+
+The correction passed seven generator tests in the leased `bim-qvm-w4-debug`
+container (0.5 CPU, 1,536 MiB), including the independently reproduced then fixed
+boundary regression. Scoped TypeScript checking passed against the combined
+integration source. `npm run validate` passed against an isolated W4 source copy
+(121 TypeScript sources); the combined W4/W5 copy requires W5's `pg` dependencies,
+which are absent from the unmodified tools image. No database load or full dataset
+generation ran during this correction.
+
 `--table manifest` emits one JSON object. It streams all three tables internally
 without storing them, computing SHA-256 of their **exact escaped TSV bytes**,
 row/byte counts, counts by kind, property counts, payload/property byte statistics,
@@ -102,7 +122,7 @@ cohort supply explicitly labeled compression/deduplication samples.
 `check.ts` emits W0 `Observation[]` to stdout, with nonzero exit on failed checks.
 Its independent endpoint/degree maps are restricted to smoke or smaller, at most
 10,000 entities. This checker is deliberately separate from the memory-bounded
-data producer. `generator.test.ts` prepares six server test cases, including odd
+data producer. `generator.test.ts` prepares seven server test cases, including odd
 port counts, seed variation, COPY escaping and full analytical cardinalities.
 No local build/test has run; no qualification result is asserted. The observations
 cover generator correctness only. W5/W0 must account for every remaining EX-13
@@ -112,7 +132,8 @@ assertion before publishing a terminal result; these observations carry limitati
 
 Only the coordinator runs these commands in an allocated slot. They have not run.
 `W4_SOURCE` is an actual clean Git bundle clone of the handed-off source commit on
-`/ssd1`. Root dependencies are supplied by the tools image at `/node_modules`.
+`/ssd1`. The tools image supplies dependencies under `/app/node_modules`; create
+a `/node_modules` symlink inside each disposable container before running Node.
 `W4_EVIDENCE` is a unique run directory on `/ssd1`, retained with source/image
 bindings. Pin the tools image ID supplied by the coordinator; these examples use
 the immutable image ID rather than the mutable tag.
@@ -125,15 +146,15 @@ W4_IMAGE=sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff
 mkdir -p "$W4_EVIDENCE"
 docker run --rm --cpus=1 --memory=2g \
   -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
-  sh -c 'npm run validate && npx --no-install tsc --noEmit -p benchmarks/hospital/generator/tsconfig.json && node --test benchmarks/hospital/generator/generator.test.ts' \
+  sh -c 'ln -s /app/node_modules /node_modules && npm run validate && /app/node_modules/.bin/tsc --noEmit -p benchmarks/hospital/generator/tsconfig.json && node --test benchmarks/hospital/generator/generator.test.ts' \
   >"$W4_EVIDENCE/validation.log" 2>&1
 docker run --rm --cpus=1 --memory=2g \
   -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
-  node benchmarks/hospital/generator/check.ts --scale smoke \
+  sh -c 'ln -s /app/node_modules /node_modules && node benchmarks/hospital/generator/check.ts --scale smoke' \
   >"$W4_EVIDENCE/observations.json" 2>"$W4_EVIDENCE/check.stderr"
 docker run --rm --cpus=1 --memory=2g \
   -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
-  node benchmarks/hospital/generator/cli.ts --scale smoke --table manifest \
+  sh -c 'ln -s /app/node_modules /node_modules && node benchmarks/hospital/generator/cli.ts --scale smoke --table manifest' \
   >"$W4_EVIDENCE/manifest-smoke.json" 2>"$W4_EVIDENCE/manifest.stderr"
 ```
 
@@ -151,7 +172,7 @@ W4_SCALE=smoke
 for table in entities relationships parameters; do
   docker run --rm --cpus=1 --memory=2g \
     -v "$W4_SOURCE:/workspace:ro" -w /workspace "$W4_IMAGE" \
-    node benchmarks/hospital/generator/cli.ts --scale "$W4_SCALE" --table "$table" \
+    sh -c 'ln -s /app/node_modules /node_modules && exec node benchmarks/hospital/generator/cli.ts "$@"' sh --scale "$W4_SCALE" --table "$table" \
     2>"$W4_EVIDENCE/$table-generator.stderr" \
   | tee >(sha256sum >"$W4_EVIDENCE/$table.sha256") \
   | docker exec -i "$W5_PG_CONTAINER" psql -X -v ON_ERROR_STOP=1 \

@@ -21,13 +21,10 @@ export type EntityRow = {
 export type ParameterRow = { id: number; entityId: number; name: string; kind: string;
   value: object; dependsOnEntityId: number; properties: object };
 
-function cohortIndex(ordinal: number, count: number, fractions: readonly number[]): number {
-  let upper = 0;
-  for (let index = 0; index < fractions.length; index += 1) {
-    const fraction = fractions[index];
-    if (fraction === undefined) throw new Error('Missing internal cohort.');
-    upper += index === fractions.length - 1 ? count : Math.floor(count * fraction);
-    if (ordinal <= upper) return index;
+function cohortIndex(ordinal: number, upperBounds: readonly number[]): number {
+  for (let index = 0; index < upperBounds.length; index += 1) {
+    const upper = upperBounds[index];
+    if (upper !== undefined && ordinal <= upper) return index;
   }
   throw new Error('Cohort did not cover admitted entity.');
 }
@@ -37,7 +34,9 @@ export function propertyCount(graph: Graph, entity: EntityRef): number {
   if (entity.kind === 'connectionPort') return profile.properties.connectionPortCountPerEntity;
   if (entity.kind === 'typeDefinition') return profile.properties.typeDefinitionCountPerEntity;
   const cohorts = profile.properties.otherEntityCohorts;
-  const cohort = cohorts[cohortIndex(entity.ordinal, graph.dataset.range(entity.kind).count, cohorts.map((item) => item.fraction))];
+  const bounds = graph.dataset.propertyCohortBounds.get(entity.kind);
+  if (!bounds) throw new Error('Missing property cohort boundaries.');
+  const cohort = cohorts[cohortIndex(entity.ordinal, bounds)];
   if (!cohort) throw new Error('Missing property cohort.');
   return cohort.valueCount;
 }
@@ -115,7 +114,7 @@ export function payloadFor(graph: Graph, entity: EntityRef): string {
   const profile = graph.dataset.profile.geometryAndArtifacts;
   // A bijection spreads exact global cohort sizes across kinds and neighborhoods.
   const rank = ((entity.id - 1) * graph.dataset.payloadPermutationStride + graph.dataset.salt) % graph.dataset.entityCount + 1;
-  const cohort = profile.payloadCohorts[cohortIndex(rank, graph.dataset.entityCount, profile.payloadCohorts.map((item) => item.fraction))];
+  const cohort = profile.payloadCohorts[cohortIndex(rank, graph.dataset.payloadCohortBounds)];
   if (!cohort) throw new Error('Missing payload cohort.');
   const base = { bounds: boundsFor(graph, entity), mediaType: 'application/x-bim-forge-synthetic-proxy', id: entity.id, data: '' };
   const length = cohort.bytes - Buffer.byteLength(JSON.stringify(base));

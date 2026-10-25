@@ -3,7 +3,8 @@ import test from 'node:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Dataset, KINDS, loadProfile, parseOptions } from './profile.ts';
+import { Dataset, KINDS, cohortUpperBounds, loadProfile, parseOptions } from './profile.ts';
+import type { Kind } from './profile.ts';
 import { Graph } from './graph.ts';
 import { copyLine, entityLine, entityRow, propertyCount, propertiesFor } from './rows.ts';
 import { decodeCopyLine, runChecks } from './check.ts';
@@ -33,14 +34,34 @@ test('full admission retains the declared 35-kind inventory and parameter count 
     const count = full.dataset.range(kind).count;
     if (kind === 'connectionPort') return sum + count * 8;
     if (kind === 'typeDefinition') return sum + count * 80;
-    const small = Math.floor(count * 0.7);
-    const medium = Math.floor(count * 0.25);
+    // An independent rational oracle; decimal allocation must not lose whole entities.
+    const small = Number(BigInt(count) * 7n / 10n);
+    const medium = Number(BigInt(count) / 4n);
     return sum + small * 16 + medium * 48 + (count - small - medium) * 176;
   }, 0);
   assert.equal(properties, 145_118_512);
   const port = full.dataset.ref('connectionPort', 3_000_000);
   const owner = full.ownerOf(port);
   assert.equal(full.systemOf(port)?.id, full.systemOf(owner)?.id);
+});
+
+test('decimal cohort cutoffs retain the exact 70 percent and 25 percent boundaries for full inventory', () => {
+  const full = graph('full');
+  for (const [kind, small, medium] of [
+    ['stud', 980_000, 350_000],
+    ['electricalOutlet', 126_000, 45_000],
+    ['ductSegment', 126_000, 45_000],
+  ] satisfies [Kind, number, number][]) {
+    assert.equal(propertyCount(full, full.dataset.ref(kind, small)), 16, `${kind}: last 16-value entity`);
+    assert.equal(propertyCount(full, full.dataset.ref(kind, small + 1)), 48, `${kind}: first 48-value entity`);
+    assert.equal(propertyCount(full, full.dataset.ref(kind, small + medium)), 48, `${kind}: last 48-value entity`);
+    assert.equal(propertyCount(full, full.dataset.ref(kind, small + medium + 1)), 176, `${kind}: first 176-value entity`);
+  }
+  assert.deepEqual(cohortUpperBounds(1_400_000, [0.7, 0.25, 0.05]), [980_000, 1_330_000, 1_400_000]);
+  assert.deepEqual(cohortUpperBounds(180_000, [0.7, 0.25, 0.05]), [126_000, 171_000, 180_000]);
+  assert.deepEqual(cohortUpperBounds(1, [0.7, 0.25, 0.05]), [0, 0, 1]);
+  assert.deepEqual(cohortUpperBounds(4, [0.7, 0.25, 0.05]), [2, 3, 4]);
+  assert.deepEqual(cohortUpperBounds(10_000_000, [1e-7, 0.9999999]), [1, 10_000_000]);
 });
 
 test('smoke independently checks endpoints, type scope, degree distributions, parameters and repeatable wire bytes', () => {
