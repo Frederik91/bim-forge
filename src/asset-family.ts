@@ -69,6 +69,10 @@ function millimetres(value: number): number {
   if (Math.abs(value * 1000 - Math.round(value * 1000)) > 1e-6) throw new Error('Asset placement and dimensions require a millimetre grid.');
   return value;
 }
+function readable(value: string): string {
+  if (!value.trim() || /[\u0000-\u001f\u007f]/.test(value)) throw new Error('Asset names and descriptions must be nonblank readable text without ASCII controls.');
+  return value;
+}
 export function parseAssetFamily(input: unknown): AssetFamily {
   const value = plain(input);
   if (!Check(AssetFamilySchema, value)) throw new Error('Asset family requires exact fields and one to sixteen bounded primitives.');
@@ -81,14 +85,14 @@ export function parseAssetFamily(input: unknown): AssetFamily {
       throw new Error('Positive family primitives must stay inside and attain all six unit-box extrema.');
     }
   }
-  return { ...value, id: identifier(value.id), parts };
+  return { ...value, id: identifier(value.id), name: readable(value.name), description: readable(value.description), parts };
 }
 export function parseAssetInstance(input: unknown): AssetInstance {
   const value = plain(input);
   if (!Check(AssetInstanceSchema, value)) throw new Error('Asset instance requires exact fields, a bound placement and bounded dimensions.');
   const [x, y] = value.position;
   if (x === undefined || y === undefined) throw new Error('Asset position requires two coordinates.');
-  return { ...value, id: identifier(value.id), familyId: identifier(value.familyId), position: [millimetres(x), millimetres(y)],
+  return { ...value, id: identifier(value.id), name: readable(value.name), familyId: identifier(value.familyId), position: [millimetres(x), millimetres(y)],
     size: { width: millimetres(value.size.width), depth: millimetres(value.size.depth), height: millimetres(value.size.height) },
     placement: value.placement.kind === 'single-room' ? { kind: 'single-room' } : { kind: 'room', roomId: identifier(value.placement.roomId) } };
 }

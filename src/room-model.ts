@@ -868,6 +868,15 @@ function cloneSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
   return structuredClone(snapshot);
 }
 
+function registerFamilyIdentities(known: Map<EntityId, string>, snapshot: ModelSnapshot): void {
+  for (const entity of snapshot.entities) if (entity.type === 'AssetFamily') {
+    const recipe = canonical(entity);
+    const previous = known.get(entity.id);
+    if (previous !== undefined && previous !== recipe) fail('Family IDs are immutable across repository history. Register a new family ID.');
+    known.set(entity.id, recipe);
+  }
+}
+
 function fixture(): ModelSnapshot {
   const sides: Array<{ side: string; start: Point; end: Point }> = [
     { side: 'south', start: [0, 0], end: [6, 0] },
@@ -1092,6 +1101,7 @@ export class RoomRepository {
     const reviewValues = value.version === 2 ? value.reviews : [];
     if (!Array.isArray(reviewValues) || reviewValues.length > 31) fail('Unsupported saved project.');
     const revisions = new Map<RevisionId, Revision>();
+    const familyIdentities = new Map<EntityId, string>();
     for (const item of revisionValues) {
       fields(item, ['id', 'parentId', 'snapshot']);
       const id = revisionIdentifier(item.id);
@@ -1099,6 +1109,7 @@ export class RoomRepository {
       if (revisions.has(id)) fail('Invalid revision identity.');
       const validated = await revision(parentId, validateSnapshot(item.snapshot));
       if (validated.id !== id) fail('Saved revision content does not match its hash.');
+      registerFamilyIdentities(familyIdentities, validated.snapshot);
       revisions.set(id, validated);
     }
     const roots = [...revisions.values()].filter((item) => item.parentId === null);
@@ -1282,6 +1293,9 @@ export class RoomRepository {
   async #commit(name: BranchName, base: Revision, snapshot: unknown): Promise<RoomRepository> {
     if (name === 'main') fail('Choose a proposal name other than main.');
     const updated = validateSnapshot(snapshot);
+    const familyIdentities = new Map<EntityId, string>();
+    for (const revision of this.#state.revisions) registerFamilyIdentities(familyIdentities, revision.snapshot);
+    registerFamilyIdentities(familyIdentities, updated);
     const next = canonical(updated) === canonical(base.snapshot) ? base : await revision(base.id, updated);
     const existing = this.#state.branches.find((item) => item.name === name);
     if (existing) {
