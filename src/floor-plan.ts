@@ -165,6 +165,7 @@ export function validateFloorPlan(snapshot: ModelGraph): void {
       if (!support || entityLevel(snapshot, support)?.id !== entityLevel(snapshot, entity)?.id) throw new Error('Furniture supports must remain on the same level.');
     }
   }
+  validateSlabClearance(snapshot);
   for (const level of ordered) {
     const view = levelView(snapshot, level.id);
     validateSingleFloor(view, level.id);
@@ -219,4 +220,42 @@ export function validateFloorPlan(snapshot: ModelGraph): void {
   // Without a terrain/landing model, only elevation-zero exterior doors establish ground exits.
   const exits = connections.filter((link) => link.exterior && entityLevel(snapshot, link.door)?.elevation === 0).flatMap((link) => link.roomIds);
   validateReachability(spaces(snapshot), exits, [...connections.map((link) => link.roomIds), ...stairEdges]);
+}
+
+/** Owned solids may touch an upper slab underside but may not extend through it. */
+function validateSlabClearance(snapshot: ModelGraph): void {
+  const slabs = snapshot.entities.filter((item) => item.type === 'Slab');
+  for (const entity of snapshot.entities) {
+    const owner = entityLevel(snapshot, entity);
+    if (!owner) continue;
+    let footprint: Bounds;
+    let bottom = owner.elevation;
+    let top: number;
+    if (entity.type === 'Wall') {
+      footprint = { minX: Math.min(entity.start[0], entity.end[0]) - entity.thickness / 2,
+        minY: Math.min(entity.start[1], entity.end[1]) - entity.thickness / 2,
+        maxX: Math.max(entity.start[0], entity.end[0]) + entity.thickness / 2,
+        maxY: Math.max(entity.start[1], entity.end[1]) + entity.thickness / 2 };
+      top = bottom + entity.height;
+    } else if (entity.type === 'Equipment' || entity.type === 'Furniture') {
+      const sideways = entity.type === 'Furniture' && (entity.rotationDeg === 90 || entity.rotationDeg === 270);
+      const width = sideways ? entity.depth : entity.width; const depth = sideways ? entity.width : entity.depth;
+      footprint = { minX: entity.position[0] - width / 2, maxX: entity.position[0] + width / 2,
+        minY: entity.position[1] - depth / 2, maxY: entity.position[1] + depth / 2 };
+      if (entity.type === 'Equipment') bottom += entity.elevation;
+      else if (entity.supportId !== null) {
+        const support = snapshot.entities.find((item) => item.id === entity.supportId);
+        if (support?.type === 'Furniture') bottom += support.height;
+      }
+      top = bottom + entity.height;
+    } else continue;
+    for (const slab of slabs) {
+      const slabLevel = entityLevel(snapshot, slab);
+      if (!slabLevel || slabLevel.elevation <= owner.elevation || !overlapsBounds(footprint, slab.bounds)) continue;
+      // Also reject equipment placed wholly above its owner's ceiling: it cannot acquire another floor by offset.
+      if (top > slabLevel.elevation - slab.thickness + 1e-9) {
+        throw new Error('Walls, furniture and equipment must remain below overlapping upper slabs.');
+      }
+    }
+  }
 }

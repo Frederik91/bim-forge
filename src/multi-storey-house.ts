@@ -12,7 +12,7 @@ export function multiStoreyLayout(): BuildingLayout {
     ].map((level) => ({ level, rooms: [
       { id: level.id + '-west', name: level.name + ' west room', boundsMm: { minX: 0, minY: 0, maxX: 4000, maxY: 6000 } },
       { id: level.id + '-east', name: level.name + ' east room', boundsMm: { minX: 4000, minY: 0, maxX: 8000, maxY: 6000 } },
-    ], wallThicknessMm: 150, heightMm: 2700, slabThicknessMm: 200,
+    ], wallThicknessMm: 150, heightMm: level.id === 'level-attic' ? 4200 : 2700, slabThicknessMm: 200,
     openings: [
       { id: level.id + '-door-inner', type: 'Door', name: level.name + ' connecting door', roomId: level.id + '-west',
         side: 'east', offsetMm: 3000, widthMm: 900, heightMm: 2100 },
@@ -45,7 +45,7 @@ export function multiStoreySnapshot(): SnapshotV2 {
       { side: 'west', start: [0, 0], end: [0, 6] }, { side: 'east', start: [8, 0], end: [8, 6] },
       { side: 'inner', start: [4, 0], end: [4, 6] },
     ]) entities.push({ id: id + '-wall-' + wall.side, type: 'Wall', name: name + ' ' + wall.side + ' wall',
-      levelId: id, start: wall.start, end: wall.end, thickness: .15, height: 2.7 });
+      levelId: id, start: wall.start, end: wall.end, thickness: .15, height: floor.heightMm / 1000 });
     for (const opening of floor.openings) {
       entities.push({ id: opening.id, type: 'Door', name: opening.name, width: .9, height: 2.1 });
       relationships.push({ id: 'host-' + opening.id, type: 'hosted-by', source: opening.id,

@@ -95,13 +95,54 @@ test('same-level overlap, cross-level supports, stair voids and sloping roof cle
   assert.throws(() => previewFurnishings(base, { furnishings: furnishings(base).map((item) => item.id === plant.id
     ? { ...item, position: [6, 1.5] } : item) }), /stairs and slab voids/);
   assert.throws(() => previewFurnishings(base, { furnishings: furnishings(base).map((item) => item.id === plant.id
-    ? { ...item, position: [1, .4], height: 2.75 } : item) }), /ceiling|roof underside/);
+    ? { ...item, position: [1, .3], height: 2.65 } : item) }), /roof underside/);
+  assert.throws(() => validateSnapshot({ ...base, entities: [...base.entities,
+    { id: 'attic-equipment', type: 'Equipment', name: 'Tall equipment', category: 'mechanical', levelId: 'level-attic',
+      position: [6, .3], elevation: 2.4, width: .4, depth: .4, height: .3 },
+  ] }), /Equipment must fit below the roof underside/);
   assert.throws(() => validateSnapshot({ ...base, entities: [...base.entities,
     { id: 'desk-ground', type: 'Furniture', name: 'Desk', kind: 'desk', levelId: 'level-ground', position: [6, 4.8],
       width: 1.2, depth: .8, height: .75, rotationDeg: 0, supportId: null },
     { id: 'monitor-attic', type: 'Furniture', name: 'Monitor', kind: 'monitor', levelId: 'level-attic', position: [6, 4.8],
       width: .5, depth: .2, height: .4, rotationDeg: 0, supportId: 'desk-ground' },
   ] }), /same level/);
+});
+
+test('unrelated upper stairs do not block basement furnishings or equipment', () => {
+  const base = multiStoreySnapshot();
+  const after = previewFurnishings(base, { furnishings: furnishings(base).map((item) => item.id === 'level-basement-plant'
+    ? { ...item, position: [6, 1.5] } : item) });
+  assert.equal(entityElevation(after, 'level-basement-plant'), -3);
+  assert.doesNotThrow(() => validateSnapshot({ ...base, entities: [...base.entities,
+    { id: 'basement-equipment', type: 'Equipment', name: 'Basement equipment', category: 'mechanical', levelId: 'level-basement',
+      position: [6, 1.5], elevation: 0, width: .4, depth: .4, height: .5 },
+  ] }));
+});
+
+test('lower solids may meet an upper slab underside but cannot cross it or move above their owner', () => {
+  const base = multiStoreySnapshot();
+  const wallsAtUnderside = { ...base, entities: base.entities.map((item) => item.type === 'Wall' && item.levelId === 'level-basement'
+    ? { ...item, height: 2.8 } : item) };
+  assert.doesNotThrow(() => validateSnapshot(wallsAtUnderside));
+  assert.throws(() => validateSnapshot({ ...base, entities: base.entities.map((item) => item.type === 'Wall' && item.levelId === 'level-basement'
+    ? { ...item, height: 2.801 } : item) }), /below overlapping upper slabs/);
+  for (const elevation of [0, 4]) assert.throws(() => validateSnapshot({ ...base, entities: [...base.entities,
+    { id: 'basement-tall-equipment', type: 'Equipment', name: 'Tall basement equipment', category: 'mechanical', levelId: 'level-basement',
+      position: [6, 4.8], elevation, width: .4, depth: .4, height: 2.801 },
+  ] }), /below overlapping upper slabs/);
+  assert.throws(() => previewFurnishings(base, { furnishings: furnishings(base).map((item) => item.id === 'level-basement-plant'
+    ? { ...item, height: 2.801 } : item) }), /below overlapping upper slabs/);
+});
+
+test('attic nominal walls reach the ridge and are clipped by the roof underside', () => {
+  const base = multiStoreySnapshot();
+  assert.ok(base.entities.filter((item) => item.type === 'Wall' && item.levelId === 'level-attic').every((wall) => wall.type === 'Wall' && wall.height === 4.2));
+  // A tall object under the ridge fits; the same height near the eaves does not.
+  const ridge = previewFurnishings(base, { furnishings: furnishings(base).map((item) => item.id === 'level-attic-plant'
+    ? { ...item, position: [1, 3], height: 2.9 } : item) });
+  assert.equal(entityElevation(ridge, 'level-attic-plant'), 3);
+  assert.throws(() => previewFurnishings(base, { furnishings: furnishings(base).map((item) => item.id === 'level-attic-plant'
+    ? { ...item, position: [1, .3], height: 2.9 } : item) }), /roof underside/);
 });
 
 test('roofs and slabs reject invalid shape, location and thickness', () => {

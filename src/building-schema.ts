@@ -35,7 +35,7 @@ export const BuildingLayoutSchema = Type.Object({
       profile: RoofLayoutProfileSchema }, { additionalProperties: false }), Type.Null()], { title: 'LevelRoofLayout' }),
   }, { additionalProperties: false, title: 'BuildingLevelLayout' }), { minItems: 1, maxItems: 6 }),
   stairs: Type.Array(Type.Object({ id: identifier, name, fromLevelId: identifier, toLevelId: identifier,
-    startMm: Type.Tuple([coordinate, coordinate]), endMm: Type.Tuple([coordinate, coordinate]),
+    startMm: Type.Array(coordinate, { minItems: 2, maxItems: 2 }), endMm: Type.Array(coordinate, { minItems: 2, maxItems: 2 }),
     widthMm: Type.Integer({ minimum: 100, maximum: 5000 }), steps: Type.Integer({ minimum: 1, maximum: 100 }),
   }, { additionalProperties: false, title: 'StairLayout' }), { maxItems: 10 }),
 }, { title: 'BuildingLayout', additionalProperties: false });
