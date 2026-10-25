@@ -1,8 +1,8 @@
 # EX-07 dependency evaluation and geometric references
 
-W3, [#126](https://github.com/Frederik91/bim-forge/issues/126), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). The coordinator reported passing validation, scoped type checking and 11 Node tests on the first module commit. Real OCP execution passed six bounded assertions on kernel attempt 3 after two binding failures. **This is not a terminal qualification result.** No registry change, production model change or PR is included.
+W3, [#126](https://github.com/Frederik91/bim-forge/issues/126), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). Validation, scoped type checking, 11 W3 tests and five W0 contract tests passed on source `915138a`. Real OCP execution passed six bounded assertions on kernel attempt 3 after two binding failures. The 16 successful observations support an **inconclusive** terminal record, with general topology coverage partial. No registry or production model change is included.
 
-Foundation: W0 `1911844` (repository-root normalization follow-up), PR base `feature/issue-123-qualification-contracts`. `contract.ts` uses W0's observation schema/parser and adds EX-07 identity, cardinality and duplicate checks. `run.ts` emits the frozen observation array, raw artifacts, exact registry assertion coverage, and a dataset manifest. W0 owns terminal record verification/publication and approval remains human.
+Foundation: W0 `29583f735c1803872ace3fa663dcf6d7a145434a` (hashed executed observations and source-commit verification), PR base `feature/issue-123-qualification-contracts`. `contract.ts` uses W0's observation schema/parser and adds EX-07 identity, cardinality and duplicate checks. `run.ts` emits the frozen observation array, raw artifacts, exact registry assertion coverage, and a dataset manifest. W0 owns terminal record verification/publication and approval remains human.
 
 ## Plan and scope
 
@@ -102,7 +102,19 @@ Attempt 3 tested Python source SHA-256 `5626f425916ed87fa9c2edb03c25ec2566ee2686
 
 `node/observations.json` is an array of `{experimentId,caseId,expected,observed,passed,limitations}`. `node/dependency-artifacts.json` contains requested models, baseline snapshots, candidate/full deltas or rollback diagnostics, and assertion errors. `node/coverage.json` uses the four exact EX-07 registry assertion strings. `node/dataset-manifest.json` hashes the shared fixture and W3 extension. `occt/topology-artifacts.json` records topology descriptors, real counts and ambiguity, environment, decisions and BREP hashes. Keep the `occt/*.brep`, source-observation copy, logs and exit statuses alongside them.
 
-No code here writes a terminal `Run`. The coordinator uses W0 `bindingFor` for design/definition bindings, `sha256` for the dataset manifest, `describeArtifact` for retained artifacts, and `verifyRun`/`publishRun` for the complete, actual run record. Populate source/runner commit, actual image/resource/slot metadata, executed commands, timing, errors and limitations from execution, never from this preparation document. Bind exactly the registry assertion set used by `coverage.json`.
+`finalize.ts` retrospectively packages the retained source-915138a evidence without rerunning experiments. It uses W0 `bindingFor`, `sha256`, `describeArtifact`, `verifyRun` and `publishRun`, including the required hashed `observationsArtifact` and exact registry assertion set. The source/runner commit remains the actual execution commit; the publisher commit is recorded separately. It retains both earlier failures. Timing uses the original kernel stdout log creation time through the final observation-contract log modification time, and explicitly records that this is a retrospective filesystem envelope. The original run's disk budget was not captured; a predeclared, enforced 64 MiB budget applies only to finalization retention. These limits remain in the inconclusive record.
+
+Run once in the leased server container, from a committed repository with the source Git objects available, using fresh evidence and run paths:
+
+```sh
+node experiments/regeneration/finalize.ts \
+  --artifacts /qualification/artifacts \
+  --evidence docs/experiments/results/EX-07/w3-915138a-20261025-terminal01-evidence \
+  --results docs/experiments/results \
+  --run-id w3-915138a-20261025-terminal01
+```
+
+The adjacent `*-evidence/result-input.json` is the exact W0 input; the run directory contains W0's immutable `result.json` and `summary.md`. For later verification, pass the adjacent evidence directory as the explicit evidence root to W0's CLI. The finalizer does not publish EX-08; that remains W2's responsibility.
 
 The bounded topology assertion remains `partial` in coverage. Observations deliberately retain scope limitations. Under W0 v1, a run with case limitations or partial coverage cannot have conclusion `passed`; use `inconclusive` for successful bounded checks, or `failed` when the evidence rejects the hypothesis. Expected failure states (fatal/pending with correct rollback) can pass their individual assertion. This does not erase limits or imply adoption.
 
