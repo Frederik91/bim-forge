@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout } from 'node:timers/promises';
@@ -18,18 +18,37 @@ const LeaseSchema = Type.Object({ leaseId: text, artifactRoot: text, expiresAt: 
 const WorkerSchema = Type.Object({ source: text, destination: text, marker: text,
   checkpoint: Type.Union([Type.Literal('after-stage-before-publish'), Type.Literal('after-publish')]),
 }, { additionalProperties: false });
-type Lease = Static<typeof LeaseSchema>;
+export type Lease = Static<typeof LeaseSchema>;
 type WorkerInput = Static<typeof WorkerSchema>;
 
-function assertLease(lease: Lease, root: string): void {
+export function parseLease(input: unknown): Lease {
+  if (!Check(LeaseSchema, input)) throw new Error('Invalid coordinator execution lease.');
+  return input;
+}
+
+async function assertLease(lease: Lease, root: string): Promise<void> {
   const expiry = Date.parse(lease.expiresAt);
   if (!Number.isFinite(expiry) || expiry <= Date.now()) throw new Error('Coordinator execution lease expired or invalid.');
   const relative = path.relative(path.resolve(lease.artifactRoot), path.resolve(root));
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('W6 fault run must be inside the leased artifact root.');
+  // Check the nearest existing ancestor before creating the run directory.
+  let existing = path.resolve(root);
+  let resolved: string;
+  for (;;) {
+    try { resolved = await realpath(existing); break; }
+    catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      existing = parent;
+    }
+  }
+  const actualRelative = path.relative(await realpath(lease.artifactRoot), resolved);
+  if (actualRelative.startsWith('..') || path.isAbsolute(actualRelative)) throw new Error('W6 output parent escapes the leased artifact root.');
 }
 
 async function waitForCheckpoint(args: { worker: WorkerInput; lease: Lease; logRoot: string }): Promise<void> {
-  assertLease(args.lease, args.logRoot);
+  await assertLease(args.lease, args.logRoot);
   const configPath = path.join(args.logRoot, 'worker-input.json');
   await writeFile(configPath, JSON.stringify(args.worker), { flag: 'wx' });
   const helper = spawn(process.execPath, [fileURLToPath(import.meta.url), '--writer', configPath], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -61,7 +80,7 @@ async function waitForCheckpoint(args: { worker: WorkerInput; lease: Lease; logR
       await setTimeout(25);
     }
     assert.ok(markerObserved, 'Dedicated writer did not reach the requested checkpoint.');
-    assertLease(args.lease, args.logRoot);
+    await assertLease(args.lease, args.logRoot);
     assert.ok(helper.kill('SIGKILL'), 'Dedicated writer could not be killed.');
     const outcome = await result;
     if (outcome.kind === 'error') throw outcome.error;
@@ -79,7 +98,7 @@ async function waitForCheckpoint(args: { worker: WorkerInput; lease: Lease; logR
 
 export async function runPackageCrashCases(input: RunnerInput, lease: Lease): Promise<Observation[]> {
   const root = path.resolve(input.outputRoot, input.runId);
-  assertLease(lease, root);
+  await assertLease(lease, root);
   await mkdir(input.outputRoot, { recursive: true });
   await mkdir(root);
   const source = await verifyPackage(input.sourcePackage);
@@ -119,7 +138,8 @@ async function writer(filename: string): Promise<void> {
   if (!Check(WorkerSchema, raw)) throw new Error('Invalid dedicated writer input.');
   await importPackage({ source: raw.source, destination: raw.destination, checkpoint: async (stage) => {
     if (stage !== raw.checkpoint) return;
-    await writeFile(raw.marker, JSON.stringify(raw), { flag: 'wx' });
+    await writeFile(raw.marker + '.pending', JSON.stringify(raw), { flag: 'wx' });
+    await rename(raw.marker + '.pending', raw.marker);
     // A timer keeps the dedicated child alive until the leased parent kills it.
     for (;;) await setTimeout(1000);
   } });
@@ -133,8 +153,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (!inputPath || !leasePath || process.argv.length !== 4) throw new Error('Usage: node experiments/recovery/faults.ts <input.json> <coordinator-lease.json>');
     const rawInput: unknown = JSON.parse(await readFile(inputPath, 'utf8'));
     const rawLease: unknown = JSON.parse(await readFile(leasePath, 'utf8'));
-    if (!Check(LeaseSchema, rawLease)) throw new Error('Invalid coordinator execution lease.');
-    const observations = await runPackageCrashCases(parseRunnerInput(rawInput), rawLease);
+    const observations = await runPackageCrashCases(parseRunnerInput(rawInput), parseLease(rawLease));
     process.stdout.write(JSON.stringify(observations, null, 2) + '\n');
     if (observations.some((observation) => !observation.passed)) process.exitCode = 1;
   }

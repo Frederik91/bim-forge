@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { evaluateAuthority, parseAuthorityInput } from './authority.ts';
 import type { AuthorityInput } from './authority.ts';
 import { assertRetainsHistory, copyPackageForFault, createPackage, importPackage, readCurrent, sha256, verifyPackage } from './package.ts';
@@ -11,6 +14,9 @@ import { parseManifest } from './protocol.ts';
 import type { PackageManifest, Revision } from './protocol.ts';
 import { runPackageCases } from './runner.ts';
 import { parseFixture } from '../fixtures/fixture.ts';
+import { parseLease, runPackageCrashCases } from './faults.ts';
+import { parseCopyExport, verifyCopyExport } from './exports.ts';
+import { pendingStorageObservations } from './scenarios.ts';
 
 async function temporary(t: TestContext): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'w6-package-'));
@@ -66,6 +72,19 @@ function upgradedFixture(previous: ReturnType<typeof fixture>): ReturnType<typeo
     revisions: [...previous.manifest.revisions, { revisionId: 'r2', parents: ['r1'], interpretation,
       modelSha256: sha256(model), requiredArtifacts: artifacts.map((item) => item.sha256) }],
     branches: [{ name: 'accepted', revisionId: 'r2' }, { name: 'company-b/local', revisionId: 'r1' }],
+  } };
+}
+
+function replaceModel(input: ReturnType<typeof fixture>, revisionId: string, bytes: Buffer): ReturnType<typeof fixture> {
+  const revision = input.manifest.revisions.find((item) => item.revisionId === revisionId);
+  assert.ok(revision);
+  const objects = new Map(input.objects);
+  objects.set(sha256(bytes), bytes);
+  return { objects, manifest: { ...input.manifest,
+    artifacts: input.manifest.artifacts.map((artifact) => artifact.sha256 === revision.modelSha256
+      ? { ...artifact, sha256: sha256(bytes), byteLength: bytes.byteLength, mediaType: 'application/json' } : artifact),
+    revisions: input.manifest.revisions.map((item) => item.revisionId === revisionId ? { ...item,
+      modelSha256: sha256(bytes), requiredArtifacts: item.requiredArtifacts.map((hash) => hash === revision.modelSha256 ? sha256(bytes) : hash) } : item),
   } };
 }
 
@@ -238,4 +257,59 @@ test('partial runner records uncovered database cases as false and refuses to ov
   assert.equal(database.length, 7);
   assert.ok(database.every((item) => !item.passed && item.observed.startsWith('Not executed:')));
   await assert.rejects(runPackageCases(input), /EEXIST/);
+});
+
+test('a fresh actual process exports every retained model and its bytes without access to the source root', async (t) => {
+  const root = await temporary(t);
+  const originalBytes = await readFile(new URL('../fixtures/tiny-building.json', import.meta.url));
+  const initial = replaceModel(fixture(), 'r1', originalBytes);
+  const sourceRaw: unknown = JSON.parse(originalBytes.toString('utf8'));
+  const originalModel = parseFixture(sourceRaw);
+  const changedModel = { ...originalModel, entities: originalModel.entities.map((item) => item.id === 'chair-a'
+    ? { ...item, properties: { ...item.properties, x: 2.25 } } : item) };
+  const next = replaceModel(upgradedFixture(initial), 'r2', Buffer.from(JSON.stringify(changedModel)));
+  const source = path.join(root, 'source');
+  const upgraded = path.join(root, 'upgraded');
+  const destination = path.join(root, 'retained');
+  await createPackage({ root: source, ...initial });
+  await createPackage({ root: upgraded, ...next });
+  await importPackage({ source, destination });
+  const current = await importPackage({ source: upgraded, destination });
+  await rename(source, source + '-offline');
+  await rename(upgraded, upgraded + '-offline');
+  const output = path.join(root, 'fresh-process-export.json');
+  await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./exports.ts', import.meta.url)), destination, output]);
+  const exported = await verifyCopyExport(output);
+  assert.equal(exported.manifestSha256, current.manifestSha256);
+  assert.deepEqual(exported.models.map((item) => item.fixture), [originalModel, changedModel]);
+  assert.throws(() => parseCopyExport({ ...exported, manifestSha256: sha256('forged manifest') }), /manifest bytes/);
+  assert.throws(() => parseCopyExport({ ...exported, models: exported.models.map((item) => ({ ...item, bytesBase64: Buffer.from('{}').toString('base64') })) }));
+});
+
+test('leased actual SIGKILL cases retain complete pointers and never qualify pending database cases', async (t) => {
+  const leaseFile = process.env.QVM_W6_LEASE_FILE;
+  if (!leaseFile) { t.skip('Main must supply QVM_W6_LEASE_FILE before terminating the dedicated package writer. Database cases remain unqualified.'); return; }
+  const rawLease: unknown = JSON.parse(await readFile(leaseFile, 'utf8'));
+  const lease = parseLease(rawLease);
+  await mkdir(lease.artifactRoot, { recursive: true });
+  // Retain actual process logs outside the auto-cleaned unit-test temporary roots.
+  const root = await mkdtemp(path.join(lease.artifactRoot, 'w6-process-evidence-'));
+  const initial = fixture();
+  const next = upgradedFixture(initial);
+  await createPackage({ root: path.join(root, 'source'), ...initial });
+  await createPackage({ root: path.join(root, 'upgraded'), ...next });
+  const observations = await runPackageCrashCases({ sourcePackage: path.join(root, 'source'),
+    upgradedPackage: path.join(root, 'upgraded'), outputRoot: path.join(root, 'runs'), runId: 'leased-package-crashes' }, lease);
+  assert.equal(observations.length, 2);
+  for (const observation of observations) {
+    assert.equal(observation.passed, true, observation.observed);
+    const stage = observation.caseId.replace('package-process-', '');
+    const log: unknown = JSON.parse(await readFile(path.join(root, 'runs', 'leased-package-crashes', stage, 'process.json'), 'utf8'));
+    assert.ok(typeof log === 'object' && log !== null && 'signal' in log && log.signal === 'SIGKILL');
+  }
+  const pending = pendingStorageObservations();
+  assert.equal(pending.length, 7);
+  assert.ok(pending.every((observation) => !observation.passed && observation.observed.startsWith('Not executed:')));
+  await writeFile(path.join(root, 'pending-storage-observations.json'), JSON.stringify(pending, null, 2), { flag: 'wx' });
+  t.diagnostic(`Retained process and pending-coverage evidence: ${root}`);
 });

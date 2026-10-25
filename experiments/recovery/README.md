@@ -2,7 +2,7 @@
 
 Issue [#129](https://github.com/Frederik91/bim-forge/issues/129), parent [#122](https://github.com/Frederik91/bim-forge/issues/122). Scope is `experiments/recovery/**`. No builds, tests, database jobs or crash cases have run for this source delivery. No experiment result or approval is claimed.
 
-The module uses W0 contract v1 at `edbfd4c4bddb78720c2be34061b7437d52bdc3bc`. `protocol.ts` reexports W0's authoritative observation schema, parser and type. Hashes use W0's `records.ts`. W0's tiny fixture is read directly in a transport test. W6 does not write a competing terminal result format or edit the shared registry.
+The module is based on final W0 foundation `4fb723bc29a0fced971b3f4b2069e0fa31699a68`. `protocol.ts` reexports W0's authoritative observation schema, parser and type. Hashes use W0's `records.ts`. W0's tiny fixture is read directly in a transport test. W6 does not write a competing terminal result format or edit the shared registry.
 
 ## Files and acceptance plan
 
@@ -14,6 +14,7 @@ The module uses W0 contract v1 at `edbfd4c4bddb78720c2be34061b7437d52bdc3bc`. `p
 | `scenarios.ts` | Expected database outcomes for EX-09, EX-11 and EX-12. Unexecuted database cases produce `passed: false` with an explicit missing-coverage explanation. |
 | `runner.ts` | Execute portable package cases and preserve raw manifests, deltas, observations and hashes. Exit 1 while database coverage is missing. |
 | `faults.ts` | Kill only its own dedicated package-writer child at an observed checkpoint, under a coordinator-issued lease. Preserve process and checkpoint logs. |
+| `exports.ts` | Query every revision of a retained copy in a fresh process; export full W0 model data, exact original bytes, ancestry, branch heads and hashes. Verify the exported query against the exported bytes. |
 | `recovery.test.ts` | Filesystem behavior, W0 fixture retention, missing/corrupt transfer rejection, immutable retry, ancestry, simulated discipline policy and partial-result honesty. No database mocks. |
 | `tsconfig.json` | Root strict TypeScript settings plus checked indexed access. |
 
@@ -35,7 +36,7 @@ TMPDIR=/evidence/w6-tmp node --test experiments/recovery/recovery.test.ts
 git -c core.whitespace=cr-at-eol diff --check
 ```
 
-The focused suite creates small real temporary artifact roots and removes them after its assertions. It never connects to PostgreSQL or terminates a process. Its opaque transport fixtures do not count as EX-09 engine upgrades or EX-11 database crash evidence. The W0 fixture case opens retained model bytes after removing the package source and queries its wall and opening relationship through W0's reader.
+The focused suite creates small real temporary artifact roots and removes them after its assertions. It uses a real subprocess to export retained W0 model data after both source package paths are removed. It does not connect to PostgreSQL. Its opaque transport fixtures do not count as EX-09 engine upgrades or EX-11 database crash evidence. The W0 fixture case opens retained model bytes after removing the package source and queries its wall and opening relationship through W0's reader.
 
 To run package cases, provide two valid packages at distinct read-only input paths. The upgraded package must retain the complete old history and exercise changed versions and bytes for all four interpretation descriptors. Each input package contains `manifest.json` and `objects/<sha256>` files. `PackageSchema` and `createPackage` define the transport contract. Package sources and output roots must be independent.
 
@@ -75,6 +76,14 @@ node experiments/recovery/faults.ts /evidence/fault-input.json /evidence/coordin
 ```
 
 This driver spawns its own Node child, waits for the child's checkpoint marker and sends SIGKILL through that child handle. It observes the retained pointer after staging and the new pointer after publication, then retries. It cannot target an arbitrary PID or PostgreSQL container. Do not supply a lease or invoke this command until main allocates the execution slot. These are POSIX process-crash checks on the portable copy, not database commit or host power-loss checks.
+
+Main can exercise this driver through the actual subprocess test as well:
+
+```sh
+QVM_W6_LEASE_FILE=/evidence/coordinator-lease.json TMPDIR=/evidence/w6-tmp node --test experiments/recovery/recovery.test.ts
+```
+
+Without that environment variable the termination test reports an explicit skip. With it, the test retains process logs and a separate array proving that all seven database placeholders remain unqualified. Process evidence is kept in a unique `w6-process-evidence-*` directory below the leased artifact root. A skipped test is never qualification evidence.
 
 ## W5 integration contract and remaining execution
 
