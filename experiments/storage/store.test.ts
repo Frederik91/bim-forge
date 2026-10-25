@@ -38,6 +38,9 @@ test('full typed documents survive immutable versions, CAS, retry and branch div
       assumptions: [{ entityId: 'wall', versionId: null }], puts: [original], deletes: [] };
     const first = await store.accept(firstCommand);
     assert.deepEqual((await store.page({ branch, after: '', limit: 10 }))[0]?.entity, original);
+    const opened = await store.projectOpen({ branch, limit: 1 });
+    assert.equal(opened.head, first.revisionId);
+    assert.deepEqual(opened.page.map((row) => row.entity), [original]);
     assert.deepEqual(await store.accept(firstCommand), { revisionId: first.revisionId, replayed: true });
     await assert.rejects(store.accept({ ...firstCommand, puts: [object('wall', 2)] }), /different payload/);
     const fork = `${branch}-fork`;
@@ -126,7 +129,7 @@ test('existing product snapshot and delta oracles agree within unchanged native 
     assert.deepEqual((await store.delta(second.revisionId)).map((row) => row.entity_id).sort(), nativeDeltaIds(before.snapshot, after.snapshot));
     assert.deepEqual(await snapshotAt(store, first.revisionId), before.snapshot);
     const oversized = { units: 'm', entities: Array.from({ length: 101 }, (_, index) => ({ id: `wall-${index}`, type: 'Wall' })), relationships: [] };
-    assert.throws(() => nativeEnvelopes(oversized), /Unsupported/);
+    assert.throws(() => nativeEnvelopes(oversized), { name: 'Error', message: 'Model arrays must be dense and bounded.' });
   });
 });
 

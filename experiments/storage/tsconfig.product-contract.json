@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "../..",
+    "outDir": "./node_modules/.cache/w5-native-contract",
+    "tsBuildInfoFile": "./node_modules/.cache/w5-native-contract/build.tsbuildinfo"
+  },
+  "include": ["../../src/**/*.ts", "../../demo/**/*.ts", "../../factory/**/*.ts", "../../scripts/**/*.ts"],
+  "exclude": ["../../node_modules", "../../dist", "../../worktrees"]
+}

@@ -16,6 +16,8 @@ Publication is a transaction: lock branch, compare exact expected head, validate
 
 `Storage` accepts a connected `pg.Client`. `initialize()` allows only database `qvm` or prefix `qvm_w5_`. `createBranch({branch, revisionId})` creates an independent visibility copy at an existing revision, or an empty branch at null. `head(branch)`, `accept(command)`, `page({branch, after, limit, kind?})`, `historical({revisionId, after, limit})`, `history(entityId)`, `delta(revisionId)`, `metrics()` are public. `accept` returns `{revisionId, replayed}` or throws; failed transactions leave the head unchanged. W6 can use standard `pg_dump`/`pg_restore` on the complete isolated database; all tables including receipts must be copied.
 
+`detail({branch,entityId})` reads one visible version. `projectOpen({branch,limit})` returns head/parent/command/time, a small revision manifest summary and at most 1,000 visible bodies from one SQL snapshot. It does not scan/materialize the entire model. Current/history keyset ordering follows the database primary-key collation, recorded in metrics. CLI: `open <branch> <limit>`. Workload configuration requires the predeclared execution envelope; standalone low-level loaders do not claim timing qualification.
+
 Envelope (loader NDJSON, one object per line):
 
 ```json
