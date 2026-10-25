@@ -18,6 +18,8 @@ import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pi
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
 import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
 import type { RequestState } from './change-requests.ts';
+import { groupRequests, REQUEST_TABS } from './request-tabs.ts';
+import type { RequestTab } from './request-tabs.ts';
 import { parseIntentAssessment } from '../src/model-intent.ts';
 import type { IntentAssessment } from '../src/model-intent.ts';
 import { RequestSourcePicker, parseSourceContext, renderSourceContext } from './request-source-ui.ts';
@@ -180,7 +182,8 @@ const ui = {
   'visual-x': input('visual-x'), 'visual-y': input('visual-y'), 'mark-visual-point': button('mark-visual-point'),
   'clear-visual-reference': button('clear-visual-reference'), 'describe-visual-reference': button('describe-visual-reference'),
   'backlog-page': generic('backlog-page'), 'nav-backlog': button('nav-backlog'), 'open-backlog': button('open-backlog'),
-  'backlog-list': generic('backlog-list'), 'backlog-filter': select('backlog-filter'), 'backlog-summary': generic('backlog-summary'),
+  'backlog-list': generic('backlog-list'), 'backlog-tabs': generic('backlog-tabs'), 'backlog-panel': generic('backlog-panel'),
+  'backlog-tab-description': generic('backlog-tab-description'), 'backlog-summary': generic('backlog-summary'),
   'backlog-connection': generic('backlog-connection'), 'open-current-model': button('open-current-model'),
   'reject-proposal': button('reject-proposal'),
   'ticket-history': generic('ticket-history'),
@@ -1124,14 +1127,50 @@ function requestLabel(name: string): string {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
+let activeRequestTab: RequestTab = 'review';
+const requestTabs = REQUEST_TABS.map((tab, index) => {
+  const control = element('button', undefined, 'backlog-tab');
+  control.type = 'button'; control.id = `backlog-tab-${tab.id}`;
+  control.setAttribute('role', 'tab'); control.setAttribute('aria-controls', 'backlog-panel');
+  const count = element('span', '0', 'backlog-tab-count');
+  control.append(element('span', tab.label), count);
+  control.addEventListener('click', () => { activeRequestTab = tab.id; renderBacklog(); });
+  control.addEventListener('keydown', (event) => {
+    let next: number;
+    switch (event.key) {
+      case 'ArrowRight': next = (index + 1) % REQUEST_TABS.length; break;
+      case 'ArrowLeft': next = (index + REQUEST_TABS.length - 1) % REQUEST_TABS.length; break;
+      case 'Home': next = 0; break;
+      case 'End': next = REQUEST_TABS.length - 1; break;
+      default: return;
+    }
+    event.preventDefault();
+    const target = requestTabs[next];
+    if (target) { target.control.click(); target.control.focus(); }
+  });
+  ui['backlog-tabs'].append(control);
+  return { ...tab, control, count };
+});
+
 function renderBacklog(): void {
   const items = backlogItems.filter((item) => item.projectId === repo?.projectId);
+  const groups = groupRequests(items);
   const ready = items.filter((item) => item.state === 'ready').length;
   const pending = items.filter((item) => item.state === 'queued' || item.state === 'working').length;
   ui['nav-backlog'].replaceChildren(element('span', '2'), element('b', 'Backlog'), element('small', `${ready} ready for review`));
   ui['open-backlog'].textContent = `Change requests · ${items.length}`;
-  ui['backlog-summary'].textContent = `${pending} in progress · ${ready} ready for review · ${items.length} total`;
-  const visible = items.filter((item) => ui['backlog-filter'].value === 'all' || item.state === ui['backlog-filter'].value).reverse();
+  ui['backlog-summary'].textContent = `${items.length} requests · ${groups.review.length} need your attention · ${pending} active or waiting`;
+  let empty = '';
+  for (const tab of requestTabs) {
+    const selected = tab.id === activeRequestTab;
+    tab.control.setAttribute('aria-selected', String(selected)); tab.control.tabIndex = selected ? 0 : -1;
+    tab.count.textContent = String(groups[tab.id].length);
+    if (selected) {
+      ui['backlog-panel'].setAttribute('aria-labelledby', tab.control.id);
+      ui['backlog-tab-description'].textContent = tab.description; empty = tab.empty;
+    }
+  }
+  const visible = groups[activeRequestTab].reverse();
   ui['backlog-list'].replaceChildren(...visible.map((item) => {
     const card = element('article', undefined, 'request-ticket'); card.dataset.state = item.state;
     const heading = element('header'); heading.append(element('h2', requestLabel(item.request.proposalName)), element('span', stateLabels[item.state], 'pill'));
@@ -1149,9 +1188,8 @@ function renderBacklog(): void {
     if (item.state === 'failed' || item.state === 'needs-input' || item.state === 'ready') add('Revise request', () => { void perform(() => reviseTicket(item)); });
     card.append(actions); return card;
   }));
-  if (!visible.length) ui['backlog-list'].append(element('p', items.length ? 'No requests in this view.' : 'Your requests will appear here. Send one from the model and keep working.', 'empty-note'));
+  if (!visible.length) ui['backlog-list'].append(element('p', empty, 'empty-note'));
 }
-ui['backlog-filter'].addEventListener('change', renderBacklog);
 async function openActivity(id: string): Promise<void> {
   if (!await discardRequest('Open request activity and discard the unsent request?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
