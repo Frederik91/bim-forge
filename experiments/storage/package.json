@@ -5,7 +5,7 @@
   "type": "module",
   "engines": { "node": ">=24" },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc -b tsconfig.product-contract.json && tsc --noEmit -p tsconfig.json",
     "test": "node --test store.test.ts envelope.test.ts",
     "cli": "node cli.ts"
   },

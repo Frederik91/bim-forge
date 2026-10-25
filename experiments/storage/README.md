@@ -46,6 +46,8 @@ docker run --rm --name bim-qvm-w5-checks --network bim-qvm-20261025 \
 
 The script installs only experimental dependencies outside the source checkout, records its resolved lock/tree, links module resolution, then runs `npm run validate`, strict experimental typecheck, seven real PostgreSQL/wire tests plus four envelope/budget tests and captures database metrics. Direct package versions are pinned. The first server-resolved lock file is an evidence artifact; transitive dependencies are not yet source-locked. W0's lint skips installed dependency sources. Server check outcomes are reported separately with their exact source commit.
 
+The experimental typecheck first builds native declaration contracts under the unchanged product compiler settings, then checks W5 with `noUncheckedIndexedAccess` enabled against those contracts. TypeScript project references keep that extra rule scoped to W5 rather than applying it to imported native implementation files. Declaration outputs live under the experimental `node_modules/.cache`; no product code or root validator is changed. Use the package's `typecheck` script, which includes both steps.
+
 Once that passes, use the same container/mount/network/environment for these individual commands (each with a coordinator slot):
 
 ```bash
