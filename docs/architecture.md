@@ -39,6 +39,8 @@ Views and discipline workspaces project the same shared model; they are not mode
 
 The first implementation can be a modular monolith with clear interfaces. Split services only when a real deployment or scaling boundary appears.
 
+The [native computation proposal](design/native-computation.md) distinguishes inspected preview and experiment code from proposed geometry, spatial, and regeneration ownership under permanent resource limits. It keeps TypeScript orchestration and one authoritative versioned model, with explicit native data/budget contracts and measured migration gates. This is an unadopted proposal for issue #153, not a backend rewrite decision.
+
 ## Versioning semantics
 
 - Revisions are immutable and content-addressed where practical.
