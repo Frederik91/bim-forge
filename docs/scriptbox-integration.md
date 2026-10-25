@@ -44,6 +44,7 @@ The public authoring sequence is:
 ```text
 Saved request, revision and selection
   -> run_model_script
+     -> scene-grounded interpretation, assumptions and self-rated certainty
      -> typed model methods operating on a private draft
      -> ScriptBox terminal outcome
      -> application validation and host-computed delta
@@ -81,16 +82,20 @@ return {kind: 'propose', review: {
 	summary: 'Widen the entry.',
 	rationale: 'The requested width fits the current host.',
 	constraints: 'Retain the shell and all other hosted objects.',
-	uncertainty: 'Concept model requiring human review.'
+	uncertainty: 'Concept model requiring human review.',
+	intent: {interpretation: 'Widen the entry.', assumptions: [], certainty: 95,
+		basis: 'The request specifies a 1200 mm width on the selected entry.'}
 }};
 ```
 
 ```typescript
-return {kind: 'decline', reason: 'Should the devices move with the desk?',
-	uncertainty: 'The requested device destination is unclear.'};
+return {kind: 'decline', reason: 'Which dimension should change? The requested dimensions contradict each other.',
+	uncertainty: 'No candidate can satisfy both explicit dimensions.'};
 ```
 
 Observation and clarification discard any staged changes. A proposal requires a nonempty validated delta. A provider failure after a valid script still publishes no proposal. Old executable authoring tool names are not an alternative execution path; they remain valid only as historical saved evidence.
+
+New scripted proposals also require a bounded intent assessment. See [scene-grounded interpretation](model-intent.md) for assumptions, support dependencies and the meaning of self-rated certainty. Historical saved reviews without an assessment retain their exact representation.
 
 Selection and proximity still express context, not implicit group membership or authorization. Natural-language intent remains partly an agent interpretation problem. Geometry validation and sandbox capabilities do not prove that an interpretation matches the request. Human review remains required.
 

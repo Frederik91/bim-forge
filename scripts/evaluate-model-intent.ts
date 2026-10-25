@@ -143,27 +143,27 @@ if (replayIndex >= 0) {
     console.log(JSON.stringify({ replay: scenario.id, passed: true, note: 'Rechecks saved live outputs without another model call.' }));
   }
 } else {
-const evidenceDirectory = process.env.BIM_FORGE_INTENT_EVIDENCE_DIRECTORY;
-if (evidenceDirectory) {
-  await fs.mkdir(evidenceDirectory, { recursive: true });
-  if ((await fs.readdir(evidenceDirectory)).length) throw new Error('Use a fresh empty evidence directory for each live run. Previous samples must not mask failures.');
-}
-const connection = await CodexAccountConnection.open();
-const scripts = new ModelScripts();
-try {
-  const worker = connection.modelWorker();
-  console.log(JSON.stringify({ evaluation: 'model-intent-v1', provider: worker.identity, baseline, samplesPerCase: 1, note: 'Live stochastic samples, not a calibrated reliability estimate.' }));
-  for (const scenario of selected) {
-    const repo = await RoomRepository.createProject({ projectId: globalThis.crypto.randomUUID(), name: `Intent evaluation ${scenario.id}`, snapshot: scenario.snapshot });
-    const original = repo.serialize();
-    try {
-      const result = await prepareModelProposal(repo, { requestId: `eval-${scenario.id}`, proposalName: `eval-${scenario.id}`,
-        baseRevisionId: repo.head('main'), selectedObjectIds: [scenario.selectedId], instruction: scenario.instruction, visualIntent: scenario.visualIntent }, worker, undefined, { scripts });
-      if (evidenceDirectory) await fs.writeFile(path.join(evidenceDirectory, `${scenario.id}.project.json`), result.repository.serialize(), { flag: 'wx' });
-      assert.equal(repo.serialize(), original);
-      const after = verifySample(scenario, result, result.repository, baseline);
-      console.log(JSON.stringify({ case: scenario.id, passed: true, status: result.status, review: result.review, changes: diffSnapshots(scenario.snapshot, after) }));
-    } catch (error) { process.exitCode = 1; console.log(JSON.stringify({ case: scenario.id, passed: false, error: error instanceof Error ? error.message : 'Evaluation failed.' })); }
+  const evidenceDirectory = process.env.BIM_FORGE_INTENT_EVIDENCE_DIRECTORY;
+  if (evidenceDirectory) {
+    await fs.mkdir(evidenceDirectory, { recursive: true });
+    if ((await fs.readdir(evidenceDirectory)).length) throw new Error('Use a fresh empty evidence directory for each live run. Previous samples must not mask failures.');
   }
-} finally { await scripts.dispose(); connection.close(); }
+  const connection = await CodexAccountConnection.open();
+  const scripts = new ModelScripts();
+  try {
+    const worker = connection.modelWorker();
+    console.log(JSON.stringify({ evaluation: 'model-intent-v1', provider: worker.identity, baseline, samplesPerCase: 1, note: 'Live stochastic samples, not a calibrated reliability estimate.' }));
+    for (const scenario of selected) {
+      const repo = await RoomRepository.createProject({ projectId: globalThis.crypto.randomUUID(), name: `Intent evaluation ${scenario.id}`, snapshot: scenario.snapshot });
+      const original = repo.serialize();
+      try {
+        const result = await prepareModelProposal(repo, { requestId: `eval-${scenario.id}`, proposalName: `eval-${scenario.id}`,
+          baseRevisionId: repo.head('main'), selectedObjectIds: [scenario.selectedId], instruction: scenario.instruction, visualIntent: scenario.visualIntent }, worker, undefined, { scripts });
+        if (evidenceDirectory) await fs.writeFile(path.join(evidenceDirectory, `${scenario.id}.project.json`), result.repository.serialize(), { flag: 'wx' });
+        assert.equal(repo.serialize(), original);
+        const after = verifySample(scenario, result, result.repository, baseline);
+        console.log(JSON.stringify({ case: scenario.id, passed: true, status: result.status, review: result.review, changes: diffSnapshots(scenario.snapshot, after) }));
+      } catch (error) { process.exitCode = 1; console.log(JSON.stringify({ case: scenario.id, passed: false, error: error instanceof Error ? error.message : 'Evaluation failed.' })); }
+    }
+  } finally { await scripts.dispose(); connection.close(); }
 }
