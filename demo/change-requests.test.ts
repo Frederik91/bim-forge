@@ -144,9 +144,10 @@ test('acceptance and its ticket decision are atomic, replay-safe and cannot over
   assert.equal(accepted.ticket.state, 'completed');
   assert.equal((await decide(queue, 'one', { action: 'accept', decisionId: 'decision-one' })).project, accepted.project);
   await assert.rejects(() => decide(queue, 'one', { action: 'reject', decisionId: 'decision-one' }), /another action/);
-  await assert.rejects(() => decide(queue, 'two', { action: 'accept', decisionId: 'decision-two' }), /older or unaccepted/);
+  await assert.rejects(() => decide(queue, 'two', { action: 'accept', decisionId: 'decision-two' }), /Conflicting changes to door-entry/);
   assert.equal(queue.project(repo.projectId), accepted.project);
   assert.equal(queue.get('two').state, 'needs-input');
+  assert.match(queue.get('two').error ?? '', /Conflicting changes to door-entry/);
   await assert.rejects(() => queue.submit(repo.serialize(), request(repo, 'old-client', 'old-client-entry')), /server model changed/);
   const revised = await queue.revise('two', current.serialize(), request(current, 'two-revised', 'revised-entry', 1300));
   assert.equal(revised.id, 'two'); assert.equal(revised.history.length, 1);
