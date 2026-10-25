@@ -46,6 +46,7 @@ function maskNonCode(text: string): string {
 function walk(directory: string): string[] {
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.isDirectory() && (entry.name === 'node_modules' || entry.name === '.git')) return [];
     const filename = path.join(directory, entry.name);
     return entry.isDirectory() ? walk(filename) : [filename];
   });

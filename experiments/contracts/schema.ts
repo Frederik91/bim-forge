@@ -15,7 +15,7 @@ export type Observation = Static<typeof ObservationSchema>;
 const artifact = Type.Object({ path: text, sha256: hash, bytes: Type.Integer({ minimum: 0 }), mediaType: text }, { additionalProperties: false });
 const binding = Type.Object({ commit, path: text, sha256: hash }, { additionalProperties: false });
 const environment = Type.Object({
-  host: text, software: Type.Record(text, text), imageDigests: Type.Array(text, { minItems: 1 }),
+  host: text, software: Type.Record(text, text), imageDigests: Type.Array(Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }), { minItems: 1 }),
   cpuLimit: Type.Number({ exclusiveMinimum: 0 }), memoryLimitBytes: Type.Integer({ minimum: 1 }),
   diskBudgetBytes: Type.Integer({ minimum: 1 }), storage: text, cacheProcedure: text, measurementSlot: text,
 }, { additionalProperties: false });

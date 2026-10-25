@@ -40,7 +40,7 @@ async function example(evidence: string): Promise<Run> {
     design: { candidateId: 'VM-C1', ...design }, definition,
     implementation: { sourceCommit: design.commit, runnerCommit: design.commit, validators: ['contract-v1'] },
     dataset: { name: 'contract-test', seed: 'fixed', manifestSha256: sha256('contract-test') },
-    environment: { host: 'disposable-test-container', software: { node: process.version }, imageDigests: ['test-only'],
+    environment: { host: 'disposable-test-container', software: { node: process.version }, imageDigests: [`sha256:${sha256('test-only')}`],
       cpuLimit: 1, memoryLimitBytes: 1024, diskBudgetBytes: 4096, storage: 'temporary', cacheProcedure: 'not a benchmark', measurementSlot: 'test-only' },
     commands: ['node --test experiments/contracts/contract.test.ts'],
     observations: [{ experimentId: 'EX-04', caseId: 'contract-check', expected: 'typed and bound', observed: 'typed and bound', passed: true, limitations: [] }],
