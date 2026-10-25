@@ -25,7 +25,13 @@ export function previewBuilding(baseSnapshot: unknown, input: unknown): Snapshot
   const base = validateSnapshot(baseSnapshot);
   const layout = parseBuildingLayout(input);
   const zeroLevels = layout.levels.filter((item) => item.level.elevationMm === 0);
-  const contents = base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment').map((item) => {
+  const contents = base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment'
+    || item.type === 'AssetFamily' || item.type === 'AssetInstance').map((item) => {
+    if (item.type === 'AssetFamily') return item;
+    if (item.type === 'AssetInstance') {
+      if (item.placement.kind === 'single-room') throw new Error('Explicitly remove/rebind single-room asset instances before building reconstruction.');
+      return item;
+    }
     if (base.version === 2) {
       const level = entityLevel(base, item);
       if (!level || !layout.levels.some((candidate) => candidate.level.id === level.id)) throw new Error('Building reconstruction must retain every content owner.');

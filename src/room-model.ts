@@ -7,6 +7,8 @@ import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
 import type { RequestSource, AuthoringScope } from './request-sources.ts';
 import { entityLevel, levelView, levels, roofHeightAt, stairFootprint } from './building-levels.ts';
 import type { AssetFamily, AssetInstance } from './asset-family.ts';
+import { parseAssetEdit, parseAssetFamily, parseAssetInstance } from './asset-family.ts';
+import { validateAssets } from './asset-placement.ts';
 export type { AssetFamily, AssetInstance } from './asset-family.ts';
 
 const MAX_BYTES = 256 * 1024;
@@ -521,6 +523,8 @@ function parseBounds(input: JsonValue): Bounds {
 
 function parseEntity(input: JsonValue, building = false): Entity {
   if (!input || Array.isArray(input) || typeof input !== 'object') fail('Unexpected model fields.');
+  if (input.type === 'AssetFamily') return parseAssetFamily(input);
+  if (input.type === 'AssetInstance') return parseAssetInstance(input);
   if (building && (input.type === 'Wall' || input.type === 'Furniture' || input.type === 'Equipment')) {
     const { levelId: rawLevel, ...geometry } = input;
     const levelId = identifier(rawLevel);
@@ -774,6 +778,37 @@ export function previewRoomFurnishings(baseSnapshot: unknown, input: unknown): M
     ? { levelAssignments: incoming.map((item) => ({ entityId: item.id, levelId: room.levelId })) } : {}) });
 }
 
+/** Atomically upsert inert recipes/placements; shell geometry and all other entities stay intact. */
+export function previewAssets(baseSnapshot: unknown, input: unknown): ModelSnapshot {
+  const base = validateSnapshot(baseSnapshot);
+  const edit = parseAssetEdit(input);
+  const byId = new Map<EntityId, Entity>(base.entities.map((item) => [item.id, item]));
+  const touched = new Set<EntityId>();
+  for (const family of edit.families) {
+    if (touched.has(family.id)) fail('Asset edit identities must be unique.');
+    touched.add(family.id);
+    const existing = byId.get(family.id);
+    if (existing && (existing.type !== 'AssetFamily' || canonical(existing) !== canonical(family))) {
+      fail('Family IDs are immutable. Register a new family ID for a changed recipe.');
+    }
+    byId.set(family.id, family);
+  }
+  for (const instance of edit.instances) {
+    if (touched.has(instance.id)) fail('Asset edit identities must be unique.');
+    touched.add(instance.id);
+    const existing = byId.get(instance.id);
+    if (existing && existing.type !== 'AssetInstance') fail('Asset edits cannot replace protected model entities.');
+    byId.set(instance.id, instance);
+  }
+  for (const id of edit.removeInstanceIds) {
+    if (touched.has(id)) fail('An instance cannot be removed and upserted in the same edit.');
+    touched.add(id);
+    if (byId.get(id)?.type !== 'AssetInstance') fail('Only existing asset instances can be removed.');
+    byId.delete(id);
+  }
+  return validateSnapshot({ ...base, entities: [...byId.values()] });
+}
+
 export function validateSnapshot(input: unknown): ModelSnapshot {
   const value = copy(input);
   const building = value !== null && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, 'version');
@@ -821,6 +856,7 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
       validateFurnishings(view.entities, view.relationships, view);
     }
   } else validateFurnishings(entities, relationships);
+  validateAssets(graph);
   const byId = (a: ModelItem, b: ModelItem): number => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   entities.sort(byId); relationships.sort(byId);
   if (building && entities.every(isBuildingEntity)) return freeze({ version: 2, units: 'm', entities, relationships });

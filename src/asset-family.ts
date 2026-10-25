@@ -103,7 +103,8 @@ export interface AssetGeometry {
   bounds: { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number };
   footprint: Bounds; dimensions: { width: number; depth: number; height: number }; family: AssetFamily;
 }
-export function assetFootprint(_graph: ModelGraph, instance: AssetInstance): Bounds {
+export function assetFootprint(graph: ModelGraph, instance: AssetInstance): Bounds {
+  if (!graph.entities.some((item) => item.type === 'AssetFamily' && item.id === instance.familyId)) throw new Error('Asset instance requires an existing family definition.');
   const sideways = instance.rotationDeg === 90 || instance.rotationDeg === 270;
   const width = sideways ? instance.size.depth : instance.size.width; const depth = sideways ? instance.size.width : instance.size.depth;
   return { minX: instance.position[0] - width / 2, maxX: instance.position[0] + width / 2,
