@@ -29,6 +29,8 @@ The first module supports floor-standing proxies with axis sizing, not topology-
 
 Candidate A proposed declarative parametric primitives; B proposed generated inert triangle meshes. Prefer A's compact, predictable primitive representation, simplify its affine evaluator to normalized geometry with three size parameters, and graft B's immutable IDs and direct support for existing single-room projects. Reject A's mandatory whole-snapshot upgrade and B's larger mesh transport/validation surface for this first slice. Keep new geometry behind one shared evaluator used by bounds, placement, plan, Babylon and model-delta review.
 
+An independent design judge preferred the same synthesis. We accept whole-axis scaling and conservative occupied bounding boxes in exchange for a small, deterministic authoring and review boundary. Height changes stretch vertical features; fixed-size subcomponents, articulated poses and richer constraint parameters require further family semantics.
+
 ## Implementation plan
 
 - New `src/asset-family.ts`: authoritative TypeBox schemas/types, recipe validation, resolution, local/world geometry, footprints and bounded quantities. Maximum 8 definitions, 16 parts/family, 32 combined furnishings/instances, within graph100/result64KiB/history256KiB limits.
@@ -36,3 +38,7 @@ Candidate A proposed declarative parametric primitives; B proposed generated ine
 - `model-script.ts`, `model-proposal.ts`: one `model.previewAssets` capability, discovered schemas/docs, inspectable families and placements, ordinary execution evidence and human review.
 - Babylon/plan/delta/UI: generic family geometry and instance picking, derived dimensions/proxy description, before/after parameter/placement changes and instance deltas when family references change.
 - Fixtures for a 1.87 m person, second height reusing one family, unrelated generated object; deterministic geometry/budget/clearance rejection, atomic failure, exact legacy restore, real ScriptBox/queue/acceptance, and actual AI/browser verification on server containers. Open a draft PR, no merge or shared-preview deployment.
+
+## Verification
+
+See [server, live-worker and browser evidence](evidence/issue-113/README.md). The actual AI authored a standing-person family, reused it at 1.87 m and 1.65 m, and authored an unrelated floor lamp. A separate UI request produced a 1.87 m person that was accepted and restored without changing the original shell. Tests measure generated vertices as well as declared dimensions.

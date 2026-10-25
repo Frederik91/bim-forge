@@ -10,6 +10,7 @@ import { ModelScripts } from './model-script.ts';
 import { prepareModelProposal } from './model-proposal.ts';
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
 import { RoomRepository, diffSnapshots, previewAssets } from './room-model.ts';
+import type { Entity } from './room-model.ts';
 import { multiStoreySnapshot } from './multi-storey-house.ts';
 import { ChangeRequests } from '../demo/change-requests.ts';
 
@@ -99,7 +100,7 @@ test('ordinary TypeScript authors a 1870 mm person and reuses its family at anot
   assert.deepEqual(delta.entities.modified, []); assert.deepEqual(delta.entities.removed, []);
   assert.deepEqual(after.relationships, before.relationships);
   for (const [id, height] of [['person-1870', 1.87], ['person-1650', 1.65]] satisfies [string, number][]) {
-    const instance = after.entities.find(item => item.id === id); assert.ok(instance?.type === 'AssetInstance');
+    const instance: Entity | undefined = after.entities.find(item => item.id === id); assert.ok(instance?.type === 'AssetInstance');
     assert.equal(assetGeometry(after, instance).bounds.maxZ, height);
     assert.equal(instance.size.height * 1000, Math.round(height * 1000));
   }

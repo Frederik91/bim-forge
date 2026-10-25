@@ -1,0 +1,173 @@
+{
+  "requestId": "8ecc87fb-0dfb-4e81-8e26-1694320902ca",
+  "proposalName": "author-a-recognizable-standing-pknpojbchokhbjjmonbikmglhbdgjaff",
+  "baseRevisionId": "c050c7bdaebb75d7115659ee44495d8a884f7a68034ebc3f72820020e98c9b78",
+  "proposalRevisionId": "b7102a7b6a3b92f899edfe608226c5207dd15a8887c6b9760892aea6d97a9844",
+  "selectedObjectIds": [
+    "wall-north"
+  ],
+  "instruction": "Author a recognizable standing-person proxy with distinct head, torso, two arms and two legs, at least five primitive parts, not a named box. Instance person-1870 must be exactly 1.87 m tall, .55 m wide and .35 m deep at [1.2,2.8]. Then add person-1650, exactly 1.65 m tall at [2.7,2.8], reusing the SAME authored family and width/depth. Independently author an unrelated floor lamp with base, stem and shade as instance floor-lamp at [4.5,2.8], width/depth .5 m and height 1.5 m. Use normalized primitives attaining all six unit-box extrema. Keep the existing unlevelled single-room shell, entry and unrelated objects unchanged; no reconstruction. Disclose proxy fidelity and assumptions, no anatomy or product certification. Leave all changes in one proposal for human review.",
+  "summary": "Add two standing-person proxies sharing one eight-part family and an independent three-part floor lamp.",
+  "rationale": "People have head, torso, two arms, two legs and two feet. person-1870: 0.55 × 0.35 × 1.87 m at [1.2,2.8]. person-1650: 0.55 × 0.35 × 1.65 m at [2.7,2.8]. Lamp: 0.5 × 0.5 × 1.5 m at [4.5,2.8], with base, stem and shade. Both normalized recipes attain all six unit-box extrema.",
+  "constraints": "Preserve all existing shell, entry and hosting identities unchanged. No reconstruction, wall attachment, removals or dependency changes. Three independent floor-standing assets in the existing unlevelled room; human acceptance required.",
+  "uncertainty": "Conceptual primitive proxies only, without anatomical fidelity, manufacturer accuracy or anatomy/product certification. Assume arms-down standing poses, rotation 0, schematic colors and a cylindrical lamp shade; positions are footprint centers.",
+  "worker": {
+    "provider": "openai-codex-app-server",
+    "model": "gpt-6.1-sol",
+    "responseIds": [
+      "01a17258-0dc2-7811-9ca0-fdfaeb9418b0"
+    ],
+    "usage": {
+      "inputTokens": 19782,
+      "outputTokens": 54,
+      "totalTokens": 19836
+    }
+  },
+  "toolCalls": [
+    {
+      "name": "run_model_script",
+      "status": "accepted",
+      "error": null
+    },
+    {
+      "name": "run_model_script",
+      "status": "rejected",
+      "error": "Review text requires 1 to 600 readable characters."
+    },
+    {
+      "name": "run_model_script",
+      "status": "accepted",
+      "error": null
+    }
+  ],
+  "scriptExecutions": [
+    {
+      "version": 1,
+      "executionId": "0edede09-c997-4ff3-882a-a75c8b86a5c2",
+      "language": "javascript",
+      "sourceSha256": "d36567d19cd5e4b81a91cf7bf0fe70acbf4511f3377954ea7a66a2289410b623",
+      "status": "completed",
+      "disposition": "observation",
+      "validation": "not-run",
+      "contractSha256": "edaf17607077f732bbf0fa2513f98374f32487db33e44bef7492e9b4b3bf26c6",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "model.inspect",
+          "disposition": "completed"
+        },
+        {
+          "sequence": 2,
+          "method": "docs.read",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": null
+    },
+    {
+      "version": 1,
+      "executionId": "b458dfcb-9229-4cf4-a209-be22c7c03fd9",
+      "language": "javascript",
+      "sourceSha256": "0230e4b1b678ec7b58b7719f49a5ab841bb0729d936f54dc939d7caca4e9511b",
+      "status": "completed",
+      "disposition": "discarded",
+      "validation": "failed",
+      "contractSha256": "edaf17607077f732bbf0fa2513f98374f32487db33e44bef7492e9b4b3bf26c6",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "model.inspect",
+          "disposition": "completed"
+        },
+        {
+          "sequence": 2,
+          "method": "model.previewAssets",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": {
+        "code": "invalid-proposal",
+        "message": "Review text requires 1 to 600 readable characters.",
+        "line": null,
+        "column": null
+      }
+    },
+    {
+      "version": 1,
+      "executionId": "31db49bf-ff40-4aa6-92cd-53207c8778b2",
+      "language": "javascript",
+      "sourceSha256": "dee4a7080b34188e3615bd76ecd96c63275861de0dd283436683b176be2011b9",
+      "status": "completed",
+      "disposition": "proposal",
+      "validation": "passed",
+      "contractSha256": "edaf17607077f732bbf0fa2513f98374f32487db33e44bef7492e9b4b3bf26c6",
+      "policyVersion": "proposal-intent-v1",
+      "runtime": {
+        "packageVersion": "0.1.1",
+        "guestAbi": 2,
+        "bootstrapVersion": 3,
+        "artifactSha256": "a52c2b3ca778ceed0bbc5b84a72c9686e5b663c7ef253af0b9b717b46d09768b"
+      },
+      "calls": [
+        {
+          "sequence": 1,
+          "method": "model.inspect",
+          "disposition": "completed"
+        },
+        {
+          "sequence": 2,
+          "method": "model.previewAssets",
+          "disposition": "completed"
+        }
+      ],
+      "diagnostic": null
+    }
+  ],
+  "intent": {
+    "interpretation": "Add exactly sized person-1870 and person-1650 sharing one multipart family, plus an independently authored floor lamp at the specified positions.",
+    "assumptions": [
+      "Neutral arms-down poses, rotation 0 and schematic colors.",
+      "Lamp has circular base, vertical stem and cylindrical shade."
+    ],
+    "certainty": 99,
+    "basis": "Explicit IDs, dimensions and positions specify three floor-standing additions. Inspection shows an empty unlevelled room. Selected north wall is context, not an attachment or reconstruction request."
+  },
+  "validator": "room-graph-v1",
+  "decision": {
+    "status": "pending",
+    "decisionId": null,
+    "actor": null
+  },
+  "changes": {
+    "entities": {
+      "added": [
+        "floor-lamp",
+        "floor-lamp-proxy-v1",
+        "person-1650",
+        "person-1870",
+        "standing-person-proxy-v1"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "relationships": {
+      "added": [],
+      "removed": [],
+      "modified": []
+    }
+  }
+}

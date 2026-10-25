@@ -1462,20 +1462,6 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     return svgNode('line', { x1, y1, x2, y2, ...attributes });
   };
 
-  for (const item of snapshot.entities.filter(entity => entity.type === 'AssetInstance')) {
-    const geometry = assetGeometry(snapshot, item);
-    const footprint = geometry.footprint;
-    const [x, y] = transform([footprint.minX, footprint.maxY]);
-    const selected = item.id === selectedObject;
-    const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
-    group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
-      rx: 3, fill: '#a8c1b4', stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
-    const [cx, cy] = transform(item.position);
-    group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': 7, 'pointer-events': 'none' }, item.name));
-    group.append(svgNode('title', {}, `${geometry.family.name} · ${number.format(geometry.dimensions.height)} m tall · dimensional proxy`));
-    svg.append(group);
-  }
   for (const room of spaces(snapshot)) {
     const b = room.bounds;
     const [x, y] = transform([b.minX, b.maxY]);
@@ -1590,6 +1576,20 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
       stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
     const [cx, cy] = transform(item.position);
     group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': item.supportId ? 6 : 8, 'pointer-events': 'none' }, item.kind));
+    svg.append(group);
+  }
+  for (const item of snapshot.entities.filter(entity => entity.type === 'AssetInstance')) {
+    const geometry = assetGeometry(snapshot, item);
+    const footprint = geometry.footprint;
+    const [x, y] = transform([footprint.minX, footprint.maxY]);
+    const selected = item.id === selectedObject;
+    const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
+      'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
+    group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
+      rx: 3, fill: '#a8c1b4', stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
+    const [cx, cy] = transform(item.position);
+    group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': 7, 'pointer-events': 'none' }, item.name));
+    group.append(svgNode('title', {}, `${geometry.family.name} · ${number.format(geometry.dimensions.height)} m tall · dimensional proxy`));
     svg.append(group);
   }
   for (const room of spaces(snapshot)) {
@@ -1916,6 +1916,10 @@ type PropertyRow = [string, string, string, string];
 
 function modelProperties(item: ModelItem): Record<string, unknown> {
   if (item.type === 'AssetFamily') return { id: item.id, type: item.type, name: item.name, description: item.description, parts: item.parts.length };
+  if (item.type === 'AssetInstance') {
+    const { size, ...properties } = item;
+    return { ...properties, width: size.width, depth: size.depth, height: size.height };
+  }
   return { ...item };
 }
 
