@@ -68,8 +68,8 @@
       ],
       "preparationNote": null,
       "status": "failed",
-      "latestReviewedRun": "docs/experiments/results/EX-02/w2-partial-exchange-20261025-01/result.json",
-      "latestReview": "docs/experiments/decisions/exchange-storage-review-20261025.md",
+      "latestReviewedRun": "docs/experiments/results/EX-02/w2-exchange-review-20261025-02/result.json",
+      "latestReview": "docs/experiments/decisions/record-identity-reconciliation-20261025.md",
       "producerStreams": [
         "W0"
       ],
@@ -270,8 +270,8 @@
       ],
       "preparationNote": null,
       "status": "inconclusive",
-      "latestReviewedRun": "docs/experiments/results/EX-08/w2-partial-coordinates-20261025-01/result.json",
-      "latestReview": "docs/experiments/decisions/exchange-storage-review-20261025.md",
+      "latestReviewedRun": "docs/experiments/results/EX-08/w2-coordinates-review-20261025-02/result.json",
+      "latestReview": "docs/experiments/decisions/record-identity-reconciliation-20261025.md",
       "producerStreams": [
         "W0"
       ],

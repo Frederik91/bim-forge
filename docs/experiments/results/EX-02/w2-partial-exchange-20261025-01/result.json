@@ -48,7 +48,7 @@
     ],
     "cpuLimit": 0.5,
     "memoryLimitBytes": 1610612736,
-    "diskBudgetBytes": null,
+    "diskBudgetBytes": 1073741824,
     "storage": "/ssd1/bim-forge-qualification/qvm-20261025; retained private local SSD artifacts",
     "cacheProcedure": "No cache flushing or performance claims; deterministic correctness checks only",
     "measurementSlot": "W2 debug lease: preparation historical; distinct downstream task authorized after retry escalation"
@@ -2154,7 +2154,7 @@
     "Latest source c30979d640a22ef8b4dc83f7307e111cd5d6546a: root validation, scoped typecheck, 3 TS and 8 Python tests passed. Full IFC preparation on that source remains unvalidated.",
     "Preparation and downstream engine observations used historical source/runner be6e71b2cc641d669de9f2e57dec49623744100a, before the pytest and JSON-null fixes.",
     "1 GiB is the evidence-packaging budget declared and checked at finalization. The original preparation had no recorded W2 disk budget; this value is not a historical enforced run quota.",
-    "Coordinator terminal record uses null for the unrecorded original disk budget. The independently checked 1 GiB packaging budget is not an original-run limit."
+    "Terminal metadata publication records the failed/inconclusive evidence only; it is not registry adoption, PR merge or engineering/model approval."
   ],
   "decisionImplications": [
     "Native scalar/list mapping actually loses the unfamiliar bounded property on re-export; retain this failed preservation result.",
