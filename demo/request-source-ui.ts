@@ -77,6 +77,7 @@ export class RequestSourcePicker {
   #entries: SourceEntry[] = [];
   #projectId: string | null = null;
   #disabled = true;
+  #draining = false;
   #error = '';
   readonly #ui: { input: HTMLInputElement; list: HTMLElement; status: HTMLElement; error: HTMLElement };
   readonly #changed: () => void;
@@ -103,7 +104,7 @@ export class RequestSourcePicker {
           previewUrl: mediaType.startsWith('image/') ? URL.createObjectURL(file) : null, upload: { kind: 'pending' },
         }));
         this.#entries.push(...entries); this.#error = ''; this.#render();
-        for (const entry of entries) void this.#upload(entry);
+        void this.#drainUploads();
       } catch (error) {
         this.#error = error instanceof Error ? error.message : 'These files could not be attached.';
         this.#render();
@@ -155,6 +156,18 @@ export class RequestSourcePicker {
     if (entry.previewUrl) { URL.revokeObjectURL(entry.previewUrl); entry.previewUrl = null; }
   }
 
+  async #drainUploads(): Promise<void> {
+    if (this.#draining) return;
+    this.#draining = true;
+    try {
+      while (true) {
+        const entry = this.#entries.find((item): item is PickedSource => item.kind === 'picked' && item.upload.kind === 'pending');
+        if (!entry) break;
+        await this.#upload(entry);
+      }
+    } finally { this.#draining = false; }
+  }
+
   async #upload(entry: PickedSource): Promise<void> {
     const projectId = this.#projectId;
     if (!projectId || !this.#entries.includes(entry) || entry.upload.kind === 'uploading' || entry.upload.kind === 'ready') return;
@@ -164,7 +177,17 @@ export class RequestSourcePicker {
         method: 'POST', headers: { 'Content-Type': entry.mediaType, 'X-Source-Name': encodeURIComponent(entry.name) },
         body: entry.file, signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`Upload failed (HTTP ${response.status}). Retry this file.`);
+      if (!response.ok) {
+        let message = `Upload failed (HTTP ${response.status}). Retry this file.`;
+        try {
+          const failure: unknown = await response.json();
+          if (failure && typeof failure === 'object' && 'error' in failure && typeof failure.error === 'string') {
+            const detail = failure.error.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 300);
+            if (detail) message = detail;
+          }
+        } catch { /* Non-JSON responses retain the HTTP fallback. */ }
+        throw new Error(message);
+      }
       const value: unknown = await response.json();
       if (!value || typeof value !== 'object' || !('source' in value)) throw new Error('Upload returned an invalid source reference.');
       const source = parseRequestSources([value.source])[0];
@@ -190,13 +213,14 @@ export class RequestSourcePicker {
       if (imageUrl) { const image = node('img', undefined, 'source-preview'); image.src = imageUrl; image.alt = `Source preview: ${name}`; item.append(image); }
       const copy = node('div', undefined, 'source-copy');
       copy.append(source && this.#projectId ? sourceLink(this.#projectId, source) : node('strong', name));
-      const state = source ? `Uploaded · ${sizeLabel(source.byteLength)}` : entry.kind === 'picked' && entry.upload.kind === 'failed' ? entry.upload.message : 'Uploading…';
+      const state = source ? `Uploaded · ${sizeLabel(source.byteLength)}` : entry.kind === 'picked' && entry.upload.kind === 'failed' ? entry.upload.message
+        : entry.kind === 'picked' && entry.upload.kind === 'pending' ? 'Waiting to upload…' : 'Uploading…';
       copy.append(node('small', state));
       if (source) copy.append(referenceDetails(source));
       const actions = node('div', undefined, 'source-actions');
       if (entry.kind === 'picked' && entry.upload.kind === 'failed') {
         const retry = node('button', 'Retry upload', 'text-button'); retry.type = 'button'; retry.setAttribute('aria-label', `Retry upload of ${name}`);
-        retry.addEventListener('click', () => { void this.#upload(entry); }); actions.append(retry);
+        retry.addEventListener('click', () => { entry.upload = { kind: 'pending' }; this.#render(); void this.#drainUploads(); }); actions.append(retry);
       }
       const remove = node('button', 'Remove', 'text-button'); remove.type = 'button'; remove.setAttribute('aria-label', `Remove ${name} from this request`);
       remove.addEventListener('click', () => {
