@@ -1,0 +1,149 @@
+{
+  "source": "c0ad96765e8fee8088188894dc484f3a81704dda",
+  "profile": "artifacts/round2-final-reduced-profile/profile/CPU.20261025.151025.26.0.001.cpuprofile",
+  "parentOnly": true,
+  "sampleCount": 94514,
+  "topAggregatedSelf": [
+    {
+      "function": "(idle)",
+      "url": "",
+      "line": -1,
+      "count": 59787,
+      "sampleFraction": 0.6325729521552362
+    },
+    {
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62,
+      "count": 7683,
+      "sampleFraction": 0.08128954440611973
+    },
+    {
+      "function": "",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 65,
+      "count": 3849,
+      "sampleFraction": 0.040724125526377046
+    },
+    {
+      "function": "update",
+      "url": "node:internal/crypto/hash",
+      "line": 185,
+      "count": 2771,
+      "sampleFraction": 0.029318407854920965
+    },
+    {
+      "function": "(garbage collector)",
+      "url": "",
+      "line": -1,
+      "count": 2133,
+      "sampleFraction": 0.02256808515140614
+    },
+    {
+      "function": "json",
+      "url": "file:///app/experiments/storage/w4.ts",
+      "line": 35,
+      "count": 1566,
+      "sampleFraction": 0.016568973908627292
+    },
+    {
+      "function": "parseRow",
+      "url": "file:///qualification/node-storage/node_modules/pg/lib/result.js",
+      "line": 62,
+      "count": 1560,
+      "sampleFraction": 0.01650549124997355
+    },
+    {
+      "function": "check_0",
+      "url": "",
+      "line": 2,
+      "count": 1049,
+      "sampleFraction": 0.011098884821296316
+    },
+    {
+      "function": "RegExp: ^.*$",
+      "url": "",
+      "line": -1,
+      "count": 999,
+      "sampleFraction": 0.010569862665848445
+    },
+    {
+      "function": "",
+      "url": "",
+      "line": 4,
+      "count": 970,
+      "sampleFraction": 0.010263029815688681
+    },
+    {
+      "function": "w4Generator",
+      "url": "file:///app/experiments/storage/w4.ts",
+      "line": 116,
+      "count": 963,
+      "sampleFraction": 0.01018896671392598
+    },
+    {
+      "function": "check_2",
+      "url": "",
+      "line": 4,
+      "count": 944,
+      "sampleFraction": 0.009987938294855789
+    },
+    {
+      "function": "PreparedEntity",
+      "url": "file:///app/experiments/storage/prepared.ts",
+      "line": 13,
+      "count": 870,
+      "sampleFraction": 0.00920498550479294
+    },
+    {
+      "function": "",
+      "url": "",
+      "line": -1,
+      "count": 867,
+      "sampleFraction": 0.00917324417546607
+    },
+    {
+      "function": "load",
+      "url": "file:///app/experiments/storage/load.ts",
+      "line": 51,
+      "count": 772,
+      "sampleFraction": 0.008168102080115116
+    },
+    {
+      "function": "Hash",
+      "url": "node:internal/crypto/hash",
+      "line": 111,
+      "count": 722,
+      "sampleFraction": 0.007639079924667245
+    },
+    {
+      "function": "addHash",
+      "url": "file:///app/experiments/storage/load.ts",
+      "line": 19,
+      "count": 645,
+      "sampleFraction": 0.006824385805277525
+    },
+    {
+      "function": "check_1",
+      "url": "",
+      "line": 3,
+      "count": 628,
+      "sampleFraction": 0.006644518272425249
+    },
+    {
+      "function": "digest",
+      "url": "node:internal/crypto/hash",
+      "line": 203,
+      "count": 543,
+      "sampleFraction": 0.00574518060816387
+    },
+    {
+      "function": "runMicrotasks",
+      "url": "",
+      "line": -1,
+      "count": 420,
+      "sampleFraction": 0.004443786105762109
+    }
+  ],
+  "scope": "Function frames aggregated across call-tree nodes; sampled parent V8 execution, not whole-process-group CPU or whole-host idle."
+}

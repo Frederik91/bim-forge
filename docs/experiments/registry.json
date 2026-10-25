@@ -476,8 +476,8 @@
       ],
       "preparationNote": "Profile hospital-200k-v1; W4/#127 owns generation. Full measurements require exclusive resource scheduling.",
       "status": "failed",
-      "latestReviewedRun": "docs/experiments/results/EX-13/hospital-full-20261025a/result.json",
-      "latestReview": "docs/experiments/decisions/full-hospital-review-20261025.md",
+      "latestReviewedRun": "docs/experiments/results/EX-13/hospital-full-20261025b/result.json",
+      "latestReview": "docs/experiments/decisions/full-hospital-round2-review-20261025.md",
       "producerStreams": [
         "W0",
         "W4"
