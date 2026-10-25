@@ -1,0 +1,10 @@
+✔ empty catalog categories match an observed inventory with no rows in those categories (1.745734ms)
+✔ a missing nonempty catalog category still differs from the observed inventory (0.255302ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2093.710982
