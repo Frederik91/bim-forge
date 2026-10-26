@@ -7,6 +7,7 @@ import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
+import { WorkspaceShell } from './workspace-shell.ts';
 import { requestContext } from './request-context.ts';
 import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
@@ -247,6 +248,7 @@ const ui = {
 };
 
 const projects = new ProjectClient();
+const workspace = new WorkspaceShell();
 let serverAvailable = false;
 let projectChoices: readonly ProjectSummary[] = [];
 let legacyProject: RoomRepository | null = null;
@@ -473,7 +475,11 @@ function showPage(name: PageName): void {
   currentPage = name;
   generic('activity-page').hidden = name !== 'activity';
   ui['project-page'].hidden = name !== 'project';
-  ui.journey.hidden = name === 'project';
+  ui.journey.hidden = false;
+  ui['editor-panel'].hidden = name !== 'request';
+  generic('workspace-review-canvas').hidden = name !== 'review';
+  ui['request-page'].hidden = name === 'review';
+  workspace.showContext(name);
   const pages = [
     { name: 'request', page: ui['request-page'], navigation: ui['nav-request'] },
     { name: 'backlog', page: ui['backlog-page'], navigation: ui['nav-backlog'] },
@@ -481,7 +487,7 @@ function showPage(name: PageName): void {
     { name: 'history', page: ui['history-page'], navigation: ui['nav-history'] },
   ];
   for (const item of pages) {
-    item.page.hidden = item.name !== name;
+    if (item.name !== 'request') item.page.hidden = item.name !== name;
     item.navigation.setAttribute('aria-pressed', String(item.name === name || name === 'activity' && item.name === 'backlog'));
   }
   if (repo) { renderComparison(); if (name === 'project') renderProjectOverview(); }
@@ -490,6 +496,7 @@ function showPage(name: PageName): void {
 
 function showRequestPane(name: RequestPane): void {
   const details = name === 'details';
+  workspace.showRequestDetails(details);
   ui['request-page'].dataset.requestPane = details ? 'details' : 'canvas';
   ui['request-canvas-pane'].dataset.active = String(!details);
   ui['editor-panel'].dataset.active = String(details);
@@ -2327,12 +2334,12 @@ function focusRoom(id: string | null): void {
 }
 function renderRoomNavigation(snapshot: ModelSnapshot): void {
   const storeys = levels(snapshot);
-  const needsPlan = modelView === 'plan' || currentPage === 'project';
+  const needsPlan = modelView === 'plan';
   if (activeLevelId && !storeys.some(level => level.id === activeLevelId)) activeLevelId = null;
   if (!activeLevelId && needsPlan && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
   const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
   const rooms = spaces(view);
-  generic('level-navigation').hidden = !storeys.length || !['project', 'request', 'review'].includes(currentPage);
+  generic('level-navigation').hidden = !storeys.length;
   const all = new Option('All storeys · 3D', ''); all.disabled = needsPlan;
   ui['level-focus'].replaceChildren(all, ...storeys.map(level => new Option(`${level.name} · ${number.format(level.elevation)} m`, level.id)));
   ui['level-focus'].value = activeLevelId ?? '';
@@ -2372,7 +2379,6 @@ button('whole-floor').addEventListener('click', () => focusRoom(null));
 
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
-  if (!inDeltaDialog && currentPage !== 'request' && currentPage !== 'review') { modelViewer?.hide(); return; }
   const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
   const comparison = inDeltaDialog || currentPage === 'review' && reviewDelta ? baseline : null;
   try {
