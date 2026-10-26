@@ -38,7 +38,7 @@ async function settled(server: DemoServer, id: string, state: string) {
   while (Date.now() < deadline) {
     const result = await call(server, '/api/change-requests/' + id); assert.equal(result.status, 200);
     const current = ticket(result.value); if (current.state === state) return current;
-    assert.ok(current.state === 'queued' || current.state === 'working', JSON.stringify(current));
+    assert.ok(current.state === 'queued' || current.state === 'working', JSON.stringify({ state: current.state, error: current.error }));
     await new Promise(resolve => setTimeout(resolve, 20));
   } throw new Error('Combined request did not reach its expected review state.');
 }
