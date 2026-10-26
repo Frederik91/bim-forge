@@ -1521,14 +1521,14 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
 }
 
 interface BacklogItem {
-  id: string; projectId: string; state: RequestState; createdAt: number; attempts: number; error: string | null;
+  id: string; projectId: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
   request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
 }
 const ticketScopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
 function parseBacklogItem(value: unknown): BacklogItem {
   if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
-      || typeof value.createdAt !== 'number' || typeof value.attempts !== 'number' || (value.error !== null && typeof value.error !== 'string')) throw new Error('Invalid backlog item.');
+      || typeof value.createdAt !== 'number' || typeof value.updatedAt !== 'number' || typeof value.attempts !== 'number' || (value.error !== null && typeof value.error !== 'string')) throw new Error('Invalid backlog item.');
   const state = value.state;
   if (state !== 'queued' && state !== 'working' && state !== 'needs-input' && state !== 'ready'
       && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
@@ -1545,7 +1545,7 @@ function parseBacklogItem(value: unknown): BacklogItem {
   const cached = ticketScopes.get(requestId);
   const scope = cached?.projectId === value.projectId && cached.scope.baseRevisionId === baseRevisionId
     && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
-  return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, attempts: value.attempts, error: value.error,
+  return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
     request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId, selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
 }
