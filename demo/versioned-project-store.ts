@@ -25,8 +25,11 @@ interface Manifest {
 let savepointSequence = 0;
 
 function fail(message: string): never { throw new Error(`Versioned project store: ${message}`); }
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 function object(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) fail('invalid stored object.');
+  if (!isObject(value)) fail('invalid stored object.');
   return value;
 }
 function string(value: unknown): string {
@@ -34,8 +37,8 @@ function string(value: unknown): string {
   return value;
 }
 function nullable(value: unknown): string | null { return value === null ? null : string(value); }
-function array(value: unknown): unknown[] {
-  if (!Array.isArray(value) || value.length > 100) fail('invalid bounded collection.');
+function array(value: unknown, maximum = 100): unknown[] {
+  if (!Array.isArray(value) || value.length > maximum) fail('invalid bounded collection.');
   const result: unknown[] = value;
   return result;
 }
@@ -65,7 +68,7 @@ function manifest(text: string): Manifest {
 function delta(text: string): Delta {
   const value = object(parsed(text));
   if (value.version !== null && value.version !== 2) fail('invalid snapshot version.');
-  const changes = (input: unknown): Change[] => array(input).map((entry) => {
+  const changes = (input: unknown): Change[] => array(input, 200).map((entry) => {
     const item = object(entry); return { id: string(item.id), body: nullable(item.body) };
   });
   const moves = (input: unknown): Move[] => array(input).map((entry) => {
