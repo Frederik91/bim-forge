@@ -274,7 +274,6 @@ let gesture: GestureState | null = null;
 let activeReview: ActiveReview | null = null;
 let reviewRepository: RoomRepository | null = null;
 let activeTicketId: string | null = null;
-let revisionTicketId: string | null = null;
 let backlogItems: BacklogItem[] = [];
 let serverProjectText: string | null = null;
 let serverHeadRevisionId: string | null = null;
@@ -670,7 +669,7 @@ function updateControls() {
   ui['whole-building'].disabled = busy || dragging || !repo;
   ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
   ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready;
-  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : chatTicketId ? 'Send reply →' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
+  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : chatTicketId ? 'Send reply →' : 'Send change request →';
   requestChat.setDisabled(!writable || !preview);
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
@@ -862,7 +861,7 @@ function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
-  if (projectChanged) { backlogItems = []; ticketScopes.clear(); revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
+  if (projectChanged) { backlogItems = []; ticketScopes.clear(); submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
   serverProjectText = text;
   serverHeadRevisionId = next.head('main');
   historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
@@ -1058,7 +1057,7 @@ async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
   if (!await discardRequest('Return to the accepted model and discard the unsent request?')) return false;
   closeChat();
-  reviewRepository = null; activeTicketId = null; activeReview = null; revisionTicketId = null;
+  reviewRepository = null; activeTicketId = null; activeReview = null;
   selectedBranch = 'main'; selectedRevision = repo.head('main');
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   resetEditor(); render(); showPage('request');
@@ -1244,7 +1243,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
     const fingerprint = JSON.stringify(content);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
-    const response = await fetch(revisionTicketId ? `/api/change-requests/${encodeURIComponent(revisionTicketId)}/revision` : '/api/change-requests', {
+    const response = await fetch('/api/change-requests', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...content, request: { ...content.request, requestId: submission.requestId } }),
     });
@@ -1253,7 +1252,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const submittedTicket = parseBacklogItem(acknowledgement.ticket);
     const submittedName = submittedTicket.request.proposalName;
     chatTicketId = submittedTicket.id;
-    submission = null; revisionTicketId = null;
+    submission = null;
     clearRequestSources();
     chatVisual = null; requestChat.setVisual(null);
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
@@ -1307,7 +1306,7 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
   if (!keepProposal) displayAccepted(await projects.read(projectId));
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
-  chatVisual = null; chatReply = null; requestChat.setVisual(null); revisionTicketId = null;
+  chatVisual = null; chatReply = null; requestChat.setVisual(null);
   showChatTicket(value.ticket); render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
   status('Conversation opened. Add a reply or attach evidence from the displayed snapshot. A reply never approves a proposal.');
 }
@@ -1662,7 +1661,7 @@ ui['open-current-model'].addEventListener('click', () => {
     if (!repo) return;
     displayAccepted(await projects.read(repo.projectId));
     clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
-    activeReview = null; revisionTicketId = null; render(); showPage('request');
+    activeReview = null; render(); showPage('request');
     status('Opened the current accepted server model.');
   });
 });
@@ -1708,6 +1707,7 @@ ui['request-revision'].addEventListener('click', () => {
   const item = backlogItems.find((ticket) => ticket.id === activeTicketId);
   if (item) void perform(() => openConversation(item.id, true));
 });
+ui['request-revision'].textContent = 'Continue conversation';
 
 function download(text: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json;charset=utf-8' }));
@@ -2366,7 +2366,7 @@ async function selectRevision(branch: string, revisionId: string): Promise<void>
   const project = repo;
   if (!await discardRequest('View this saved revision and discard the unsent request?')) return;
   reviewRepository = null;
-  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; revisionTicketId = null;
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   selectedBranch = branch;
   selectedRevision = revisionId;
   activeReview = project.reviewAt(revisionId)?.review ?? null;
