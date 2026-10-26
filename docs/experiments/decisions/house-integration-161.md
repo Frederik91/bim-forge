@@ -22,6 +22,9 @@ Artifacts live below `/ssd1/bim-forge-qualification/house-161`.
 | `1a536e4` | Root validation, demo build, client and HTTP integration | PASS; 17 tests, 0 skipped | `artifacts/integrated-1a536e4` |
 | `30bbcc5` | Root validation and complete `npm test` | PASS; 459 passed, 0 failed, 2 skipped; asset suite 21 passed | `artifacts/full-suite-30bbcc5` |
 | `f2ed71b` | Root validation, demo build and browser client tests | PASS; 16 tests, 0 skipped | `artifacts/browser-fixed-f2ed71b` |
+| `9f41b26` (queue worker) | Root validation, demo build and migration/queue/HTTP tests | PASS; 33 tests, 0 skipped | `worker164-9f41b26/artifacts` |
+| `ace24fc` (browser worker) | Root validation, demo build and client tests | PASS; 16 tests, 0 skipped | `issue-165-20261026-overview-phone/artifacts` |
+| `742b559` (combined code) | Root and changed-path validation, demo build, queue/HTTP/client/integration tests | PASS; 51 tests, 0 skipped | `artifacts/final-code-742b559` |
 
 The full run includes the single maintainer-approved rerun of the corrected persistence fixtures. Its core source/test blobs match `eb5cfba`; all 15 persistence tests passed. The two skipped cases are the existing administrator-dispatch/symlink tests. This is not a pass for those platform-specific cases.
 
@@ -41,7 +44,9 @@ At `f2ed71b`, the browser reopened the eight-room house from the server. Two pro
 4. Accepted it, producing `2730340a2bcd35de96189a099ef1d69e34628a53b7dac354c6a4b828d68cbca8`.
 5. Observed zero ready requests, two completed requests and three accepted ancestry entries with request/decision bindings.
 
-Review caught two browser corrections: native `fetch` needed its browser receiver preserved; Overview needed the accepted repository rather than the historical review repository. A phone check also found 14 px of root overflow requiring a structural layout correction. Final verification and artifacts are recorded below after those changes.
+Review caught browser corrections: native `fetch` needed its browser receiver preserved; Overview and retained comparison choices needed the accepted repository rather than the historical review repository. A phone check also found 14 px of root overflow requiring a structural layout correction.
+
+At combined source `742b559`, a replacement container reopened the same database, including migration from the interim normalized sentinel column to `projects(id)`. A new browser tab reopened accepted head `2730340a2b`, two completed requests and the same three history entries. Opening the older desk request and then Overview still showed accepted revision `2730340a2b`. At a 390 × 844 viewport, document client/body/root widths were all 375 px (the scrollbar uses the remainder), with no horizontal root overflow. The temporary viewport override was reset.
 
 ## Boundaries and next qualification
 
