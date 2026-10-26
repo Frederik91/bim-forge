@@ -42,7 +42,7 @@ export class ModelScopeClient {
     if (new TextEncoder().encode(text).byteLength > 512 * 1024) throw new Error('Scope response exceeds the bounded demo limit.');
     const value: unknown = JSON.parse(text);
     if (!response.ok) {
-      if (response.status === 409) throw new Error('The saved scope changed on the server. Refresh named scopes before saving again; your filters are retained.');
+      if (response.status === 409) throw new Error('The saved scope changed on the server. Your filters are retained. Refresh and reopen the saved scope to review its current query before replacing it.');
       throw new Error(`Scope server refused this action (HTTP ${response.status}). Your selection and filters are retained.`);
     }
     return value;
@@ -282,13 +282,19 @@ export class ModelScopeBuilder {
   }
 
   get dirty(): boolean { return this.#enabled.checked; }
-  get ready(): boolean { return !this.#enabled.checked || Boolean(this.#preview?.scope.targetIds.length && this.#matchesPreview()); }
+  get ready(): boolean { return !this.#loading && (!this.#enabled.checked || Boolean(this.#preview?.scope.targetIds.length && this.#matchesPreview())); }
   request(): ScopedRequest | undefined {
     if (!this.#enabled.checked) return undefined;
     if (!this.ready || !this.#preview) throw new Error('Preview this scope and confirm nonempty targets at the current revision before submitting.');
     return parseScopedRequest({ query: this.#preview.scope.query, ...(this.#savedScopeId ? { savedScopeId: this.#savedScopeId } : {}) });
   }
-  setDisabled(disabled: boolean): void { this.#enabled.disabled = disabled || this.#loading; this.#controls.disabled = disabled || this.#loading; }
+  setDisabled(disabled: boolean): void {
+    this.#enabled.disabled = disabled || this.#loading; this.#controls.disabled = disabled || this.#loading;
+    if (this.#preview && !this.#matchesPreview()) {
+      this.#preview = null; this.#evidence.hidden = true;
+      this.#status.textContent = 'The base revision changed. Preview this scope again before submitting.';
+    }
+  }
   setProject(projectId: string): void {
     if (this.#projectId === projectId) return;
     this.#projectId = projectId; this.#definitions = []; this.#saved.replaceChildren(); this.reset();
@@ -330,9 +336,10 @@ export class ModelScopeBuilder {
   #try(action: () => void): void { try { action(); } catch (error) { this.#status.textContent = error instanceof Error ? error.message : 'Invalid scope input.'; } }
   async #run(action: () => Promise<void>): Promise<void> {
     if (this.#loading) return;
+    const generation = this.#generation; const projectId = this.#context()?.projectId;
     this.#loading = true; this.#changed();
     try { await action(); }
-    catch (error) { this.#status.textContent = error instanceof Error ? error.message : 'Scope action failed. Selection and filters are retained.'; }
+    catch (error) { if (generation === this.#generation && projectId === this.#context()?.projectId) this.#status.textContent = error instanceof Error ? error.message : 'Scope action failed. Selection and filters are retained.'; }
     finally { this.#loading = false; this.#changed(); }
   }
 }

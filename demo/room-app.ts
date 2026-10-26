@@ -835,7 +835,7 @@ function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
-  if (projectChanged) { backlogItems = []; revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; }
+  if (projectChanged) { backlogItems = []; ticketScopes.clear(); revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; }
   serverProjectText = text;
   serverHeadRevisionId = next.head('main');
   historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
@@ -1242,15 +1242,36 @@ interface BacklogItem {
   request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
 }
+const ticketScopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
 function parseBacklogItem(value: unknown): BacklogItem {
   if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
       || typeof value.createdAt !== 'number' || typeof value.attempts !== 'number' || (value.error !== null && typeof value.error !== 'string')) throw new Error('Invalid backlog item.');
   const state = value.state;
   if (state !== 'queued' && state !== 'working' && state !== 'needs-input' && state !== 'ready'
       && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
+  const requestId = requiredText(value.request, 'requestId');
+  const baseRevisionId = requiredText(value.request, 'baseRevisionId');
+  const requestScope = requestScopeContext(value.request);
+  const frozen = reviewScopeContext(value).scope ?? (isRecord(value.result) && isRecord(value.result.review) ? reviewScopeContext(value.result.review).scope : undefined);
+  if (frozen) {
+    if (frozen.baseRevisionId !== baseRevisionId || !requestScope.scope || JSON.stringify(frozen.query) !== JSON.stringify(requestScope.scope.query)) throw new Error('Frozen scope does not match this request binding.');
+    ticketScopes.set(requestId, { projectId: value.projectId, scope: frozen });
+  }
+  const cached = ticketScopes.get(requestId);
+  const scope = cached?.projectId === value.projectId && cached.scope.baseRevisionId === baseRevisionId
+    && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
   return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, attempts: value.attempts, error: value.error,
-    ...reviewScopeContext(value),
-    request: { requestId: requiredText(value.request, 'requestId'), proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId: requiredText(value.request, 'baseRevisionId'), ...parseSourceContext(value.request), ...requestScopeContext(value.request) } };
+    ...(scope ? { scope } : {}),
+    request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId, ...parseSourceContext(value.request), ...requestScope } };
+}
+async function inspectTicketScope(item: BacklogItem): Promise<void> {
+  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
+  if (!isRecord(value)) throw new Error('Missing request scope evidence.');
+  const ticket = parseBacklogItem(value.ticket);
+  if (ticket.projectId !== repo?.projectId || ticket.request.requestId !== item.request.requestId) throw new Error('This request changed. Refresh the backlog before inspecting its scope.');
+  if (!ticket.scope) throw new Error('No frozen proposal scope is available yet. The submitted query is retained; inspect the scope when the proposal is ready.');
+  backlogItems = backlogItems.map(current => current.id === ticket.id ? ticket : current);
+  renderBacklog(); status('Frozen targets, read-only context and writable dependency impact opened. No model geometry changed.');
 }
 const stateLabels: Record<RequestState, string> = { queued: 'Queued', working: 'Working', 'needs-input': 'Needs your input',
   ready: 'Ready for review', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed' };
@@ -1346,6 +1367,7 @@ function renderBacklog(): void {
     if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Prepared on an earlier revision. Acceptance will retain unrelated changes and validate the combined model.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
     const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
+    if (item.request.scope && !item.scope) add('Inspect frozen scope', () => { void perform(() => inspectTicketScope(item)); });
     add(item.state === 'queued' || item.state === 'working' ? 'View progress' : 'View activity', () => { void perform(() => openActivity(item.id)); });
     if (item.state === 'ready' || item.state === 'needs-input' || item.state === 'completed' || item.state === 'rejected') add('Open request', () => { void perform(() => openTicket(item.id)); });
     if (item.state === 'queued' || item.state === 'working') add('Cancel request', () => { void perform(() => decideTicket(item.id, 'cancel')); });
