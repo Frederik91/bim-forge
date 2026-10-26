@@ -5,6 +5,8 @@
 !demo/server.ts
 !demo/change-requests.ts
 !demo/request-source-store.ts
+!demo/versioned-project-store.ts
+!demo/versioned-project-contract.ts
 !src/
 !src/**
 !scripts/
