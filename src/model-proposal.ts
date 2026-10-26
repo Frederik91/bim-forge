@@ -4,7 +4,7 @@ import type { Entity, EntityId, ProposalReview, Revision, RoomRepository, ToolCa
 import { parseVisualRequest } from './visual-request.ts';
 import type { VisualRequest } from './visual-request.ts';
 import type { ActivityUpdate } from './request-activity.ts';
-import { ModelScripts, summarizeModelDelta } from './model-script.ts';
+import { ModelScripts, summarizeModelDelta, modelWorkingGraph } from './model-script.ts';
 import type { ModelScriptResult } from './model-script.ts';
 import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
@@ -12,6 +12,10 @@ import { MODEL_INTENT_GUIDANCE } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
 import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
 import type { RequestSource, AuthoringScope } from './request-sources.ts';
+import { parseScopedRequest } from './model-scope-contract.ts';
+import type { FrozenModelScope, ScopedRequest } from './model-scope-contract.ts';
+import { freezeModelScope, assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
+import { isDeepStrictEqual } from 'node:util';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
@@ -30,6 +34,8 @@ interface BoundRequest {
   selectedObjects: readonly Entity[];
   sources?: RequestSource[];
   authoringScope?: AuthoringScope;
+  scope?: FrozenModelScope;
+  scopedRequest?: ScopedRequest;
 }
 interface ProviderEvent { responseId: string; inputTokens: number; outputTokens: number; totalTokens: number }
 export interface ModelWorkerSession {
@@ -61,6 +67,7 @@ interface DeclinedResult {
 }
 export type ModelProposalResult = Readonly<ReadyResult | DeclinedResult>;
 export interface ModelProposalOptions {
+  scope?: FrozenModelScope;
   signal?: AbortSignal;
   scripts?: ModelScripts;
   onExecution?: (evidence: ScriptExecutionEvidence) => void;
@@ -80,7 +87,7 @@ function text(value: unknown, name: string, maximum: number): string {
   return value.trim();
 }
 function request(input: unknown, repository: RoomRepository): BoundRequest {
-  const extra = isRecord(input) ? ['sources', 'authoringScope'].filter((key) => Object.hasOwn(input, key)) : [];
+  const extra = isRecord(input) ? ['sources', 'authoringScope', 'scope'].filter((key) => Object.hasOwn(input, key)) : [];
   fields(input, [...(isRecord(input) && Object.hasOwn(input, 'proposalName')
     ? ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']
     : ['requestId', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']), ...extra]);
@@ -107,7 +114,10 @@ function request(input: unknown, repository: RoomRepository): BoundRequest {
   }
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid selected object identity.');
   const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
+  const scopedRequest = extra.includes('scope') ? parseScopedRequest(input.scope) : undefined;
+  const scope = scopedRequest ? freezeModelScope({ graph: base.snapshot, query: scopedRequest.query, baseRevisionId: base.id }) : undefined;
   return Object.freeze({ requestId, proposalName, baseRevisionId: base.id, instruction, visualIntent: Object.freeze(visualIntent), base,
+    ...(scope && scopedRequest ? { scope, scopedRequest } : {}),
     ...(extra.includes('sources') ? { sources: parseRequestSources(input.sources) } : {}),
     ...(extra.includes('authoringScope') ? { authoringScope: parseAuthoringScope(input.authoringScope) } : {}),
     selectedObjectIds: Object.freeze(selectedObjectIds), selectedObjects: Object.freeze(selectedObjectIds.map((id) => {
@@ -127,6 +137,7 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([Object.freeze({
 })]);
 
 const instructions = `You prepare BIM model proposals for human review using run_model_script only. The source is an async function body with await and return, with no imports, shell, network, filesystem or credentials. Call the typed model API directly, never other tool names.
+When request.scope is present, call model.scope() for frozen targets, read-only context, dependencies, writable IDs and the current working graph. model.inspect() and every mutation result expose only that working context. It is a partial graph, never an authoritative standalone project. Use model.previewParameters({edits:[{definitionId,name,value}]}) for typed parameter changes to the frozen targets. Values carry explicit kinds and units; inspect existing parameters before editing. Context is never write permission. Every geometry tool enforces the same frozen write fence, and no tool accepts a proposal. New query matches require a new human review.
 Each execution starts from the same bound base revision with a fresh private draft. Changes do NOT persist between scripts. Inspect and compose all changes for a proposal in ONE script. You can return {kind:"observe",observation:await model.inspect()} to inspect without proposing; replay the needed operations in the final script.
 Return {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}} only after model operations succeed. Every new proposal requires intent assessment; historical saved reviews can omit it. The host independently validates the draft and computes its delta. Return {kind:"decline",reason,uncertainty} for a specific clarification. Never return a replacement snapshot, fabricated evidence or approval. Finish only after the tool returns done:true.
 Inspect first. Selection and spatial references are context, not a move command, group or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. Retain unrelated objects and identities. A freestanding point does not imply wall attachment. Never leave devices without valid support.
@@ -154,6 +165,10 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   fields(worker.identity, ['provider', 'model']);
   const identity = { provider: text(worker.identity.provider, 'Worker provider', 80), model: text(worker.identity.model, 'Worker model', 100) };
   const bound = request(input, repository);
+  if (options.scope) {
+    if (!bound.scope || !isDeepStrictEqual(options.scope, bound.scope)) fail('Stored scope does not match the immutable request base and query.');
+    assertModelScopeFresh({ base: bound.base.snapshot, current: bound.base.snapshot, binding: options.scope });
+  }
   if (bound.sources && !options.sourceInput) fail('Request sources must be loaded from the private source store before processing.');
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);
@@ -232,8 +247,9 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
       input: { request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
         selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
-        ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) },
-        selectedObjects: bound.selectedObjects,
+        ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}),
+        ...(bound.scope ? { scope: bound.scope } : {}) },
+        selectedObjects: modelWorkingGraph(bound.base.snapshot, bound.scope).entities.filter(item => bound.selectedObjectIds.includes(item.id)),
         ...(options.sourceInput ? { sourceDocuments: options.sourceInput.documents } : {}) },
       tools: MODEL_PROPOSAL_TOOLS, signal, executeTool, recordProviderEvent,
       ...(options.sourceInput ? { images: options.sourceInput.images } : {}) });
@@ -248,13 +264,14 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       rationale: result.reason, constraints: 'No model change was prepared. The accepted model remains unchanged.', uncertainty: result.uncertainty, changes: null,
       ...(result.intent ? { intent: result.intent } : {}),
     } };
+    if (bound.scope) assertModelScopeWrites({ before: bound.base.snapshot, after: result.snapshot, binding: bound.scope });
     const next = await repository.proposeReviewedModel({ name: bound.proposalName, from: bound.base.id, snapshot: result.snapshot,
       review: { requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
         ...result.review, worker: { ...identity, responseIds: providerEvents.map((event) => event.responseId),
           usage: providerEvents.reduce((sum, event) => ({ inputTokens: sum.inputTokens + event.inputTokens, outputTokens: sum.outputTokens + event.outputTokens,
             totalTokens: sum.totalTokens + event.totalTokens }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 }) },
         toolCalls, scriptExecutions: executions, ...(bound.sources ? { sources: bound.sources } : {}),
-        ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}), validator: 'room-graph-v1' },
+        ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}), ...(bound.scope ? { scope: bound.scope } : {}), validator: 'room-graph-v1' },
     });
     signal.throwIfAborted();
     return { status: 'ready', repository: next, review: { ...next.review(bound.proposalName), changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } };

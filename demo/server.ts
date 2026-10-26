@@ -7,6 +7,8 @@ import { CodexAccountConnection, CodexAppServerError } from '../src/codex-app-se
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 import { MAX_SOURCE_BYTES, sourceMediaType, sourceName } from '../src/request-sources.ts';
+import { parseModelScopeQuery } from '../src/model-scope-contract.ts';
+import { ScopeStoreConflict } from './model-scope-store.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
@@ -201,6 +203,36 @@ export async function createDemoServer({
     let projectUrl: URL;
     try { projectUrl = new URL(request.url ?? '/', 'http://localhost'); }
     catch { send(response, 400, { error: 'Invalid request URL.' }); return; }
+    const scopeRoute = /^\/api\/projects\/([^/]+)\/(scope-preview|scopes)$/.exec(projectUrl.pathname);
+    if (scopeRoute) {
+      try {
+        sameOriginRequest(request, publicOrigin);
+        if (projectUrl.search) throw new Error('Scope endpoints do not accept query parameters.');
+        const projectId = decodeURIComponent(scopeRoute[1] ?? '');
+        if (!backlog.hasProject(projectId)) { send(response, 404, { error: 'Unknown project.' }); return; }
+        if (scopeRoute[2] === 'scope-preview') {
+          if (request.method !== 'POST') { send(response, 405, { error: 'Scope preview requires POST.' }); return; }
+          const value = await readJson(request, 32 * 1024);
+          if (!isRecord(value) || Object.keys(value).length !== 2 || !Object.hasOwn(value, 'query') || typeof value.baseRevisionId !== 'string') {
+            throw new Error('Scope preview requires exactly baseRevisionId and query.');
+          }
+          send(response, 200, backlog.scopePreview(projectId, value.baseRevisionId, value.query));
+        } else if (request.method === 'GET') send(response, 200, { scopes: backlog.savedScopes(projectId) });
+        else if (request.method === 'POST') {
+          const value = await readJson(request, 32 * 1024);
+          if (!isRecord(value) || Object.keys(value).length !== 4 || typeof value.id !== 'string' || typeof value.name !== 'string'
+              || !Object.hasOwn(value, 'query') || (value.expectedVersion !== null && typeof value.expectedVersion !== 'string')) {
+            throw new Error('Saving a scope requires exactly id, name, query and expectedVersion.');
+          }
+          send(response, 200, { scope: backlog.saveModelScope({ projectId, id: value.id, name: value.name,
+            query: parseModelScopeQuery(value.query), expectedVersion: value.expectedVersion }) });
+        } else send(response, 405, { error: 'Saved scopes require GET or POST.' });
+      } catch (error) {
+        send(response, error instanceof ScopeStoreConflict || error instanceof BacklogConflict ? 409 : 400,
+          { error: error instanceof Error ? error.message : 'Scope unavailable.' });
+      }
+      return;
+    }
     const savedProjectRoute = /^\/api\/projects\/([^/]+)(\/history)?$/.exec(projectUrl.pathname);
     if (projectUrl.pathname === '/api/projects' || savedProjectRoute) {
       try {

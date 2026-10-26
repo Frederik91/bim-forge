@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
-import { RoomRepository, rectangleLayout, previewFurnishings, previewRectangle } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewFurnishings, previewRectangle, validateSnapshot } from '../src/room-model.ts';
+import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
+import type { ModelScopeQuery } from '../src/model-scope-contract.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { parseRequestActivity } from '../src/request-activity.ts';
@@ -31,6 +33,28 @@ const worker: ModelWorker = { identity: { provider: 'test', model: 'backlog-agen
   ` });
   assert.equal(output.done, true);
 } };
+
+const scopedWorker: ModelWorker = { identity: { provider: 'test', model: 'scoped-backlog-agent' }, async run(session) {
+  const input = session.input;
+  assert.ok(input && typeof input === 'object' && 'request' in input);
+  const bound = input.request;
+  assert.ok(bound && typeof bound === 'object' && 'requestId' in bound);
+  const output = await session.executeTool('run_model_script', { language: 'typescript', source: `
+    await model.scope(); await model.inspect();
+    await model.previewParameters({edits:[${bound.requestId === 'scope-new-match'
+      ? "{definitionId:'geometry-height',name:'height',value:{kind:'length',value:1000,unit:'mm'}}"
+      : "{definitionId:'inspection-interval',name:'Inspection interval',value:{kind:'duration',value:2,unit:'h'}}"}]});
+    return {kind:'propose',review:{summary:'Edit frozen parameter targets.',rationale:'Apply the explicit scoped request.',
+      constraints:'Retain all context and unrelated objects.',uncertainty:'Concept model for human review.',
+      intent:{interpretation:'Edit exactly the frozen targets.',assumptions:[],certainty:95,basis:'Explicit deterministic scoped request.'}}};
+  ` });
+  assert.equal(output.ok, true, JSON.stringify(output));
+} };
+
+function scopedRequest(repo: RoomRepository, id: string, query: ModelScopeQuery, selectedObjectIds = ['level-ground-plant']) {
+  return { requestId: id, proposalName: id, baseRevisionId: repo.head('main'), selectedObjectIds,
+    instruction: 'Edit the frozen parameter targets.', visualIntent: { kind: 'selection' }, scope: { query } };
+}
 
 function pause(signal: AbortSignal, capture: (release: () => void) => void): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -77,6 +101,81 @@ async function waitFor(queue: ChangeRequests, id: string, states = ['ready', 'ne
   }
   throw new Error(`Request ${id} did not reach ${states.join(', ')}.`);
 }
+
+test('saved scope submissions freeze once, survive restart and retain previous query revisions after saved-definition edits', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-scope-backlog-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'requests.sqlite');
+  const repo = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Durable scopes', snapshot: multiStoreySnapshot() });
+  let queue = await ChangeRequests.open(file, () => null);
+  await queue.importProject(repo.serialize());
+  const query: ModelScopeQuery = { version: 1, allOf: [{ kind: 'furniture-kind', furnitureKind: 'plant' }], anyOf: [], excludeIds: [] };
+  const saved = queue.saveModelScope({ projectId: repo.projectId, id: 'plants', name: 'All plants', query, expectedVersion: null });
+  const input = { ...scopedRequest(repo, 'scope-durable', query), scope: { query, savedScopeId: saved.id } };
+  const submitted = await queue.submit(repo.serialize(), input);
+  const frozen = queue.get(submitted.id).scope;
+  assert.equal(frozen?.targetIds.length, 3);
+  const narrower: ModelScopeQuery = { version: 1, allOf: [{ kind: 'ids', ids: ['level-attic-plant'] }], anyOf: [], excludeIds: [] };
+  queue.saveModelScope({ projectId: repo.projectId, id: saved.id, name: 'Attic only', query: narrower, expectedVersion: saved.version });
+  await assert.rejects(() => queue.submit(repo.serialize(), { ...input, requestId: 'scope-saved-mismatch', proposalName: 'scope-saved-mismatch' }), /saved scope query changed/i);
+  await queue.close();
+  queue = await ChangeRequests.open(file, () => scopedWorker); t.after(() => queue.close());
+  await waitFor(queue, submitted.id);
+  const ready = queue.get(submitted.id); assert.equal(ready.state, 'ready', ready.error ?? '');
+  assert.deepEqual(ready.scope, frozen); assert.deepEqual(ready.request.scope?.query, query);
+  assert.deepEqual(queue.savedScopes(repo.projectId)[0]?.query, narrower);
+  const proposed = await RoomRepository.restore(ready.result?.project);
+  assert.deepEqual(proposed.review(ready.request.proposalName).scope, frozen);
+  assert.ok(ready.activity.some(event => event.stage === 'inspecting'));
+  assert.deepEqual(queue.executions(submitted.id).map(record => record.evidence.disposition), ['proposal']);
+  await queue.revise(submitted.id, repo.serialize(), scopedRequest(repo, 'scope-durable-revised', narrower, ['level-attic-plant']));
+  await waitFor(queue, submitted.id);
+  const revised = queue.get(submitted.id); assert.equal(revised.state, 'ready', revised.error ?? '');
+  assert.deepEqual(revised.scope?.targetIds, ['level-attic-plant']);
+  assert.ok(revised.history[0]?.includes('scope-durable'));
+  assert.ok(revised.history[0]?.includes(JSON.stringify(query)));
+});
+
+test('new scope matches block acceptance and require a fresh review', async t => {
+  const original = multiStoreySnapshot();
+  const repo = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Scope reconciliation', snapshot: validateSnapshot({ ...original,
+    entities: original.entities.map(item => item.id === 'level-attic-plant' && item.type === 'Furniture' ? { ...item, height: 1.2 } : item) }) });
+  const queue = await ChangeRequests.open(':memory:', () => scopedWorker); t.after(() => queue.close());
+  const query: ModelScopeQuery = { version: 1, allOf: [{ kind: 'furniture-kind', furnitureKind: 'plant' },
+    { kind: 'parameter-compare', definitionId: 'geometry-height', operator: 'lt', value: { kind: 'length', value: 1100, unit: 'mm' } }], anyOf: [], excludeIds: [] };
+  const pending = await queue.submit(repo.serialize(), scopedRequest(repo, 'scope-pending', query));
+  await waitFor(queue, pending.id); assert.equal(queue.get(pending.id).state, 'ready', queue.get(pending.id).error ?? '');
+  assert.equal(queue.get(pending.id).scope?.targetIds.length, 2);
+  const attic: ModelScopeQuery = { version: 1, allOf: [{ kind: 'ids', ids: ['level-attic-plant'] }], anyOf: [], excludeIds: [] };
+  const change = await queue.submit(repo.serialize(), scopedRequest(repo, 'scope-new-match', attic, ['level-attic-plant']));
+  await waitFor(queue, change.id); assert.equal(queue.get(change.id).state, 'ready', queue.get(change.id).error ?? '');
+  await decide(queue, change.id, { action: 'accept', decisionId: 'accept-scope-new-match' });
+  assert.equal(queue.get(pending.id).state, 'needs-input');
+  await assert.rejects(() => decide(queue, pending.id, { action: 'accept', decisionId: 'accept-stale-scope' }), BacklogConflict);
+  const current = await RoomRepository.restore(queue.project(repo.projectId));
+  const plant = current.view(current.head('main')).snapshot.entities.find(item => item.id === 'level-attic-plant');
+  assert.ok(plant?.type === 'Furniture'); assert.equal(plant.height, 1);
+});
+
+test('scope acceptance preserves an unrelated accepted edit on another level', async t => {
+  const repo = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Independent scope edits', snapshot: multiStoreySnapshot() });
+  const queue = await ChangeRequests.open(':memory:', () => scopedWorker); t.after(() => queue.close());
+  const ground: ModelScopeQuery = { version: 1, allOf: [{ kind: 'ids', ids: ['level-ground-plant'] }], anyOf: [], excludeIds: [] };
+  const attic: ModelScopeQuery = { version: 1, allOf: [{ kind: 'ids', ids: ['level-attic-plant'] }], anyOf: [], excludeIds: [] };
+  const a = await queue.submit(repo.serialize(), scopedRequest(repo, 'scope-ground-independent', ground));
+  const b = await queue.submit(repo.serialize(), scopedRequest(repo, 'scope-attic-independent', attic, ['level-attic-plant']));
+  await waitFor(queue, a.id); await waitFor(queue, b.id);
+  assert.equal(queue.get(a.id).state, 'ready', queue.get(a.id).error ?? '');
+  assert.equal(queue.get(b.id).state, 'ready', queue.get(b.id).error ?? '');
+  await decide(queue, b.id, { action: 'accept', decisionId: 'accept-scope-attic' });
+  assert.equal(queue.get(a.id).state, 'ready', queue.get(a.id).error ?? '');
+  await decide(queue, a.id, { action: 'accept', decisionId: 'accept-scope-ground' });
+  const current = await RoomRepository.restore(queue.project(repo.projectId));
+  for (const id of ['level-ground-plant', 'level-attic-plant']) {
+    assert.deepEqual(current.view(current.head('main')).snapshot.entities.find(item => item.id === id)?.parameters,
+      [{ definitionId: 'inspection-interval', name: 'Inspection interval', value: { kind: 'duration', value: 2, unit: 'h' } }]);
+  }
+});
 
 test('submission is durable before acknowledgement, idempotent and independent of worker availability', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-backlog-'));

@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { ModelScripts } from './model-script.ts';
-import { prepareModelProposal, MODEL_PROPOSAL_TOOLS } from './model-proposal.ts';
+import { prepareModelProposal, MODEL_PROPOSAL_TOOLS, validateModelProposalRequest } from './model-proposal.ts';
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
-import { RoomRepository, rectangleLayout, diffSnapshots } from './room-model.ts';
+import { RoomRepository, rectangleLayout, diffSnapshots, validateSnapshot } from './room-model.ts';
+import { multiStoreySnapshot } from './multi-storey-house.ts';
+import { freezeModelScope } from './model-scope.ts';
+import type { ModelScopeQuery } from './model-scope-contract.ts';
 import { createResidentialProject } from './residential-floor.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { MODEL_INTENT_GUIDANCE, parseIntentAssessment } from './model-intent.ts';
@@ -271,4 +274,98 @@ test('returned snapshots, forged evidence, empty deltas and legacy executable au
     assert.equal((await session.executeTool('run_model_script', { language: 'typescript', source: propose })).ok, false);
   })), /without proposing|lost execution/);
   assert.equal(repo.branches().length, 1);
+});
+
+test('a scoped room script inspects only frozen working context, fences old tools and preserves supported devices and unrelated metadata', async () => {
+  const source = await createResidentialProject('Scoped room');
+  const original = source.view(source.head('main')).snapshot;
+  const repo = await RoomRepository.createProject({ projectId: source.projectId, name: source.name,
+    snapshot: validateSnapshot({ ...original, entities: original.entities.map(item => item.id === 'living-table'
+      ? { ...item, parameters: [{ definitionId: 'inspection-interval', name: 'Inspection interval', value: { kind: 'duration', value: 30, unit: 'min' } }] } : item) }) });
+  const base = repo.view(repo.head('main')).snapshot;
+  const query: ModelScopeQuery = { version: 1, allOf: [{ kind: 'in-spaces', spaceIds: ['room-office'] },
+    { kind: 'entity-type', entityType: 'Furniture' }], anyOf: [], excludeIds: [] };
+  const input = { ...request(repo, 'scope-room'), selectedObjectIds: ['room-office'], scope: { query }, instruction: 'Move only the office chair 100 mm east.' };
+  const living = base.entities.filter(item => item.type === 'Furniture' && item.id.startsWith('living-'))
+    .map(item => item.id === 'living-plant' ? { ...item, height: 1.1 } : item);
+  const activity: string[] = [];
+  const result = await prepareModelProposal(repo, input, worker(async session => {
+    const output = await session.executeTool('run_model_script', { language: 'typescript', source: `
+      const binding = await model.scope();
+      if (!binding.scope || !binding.scope.targetIds.includes('office-chair')) throw new Error('Missing frozen targets.');
+      const ids = [...binding.scope.targetIds,...binding.scope.contextIds,...binding.scope.dependentIds,...binding.scope.writableIds];
+      if (binding.graph.entities.some(item => !ids.includes(item.id))) throw new Error('Full-project read escaped scope.');
+      const view = await model.inspect();
+      if (view.model.entities.map(item => item.id).join() !== binding.graph.entities.map(item => item.id).join()) throw new Error('Inspection escaped working graph.');
+      let refused = false;
+      try { await model.previewRoomFurnishings({roomId:'room-living',furnishings:${JSON.stringify(living)}}); }
+      catch (error) { if (!(error instanceof Error) || error.name !== 'ModelValidationError') throw error; refused = true; }
+      if (!refused) throw new Error('Old room tool escaped write fence.');
+      const room = view.placement.rooms.find(item => item.id === 'room-office');
+      if (!room) throw new Error('Missing room context.');
+      const furnishings = view.model.entities.filter(item => item.type === 'Furniture' && room.entityIds.includes(item.id))
+        .map(item => ({id:item.id,type:item.type,name:item.name,kind:item.kind,position:item.id === 'office-chair' ? [item.position[0]+.1,item.position[1]] : item.position,
+          width:item.width,depth:item.depth,height:item.height,rotationDeg:item.rotationDeg,supportId:item.supportId}));
+      await model.previewRoomFurnishings({roomId:room.id,furnishings});
+      ${propose}
+    ` });
+    assert.equal(output.ok, true, JSON.stringify(output));
+  }), event => activity.push(event.stage));
+  assert.equal(result.status, 'ready');
+  const stored = result.repository.review('scope-room');
+  assert.deepEqual(stored.scope, freezeModelScope({ graph: base, query, baseRevisionId: repo.head('main') }));
+  assert.ok(activity.includes('validation-failed')); assert.ok(activity.includes('validated'));
+  assert.deepEqual(stored.scriptExecutions?.[0]?.calls.map(call => call.method),
+    ['model.scope', 'model.inspect', 'model.previewRoomFurnishings', 'model.previewRoomFurnishings']);
+  const after = result.repository.view(stored.proposalRevisionId).snapshot;
+  assert.deepEqual(diffSnapshots(base, after).entities.modified.map(item => item.id), ['office-chair']);
+  assert.deepEqual(after.entities.find(item => item.id === 'living-table'), base.entities.find(item => item.id === 'living-table'));
+  assert.deepEqual(after.entities.find(item => item.id === 'office-monitor'), base.entities.find(item => item.id === 'office-monitor'));
+  assert.deepEqual(validateSnapshot(after), after);
+  assert.equal(result.repository.head('main'), repo.head('main'));
+});
+
+test('a real building-wide type script edits frozen plant dimensions in millimetres and typed duration metadata', async () => {
+  const repo = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Global scoped type', snapshot: multiStoreySnapshot() });
+  const query: ModelScopeQuery = { version: 1, allOf: [{ kind: 'furniture-kind', furnitureKind: 'plant' }], anyOf: [], excludeIds: [] };
+  const input = { ...request(repo, 'scope-parameter'), selectedObjectIds: ['level-ground-plant'], scope: { query }, instruction: 'Set every plant proxy height to 1200 mm and inspection interval to 2 h.' };
+  const result = await prepareModelProposal(repo, input, worker(async session => {
+    const output = await session.executeTool('run_model_script', { language: 'typescript', source: `
+      const scoped = await model.scope(); const view = await model.inspect();
+      if (scoped.scope?.targetIds.length !== 3) throw new Error('Expected one plant per level.');
+      if (!view.parameters.some(item => item.parameters.some(parameter => parameter.definitionId === 'geometry-height' && parameter.value.kind === 'length' && parameter.value.unit === 'm'))) throw new Error('Missing typed units.');
+      await model.previewParameters({edits:[{definitionId:'geometry-height',name:'height',value:{kind:'length',value:1200,unit:'mm'}},
+        {definitionId:'inspection-interval',name:'Inspection interval',value:{kind:'duration',value:2,unit:'h'}}]});
+      const live = await model.scope();
+      if (live.graph.entities.some(item => item.type === 'Furniture' && item.kind === 'plant' && item.height !== 1.2)) throw new Error('Stale working graph.');
+      ${propose}
+    ` });
+    assert.equal(output.ok, true, JSON.stringify(output));
+  }));
+  const reviewRecord = result.repository.review('scope-parameter');
+  assert.equal(reviewRecord.scope?.targetIds.length, 3);
+  const before = repo.view(repo.head('main')).snapshot;
+  const after = result.repository.view(reviewRecord.proposalRevisionId).snapshot;
+  const modified = diffSnapshots(before, after).entities.modified;
+  assert.equal(modified.length, 3);
+  for (const item of after.entities.filter(item => item.type === 'Furniture' && item.kind === 'plant')) {
+    assert.equal(item.height, 1.2);
+    assert.deepEqual(item.parameters, [{ definitionId: 'inspection-interval', name: 'Inspection interval', value: { kind: 'duration', value: 2, unit: 'h' } }]);
+  }
+  const accepted = result.repository.accept('scope-parameter', { decisionId: 'scope-parameter-human', actor: 'Human reviewer' });
+  assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
+});
+
+test('scoped request validation rejects guest write authority and mismatched frozen script bindings before execution', async () => {
+  const repo = await RoomRepository.create('No forged scope');
+  const query: ModelScopeQuery = { version: 1, allOf: [{ kind: 'ids', ids: ['door-entry'] }], anyOf: [], excludeIds: [] };
+  const input = { ...request(repo, 'scope-forgery'), scope: { query, writableIds: ['wall-south'] } };
+  assert.throws(() => validateModelProposalRequest(repo, input), /scoped request/i);
+  const scripts = new ModelScripts();
+  try {
+    const scope = freezeModelScope({ graph: repo.view(repo.head('main')).snapshot, query, baseRevisionId: repo.head('main') });
+    await assert.rejects(() => scripts.run({ base: repo.view(repo.head('main')).snapshot,
+      binding: { baseRevisionId: repo.head('main'), selectedObjectIds: [], visualIntent: { kind: 'selection' }, scope: { ...scope, writableIds: [] } },
+      language: 'typescript', source: `${widen()} ${propose}`, signal: new AbortController().signal, remainingHostCalls: 16, onActivity: () => {} }), /scope/i);
+  } finally { await scripts.dispose(); }
 });
