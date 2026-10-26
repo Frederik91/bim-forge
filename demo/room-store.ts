@@ -136,7 +136,7 @@ export class ProjectServerError extends Error {
 // Direct HTTP boundary for the fixed project API. No client-side accepted-state writes.
 export class ProjectClient {
   readonly #fetch: typeof fetch;
-  constructor(request: typeof fetch = globalThis.fetch) { this.#fetch = request; }
+  constructor(request: typeof fetch = (input, options) => globalThis.fetch(input, options)) { this.#fetch = request; }
 
   async #json(path: string, options: RequestInit = {}): Promise<unknown> {
     let response: Response;
