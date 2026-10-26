@@ -174,6 +174,20 @@ export class ProjectClient {
     return this.#repository(await this.#json(`/api/projects/${encodeURIComponent(projectId)}`), { projectId });
   }
 
+  async reopen(input: { rememberedProjectId: string | null; choices: readonly ProjectSummary[] }): Promise<RoomRepository | null> {
+    const candidates = new Set([
+      ...(input.rememberedProjectId === null ? [] : [input.rememberedProjectId]),
+      ...input.choices.map(choice => choice.projectId),
+    ]);
+    for (const projectId of candidates) {
+      try { return await this.read(projectId); }
+      catch (error) {
+        if (!(error instanceof ProjectServerError) || error.status !== 404) throw error;
+      }
+    }
+    return null;
+  }
+
   async register(project: RoomRepository): Promise<RoomRepository> {
     const value = await this.#json('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ project: project.serialize() }) });

@@ -905,7 +905,7 @@ ui['start-close'].addEventListener('click', () => closeDialog(ui['start-dialog']
 ui['refresh-projects'].addEventListener('click', () => { void perform(refreshProjectChoices); });
 ui['saved-projects'].addEventListener('change', updateControls);
 ui['open-saved-project'].addEventListener('click', () => { void perform(async () => {
-  if (confirmReplacement()) await openServerProject(ui['saved-projects'].value);
+  if (confirmReplacement() && ui['saved-projects'].value) await openServerProject(await projects.read(ui['saved-projects'].value));
 }); });
 ui['retry-legacy'].addEventListener('click', () => { void perform(readLegacyRecovery); });
 ui['export-legacy'].addEventListener('click', () => {
@@ -943,11 +943,10 @@ async function refreshProjectChoices(): Promise<void> {
   } finally { updateControls(); }
 }
 
-async function openServerProject(projectId: string): Promise<void> {
-  if (!projectId) return;
-  const next = await projects.read(projectId);
+async function openServerProject(next: RoomRepository): Promise<void> {
   await recognizeHousePilot(next);
   displayAccepted(next);
+  if (projectChoices.some(choice => choice.projectId === next.projectId)) ui['saved-projects'].value = next.projectId;
   closeDialog(ui['start-dialog']); showPage('project');
   await refreshBacklog();
   status('Latest accepted model reopened from the server. Pending work remains in the backlog; unsent sketches are not saved.');
@@ -2535,8 +2534,8 @@ async function initialize() {
     await refreshProjectChoices();
     let remembered: string | null = null;
     try { remembered = localStorage.getItem(LAST_PROJECT); } catch { /* Optional selection memory. */ }
-    const projectId = remembered ?? projectChoices[0]?.projectId;
-    if (projectId) await openServerProject(projectId);
+    const next = await projects.reopen({ rememberedProjectId: remembered, choices: projectChoices });
+    if (next) await openServerProject(next);
     else { needsStart = true; status('Ready. Create or import a project to save it on this server.'); }
   } catch (error) {
     needsStart = true;

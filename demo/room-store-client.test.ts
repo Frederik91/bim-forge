@@ -6,6 +6,82 @@ import type { ProjectHistoryEntry } from './versioned-project-contract.ts';
 
 function json(value: unknown, status = 200): Response { return Response.json(value, { status }); }
 
+function choice(project: RoomRepository) {
+  return { projectId: project.projectId, name: project.name, headRevisionId: project.head('main'), recordedAt: 1234 };
+}
+
+test('startup falls back from a missing remembered server project to an available listed project', async () => {
+  const available = await RoomRepository.create('Available server project');
+  const choices = [choice(available)];
+  const calls: string[] = [];
+  const client = new ProjectClient(async input => {
+    const path = String(input); calls.push(path);
+    return path === '/api/projects/missing-remembered' ? json({ error: 'missing' }, 404) : json({ project: available.serialize() });
+  });
+  const legacyBytes = '  {"recovery":"unchanged"}\r\n';
+  const record = { generation: 3, text: legacyBytes };
+  const reopened = await client.reopen({ rememberedProjectId: 'missing-remembered', choices });
+  assert.equal(reopened?.serialize(), available.serialize());
+  assert.deepEqual(calls, ['/api/projects/missing-remembered', `/api/projects/${available.projectId}`]);
+  assert.deepEqual(choices, [choice(available)], 'The saved project selector retains its choices.');
+  assert.deepEqual(parseLegacyRecord(record), { generation: 3, text: legacyBytes });
+});
+
+test('startup reads an existing remembered project omitted from the bounded list directly', async () => {
+  const remembered = await RoomRepository.create('Remembered beyond the list');
+  const available = await RoomRepository.create('Listed project');
+  const calls: string[] = [];
+  const client = new ProjectClient(async input => { calls.push(String(input)); return json({ project: remembered.serialize() }); });
+  const reopened = await client.reopen({ rememberedProjectId: remembered.projectId, choices: [choice(available)] });
+  assert.equal(reopened?.serialize(), remembered.serialize());
+  assert.deepEqual(calls, [`/api/projects/${remembered.projectId}`]);
+});
+
+test('startup surfaces network, server and model validation failures while saved choices remain usable', async () => {
+  const available = await RoomRepository.create('Selectable after error');
+  const failures: Array<() => Response> = [
+    ...[401, 409, 500, 503].map(status => () => json({ error: 'refused' }, status)),
+    () => { throw new Error('network disconnected'); },
+    () => new Response('invalid JSON'),
+    () => json({ project: '{invalid model' }),
+    () => json({ project: available.serialize() }),
+  ];
+  for (const failure of failures) {
+    const calls: string[] = [];
+    const choices = [choice(available)];
+    const client = new ProjectClient(async input => {
+      const path = String(input); calls.push(path);
+      return path === '/api/projects/remembered' ? failure() : json({ project: available.serialize() });
+    });
+    await assert.rejects(client.reopen({ rememberedProjectId: 'remembered', choices }));
+    assert.deepEqual(calls, ['/api/projects/remembered'], 'Only a 404 may trigger automatic fallback.');
+    assert.equal((await client.read(choices[0].projectId)).serialize(), available.serialize(), 'A user can still select a valid listed project.');
+    assert.deepEqual(choices, [choice(available)]);
+  }
+});
+
+test('startup skips disappeared listed projects once and returns empty when all are missing', async () => {
+  const available = await RoomRepository.create('Available after list race');
+  const missing = { ...choice(available), projectId: 'missing' };
+  const calls: string[] = [];
+  const client = new ProjectClient(async input => {
+    const path = String(input); calls.push(path);
+    return path === '/api/projects/missing' ? json({ error: 'missing' }, 404) : json({ project: available.serialize() });
+  });
+  assert.equal((await client.reopen({ rememberedProjectId: 'missing', choices: [missing, choice(available)] }))?.projectId, available.projectId);
+  assert.deepEqual(calls, ['/api/projects/missing', `/api/projects/${available.projectId}`]);
+  assert.equal(await client.reopen({ rememberedProjectId: 'missing', choices: [missing] }), null);
+});
+
+test('startup with no remembered identity opens the first listed project or leaves creation available', async () => {
+  const available = await RoomRepository.create('First project');
+  let calls = 0;
+  const client = new ProjectClient(async () => { calls += 1; return json({ project: available.serialize() }); });
+  assert.equal((await client.reopen({ rememberedProjectId: null, choices: [choice(available)] }))?.projectId, available.projectId);
+  assert.equal(await client.reopen({ rememberedProjectId: null, choices: [] }), null);
+  assert.equal(calls, 1);
+});
+
 async function reviewedProject() {
   const base = await RoomRepository.create('Recovery study');
   const snapshot = base.view(base.head('main')).snapshot;
