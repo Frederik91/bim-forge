@@ -217,7 +217,7 @@ interface RepositoryStateV2 {
   reviews: ProposalReview[];
 }
 
-type RepositoryState = RepositoryStateV1 | RepositoryStateV2;
+export type RepositoryState = RepositoryStateV1 | RepositoryStateV2;
 type ModelItem = Entity | HostingRelationship;
 
 export interface CollectionChanges<T extends ModelItem> {
@@ -1444,6 +1444,9 @@ export class RoomRepository {
       ...collectionConflicts('relationship', base.relationships, left.relationships, right.relationships),
     ]);
   }
+
+  /** Validated, deeply frozen state for durable storage; callers cannot author through this view. */
+  persistence(): RepositoryState { return this.#state; }
 
   serialize(): string { return canonical(this.#state); }
 }
