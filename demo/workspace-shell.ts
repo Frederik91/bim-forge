@@ -33,8 +33,8 @@ export class WorkspaceShell {
     this.contextToggle = button('workspace-context-toggle');
     this.heading = required('workspace-context-heading');
     this.toggleLabel = required('workspace-context-toggle-label');
-    this.navigationToggle.addEventListener('click', () => this.setPanel('navigation', this.navigation.hidden));
-    this.contextToggle.addEventListener('click', () => this.setPanel('context', this.context.hidden));
+    this.navigationToggle.addEventListener('click', () => this.setPanel('navigation', this.navigation.hidden === true));
+    this.contextToggle.addEventListener('click', () => this.setPanel('context', this.context.hidden === true));
     button('workspace-navigation-close').addEventListener('click', () => this.close('navigation'));
     button('workspace-context-close').addEventListener('click', () => this.close('context'));
     document.addEventListener('keydown', event => {
