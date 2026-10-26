@@ -5,7 +5,7 @@ import {
   diffSnapshots, FURNITURE_KINDS, previewFurnishings, previewRectangle, previewRoomFurnishings,
   rectangleLayout, validateSnapshot, previewAssets,
 } from './room-model.ts';
-import type { EntityId, ModelDelta, ModelSnapshot } from './room-model.ts';
+import type { EntityId, ModelDelta, ModelSnapshot, ModelGraph } from './room-model.ts';
 import type { VisualRequest } from './visual-request.ts';
 import type { ActivityUpdate } from './request-activity.ts';
 import { parseScriptExecutionEvidence, MAX_SCRIPT_HOST_CALLS } from './script-evidence.ts';
@@ -18,6 +18,12 @@ import { FloorLayoutSchema, BuildingLayoutSchema } from './building-schema.ts';
 import { levels, entityLevel, entityElevation, levelView } from './building-levels.ts';
 import { AssetFamilySchema, AssetInstanceSchema, AssetEditSchema } from './asset-family.ts';
 import type { AuthoringScope } from './request-sources.ts';
+import { ModelParametersSchema, ModelParameterSchema } from './model-scope-contract.ts';
+import { parseClarification } from './request-conversation.ts';
+import type { Clarification } from './request-conversation.ts';
+import type { FrozenModelScope } from './model-scope-contract.ts';
+import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
+import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -45,27 +51,34 @@ const relationships = Type.Array(Type.Object({
   id: identifier, type: Type.Literal('hosted-by'), source: identifier, target: identifier, offset: Type.Number(),
 }), { maxItems: 100 });
 // Read contract only: core validation enforces required V2 ownership before staging/persistence.
+const parameterFields = { parameters: Type.Optional(ModelParametersSchema) };
 const entity = Type.Union([
-  Type.Object({ ...wall.properties, levelId: Type.Optional(identifier) }),
-  Type.Object({ ...equipment.properties, levelId: Type.Optional(identifier) }),
-  Type.Object({ ...furniture.properties, levelId: Type.Optional(identifier) }),
-  door, window, space,
-  Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
-  Type.Object({ id: identifier, type: Type.Literal('Slab'), name, levelId: identifier, bounds, thickness: Type.Number() }),
-  Type.Object({ id: identifier, type: Type.Literal('Stair'), name, fromLevelId: identifier, toLevelId: identifier,
+  Type.Object({ ...wall.properties, ...parameterFields, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...equipment.properties, ...parameterFields, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...furniture.properties, ...parameterFields, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...door.properties, ...parameterFields }), Type.Object({ ...window.properties, ...parameterFields }), Type.Object({ ...space.properties, ...parameterFields }),
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Slab'), name, levelId: identifier, bounds, thickness: Type.Number() }),
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Stair'), name, fromLevelId: identifier, toLevelId: identifier,
     start: point, end: point, width: Type.Number(), steps: Type.Integer() }),
-  Type.Object({ id: identifier, type: Type.Literal('Roof'), name, levelId: identifier, bounds, thickness: Type.Number(), profile: Type.Union([
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Roof'), name, levelId: identifier, bounds, thickness: Type.Number(), profile: Type.Union([
     Type.Object({ kind: Type.Literal('flat'), height: Type.Number() }),
     Type.Object({ kind: Type.Literal('gable'), eaveHeight: Type.Number(), ridgeHeight: Type.Number(), ridgeAxis: Type.Union([Type.Literal('x'), Type.Literal('y')]) }),
   ]) }),
-  AssetFamilySchema, AssetInstanceSchema,
+  Type.Object({ ...AssetFamilySchema.properties, ...parameterFields }), Type.Object({ ...AssetInstanceSchema.properties, ...parameterFields }),
 ], { title: 'ModelEntity' });
 const snapshot = Type.Object({ version: Type.Optional(Type.Literal(2)), units: Type.Literal('m'),
   entities: Type.Array(entity, { maxItems: 100 }), relationships }, { title: 'ModelSnapshot', additionalProperties: false });
+// The guest only reads this host-validated query. ScriptBox's closed read schema
+// cannot express the wire schema's uniqueItems constraint; no authority is parsed here.
+const scopeReadIds = Type.Array(identifier, { maxItems: 100 });
+const scopeRead = Type.Object({ version: Type.Literal(1), baseRevisionId: Type.String(), query: Type.Unknown(),
+  targetIds: scopeReadIds, contextIds: scopeReadIds, dependentIds: scopeReadIds, writableIds: scopeReadIds, relationshipIds: scopeReadIds });
 const collectionChanges = Type.Object({ added: Type.Array(identifier), removed: Type.Array(identifier), modified: Type.Array(identifier) });
 const changes = Type.Object({ entities: collectionChanges, relationships: collectionChanges });
 const inspection = Type.Object({
   revisionId: Type.String(), selectedObjectIds: Type.Array(identifier), model: snapshot,
+  parameters: Type.Array(Type.Object({ entityId: identifier, parameters: Type.Array(ModelParameterSchema, { maxItems: 32 }) }), { maxItems: 100 }),
   placement: Type.Object({
     levels: Type.Array(Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() })),
     selectedLevelId: Type.Union([identifier, Type.Null()]),
@@ -73,7 +86,7 @@ const inspection = Type.Object({
     assetFamilies: Type.Array(Type.Object({ familyId: identifier, instanceIds: Type.Array(identifier, { maxItems: 32 }) }), { maxItems: 8 }),
     assetInstances: Type.Array(Type.Object({ entityId: identifier, familyId: identifier,
       roomId: Type.Union([identifier, Type.Null()]), levelId: Type.Union([identifier, Type.Null()]), elevation: Type.Number() }), { maxItems: 32 }),
-    layout: Type.Union([layout, Type.Null()]), floorBounds: bounds,
+    layout: Type.Union([layout, Type.Null()]), floorBounds: Type.Union([bounds, Type.Null()]),
     rooms: Type.Array(Type.Object({ ...space.properties, clearBounds: bounds, entityIds: Type.Array(identifier) })),
     doorConnections: Type.Array(Type.Object({ door, roomIds: Type.Array(identifier), exterior: Type.Boolean() })),
     coordinates: Type.String(), suggestedDimensions: Type.Object({ desk: Type.Array(Type.Number()), monitor: Type.Array(Type.Number()),
@@ -86,13 +99,14 @@ export interface ModelScriptBinding {
   selectedObjectIds: readonly EntityId[];
   visualIntent: VisualRequest;
   authoringScope?: AuthoringScope;
+  scope?: FrozenModelScope;
 }
 export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment }
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
   | { kind: 'proposal'; snapshot: ModelSnapshot; review: ScriptReviewText; evidence: ScriptExecutionEvidence }
-  | { kind: 'declined'; reason: string; uncertainty: string; intent?: IntentAssessment; evidence: ScriptExecutionEvidence }
+  | { kind: 'declined'; reason: string; uncertainty: string; clarification?: Clarification; intent?: IntentAssessment; evidence: ScriptExecutionEvidence }
   | { kind: 'failed'; diagnostic: ScriptDiagnostic; evidence: ScriptExecutionEvidence };
 
 interface Draft {
@@ -104,6 +118,7 @@ interface Draft {
 }
 interface RunInput {
   base: ModelSnapshot;
+  initialDraft?: ModelSnapshot;
   binding: ModelScriptBinding;
   source: string;
   language: 'javascript' | 'typescript';
@@ -136,6 +151,7 @@ function text(value: unknown, maximum: number): string {
 function decision(value: unknown):
   | { kind: 'observe'; observation: JsonValue }
   | { kind: 'propose'; review: ScriptReviewText }
+  | { kind: 'clarify'; clarification: Clarification }
   | { kind: 'decline'; reason: string; uncertainty: string; intent?: IntentAssessment } {
   if (!record(value)) throw new Error('Return an observe, propose or decline decision.');
   if (value.kind === 'observe') {
@@ -149,6 +165,10 @@ function decision(value: unknown):
     return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
       constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
       intent: parseIntentAssessment(value.review.intent) } };
+  }
+  if (value.kind === 'clarify') {
+    fields(value, ['kind', 'question', 'options']);
+    return { kind: 'clarify', clarification: parseClarification({ question: value.question, options: value.options }) };
   }
   if (value.kind === 'decline') {
     const hasIntent = Object.hasOwn(value, 'intent');
@@ -165,10 +185,27 @@ function jsonValue(value: unknown): JsonValue {
   throw new Error('Invalid observation value.');
 }
 
+/** A live read projection; never validated or persisted as a complete project. */
+export function modelWorkingGraph(graph: ModelGraph, scope?: FrozenModelScope): Omit<ModelGraph, 'entities' | 'relationships'> & {
+  entities: ModelGraph['entities'][number][]; relationships: ModelGraph['relationships'][number][];
+} {
+  if (!scope) return { ...graph, entities: [...graph.entities], relationships: [...graph.relationships] };
+  const ids = new Set([...scope.targetIds, ...scope.contextIds, ...scope.dependentIds, ...scope.writableIds]);
+  // New variant definitions are derived resources of writable occurrences, never extra targets.
+  for (const entity of graph.entities) if (entity.type === 'AssetInstance' && scope.writableIds.includes(entity.id)) ids.add(entity.familyId);
+  const links = new Set(scope.relationshipIds);
+  return { ...(graph.version === 2 ? { version: 2 } : {}), units: graph.units,
+    entities: graph.entities.filter(item => ids.has(item.id)),
+    relationships: graph.relationships.filter(link => links.has(link.id) && ids.has(link.source) && ids.has(link.target)) };
+}
+
 function stage(draft: Draft, operation: () => ModelSnapshot, revoked: () => void) {
   draft.onActivity({ stage: 'validating', message: 'Testing a scripted model change against the model and placement validators.' });
   let candidate: ModelSnapshot;
-  try { candidate = operation(); }
+  try {
+    candidate = operation();
+    if (draft.binding.scope) assertModelScopeWrites({ before: draft.base, after: candidate, binding: draft.binding.scope });
+  }
   catch (error) {
     draft.onActivity({ stage: 'validation-failed', message: 'A scripted change failed model validation. Its draft is unchanged; the script can correct it.' });
     throw new ScriptApiError({ name: 'ModelValidationError', message: publicMessage(error instanceof Error ? error.message : 'Invalid model change.') });
@@ -176,10 +213,10 @@ function stage(draft: Draft, operation: () => ModelSnapshot, revoked: () => void
   revoked(); draft.signal.throwIfAborted();
   draft.snapshot = candidate;
   draft.onActivity({ stage: 'validated', message: 'Scripted change passed deterministic validation. Accepted model remains unchanged.' });
-  return { model: candidate, changes: summarizeModelDelta(diffSnapshots(draft.base, candidate)) };
+  return { model: modelWorkingGraph(candidate, draft.binding.scope), changes: summarizeModelDelta(diffSnapshots(draft.base, candidate)) };
 }
 
-function selectedLevel(current: ModelSnapshot, binding: ModelScriptBinding) {
+function selectedLevel(current: ModelGraph, binding: ModelScriptBinding) {
   const selected = current.entities.filter((item) => binding.selectedObjectIds.includes(item.id));
   const explicit = selected.filter((item) => item.type === 'Level');
   if (explicit.length) return explicit.length === 1 ? explicit[0] : null;
@@ -202,22 +239,38 @@ function selectedLevel(current: ModelSnapshot, binding: ModelScriptBinding) {
 
 const api = createApiKit<Draft>();
 const model = api.namespace({ name: 'model', description: 'Read a bound model and stage validated changes in this script only. Nothing here accepts or saves a project.', methods: {
+  scope: api.method({ summary: 'Read the frozen request scope and live working graph. Context is read-only; this graph is not a complete project.',
+    effect: 'read', result: Type.Object({ scope: Type.Union([scopeRead, Type.Null()]), graph: snapshot }),
+    handler: (_args, call) => {
+      call.context.onActivity({ stage: 'inspecting', message: 'Inspecting frozen scope targets, read-only context, dependencies and write authority.' });
+      return { scope: call.context.binding.scope ?? null, graph: modelWorkingGraph(call.context.snapshot, call.context.binding.scope) };
+    } }),
+  previewParameters: api.method({ summary: 'Stage typed parameter edits on exactly the frozen target IDs, retaining context and unrelated objects.',
+    description: 'Requires a model scope. Supply edits with definitionId, name and typed value including units. Built-in geometry uses existing support, hosting, family and placement validators. This private draft never grants approval.',
+    effect: 'draft-write', params: { input: Type.Object({ edits: ModelParametersSchema }, { additionalProperties: false }) }, result: Type.Object({ model: snapshot, changes }),
+    handler: ({ input }, call) => stage(call.context, () => {
+      const scope = call.context.binding.scope;
+      if (!scope) throw new Error('Parameter editing requires a frozen model scope.');
+      return applyModelParameterEdits({ snapshot: call.context.snapshot, targetIds: scope.targetIds, edits: input.edits });
+    }, () => call.throwIfRevoked()) }),
   inspect: api.method({ summary: 'Inspect the current draft, selected identities, room membership and placement constraints.', effect: 'read', result: inspection,
     handler: (_args, call) => {
-      const draft = call.context; const current = draft.snapshot;
+      const draft = call.context; const current = modelWorkingGraph(draft.snapshot, draft.binding.scope);
       const available = levels(current);
       const selected = selectedLevel(current, draft.binding);
       const plans = available.length ? available.map((level) => levelView(current, level.id)) : [current];
       const boundPlan = selected ? levelView(current, selected.id) : current;
       draft.onActivity({ stage: 'inspecting', message: 'Inspecting the bound model, selected identities and room relationships from the script.' });
       return { revisionId: draft.binding.baseRevisionId, selectedObjectIds: [...draft.binding.selectedObjectIds], model: current,
+        parameters: current.entities.map(item => ({ entityId: item.id, parameters: modelParameters(item) })),
         placement: { levels: available, selectedLevelId: selected?.id ?? null,
           entities: current.entities.map((item) => ({ entityId: item.id, levelId: entityLevel(current, item)?.id ?? null, elevation: entityElevation(current, item) })),
           assetFamilies: current.entities.filter((item) => item.type === 'AssetFamily').map((family) => ({ familyId: family.id,
             instanceIds: current.entities.filter((item) => item.type === 'AssetInstance' && item.familyId === family.id).map((item) => item.id) })),
           assetInstances: current.entities.filter((item) => item.type === 'AssetInstance').map((item) => ({ entityId: item.id, familyId: item.familyId,
             roomId: entitySpace(current, item)?.id ?? null, levelId: entityLevel(current, item)?.id ?? null, elevation: entityElevation(current, item) })),
-          layout: spaces(current).length || current.version === 2 ? null : rectangleLayout(current), floorBounds: floorBounds(boundPlan),
+          layout: draft.binding.scope || spaces(current).length || current.version === 2 ? null : rectangleLayout(current),
+          floorBounds: !draft.binding.scope && boundPlan.entities.some(item => item.type === 'Wall') ? floorBounds(boundPlan) : null,
           rooms: plans.flatMap((plan) => spaces(plan).map((room) => ({ ...room, clearBounds: clearSpaceBounds(plan, room),
             entityIds: plan.entities.filter((item) => entitySpace(plan, item)?.id === room.id).map((item) => item.id) }))),
           doorConnections: plans.flatMap((plan) => spaces(plan).length ? doorConnections(plan) : []),
@@ -262,7 +315,9 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
 } });
 
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
-  'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base. ' +
+  'For scoped requests, await model.scope() returns {scope,graph}: immutable target/context/dependent/writable IDs and a live partial working graph. Context is never write authority. model.inspect and mutation results use this same context. It is not a standalone valid project. ' +
+  'Call model.previewParameters({edits:[{definitionId,name,value}]}) to edit frozen targets with explicit typed units. All mutation tools enforce frozen write limits; query matches never expand during a proposal. Changed membership or dependencies require a fresh human review. ' +
+  'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base or the supplied prior proposal draft for a conversation continuation. ' +
   'placement.levels lists stable levels and world elevations; placement.selectedLevelId binds a selected Level, spatial reference or unambiguous selected-object owner. ' +
   'placement.entities supplies entityId, levelId and world floor-base elevation. placement.rooms supplies levelId and entityIds computed within that level. ' +
   'placement.assetFamilies maps reusable family IDs to instance IDs; placement.assetInstances resolves their room, level and floor elevation. Complete recipes and placements remain in model.entities. Family definitions are nonspatial read dependencies. ' +
@@ -291,7 +346,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'Roof clearance and stair geometry are concept evidence, never structural, headroom or building-code certification. ' +
   'Monitor/laptop supportId must refer to a desk/table. No implicit workstation or proximity group exists. ' +
   'Return {kind:"observe",observation:value}, {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}}, ' +
-  'or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
+  'or {kind:"clarify",question,options:[]} for a user question, or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
   'Only trusted application code validates the proposal, and only a separate human decision accepts it. ' + MODEL_INTENT_GUIDANCE)
   .addFile('/guides/assets.md', 'Author and reuse custom asset recipes from the user request.', [
     'Inspect the bound model first. Design a compact primitive recipe for the requested object, rather than looking for a preconfigured catalog category. The host has no built-in person family.',
@@ -338,10 +393,15 @@ export class ModelScripts {
     if (this.#runtime) await (await this.#runtime).dispose();
   }
   async run(input: RunInput): Promise<ModelScriptResult> {
+    const binding = structuredClone(input.binding);
+    if (binding.scope) {
+      if (binding.scope.baseRevisionId !== binding.baseRevisionId) throw new Error('Scope and script base revisions differ.');
+      assertModelScopeFresh({ base: input.base, current: input.base, binding: binding.scope });
+    }
     const runtime = await this.#get();
-    const draft: Draft = { base: input.base, snapshot: input.base, binding: input.binding, signal: input.signal, onActivity: input.onActivity };
+    const draft: Draft = { base: input.base, snapshot: input.initialDraft ?? input.base, binding, signal: input.signal, onActivity: input.onActivity };
     const session = runtime.createSession({ context: draft,
-      capabilities: ['model.inspect', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+      capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
         ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
         ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
       limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },
@@ -373,9 +433,11 @@ export class ModelScripts {
     try {
       const result = decision(outcome.value);
       if (result.kind === 'observe') return { kind: 'observation', observation: result.observation, evidence: evidence('observation', 'not-run', null) };
+      if (result.kind === 'clarify') return { kind: 'declined', reason: result.clarification.question, uncertainty: 'Awaiting user clarification.', clarification: result.clarification, evidence: evidence('declined', 'not-run', null) };
       if (result.kind === 'decline') return { kind: 'declined', reason: result.reason, uncertainty: result.uncertainty,
         ...(result.intent ? { intent: result.intent } : {}), evidence: evidence('declined', 'not-run', null) };
       const candidate = validateSnapshot(draft.snapshot);
+      if (binding.scope) assertModelScopeWrites({ before: input.base, after: candidate, binding: binding.scope });
       const delta = summarizeModelDelta(diffSnapshots(input.base, candidate));
       if (!Object.values(delta).some((collection) => Object.values(collection).some((ids) => ids.length))) throw new Error('The proposed model is identical to the bound revision.');
       input.signal.throwIfAborted();

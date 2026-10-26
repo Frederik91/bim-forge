@@ -9,6 +9,10 @@ import { entityLevel, levelView, levels, roofHeightAt, stairFootprint } from './
 import type { AssetFamily, AssetInstance } from './asset-family.ts';
 import { parseAssetEdit, parseAssetFamily, parseAssetInstance } from './asset-family.ts';
 import { validateAssets } from './asset-placement.ts';
+import { parseFrozenModelScope } from './model-scope-contract.ts';
+import { freezeModelScope, assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
+import type { FrozenModelScope, ParameterizedEntity } from './model-scope-contract.ts';
+import { parseCustomModelParameters, retainModelParameters } from './model-parameters.ts';
 export type { AssetFamily, AssetInstance } from './asset-family.ts';
 
 const MAX_BYTES = 256 * 1024;
@@ -35,7 +39,7 @@ export type RequestId = string & { readonly [requestIdBrand]: true };
 export type ProjectId = string & { readonly [projectIdBrand]: true };
 export type Point = [number, number];
 
-export interface Wall {
+export interface Wall extends ParameterizedEntity {
   id: EntityId;
   type: 'Wall';
   name: string;
@@ -45,7 +49,7 @@ export interface Wall {
   height: number;
 }
 
-export interface Door {
+export interface Door extends ParameterizedEntity {
   id: EntityId;
   type: 'Door';
   name: string;
@@ -53,7 +57,7 @@ export interface Door {
   height: number;
 }
 
-export interface Window {
+export interface Window extends ParameterizedEntity {
   id: EntityId;
   type: 'Window';
   name: string;
@@ -62,7 +66,7 @@ export interface Window {
   sillHeight: number;
 }
 
-export interface Equipment {
+export interface Equipment extends ParameterizedEntity {
   id: EntityId;
   type: 'Equipment';
   name: string;
@@ -76,7 +80,7 @@ export interface Equipment {
 
 export const FURNITURE_KINDS = ['desk', 'monitor', 'laptop', 'chair', 'table', 'plant', 'bed', 'sofa', 'cabinet'] as const;
 export type FurnitureKind = typeof FURNITURE_KINDS[number];
-export interface Furniture {
+export interface Furniture extends ParameterizedEntity {
   id: EntityId;
   type: 'Furniture';
   name: string;
@@ -92,17 +96,17 @@ export interface Furniture {
 }
 
 export interface Bounds { minX: number; minY: number; maxX: number; maxY: number }
-export interface Level { id: EntityId; type: 'Level'; name: string; elevation: number }
-export interface Space { id: EntityId; type: 'Space'; name: string; levelId: EntityId; bounds: Bounds }
+export interface Level extends ParameterizedEntity { id: EntityId; type: 'Level'; name: string; elevation: number }
+export interface Space extends ParameterizedEntity { id: EntityId; type: 'Space'; name: string; levelId: EntityId; bounds: Bounds }
 
-export interface Slab { id: EntityId; type: 'Slab'; name: string; levelId: EntityId; bounds: Bounds; thickness: number }
-export interface Stair {
+export interface Slab extends ParameterizedEntity { id: EntityId; type: 'Slab'; name: string; levelId: EntityId; bounds: Bounds; thickness: number }
+export interface Stair extends ParameterizedEntity {
   id: EntityId; type: 'Stair'; name: string; fromLevelId: EntityId; toLevelId: EntityId;
   start: Point; end: Point; width: number; steps: number;
 }
 export type RoofProfile = { kind: 'flat'; height: number }
   | { kind: 'gable'; eaveHeight: number; ridgeHeight: number; ridgeAxis: 'x' | 'y' };
-export interface Roof {
+export interface Roof extends ParameterizedEntity {
   id: EntityId; type: 'Roof'; name: string; levelId: EntityId;
   bounds: Bounds; thickness: number; profile: RoofProfile;
 }
@@ -196,6 +200,7 @@ export interface ProposalReview {
   intent?: IntentAssessment;
   sources?: RequestSource[];
   authoringScope?: AuthoringScope;
+  scope?: FrozenModelScope;
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
@@ -217,7 +222,7 @@ interface RepositoryStateV2 {
   reviews: ProposalReview[];
 }
 
-type RepositoryState = RepositoryStateV1 | RepositoryStateV2;
+export type RepositoryState = RepositoryStateV1 | RepositoryStateV2;
 type ModelItem = Entity | HostingRelationship;
 
 export interface CollectionChanges<T extends ModelItem> {
@@ -415,11 +420,12 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
   const hasIntent = review !== null && typeof review === 'object' && Object.hasOwn(review, 'intent');
   const hasSources = review !== null && typeof review === 'object' && Object.hasOwn(review, 'sources');
+  const hasFrozenScope = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scope');
   const hasScope = review !== null && typeof review === 'object' && Object.hasOwn(review, 'authoringScope');
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
     'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
     ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
-    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : [])]);
+    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
   const baseRevisionId = revisionIdentifier(review.baseRevisionId);
@@ -471,6 +477,8 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     if (!scriptEvidence.scriptExecutions) fail('Script reviews require execution evidence.');
     validateScriptReview(scriptEvidence.scriptExecutions, toolCalls);
   }
+  const scope = hasFrozenScope ? parseFrozenModelScope(review.scope) : undefined;
+  if (scope) assertScopeBinding(base, proposal.snapshot, scope);
   if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
   const hasApplied = review.decision !== null && typeof review.decision === 'object' && Object.hasOwn(review.decision, 'appliedRevisionId');
   fields(review.decision, ['status', 'decisionId', 'actor', ...(hasApplied ? ['appliedRevisionId'] : [])]);
@@ -495,6 +503,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
         ancestor = parent;
       }
       if (ancestor.id !== base.id) fail('The applied proposal must share its original base.');
+      if (scope) assertModelScopeFresh({ base: base.snapshot, current: onto.snapshot, binding: scope });
       if (canonical(mergeSnapshots(base.snapshot, onto.snapshot, proposal.snapshot)) !== canonical(applied.snapshot)) {
         fail('The applied revision does not match the reviewed proposal delta.');
       }
@@ -506,7 +515,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     constraints, uncertainty, worker: { provider, model, responseIds, usage: { inputTokens, outputTokens, totalTokens } },
     toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}),
     ...(hasSources ? { sources: parseRequestSources(review.sources) } : {}),
-    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), validator: 'room-graph-v1', decision,
+    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), validator: 'room-graph-v1', decision,
   });
 }
 
@@ -540,6 +549,10 @@ function parseBounds(input: JsonValue): Bounds {
 
 function parseEntity(input: JsonValue, building = false): Entity {
   if (!input || Array.isArray(input) || typeof input !== 'object') fail('Unexpected model fields.');
+  if (Object.hasOwn(input, 'parameters')) {
+    const { parameters, ...geometry } = input;
+    return { ...parseEntity(geometry, building), parameters: parseCustomModelParameters(parameters) };
+  }
   if (input.type === 'AssetFamily') return parseAssetFamily(input);
   if (input.type === 'AssetInstance') return parseAssetInstance(input);
   if (building && (input.type === 'Wall' || input.type === 'Furniture' || input.type === 'Equipment')) {
@@ -648,6 +661,16 @@ function parseRelationship(input: JsonValue): HostingRelationship {
   };
 }
 
+/** Shape-only hydration boundary; a partial graph is not an engineering-valid project. */
+export function parseModelEntity(value: unknown, building: boolean): Entity {
+  return parseEntity(copy(value), building);
+}
+
+/** Shape-only relationship hydration; endpoint existence requires validateSnapshot. */
+export function parseModelRelationship(value: unknown): HostingRelationship {
+  return parseRelationship(copy(value));
+}
+
 export function furnitureFootprint(item: Furniture): { minX: number; minY: number; maxX: number; maxY: number } {
   const sideways = item.rotationDeg === 90 || item.rotationDeg === 270;
   const width = sideways ? item.depth : item.width;
@@ -748,7 +771,8 @@ export function previewFurnishings(baseSnapshot: unknown, input: unknown): Model
   const hasAssignments = value !== null && typeof value === 'object' && Object.hasOwn(value, 'levelAssignments');
   fields(value, hasAssignments ? ['furnishings', 'levelAssignments'] : ['furnishings']);
   if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 furnishings.');
-  const furnishings = value.furnishings.map((item) => parseEntity(item));
+  const furnishings = value.furnishings.map((item) => { const entity = parseEntity(item);
+    return retainModelParameters(base.entities.find((existing) => existing.id === entity.id), entity); });
   if (furnishings.some((item) => item.type !== 'Furniture')) fail('Only furnishings can be changed by this tool.');
   const assignments = new Map<EntityId, EntityId>();
   if (hasAssignments) {
@@ -779,7 +803,8 @@ export function previewRoomFurnishings(baseSnapshot: unknown, input: unknown): M
   const room = spaces(base).find((item) => item.id === value.roomId);
   if (!room) fail('Choose a room from the bound floor.');
   if (!Array.isArray(value.furnishings) || value.furnishings.length > 32) fail('Provide up to 32 room furnishings.');
-  const incoming = value.furnishings.map((item) => parseEntity(item));
+  const incoming = value.furnishings.map((item) => { const entity = parseEntity(item);
+    return retainModelParameters(base.entities.find((existing) => existing.id === entity.id), entity); });
   const view = base.version === 2 ? levelView(base, room.levelId) : base;
   for (const item of incoming) {
     if (item.type !== 'Furniture') fail('Only furnishings can be changed by this tool.');
@@ -801,7 +826,8 @@ export function previewAssets(baseSnapshot: unknown, input: unknown): ModelSnaps
   const edit = parseAssetEdit(input);
   const byId = new Map<EntityId, Entity>(base.entities.map((item) => [item.id, item]));
   const touched = new Set<EntityId>();
-  for (const family of edit.families) {
+  for (const requestedFamily of edit.families) {
+    const family = retainModelParameters(byId.get(requestedFamily.id), requestedFamily);
     if (touched.has(family.id)) fail('Asset edit identities must be unique.');
     touched.add(family.id);
     const existing = byId.get(family.id);
@@ -815,7 +841,7 @@ export function previewAssets(baseSnapshot: unknown, input: unknown): ModelSnaps
     touched.add(instance.id);
     const existing = byId.get(instance.id);
     if (existing && existing.type !== 'AssetInstance') fail('Asset edits cannot replace protected model entities.');
-    byId.set(instance.id, instance);
+    byId.set(instance.id, retainModelParameters(existing, instance));
   }
   for (const id of edit.removeInstanceIds) {
     if (touched.has(id)) fail('An instance cannot be removed and upserted in the same edit.');
@@ -843,6 +869,12 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
     if (byEntityId.has(entity.id)) fail('Duplicate entity identifier.');
     byEntityId.set(entity.id, entity);
     entities.push(entity);
+  }
+  const parameterDefinitions = new Map<string, { name: string; kind: string }>();
+  for (const entity of byEntityId.values()) for (const parameter of entity.parameters ?? []) {
+    const previous = parameterDefinitions.get(parameter.definitionId);
+    if (previous && (previous.name !== parameter.name || previous.kind !== parameter.value.kind)) fail('Parameter definition identity and value kind must agree across the model.');
+    parameterDefinitions.set(parameter.definitionId, { name: parameter.name, kind: parameter.value.kind });
   }
   const relationIds = new Set<EntityId>();
   const hosted = new Set<EntityId>();
@@ -1061,6 +1093,14 @@ function collectionConflicts<T extends ModelItem>(
   return conflicts;
 }
 
+function assertScopeBinding(base: Revision, after: ModelSnapshot, binding: FrozenModelScope): void {
+  if (binding.baseRevisionId !== base.id) fail('Frozen scope must identify the exact proposal base revision.');
+  const expected = freezeModelScope({ graph: base.snapshot, query: binding.query, baseRevisionId: base.id });
+  if (canonical(expected) !== canonical(binding)) fail('Frozen scope evidence does not match the proposal base.');
+  assertModelScopeFresh({ base: base.snapshot, current: base.snapshot, binding });
+  assertModelScopeWrites({ before: base.snapshot, after, binding });
+}
+
 export class ProposalConflict extends Error {}
 
 function mergeCollection<T extends ModelItem>(base: T[], current: T[], proposed: T[]): T[] {
@@ -1275,6 +1315,11 @@ export class RoomRepository {
     const actor = readable(decision.actor, 'Decision actor', 80);
     if (this.head('main') === proposal.revisionId && review.decision.status === 'accepted') return this;
     if (this.head('main') !== review.baseRevisionId) fail('Accepting an older proposal requires reconciliation with the current model.');
+    if (review.scope) {
+      const base = this.view(review.baseRevisionId);
+      assertScopeBinding(base, this.view(proposal.revisionId).snapshot, review.scope);
+      assertModelScopeFresh({ base: base.snapshot, current: this.view(this.head('main')).snapshot, binding: review.scope });
+    }
     const mainName = branchName('main');
     const branches: Branch[] = this.#state.branches.map((item) => item.name === mainName
       ? { name: mainName, revisionId: proposal.revisionId } : item);
@@ -1299,6 +1344,10 @@ export class RoomRepository {
     let ancestor = this.view(this.head('main'));
     while (ancestor.id !== base.id && ancestor.parentId !== null) ancestor = this.view(ancestor.parentId);
     if (ancestor.id !== base.id) throw new ProposalConflict('This proposal is based on an unaccepted model. Revise it against the current accepted model.');
+    if (review.scope) {
+      assertScopeBinding(base, proposed.view(review.proposalRevisionId).snapshot, review.scope);
+      assertModelScopeFresh({ base: base.snapshot, current: this.view(this.head('main')).snapshot, binding: review.scope });
+    }
     return mergeSnapshots(base.snapshot, this.view(this.head('main')).snapshot, proposed.view(review.proposalRevisionId).snapshot);
   }
 
@@ -1339,7 +1388,8 @@ export class RoomRepository {
 
   async propose(input: unknown): Promise<RoomRepository> {
     const proposal = copy(input);
-    fields(proposal, ['name', 'from', 'doorWidthM']);
+    const hasFrozenScope = proposal !== null && typeof proposal === 'object' && Object.hasOwn(proposal, 'scope');
+    fields(proposal, ['name', 'from', 'doorWidthM', ...(hasFrozenScope ? ['scope'] : [])]);
     const name = branchName(proposal.name);
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
@@ -1349,18 +1399,19 @@ export class RoomRepository {
     const door = snapshot.entities.find((item): item is Door => item.id === 'door-entry' && item.type === 'Door');
     if (!door) fail('This revision has no entry door.');
     door.width = doorWidthM;
-    return this.#commit(name, base, snapshot);
+    return this.#commit(name, base, snapshot, hasFrozenScope ? parseFrozenModelScope(proposal.scope) : undefined);
   }
 
   async proposeLayout(input: unknown): Promise<RoomRepository> {
     const proposal = copy(input);
-    fields(proposal, ['name', 'from', 'layout']);
+    const hasFrozenScope = proposal !== null && typeof proposal === 'object' && Object.hasOwn(proposal, 'scope');
+    fields(proposal, ['name', 'from', 'layout', ...(hasFrozenScope ? ['scope'] : [])]);
     const name = branchName(proposal.name);
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
     const layout = proposal.layout;
     const base = this.view(from);
-    return this.#commit(name, base, previewRectangle(base.snapshot, layout));
+    return this.#commit(name, base, previewRectangle(base.snapshot, layout), hasFrozenScope ? parseFrozenModelScope(proposal.scope) : undefined);
   }
 
   async proposeReviewedModel(input: unknown): Promise<RoomRepository> {
@@ -1373,12 +1424,13 @@ export class RoomRepository {
     const hasScripts = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scriptExecutions');
     const hasIntent = details !== null && typeof details === 'object' && Object.hasOwn(details, 'intent');
     const hasSources = details !== null && typeof details === 'object' && Object.hasOwn(details, 'sources');
+    const hasFrozenScope = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scope');
     const hasScope = details !== null && typeof details === 'object' && Object.hasOwn(details, 'authoringScope');
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
       'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
-      ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : [])]);
+      ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : [])]);
     const base = this.view(from);
-    const next = await this.#commit(proposalName, base, proposal.snapshot);
+    const next = await this.#commit(proposalName, base, proposal.snapshot, hasFrozenScope ? parseFrozenModelScope(details.scope) : undefined);
     if (next === this) fail('The reviewed proposal must change the bound revision.');
     const record = reviewRecord({
       requestId: details.requestId, proposalName, baseRevisionId: base.id,
@@ -1390,6 +1442,7 @@ export class RoomRepository {
       ...(hasIntent ? { intent: details.intent } : {}),
       ...(hasSources ? { sources: details.sources } : {}),
       ...(hasScope ? { authoringScope: details.authoringScope } : {}),
+      ...(hasFrozenScope ? { scope: details.scope } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches));
     const reviews = [...next.reviews(), record];
@@ -1404,9 +1457,12 @@ export class RoomRepository {
     return new RoomRepository(token, state);
   }
 
-  async #commit(name: BranchName, base: Revision, snapshot: unknown): Promise<RoomRepository> {
+  async #commit(name: BranchName, base: Revision, snapshot: unknown, scope?: FrozenModelScope): Promise<RoomRepository> {
     if (name === 'main') fail('Choose a proposal name other than main.');
-    const updated = validateSnapshot(snapshot);
+    const candidate = validateSnapshot(snapshot);
+    const updated = validateSnapshot({ ...candidate, entities: candidate.entities.map((entity) =>
+      retainModelParameters(base.snapshot.entities.find((before) => before.id === entity.id && before.type === entity.type), entity)) });
+    if (scope) assertScopeBinding(base, updated, scope);
     const familyIdentities = new Map<EntityId, string>();
     for (const revision of this.#state.revisions) registerFamilyIdentities(familyIdentities, revision.snapshot);
     registerFamilyIdentities(familyIdentities, updated);
@@ -1444,6 +1500,9 @@ export class RoomRepository {
       ...collectionConflicts('relationship', base.relationships, left.relationships, right.relationships),
     ]);
   }
+
+  /** Validated, deeply frozen state for durable storage; callers cannot author through this view. */
+  persistence(): RepositoryState { return this.#state; }
 
   serialize(): string { return canonical(this.#state); }
 }

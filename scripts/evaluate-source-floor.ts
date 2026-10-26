@@ -16,7 +16,7 @@ if (!output || !path.isAbsolute(output)) throw new Error('Set BIM_SOURCE_EVIDENC
 await mkdir(output, { recursive: true });
 const codex = await CodexAccountConnection.open();
 if (!codex.publicSession().connected) { codex.close(); throw new Error('The server ChatGPT session must be connected for this manual evaluation.'); }
-const queue = new ChangeRequests(path.join(output, `evaluation-${randomUUID()}.sqlite`), () => codex.modelWorker());
+const queue = await ChangeRequests.open(path.join(output, `evaluation-${randomUUID()}.sqlite`), () => codex.modelWorker());
 const outcomes = [];
 try {
   const files: { name: string; mediaType: SourceMediaType; bytes: Buffer }[] = [

@@ -1,0 +1,97 @@
+Source: 79e078d48a03203760022b97178d48916f6c4336
+Runtime image: sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff
+Node 24; 0.5 CPU; 1 GiB RAM; memory-swap 1 GiB; validators/tests network none.
+
+validate.log
+
+> bim-forge@0.1.0 validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+
+
+> bim-forge@0.1.0 lint
+> node scripts/validate-typescript.ts
+
+Strict TypeScript valid. 132 source file(s) checked.
+
+> bim-forge@0.1.0 typecheck
+> tsc --noEmit
+
+Policy valid. 0 changed file(s) checked.
+
+policy.log
+Policy valid. 5 changed file(s) checked.
+
+build.log
+
+> bim-forge@0.1.0 build:demo
+> node scripts/build-demo.ts
+
+
+  dist/demo/room-app.mjs  2.6mb ⚠️
+
+⚡ Done in 2035ms
+
+tests.log
+✔ default scope fetch keeps the real browser global receiver and uses bounded uncached requests (104.70764ms)
+✔ preview reads partial display identities without restoring a complete project or mutating its input (4.416961ms)
+✔ project identities cannot escape the fixed project route and invalid inputs never fetch (1.033848ms)
+✔ preview refuses a response from a different base or query (2.947205ms)
+✔ preview membership must exist in the partial graph with unique identities and bounded write authority (73.423271ms)
+✔ preview refuses malformed graph and frozen evidence while an empty target preview stays explicit (2.174733ms)
+✔ list and save roundtrip the exact query and CAS version on the project-scoped routes (2.654359ms)
+✔ saved-scope conflicts and unreadable/server/network failures preserve the caller query and selection (1.998069ms)
+✔ saved scope version, query identity, names and duplicate list identities are validated (3.190674ms)
+✔ entity kinds and furniture kinds use distinct semantic domains (1.282651ms)
+✔ all/any/exclusion, bounds and relation filters retain their shared wire shapes (1.654004ms)
+✔ parameter controls derive kinds and valid units from the shared TypeBox schema (2.217393ms)
+✔ frozen review evidence distinguishes exact membership, read-only context and writable dependents as safe DOM text (0.388505ms)
+✔ optional scope stays absent for legacy requests and frozen review evidence is copied independently (1.277297ms)
+✔ shared descriptor-only scope boundary rejects accessors without invoking them (0.322857ms)
+✔ opening or revising an attic ticket restores its object, room and level independently of the browsing floor (72.20244ms)
+✔ level-qualified destinations restore their floor without persisting a level into legacy references (7.013145ms)
+✔ a frozen scope restores its target context when the browser selection belongs to another level (104.80215ms)
+✔ backlog puts review first, followed by progress, waiting and finished work (1.409212ms)
+✔ every request remains visible, with questions and failures needing attention first (0.386056ms)
+✔ default client fetch preserves the browser global receiver (97.311019ms)
+✔ startup falls back from a missing remembered server project to an available listed project (19.977065ms)
+✔ startup reads an existing remembered project omitted from the bounded list directly (72.373607ms)
+✔ startup surfaces network, server and model validation failures while saved choices remain usable (10.817083ms)
+✔ startup skips disappeared listed projects once and returns empty when all are missing (1.857795ms)
+✔ startup with no remembered identity opens the first listed project or leaves creation available (1.452831ms)
+✔ register waits for the server and returns its accepted head, preserving the older browser bytes (80.439966ms)
+✔ fresh clients reopen the latest server head without registering a cached or pending document (4.768961ms)
+✔ pending proposals in an imported new identity remain pending after server registration (3.707521ms)
+✔ failed, disconnected and interrupted registration never falls back to accepting browser state (4.602785ms)
+✔ project boundary rejects forged identity, mismatched original, malformed and oversized data (11.501299ms)
+✔ saved project choices are bounded, schema checked and preserve literal display text (5.76613ms)
+✔ history sends bounded project-specific cursors and retains actual changes, relationship IDs and bindings (3.19454ms)
+✔ history rejects invalid bounds, broken ancestry, repeated/exclusive cursors and invalid bindings (68.925255ms)
+✔ legacy recovery preserves exact text even when its generation or envelope is corrupt (0.538293ms)
+✔ unavailable browser storage reports recovery access failure independently of server reads (1.889232ms)
+✔ local demo serves only explicit assets and exposes only the bounded proposal endpoint (194.510777ms)
+✔ scope HTTP previews and saved queries retain host, origin, shape, project and CAS guards without portable history (602.267807ms)
+✔ server projects recover in a fresh session, imports preserve authority and history refuses invalid cursors (129.293448ms)
+✔ remote runtime starts device authorization without exposing credentials (80.87228ms)
+✔ server configuration parses local TCP and bounded remote Unix socket modes (0.945361ms)
+✔ authentication endpoints expose only public connection state and reject cross-origin mutations (6.109094ms)
+✔ proposal endpoint binds request to revision and returns a validated separate AI proposal (694.306217ms)
+✔ slow proposals return a job immediately, are idempotent, and expose readable failures (205.521793ms)
+✔ HTTP cancellation aborts the worker and retains execution evidence without changing the accepted project (383.749136ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 45
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7884.103062
+
+DOM mount contract
+{
+  "source": "79e078d48a03203760022b97178d48916f6c4336",
+  "baseline": "1643595c193f408f9840f1544c732b481390a158",
+  "baselineIds": 257,
+  "currentIds": 270,
+  "missingIds": [],
+  "duplicateIds": []
+}

@@ -185,11 +185,11 @@ test('ordinary asset requests keep typed execution evidence through queued proce
   const directory = await mkdtemp(path.join(tmpdir(), 'bim-asset-agent-'));
   const repository = await withMarker(); const original = repository.serialize();
   const database = path.join(directory, 'assets.sqlite');
-  let queue = new ChangeRequests(database, () => null);
+  let queue = await ChangeRequests.open(database, () => null);
   t.after(async () => { await queue.close(); await rm(directory, { recursive: true, force: true }); });
   const input = request(repository, 'queued-asset');
   await queue.submit(original, input); await queue.close();
-  queue = new ChangeRequests(database, () => worker(async session => {
+  queue = await ChangeRequests.open(database, () => worker(async session => {
     assert.ok(object(session.input) && object(session.input.request));
     assert.equal(Object.hasOwn(session.input.request, 'authoringScope'), false);
     const output = await session.executeTool('run_model_script', { language: 'typescript', source:
@@ -203,11 +203,11 @@ test('ordinary asset requests keep typed execution evidence through queued proce
   const proposed = await RoomRepository.restore(ready.result.project);
   assert.equal(proposed.review(input.proposalName).decision.status, 'pending');
   assert.ok(queue.executions(input.requestId)[0]?.evidence.calls.some(call => call.method === 'model.previewAssets' && call.disposition === 'completed'));
-  await queue.close(); queue = new ChangeRequests(database, () => null);
+  await queue.close(); queue = await ChangeRequests.open(database, () => null);
   const accepted = await queue.decide(input.requestId, { action: 'accept', decisionId: 'human-accept-assets', expectedRequestId: input.requestId });
   assert.equal(accepted.ticket.state, 'completed');
   const restored = await RoomRepository.restore(accepted.project);
   assert.equal(restored.head('main'), proposed.head(input.proposalName)); assert.equal(restored.serialize(), accepted.project);
-  await queue.close(); queue = new ChangeRequests(database, () => null);
+  await queue.close(); queue = await ChangeRequests.open(database, () => null);
   assert.equal(queue.project(repository.projectId), accepted.project); assert.equal(queue.get(input.requestId).state, 'completed');
 });

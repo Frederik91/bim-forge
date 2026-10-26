@@ -1,0 +1,74 @@
+{
+  "status": "ISSUES",
+  "fixRecheckStatus": "PASS",
+  "source": "08a5868cc735389c22a2513bd0da19a1bf38305a",
+  "bundleSha256": "a758ecd13664712c5857eab49add8f441bea192b49513f614af4df0943039219",
+  "sourceAndBundleBinding": "Parent health-confirmed runtime handback; no independent build or backend probe performed by browser worker.",
+  "url": "http://127.0.0.1:19585/",
+  "projectId": "18500000-0000-4000-8000-000000000001",
+  "qualification": "Deterministic fixture; not live LLM qualification.",
+  "scope": "Targeted correction recheck; prior completed scope/delta/orbit/acceptance checks were not restarted.",
+  "checks": {
+    "desktop1440x900SavedPinSequenceNoFalseDraft": true,
+    "phone390x844SavedPinSequenceNoFalseDraft": true,
+    "savedPinsExplicitlyReadOnly": true,
+    "desktopGenuineTextDraftPrompts": true,
+    "phoneGenuineTextDraftPrompts": true,
+    "keepEditingPreservesTextBothViewports": true,
+    "genuineNewMarkerStillPrompts": true,
+    "desktopOpenConversationRestoresSelection": true,
+    "phoneReloadOpenConversationRestoresSelection": true,
+    "restored": {
+      "selectedObject": "office-desk",
+      "room": "room-office",
+      "level": "level-ground"
+    },
+    "retainedMessageCount": 5,
+    "renderedMessageIdsTextSequencesTimestampsBindingsAndDecisionUnchanged": true,
+    "acceptedRevisionPrefix": "fdff132a32",
+    "phoneDocumentDimensions": [
+      390,
+      844
+    ],
+    "desktopDocumentDimensions": [
+      1440,
+      900
+    ],
+    "chatMountCount": 1,
+    "visible3dViewerCount": 1,
+    "noNewReplySubmitted": true
+  },
+  "applicationDefectsRemainingObserved": [],
+  "upload": {
+    "status": "UNQUALIFIED",
+    "priorChromeActualUploadAttempts": 1,
+    "priorChromeFailedMethod": "waitForEvent(filechooser) -> click #request-source-files -> FileChooser.setFiles([absolute fixture path])",
+    "priorChromeError": "To enable file upload, go to chrome://extensions in Google Chrome, click Details under the ChatGPT extension, and enable Allow access to file URLs.",
+    "newActualUploadAttempts": 0,
+    "iabProviderSelectionAttempts": 1,
+    "iabProviderError": "Browser is not available: iab",
+    "inventoryAfterError": [
+      {
+        "id": "3",
+        "name": "Chrome",
+        "type": "extension"
+      }
+    ],
+    "stopReason": "IAB provider unavailable. Stopped at capability gate without retry.",
+    "threeAttemptCapReached": false,
+    "nativeOsPickerTried": false,
+    "extensionSecuritySettingsChanged": false,
+    "fileRetainedPhoneEvidenceQualified": false
+  },
+  "console": {
+    "count": 6,
+    "file": "console-errors.json",
+    "note": "Console output retained verbatim; no console-clean claim."
+  },
+  "priorEvidenceDirectory": "C:/Users/Frederik Tegnander/.codex/visualizations/2026/10/26/combined185-ui/qa-540d315-20261026",
+  "artifactsDirectory": "C:/Users/Frederik Tegnander/.codex/visualizations/2026/10/26/combined185-ui/qa-08a5868-recheck",
+  "cleanup": {
+    "viewportReset": true,
+    "qaTabClosed": true
+  }
+}

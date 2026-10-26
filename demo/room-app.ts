@@ -5,8 +5,9 @@ import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
-import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint, identifier } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
+import { WorkspaceShell } from './workspace-shell.ts';
 import { requestContext } from './request-context.ts';
 import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
@@ -16,7 +17,8 @@ import type {
 } from '../src/room-model.ts';
 import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pilot.ts';
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
-import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
+import { RoomStore, RoomStoreError, ProjectClient, ProjectServerError, MAX_PROJECT_BYTES } from './room-store.ts';
+import type { ProjectSummary, ProjectHistoryPage } from './versioned-project-contract.ts';
 import type { RequestState } from './change-requests.ts';
 import { groupRequests, REQUEST_TABS } from './request-tabs.ts';
 import type { RequestTab } from './request-tabs.ts';
@@ -24,6 +26,12 @@ import { parseIntentAssessment } from '../src/model-intent.ts';
 import type { IntentAssessment } from '../src/model-intent.ts';
 import { RequestSourcePicker, parseSourceContext, renderSourceContext } from './request-source-ui.ts';
 import type { RequestSourceContext } from './request-source-ui.ts';
+import { ModelScopeBuilder, renderScopeEvidence, requestScopeContext, reviewScopeContext } from './model-scope-client.ts';
+import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
+import { RequestChat, conversationFromTicket } from './request-chat.ts';
+import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
+import { parseConversationReply } from '../src/request-conversation.ts';
+import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
 
 type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
@@ -49,6 +57,7 @@ type AuthSession =
   | (AuthSessionBase & { status: 'pending'; connected: false; account: null; device: { verificationUrl: string; userCode: string; expiresAt: number } })
   | (AuthSessionBase & { status: 'connected'; connected: true; account: AuthAccount });
 interface ActiveReview extends RequestSourceContext {
+  scope?: FrozenModelScope;
   requestId: string;
   proposalName: string;
   baseRevisionId: string;
@@ -169,6 +178,14 @@ const ui = {
   'import-file': input('import-file'),
   status: generic('status'), error: generic('error'),
   'recover-save': button('recover-save'),
+  'server-save-status': generic('server-save-status'), 'saved-projects': select('saved-projects'),
+  'open-saved-project': button('open-saved-project'), 'refresh-projects': button('refresh-projects'),
+  'import-server-project': button('import-server-project'),
+  'project-list-status': generic('project-list-status'), 'legacy-recovery': generic('legacy-recovery'),
+  'legacy-status': generic('legacy-status'), 'transfer-legacy': button('transfer-legacy'),
+  'retry-legacy': button('retry-legacy'), 'export-legacy': button('export-legacy'),
+  'server-history-list': generic('server-history-list'), 'server-history-status': generic('server-history-status'),
+  'history-older': button('history-older'), 'history-newest': button('history-newest'),
   'project-title': generic('project-title'), 'study-caption': generic('study-caption'),
   'project-overview': button('project-overview'), 'project-page': generic('project-page'), 'journey': generic('journey'),
   'open-room': button('open-room'), 'overview-revision': generic('overview-revision'),
@@ -234,15 +251,23 @@ const ui = {
   'auth-refresh-models': button('auth-refresh-models'), 'auth-signout': button('auth-signout'),
 };
 
-let store: RoomStore | null = null;
+const projects = new ProjectClient();
+const workspace = new WorkspaceShell();
+let serverAvailable = false;
+let projectChoices: readonly ProjectSummary[] = [];
+let legacyProject: RoomRepository | null = null;
+let legacyText: string | null = null;
+let historyPage: ProjectHistoryPage | null = null;
+let historyProjectId: string | null = null;
+let historyLoading = false;
+let historyEpoch = 0;
+const LAST_PROJECT = 'bim-forge-last-server-project';
 let repo: RoomRepository | null = null;
-let generation = 0;
 let savedText: string | null = null;
 let recoveryText: string | null = null;
 let selectedRevision = '';
 let selectedBranch = 'main';
 let busy = true;
-let writesBlocked = false;
 let layout: RoomLayout | null = null;
 let preview: ModelSnapshot | null = null;
 let selectedObject = 'door-entry';
@@ -251,10 +276,15 @@ let gesture: GestureState | null = null;
 let activeReview: ActiveReview | null = null;
 let reviewRepository: RoomRepository | null = null;
 let activeTicketId: string | null = null;
-let revisionTicketId: string | null = null;
 let backlogItems: BacklogItem[] = [];
 let serverProjectText: string | null = null;
+let serverHeadRevisionId: string | null = null;
 let submission: { fingerprint: string; requestId: string } | null = null;
+let chatTicketId: string | null = null;
+let chatVisual: ConversationVisual | null = null;
+let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
+let chatRefreshing = false;
+let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = '3d';
@@ -295,14 +325,34 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
 
 const sourcePicker = new RequestSourcePicker({ input: ui['request-source-files'], list: ui['request-source-list'],
   status: ui['request-source-status'], error: ui['request-source-error'] }, updateControls);
+const scopeBuilder = new ModelScopeBuilder({ host: generic('model-scope-builder'), changed: updateControls,
+  context: () => repo && preview ? { projectId: repo.projectId, baseRevisionId: selectedRevision, selectedIds: selectedObject ? [selectedObject] : [],
+    roomId: focusedRoomId, levelId: activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null } : null });
+const requestChat = new RequestChat(generic('request-chat-mount'), {
+  close: () => { void perform(async () => { if (await beginRequest()) status('New request. The earlier conversation remains in the backlog.'); }); },
+  answer: text => { ui['request-text'].value = text; ui['request-text'].focus(); },
+  proposal: message => { void perform(() => openChatProposal(message)); },
+  inspect: visual => { void perform(() => inspectChatVisual(visual)); },
+  attach: () => {
+    try {
+      if (!preview) throw new Error('Open a model before attaching its view.');
+      const snapshot = displayedChatSnapshot();
+      if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved snapshot before capturing a chat attachment. The unsent sketch is not a model revision.');
+      chatVisual = captureConversationVisual({ graph: preview, snapshot, view: modelView === 'plan' ? '2d' : '3d',
+        levelId: activeLevelId, selectedObjectIds: selectedObject ? [selectedObject] : [], reference: visibleReference() });
+      requestChat.setVisual(chatVisual); status(`Attached ${visualLabel(chatVisual)}. The model is unchanged.`);
+    } catch (error) { report(error); }
+  },
+  remove: () => { chatVisual = null; requestChat.setVisual(null); },
+});
 ui['request-reconstruct'].addEventListener('change', updateControls);
 
 function clearRequestSources(): void {
-  ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear();
+  ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear(); scopeBuilder.reset();
 }
 
 function requestDirty(): boolean {
-  return dirty() || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
+  return dirty() || Boolean(chatVisual) || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
 async function discardRequest(message: string): Promise<boolean> {
@@ -423,14 +473,20 @@ function clearError() { ui.error.replaceChildren(); ui.error.hidden = true; }
 function report(error: unknown, prefix = ''): void {
   ui.error.textContent = `${prefix}${error instanceof Error ? error.message : 'An unexpected error occurred.'}`;
   ui.error.hidden = false;
-  if (error instanceof RoomStoreError && (error.code === 'stale' || error.code === 'corrupt')) writesBlocked = true;
   if (error instanceof RoomStoreError && typeof error.savedText === 'string') showRecovery(error.savedText);
+  if (error instanceof ProjectServerError) serverConnection(false, error.message);
   updateControls();
 }
 
 function showRecovery(text: string): void {
   recoveryText = text;
   ui['recover-save'].hidden = false;
+}
+
+function serverConnection(available: boolean, message: string): void {
+  serverAvailable = available;
+  ui['server-save-status'].textContent = message;
+  ui['server-save-status'].dataset.state = available ? 'saved' : 'disconnected';
 }
 
 function reviewState(review: ActiveReview | null): ReviewState | null {
@@ -444,7 +500,11 @@ function showPage(name: PageName): void {
   currentPage = name;
   generic('activity-page').hidden = name !== 'activity';
   ui['project-page'].hidden = name !== 'project';
-  ui.journey.hidden = name === 'project';
+  ui.journey.hidden = false;
+  ui['editor-panel'].hidden = name !== 'request';
+  generic('workspace-review-canvas').hidden = name !== 'review';
+  ui['request-page'].hidden = name === 'review';
+  workspace.showContext(name);
   const pages = [
     { name: 'request', page: ui['request-page'], navigation: ui['nav-request'] },
     { name: 'backlog', page: ui['backlog-page'], navigation: ui['nav-backlog'] },
@@ -452,7 +512,7 @@ function showPage(name: PageName): void {
     { name: 'history', page: ui['history-page'], navigation: ui['nav-history'] },
   ];
   for (const item of pages) {
-    item.page.hidden = item.name !== name;
+    if (item.name !== 'request') item.page.hidden = item.name !== name;
     item.navigation.setAttribute('aria-pressed', String(item.name === name || name === 'activity' && item.name === 'backlog'));
   }
   if (repo) { renderComparison(); if (name === 'project') renderProjectOverview(); }
@@ -461,6 +521,7 @@ function showPage(name: PageName): void {
 
 function showRequestPane(name: RequestPane): void {
   const details = name === 'details';
+  workspace.showRequestDetails(details);
   ui['request-page'].dataset.requestPane = details ? 'details' : 'canvas';
   ui['request-canvas-pane'].dataset.active = String(!details);
   ui['editor-panel'].dataset.active = String(details);
@@ -596,30 +657,40 @@ function scheduleAuthPoll(): void {
 function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
-  const writable = Boolean(store) && !busy && !writesBlocked && !dragging;
-  const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project']];
+  const writable = serverAvailable && !busy && !dragging;
+  const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
-  for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture);
+  for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture) || Boolean(chatTicketId);
   ui['project-template'].disabled = !writable;
   ui['room-focus'].disabled = busy || dragging || !repo;
   button('whole-floor').disabled = busy || dragging || !repo;
   ui['selected-object'].disabled = busy || !preview || dragging;
-  ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture);
+  ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture) || Boolean(chatTicketId);
   ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
-  sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository));
-  ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository);
+  sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository && !chatTicketId));
+  scopeBuilder.setDisabled(!writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
+  ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
   ui['level-focus'].disabled = busy || dragging || !repo;
   ui['whole-building'].disabled = busy || dragging || !repo;
   ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
-  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready;
-  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
+  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready;
+  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : chatTicketId ? 'Send reply →' : 'Send change request →';
+  requestChat.setDisabled(!writable || !preview);
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
   ui['discard-preview'].disabled = busy || !repo || !dirty() || dragging;
   ui['export-project'].disabled = busy || !repo || savedText === null || dragging;
-  ui['new-project'].disabled = !store || busy || writesBlocked || dragging;
+  ui['new-project'].disabled = busy || dragging;
+  ui['saved-projects'].disabled = busy || dragging || !projectChoices.length;
+  ui['open-saved-project'].disabled = busy || dragging || !ui['saved-projects'].value;
+  ui['refresh-projects'].disabled = busy || dragging;
+  ui['retry-legacy'].disabled = busy;
+  ui['transfer-legacy'].disabled = !writable || !legacyProject;
+  ui['export-legacy'].disabled = busy || legacyText === null;
+  ui['history-older'].disabled = busy || historyLoading || !historyPage?.nextCursor || historyProjectId !== repo?.projectId;
+  ui['history-newest'].disabled = busy || historyLoading || !repo;
   ui['project-overview'].disabled = busy || !repo || dragging;
   ui['view-original'].disabled = busy || !repo || dragging;
   ui['nav-request'].disabled = busy || !repo || dragging;
@@ -652,12 +723,17 @@ function dirty(): boolean {
   return Boolean(visualDraft) || invalidInput || Boolean(repo && preview && JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot));
 }
 
+function visibleReference(): SpatialReference | null {
+  return visualDraft ?? inspectedChatView?.reference ?? null;
+}
+
 function feedback(message: string, invalid = false): void {
   ui['edit-feedback'].textContent = message;
   ui['edit-feedback'].dataset.invalid = String(invalid);
 }
 
 function resetEditor() {
+  inspectedChatView = null;
   visualDraft = null;
   invalidInput = false; layout = null; preview = null;
   if (!repo) return;
@@ -669,7 +745,8 @@ function resetEditor() {
   ui['selected-object'].replaceChildren(...objects.map((object) => {
     const option = element('option', object.name); option.value = object.id; return option;
   }));
-  if (!objects.some((object) => object.id === selectedObject)) selectedObject = objects[0]?.id ?? '';
+  if (!objects.some((object) => object.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
+  if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
   syncInspector();
 }
 
@@ -749,7 +826,7 @@ function acceptLayout(candidate: RoomLayout): void {
 }
 
 function editFields(event: Event): void {
-  if (!repo || busy || writesBlocked || !layout || !preview || gesture) return;
+  if (!repo || busy || !serverAvailable || !layout || !preview || gesture) return;
   const object = preview.entities.find((item) => item.id === selectedObject);
   if (!object || (object.type !== 'Door' && object.type !== 'Wall')) return;
   const fields = object.type === 'Door' ? [ui['door-width'], ui['door-offset']] : [ui['wall-position'], ui['wall-length']];
@@ -784,36 +861,42 @@ async function perform(action: () => void | Promise<void>): Promise<void> {
   clearError();
   updateControls();
   try { await action(); }
-  catch (error) { status('Action did not complete. The displayed project has not been replaced.'); report(error); }
+  catch (error) {
+    status('Action did not complete. Reopen the server model to check its current accepted state.');
+    if (ui['start-dialog'].open) ui['project-list-status'].textContent = error instanceof Error ? error.message : 'Action failed. Retry when the server is available.';
+    report(error);
+  }
   finally { busy = false; if (repo) renderComparison(); updateControls(); }
 }
 
-function writableStore(): RoomStore {
-  if (!store || writesBlocked) throw new Error('Saving is blocked. Download any recovery data or export your current project, then reload.');
-  return store;
-}
-
-// This is the only publication path for a new repository. Never assign repo before saveCAS resolves.
-async function persist(next: RoomRepository, branch = 'main'): Promise<void> {
-  const database = writableStore();
+// Display only repositories read from the server. Pending previews stay in reviewRepository.
+function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
-  const nextGeneration = await database.saveCAS(text, generation);
-  generation = nextGeneration;
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
-  if (projectChanged) { backlogItems = []; serverProjectText = null; revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; }
+  if (projectChanged) { backlogItems = []; ticketScopes.clear(); submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
+  serverProjectText = text;
+  serverHeadRevisionId = next.head('main');
+  historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
+  ui['server-history-list'].replaceChildren();
+  ui['server-history-status'].textContent = 'Open History to read the accepted server ancestry.';
   repo = next;
+  inspectedChatView = null;
   reviewRepository = null;
+  activeReview = null;
   activeTicketId = null;
-  selectedBranch = branch;
-  selectedRevision = repo.head(branch);
+  selectedBranch = 'main';
+  selectedRevision = repo.head('main');
   resetEditor();
-  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); }
+  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); }
+  try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
+  serverConnection(true, `Server saved · accepted ${selectedRevision.slice(0, 10)} · request sketches are unsaved`);
+  ui['project-name'].value = next.name;
   render();
 }
 
 function confirmReplacement(): boolean {
-  return !repo || window.confirm('Replace the locally saved project and discard any unsaved request sketch? Export saved work first if you want to keep it.');
+  return !repo || !requestDirty() || window.confirm('Switch project and discard the unsent request sketch? Server projects and browser recovery bytes are retained.');
 }
 
 async function recognizeHousePilot(project: RoomRepository): Promise<void> {
@@ -822,7 +905,6 @@ async function recognizeHousePilot(project: RoomRepository): Promise<void> {
 }
 
 async function createProject(name: string): Promise<void> {
-  writableStore();
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
   const next = ui['project-template'].value === 'house' ? await createMultiStoreyProject(name)
@@ -830,22 +912,23 @@ async function createProject(name: string): Promise<void> {
   focusedRoomId = null;
   activeReview = null;
   housePilotFixture = null;
-  await persist(next);
+  displayAccepted(await projects.register(next));
+  await refreshProjectChoices();
   ui['project-name'].value = next.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
   showPage('project');
-  status('Original model saved locally. Open the floor overview, choose a room and describe a request to begin.');
+  status('Original model saved on the server. Choose a room and describe a request to begin.');
 }
 
 async function createHousePilot(): Promise<void> {
-  writableStore();
   if (!confirmReplacement()) { status('House Pilot opening cancelled. Your current project is unchanged.'); return; }
   status('Opening the House Pilot project…');
   const fixture = await createHousePilotFixture();
   activeReview = null;
   housePilotFixture = fixture;
-  await persist(fixture.repository);
+  displayAccepted(await projects.register(fixture.repository));
+  await refreshProjectChoices();
   ui['project-name'].value = fixture.repository.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
@@ -863,8 +946,110 @@ ui['load-sample'].addEventListener('click', () => { void perform(createHousePilo
 ui['new-project'].addEventListener('click', () => {
   ui['start-close'].hidden = !repo;
   openDialog(ui['start-dialog']);
+  void perform(refreshProjectChoices);
 });
 ui['start-close'].addEventListener('click', () => closeDialog(ui['start-dialog']));
+ui['refresh-projects'].addEventListener('click', () => { void perform(refreshProjectChoices); });
+ui['saved-projects'].addEventListener('change', updateControls);
+ui['open-saved-project'].addEventListener('click', () => { void perform(async () => {
+  if (confirmReplacement() && ui['saved-projects'].value) await openServerProject(await projects.read(ui['saved-projects'].value));
+}); });
+ui['retry-legacy'].addEventListener('click', () => { void perform(readLegacyRecovery); });
+ui['export-legacy'].addEventListener('click', () => {
+  if (legacyText !== null && !busy) download(legacyText, 'browser-project-recovery.json');
+});
+ui['transfer-legacy'].addEventListener('click', () => { void perform(async () => {
+  if (!legacyProject || !confirmReplacement()) return;
+  const accepted = await projects.register(legacyProject);
+  await recognizeHousePilot(accepted);
+  displayAccepted(accepted);
+  await refreshProjectChoices();
+  closeDialog(ui['start-dialog']); showPage('project');
+  status('Browser project registered. Existing server accepted state wins. Browser recovery bytes are retained unchanged; pending proposals still require human review.');
+}); });
+ui['history-newest'].addEventListener('click', () => { void loadServerHistory(); });
+ui['history-older'].addEventListener('click', () => {
+  if (historyPage?.nextCursor) void loadServerHistory(historyPage.nextCursor);
+});
+
+async function refreshProjectChoices(): Promise<void> {
+  try {
+    const selected = ui['saved-projects'].value || repo?.projectId;
+    projectChoices = await projects.list();
+    ui['saved-projects'].replaceChildren(...projectChoices.map(project => new Option(`${project.name} · ${project.headRevisionId.slice(0, 10)}`, project.projectId)));
+    if (selected && projectChoices.some(project => project.projectId === selected)) ui['saved-projects'].value = selected;
+    ui['project-list-status'].textContent = projectChoices.length
+      ? `${projectChoices.length} saved server projects (up to 32 shown). Open to read the latest accepted model.`
+      : 'Server connected. Create a project, import JSON, or transfer browser recovery data.';
+    serverConnection(true, repo ? `Server connected · displayed accepted ${repo.head('main').slice(0, 10)} · reopen to refresh` : 'Server connected · no project open');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Project list unavailable.';
+    ui['project-list-status'].textContent = message;
+    serverConnection(false, message);
+    throw error;
+  } finally { updateControls(); }
+}
+
+async function openServerProject(next: RoomRepository): Promise<void> {
+  await recognizeHousePilot(next);
+  displayAccepted(next);
+  if (projectChoices.some(choice => choice.projectId === next.projectId)) ui['saved-projects'].value = next.projectId;
+  closeDialog(ui['start-dialog']); showPage('project');
+  await refreshBacklog();
+  status('Latest accepted model reopened from the server. Pending work remains in the backlog; unsent sketches are not saved.');
+}
+
+async function readLegacyRecovery(): Promise<void> {
+  let recoveryStore: RoomStore | null = null;
+  try {
+    recoveryStore = await RoomStore.open();
+    const record = await recoveryStore.load();
+    legacyText = record.text;
+    legacyProject = null;
+    if (record.text === null) {
+      ui['legacy-status'].textContent = 'No older browser project was found. Server projects do not require browser storage.';
+      return;
+    }
+    ui['legacy-recovery'].hidden = false;
+    showRecovery(record.text);
+    legacyProject = await RoomRepository.restore(record.text);
+    ui['legacy-status'].textContent = `Browser recovery: ${legacyProject.name}. Export these bytes or register them explicitly. Only a new server identity can be initialized; an existing server head wins. Browser bytes are never overwritten.`;
+  } catch (error) {
+    legacyProject = null;
+    ui['legacy-recovery'].hidden = false;
+    if (error instanceof RoomStoreError && error.savedText !== null) { legacyText = error.savedText; showRecovery(error.savedText); }
+    ui['legacy-status'].textContent = `${error instanceof Error ? error.message : 'Browser recovery could not be read.'} ${legacyText === null ? 'Bytes are unavailable for export; retry browser storage access. You can still open server projects.' : 'Export recovery bytes below. They remain untouched in the browser.'}`;
+  } finally { recoveryStore?.close(); updateControls(); }
+}
+
+async function loadServerHistory(before: string | null = null): Promise<void> {
+  if (!repo || historyLoading) return;
+  const projectId = repo.projectId;
+  const epoch = ++historyEpoch;
+  historyLoading = true;
+  ui['server-history-status'].textContent = 'Reading accepted server history…';
+  updateControls();
+  try {
+    const page = await projects.history(projectId, before);
+    if (repo?.projectId !== projectId || epoch !== historyEpoch) return;
+    historyPage = page; historyProjectId = projectId;
+    ui['server-history-list'].replaceChildren(...page.entries.map(entry => {
+      const row = element('li', undefined, 'server-history-entry');
+      row.append(element('strong', `${entry.origin === 'accepted' ? 'Accepted change' : entry.origin === 'imported' ? 'Imported history' : 'Project created'} · ${entry.revisionId.slice(0, 10)}`),
+        element('p', `Store recorded: ${new Date(entry.recordedAt).toLocaleString()}${entry.origin === 'imported' ? ' · original acceptance time is not asserted' : ''}`),
+        element('p', `Revision: ${entry.revisionId} · Parent: ${entry.parentRevisionId ?? 'none (original)'}`),
+        element('p', `Changed entities: ${entry.changedEntityIds.join(', ') || 'none'}`),
+        element('p', `Changed relationships: ${entry.changedRelationshipIds.join(', ') || 'none'}`),
+        element('p', `Request: ${entry.requestId ?? 'none'} · Decision: ${entry.decisionId ?? 'none'}`));
+      return row;
+    }));
+    ui['server-history-status'].textContent = `${page.entries.length} accepted ancestry entries · ${page.nextCursor ? 'older entries available' : 'end of history'}. Times are when this store recorded each entry.`;
+  } catch (error) {
+    if (repo?.projectId !== projectId || epoch !== historyEpoch) return;
+    ui['server-history-status'].textContent = `History unavailable · ${error instanceof Error ? error.message : 'retry'}. Previously displayed entries have not been refreshed.`;
+    if (error instanceof ProjectServerError) serverConnection(false, error.message);
+  } finally { if (epoch === historyEpoch) { historyLoading = false; updateControls(); } }
+}
 ui['view-original'].addEventListener('click', () => openDialog(ui['original-dialog']));
 ui['view-changes'].addEventListener('click', () => {
   changesTab = '3d'; openDialog(ui['changes-dialog']); renderComparison();
@@ -884,7 +1069,8 @@ ui['open-room'].addEventListener('click', () => {
 async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
   if (!await discardRequest('Return to the accepted model and discard the unsent request?')) return false;
-  reviewRepository = null; activeTicketId = null; activeReview = null; revisionTicketId = null;
+  closeChat();
+  reviewRepository = null; activeTicketId = null; activeReview = null;
   selectedBranch = 'main'; selectedRevision = repo.head('main');
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   resetEditor(); render(); showPage('request');
@@ -906,7 +1092,7 @@ for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventL
   showPage('backlog'); void refreshBacklog();
 });
 ui['nav-review'].addEventListener('click', () => showPage('review'));
-ui['nav-history'].addEventListener('click', () => showPage('history'));
+ui['nav-history'].addEventListener('click', () => { showPage('history'); void loadServerHistory(); });
 function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
   if (gesture) endGesture(true);
@@ -1037,6 +1223,7 @@ function parseProposalResponse(value: unknown): ProposalResponse {
       uncertainty: requiredText(reviewValue, 'uncertainty'),
       ...(Object.hasOwn(reviewValue, 'intent') ? { intent: parseIntentAssessment(reviewValue.intent) } : {}),
       ...parseSourceContext(reviewValue),
+      ...reviewScopeContext(reviewValue),
       status: value.status,
       worker,
       validator: typeof reviewValue.validator === 'string' ? reviewValue.validator : undefined,
@@ -1047,14 +1234,16 @@ function parseProposalResponse(value: unknown): ProposalResponse {
 ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
   void perform(async () => {
-    writableStore();
+    if (!serverAvailable) throw new Error('Reconnect to the project server before submitting.');
     if (!repo || !preview || invalidInput) throw new Error('Open a project and fix the request input first.');
+    if (chatTicketId) { await sendChatReply(); return; }
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
     if (name && (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main')) throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
     const instruction = ui['request-text'].value.trim();
     if (!instruction || instruction.length > 1000) throw new Error('Describe the outcome in 1 to 1000 characters.');
     const sources = sourcePicker.sources;
+    const scope = scopeBuilder.request();
     const contextLevelId = activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null;
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
@@ -1062,22 +1251,28 @@ ui['proposal-form'].addEventListener('submit', (event) => {
       selectedObjectIds: [...new Set([selectedObject, ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
+      ...(chatVisual ? { conversationVisual: checkedChatVisual() } : {}),
+      ...(scope ? { scope } : {}),
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
     const fingerprint = JSON.stringify(content);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
-    const response = await fetch(revisionTicketId ? `/api/change-requests/${encodeURIComponent(revisionTicketId)}/revision` : '/api/change-requests', {
+    const response = await fetch('/api/change-requests', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...content, request: { ...content.request, requestId: submission.requestId } }),
     });
     const acknowledgement = await proposalJson(response);
     if (!isRecord(acknowledgement)) throw new Error('Invalid request acknowledgement.');
-    const submittedName = parseBacklogItem(acknowledgement.ticket).request.proposalName;
-    submission = null; revisionTicketId = null;
+    const submittedTicket = parseBacklogItem(acknowledgement.ticket);
+    const submittedName = submittedTicket.request.proposalName;
+    chatTicketId = submittedTicket.id;
+    submission = null;
     clearRequestSources();
+    chatVisual = null; requestChat.setVisual(null);
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
     resetEditor(); renderComparison();
     await refreshBacklog();
-    status(`“${requestLabel(submittedName)}” sent to the backlog. Keep exploring or send another request; the agent works on the server.`);
+    await refreshConversation();
+    status(`“${requestLabel(submittedName)}” started. Continue this conversation below while the agent works.`);
     showRequestPane('details');
   });
 });
@@ -1089,18 +1284,182 @@ async function proposalJson(response: Response): Promise<unknown> {
   return value;
 }
 
+function closeChat(): void {
+  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close();
+}
+
+function displayedChatSnapshot(): ConversationVisual['snapshot'] {
+  if (!repo) throw new Error('Open a project before attaching model evidence.');
+  if (inspectedChatView?.snapshot.revisionId === selectedRevision) return inspectedChatView.snapshot;
+  if (reviewRepository && activeReview?.proposalRevisionId === selectedRevision) return {
+    kind: 'proposal', revisionId: selectedRevision, proposalName: activeReview.proposalName,
+  };
+  if (selectedBranch !== 'main') throw new Error('Open an accepted snapshot or a bound proposal before attaching it.');
+  return { kind: 'accepted', revisionId: selectedRevision };
+}
+
+function checkedChatVisual(): ConversationVisual | null {
+  if (chatVisual) requireCurrentVisual(chatVisual, displayedChatSnapshot());
+  return chatVisual;
+}
+
+function showChatTicket(value: unknown): void {
+  const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
+  if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
+  chatTicketId = ticket.id;
+  const firstMessage = conversation.messages.find(message => message.kind === 'user');
+  requestChat.show({ conversation, projectId: ticket.projectId,
+    title: firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state] });
+}
+
+async function openConversation(id: string, keepProposal = false): Promise<void> {
+  if (!repo || !await discardRequest('Open this conversation and discard the unsent message?')) return;
+  const projectId = repo.projectId;
+  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+  if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing conversation.');
+  const ticket = parseBacklogItem(value.ticket);
+  if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
+  if (!keepProposal) displayAccepted(await projects.read(projectId));
+  const conversation = conversationFromTicket(value.ticket);
+  const latestUser = [...conversation.messages].reverse().find(message => message.kind === 'user');
+  const visual = latestUser?.kind === 'user' ? latestUser.visual : null;
+  const context = conversationSelection({ graph: requireRepository().view(selectedRevision).snapshot,
+    selectedObjectIds: ticket.request.selectedObjectIds, ...(visual ? { visual } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}) });
+  activeLevelId = context.levelId; focusedRoomId = context.roomId; selectedObject = context.selectedId ?? '';
+  if (context.view) modelView = context.view === '2d' ? 'plan' : '3d';
+  resetEditor();
+  if (!context.selectedId) {
+    selectedObject = ''; ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', '', true, true)); syncInspector();
+  }
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
+  chatVisual = null; chatReply = null; requestChat.setVisual(null);
+  showChatTicket(value.ticket); render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
+  status(context.selectedId ? 'Conversation reference restored. Inspect a message to view its original snapshot and pins. A reply never approves a proposal.'
+    : 'Conversation opened; its saved reference is absent from the current model. Choose an item or inspect its retained evidence.');
+}
+
+async function refreshConversation(): Promise<void> {
+  const id = chatTicketId; const projectId = repo?.projectId;
+  if (!id || !projectId || chatRefreshing) return;
+  chatRefreshing = true;
+  try {
+    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+    if (chatTicketId !== id || repo?.projectId !== projectId) return;
+    if (!isRecord(value)) throw new Error('Missing conversation.');
+    showChatTicket(value.ticket);
+  } catch (error) {
+    if (chatTicketId === id) status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`);
+  } finally { chatRefreshing = false; }
+}
+
+async function sendChatReply(): Promise<void> {
+  const id = chatTicketId; const conversation = requestChat.conversation;
+  if (!id || !conversation || !repo) throw new Error('Open this conversation again before replying.');
+  const content = { baseRevisionId: repo.head('main'), text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual() };
+  const fingerprint = JSON.stringify(content);
+  if (!chatReply || chatReply.fingerprint !== fingerprint) chatReply = { fingerprint, body: parseConversationReply({
+    ...content, messageId: globalThis.crypto.randomUUID(), expectedSequence: conversation.sequence,
+  }) };
+  const response = await fetch(`/api/change-requests/${encodeURIComponent(id)}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatReply.body),
+  });
+  if (response.status === 409) {
+    chatReply = null; await refreshConversation();
+    throw new Error('The conversation changed while this reply was being sent. Review the latest messages and send again. Your draft and attachments are retained.');
+  }
+  const value = await proposalJson(response);
+  if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
+  showChatTicket(value.ticket); chatReply = null; chatVisual = null; requestChat.setVisual(null);
+  clearRequestSources(); ui['request-text'].value = ''; visualDraft = null; renderComparison();
+  await refreshBacklog(); status('Reply saved on this request. The assistant will continue with the complete conversation and earlier proposal.');
+}
+
+function archivedTickets(ticket: Record<string, unknown>): Record<string, unknown>[] {
+  const versions: Record<string, unknown>[] = [ticket];
+  if (Array.isArray(ticket.history)) for (const text of ticket.history) {
+    if (typeof text !== 'string') throw new Error('Invalid earlier conversation proposal.');
+    const value: unknown = JSON.parse(text); if (!isRecord(value)) throw new Error('Invalid earlier conversation proposal.'); versions.push(value);
+  }
+  return versions;
+}
+
+function boundChatProposal(ticket: Record<string, unknown>, message: ConversationMessage): unknown {
+  if (message.kind !== 'assistant' || message.content.kind !== 'proposal') throw new Error('This message does not contain a model proposal.');
+  const content = message.content;
+  for (const version of archivedTickets(ticket)) {
+    if (!isRecord(version.result) || !isRecord(version.result.review)) continue;
+    const review = version.result.review;
+    if (review.requestId === message.requestId && review.proposalName === content.proposalName && review.proposalRevisionId === content.proposalRevisionId) return version.result;
+  }
+  throw new Error('The proposal bound to this conversation turn is unavailable. Its message remains preserved.');
+}
+
+async function openChatProposal(message: ConversationMessage): Promise<void> {
+  if (!chatTicketId) throw new Error('Open this conversation before inspecting its proposal.');
+  await openTicket(chatTicketId, message);
+}
+
+async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
+  if (!repo || !await discardRequest('Inspect this saved visual evidence and discard the unsent message?')) return;
+  let model = repo;
+  if (chatTicketId) {
+    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(chatTicketId)}`));
+    if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing evidence provenance.');
+    for (const version of archivedTickets(value.ticket)) {
+      const project = isRecord(version.result) && typeof version.result.project === 'string' ? version.result.project : version.project;
+      if (typeof project !== 'string') continue;
+      const candidate = await RoomRepository.restore(project);
+      if (candidate.projectId !== repo.projectId || candidate.root() !== repo.root()) throw new Error('Visual evidence project mismatch.');
+      try { candidate.view(visual.snapshot.revisionId); model = candidate; break; } catch { /* Search other retained snapshots. */ }
+    }
+  }
+  const graph = model.view(visual.snapshot.revisionId).snapshot;
+  const inspection = conversationInspection(graph, visual);
+  reviewRepository = model; selectedRevision = visual.snapshot.revisionId;
+  selectedBranch = visual.snapshot.kind === 'proposal' ? visual.snapshot.proposalName : 'main';
+  activeLevelId = inspection.context.levelId; focusedRoomId = inspection.context.roomId; modelView = visual.view === '2d' ? 'plan' : '3d';
+  selectedObject = inspection.context.selectedId ?? ''; resetEditor(); inspectedChatView = inspection;
+  chatVisual = null; requestChat.setVisual(null); clearRequestSources(); ui['request-text'].value = '';
+  render(); showPage('request'); showRequestPane('canvas'); status(`Inspecting ${visualLabel(visual)}. Coordinates belong to this saved snapshot.`);
+}
+
 interface BacklogItem {
   id: string; projectId: string; state: RequestState; createdAt: number; attempts: number; error: string | null;
-  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string } & RequestSourceContext;
+  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
+  scope?: FrozenModelScope;
 }
+const ticketScopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
 function parseBacklogItem(value: unknown): BacklogItem {
   if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
       || typeof value.createdAt !== 'number' || typeof value.attempts !== 'number' || (value.error !== null && typeof value.error !== 'string')) throw new Error('Invalid backlog item.');
   const state = value.state;
   if (state !== 'queued' && state !== 'working' && state !== 'needs-input' && state !== 'ready'
       && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
+  const requestId = requiredText(value.request, 'requestId');
+  const baseRevisionId = requiredText(value.request, 'baseRevisionId');
+  if (!Array.isArray(value.request.selectedObjectIds) || value.request.selectedObjectIds.length > 100) throw new Error('Invalid saved request selection.');
+  const selectedObjectIds = value.request.selectedObjectIds.map(identifier);
+  const requestScope = requestScopeContext(value.request);
+  const frozen = reviewScopeContext(value).scope ?? (isRecord(value.result) && isRecord(value.result.review) ? reviewScopeContext(value.result.review).scope : undefined);
+  if (frozen) {
+    if (frozen.baseRevisionId !== baseRevisionId || !requestScope.scope || JSON.stringify(frozen.query) !== JSON.stringify(requestScope.scope.query)) throw new Error('Frozen scope does not match this request binding.');
+    ticketScopes.set(requestId, { projectId: value.projectId, scope: frozen });
+  }
+  const cached = ticketScopes.get(requestId);
+  const scope = cached?.projectId === value.projectId && cached.scope.baseRevisionId === baseRevisionId
+    && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
   return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, attempts: value.attempts, error: value.error,
-    request: { requestId: requiredText(value.request, 'requestId'), proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId: requiredText(value.request, 'baseRevisionId'), ...parseSourceContext(value.request) } };
+    ...(scope ? { scope } : {}),
+    request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId, selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
+}
+async function inspectTicketScope(item: BacklogItem): Promise<void> {
+  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
+  if (!isRecord(value)) throw new Error('Missing request scope evidence.');
+  const ticket = parseBacklogItem(value.ticket);
+  if (ticket.projectId !== repo?.projectId || ticket.request.requestId !== item.request.requestId) throw new Error('This request changed. Refresh the backlog before inspecting its scope.');
+  if (!ticket.scope) throw new Error('No frozen proposal scope is available yet. The submitted query is retained; inspect the scope when the proposal is ready.');
+  backlogItems = backlogItems.map(current => current.id === ticket.id ? ticket : current);
+  renderBacklog(); status('Frozen targets, read-only context and writable dependency impact opened. No model geometry changed.');
 }
 const stateLabels: Record<RequestState, string> = { queued: 'Queued', working: 'Working', 'needs-input': 'Needs your input',
   ready: 'Ready for review', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed' };
@@ -1113,13 +1472,25 @@ async function refreshBacklog(): Promise<void> {
     const value = await proposalJson(await fetch(`/api/projects/${encodeURIComponent(projectId)}/change-requests`));
     if (!isRecord(value) || !Array.isArray(value.tickets) || (value.project !== null && typeof value.project !== 'string')) throw new Error('Invalid project backlog.');
     const items = value.tickets.map(parseBacklogItem);
+    if (items.some(item => item.projectId !== projectId)) throw new Error('Backlog contains a different project.');
+    const accepted = typeof value.project === 'string' && value.project !== serverProjectText ? await RoomRepository.restore(value.project) : null;
     if (repo?.projectId !== projectId) return;
+    if (accepted && (accepted.projectId !== projectId || accepted.root() !== repo.root())) throw new Error('Accepted backlog model identity mismatch.');
     const changed = JSON.stringify(items) !== JSON.stringify(backlogItems);
     backlogItems = items; serverProjectText = value.project;
+    if (accepted) serverHeadRevisionId = accepted.head('main');
+    serverConnection(true, serverHeadRevisionId !== repo.head('main')
+      ? 'Server has a newer accepted model · open current model from Backlog · request sketch is unsaved'
+      : `Server saved · displayed accepted ${repo.head('main').slice(0, 10)} · request sketches are unsaved`);
     ui['backlog-connection'].textContent = 'Synced with server · work continues when this page is closed';
-    if (changed) { renderBacklog(); updateControls(); }
+    if (changed) renderBacklog();
+    updateControls();
   } catch (error) {
     ui['backlog-connection'].textContent = `Backlog offline · ${error instanceof Error ? error.message : 'retrying'} · server work is independent of this page`;
+    if (repo?.projectId === projectId) {
+      serverConnection(false, 'Server status unavailable · displayed model is the last accepted state read · no offline acceptance');
+      updateControls();
+    }
   } finally { backlogRefreshing = false; }
 }
 function requestLabel(name: string): string {
@@ -1178,15 +1549,18 @@ function renderBacklog(): void {
     card.append(heading, element('p', item.request.instruction), element('small', `Base ${item.request.baseRevisionId.slice(0, 10)} · ${new Date(item.createdAt).toLocaleString()} · attempt ${item.attempts}`));
     const sources = element('section', undefined, 'retained-sources');
     renderSourceContext(sources, item.projectId, item.request); card.append(sources);
+    const scope = element('pre', undefined, 'scope-evidence'); renderScopeEvidence(scope, item.scope); card.append(scope);
+    if (item.request.scope && !item.scope) card.append(element('p', `Submitted scope query: ${JSON.stringify(item.request.scope.query)}`, 'scope-evidence'));
     if (item.error) card.append(element('p', item.error, 'ticket-error'));
     if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Prepared on an earlier revision. Acceptance will retain unrelated changes and validate the combined model.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
     const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
+    if (item.request.scope && !item.scope) add('Inspect frozen scope', () => { void perform(() => inspectTicketScope(item)); });
     add(item.state === 'queued' || item.state === 'working' ? 'View progress' : 'View activity', () => { void perform(() => openActivity(item.id)); });
-    if (item.state === 'ready' || item.state === 'needs-input' || item.state === 'completed' || item.state === 'rejected') add('Open request', () => { void perform(() => openTicket(item.id)); });
+    add('Open conversation', () => { void perform(() => openConversation(item.id)); });
+    if (item.state === 'ready' || item.state === 'completed' || item.state === 'rejected') add('Review latest proposal', () => { void perform(() => openTicket(item.id)); });
     if (item.state === 'queued' || item.state === 'working') add('Cancel request', () => { void perform(() => decideTicket(item.id, 'cancel')); });
     if (item.state === 'failed' && item.attempts < 3) add('Retry agent', () => { void perform(() => decideTicket(item.id, 'retry')); });
-    if (item.state === 'failed' || item.state === 'needs-input' || item.state === 'ready') add('Revise request', () => { void perform(() => reviseTicket(item)); });
     card.append(actions); return card;
   }));
   if (!visible.length) ui['backlog-list'].append(element('p', empty, 'empty-note'));
@@ -1217,6 +1591,7 @@ function renderActivity(value: Record<string, unknown>): void {
   generic('activity-state').textContent = stateLabels[ticket.state];
   generic('activity-binding').textContent = `Request ${ticket.request.requestId} · base ${ticket.request.baseRevisionId.slice(0, 10)} · attempt ${ticket.attempts} of 3`;
   renderSourceContext(generic('activity-sources'), ticket.projectId, ticket.request, true);
+  renderScopeEvidence(generic('activity-scope'), ticket.scope);
   generic('activity-error').hidden = !ticket.error; generic('activity-error').textContent = ticket.error ?? '';
   generic('activity-list').replaceChildren(...events.map((event) => {
     const row = element('li'); row.dataset.stage = event.stage;
@@ -1248,7 +1623,7 @@ for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventL
   if (activityTicketId) void perform(async () => { await decideTicket(activityTicketId ?? '', action, activityRequestId); });
 });
 
-async function openTicket(id: string): Promise<void> {
+async function openTicket(id: string, message?: ConversationMessage): Promise<void> {
   if (!await discardRequest('Open this saved request and discard the unsent request?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
@@ -1256,7 +1631,7 @@ async function openTicket(id: string): Promise<void> {
   if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
   backlogItems = backlogItems.map((item) => item.id === ticket.id ? ticket : item);
   if (!isRecord(value.ticket.request)) throw new Error('Missing request binding.');
-  const result = parseProposalResponse(value.ticket.result ?? { status: 'declined', project: value.ticket.project, review: {
+  const result = parseProposalResponse((message ? boundChatProposal(value.ticket, message) : value.ticket.result) ?? { status: 'declined', project: value.ticket.project, review: {
     ...value.ticket.request, proposalRevisionId: null, summary: 'No model proposal is available for this attempt.',
     rationale: ticket.error ?? `Request ${stateLabels[ticket.state].toLowerCase()}.`, constraints: 'The accepted model has not been changed by this attempt.', uncertainty: 'No validated proposal was produced.',
   } });
@@ -1265,8 +1640,9 @@ async function openTicket(id: string): Promise<void> {
   clearRequestSources(); ui['request-text'].value = '';
   reviewRepository = proposed; activeTicketId = id; activeReview = { ...parseSourceContext(ticket.request), ...result.review };
   reviewDelta = result.status === 'ready'; modelView = '3d';
-  if (ticket.state === 'completed') activeReview.decision = { status: 'accepted' };
-  if (ticket.state === 'rejected') activeReview.decision = { status: 'superseded' };
+  if (ticket.state === 'completed' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'accepted' };
+  if (ticket.state === 'rejected' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'superseded' };
+  inspectedChatView = null;
   selectedBranch = result.status === 'ready' ? result.review.proposalName : 'main';
   selectedRevision = proposed.head(selectedBranch);
   const context = requestContext(proposed.view(selectedRevision).snapshot, result.review.selectedObjectIds);
@@ -1294,53 +1670,26 @@ async function decideTicket(id: string, action: string, activityVersion: string 
   }));
   if (!isRecord(value) || typeof value.project !== 'string') throw new Error('Missing accepted server project.');
   if (action === 'accept') {
-    const next = await RoomRepository.restore(value.project);
-    await persist(next); activeReview = next.review(backlogItems.find((item) => item.id === id)?.request.proposalName ?? '');
+    if (!repo) throw new Error('Open the accepted project again to view the saved decision.');
+    const next = await projects.read(repo.projectId);
+    displayAccepted(next); activeReview = next.review(backlogItems.find((item) => item.id === id)?.request.proposalName ?? '');
     renderReview(); showPage('backlog'); status('Proposal accepted. The server model and decision were saved together.');
   } else { showPage('backlog'); status(`Request ${action === 'retry' ? 'queued for another attempt' : action === 'reject' ? 'rejected' : 'cancelled'}.`); }
   await refreshBacklog();
-}
-async function reviseTicket(item: BacklogItem): Promise<void> {
-  if (!await discardRequest('Revise this ticket and discard the unsent request?')) return;
-  await refreshBacklog();
-  if (!serverProjectText) throw new Error('Refresh the server model before revising.');
-  const next = await RoomRepository.restore(serverProjectText);
-  const detail = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
-  if (!isRecord(detail) || !isRecord(detail.ticket) || !isRecord(detail.ticket.request)) throw new Error('Missing original request context.');
-  const originalRequest = detail.ticket.request;
-  const originalSources = parseSourceContext(originalRequest);
-  if (parseBacklogItem(detail.ticket).projectId !== next.projectId) throw new Error('Request project mismatch.');
-  if (!Array.isArray(originalRequest.selectedObjectIds) || !originalRequest.selectedObjectIds.every(id => typeof id === 'string')) throw new Error('Invalid original request selection.');
-  const snapshot = next.view(next.head('main')).snapshot;
-  const visual = parseVisualRequest(snapshot, originalRequest.visualIntent);
-  const context = requestContext(snapshot, originalRequest.selectedObjectIds, visual);
-  await persist(next);
-  activeReview = null; revisionTicketId = item.id;
-  sourcePicker.restore(next.projectId, originalSources.sources ?? []);
-  ui['request-reconstruct'].checked = Boolean(originalSources.authoringScope);
-  ui['reconstruction-scope'].value = originalSources.authoringScope ?? 'floor-plan-reconstruction';
-  activeLevelId = context.levelId; focusedRoomId = context.roomId;
-  selectedObject = context.selectedId ?? selectedObject;
-  if (snapshot.version === 2 && !context.levelId) modelView = '3d';
-  resetEditor();
-  if (visual.kind === 'spatial-reference') visualDraft = visual.destination;
-  ui['request-text'].value = item.request.instruction;
-  ui['proposal-name'].value = '';
-  render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
-  status('Revise this ticket against the current accepted model. Earlier attempts and proposals remain on the ticket.');
 }
 ui['open-current-model'].addEventListener('click', () => {
   void perform(async () => {
     await refreshBacklog();
     if (!serverProjectText) { await beginRequest(); return; }
     if (!await discardRequest('Open the server model and discard the unsent request?')) return;
-    await persist(await RoomRepository.restore(serverProjectText));
+    if (!repo) return;
+    displayAccepted(await projects.read(repo.projectId));
     clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
-    activeReview = null; revisionTicketId = null; render(); showPage('request');
+    activeReview = null; render(); showPage('request');
     status('Opened the current accepted server model.');
   });
 });
-window.setInterval(() => { void refreshBacklog(); void refreshActivity(); }, 2000);
+window.setInterval(() => { void refreshBacklog(); void refreshActivity(); void refreshConversation(); }, 2000);
 
 function renderReview() {
   const review = activeReview;
@@ -1350,6 +1699,7 @@ function renderReview() {
   const ticket = backlogItems.find((item) => item.id === activeTicketId);
   const sourceContext = { ...(ticket?.request.requestId === review.requestId ? parseSourceContext(ticket.request) : {}), ...parseSourceContext(review) };
   renderSourceContext(generic('review-sources'), repo?.projectId ?? '', sourceContext, true);
+  renderScopeEvidence(generic('review-scope'), review.scope);
   generic('review-scale-note').hidden = !sourceContext.authoringScope;
   ui['review-status'].textContent = ticket?.state === 'rejected' ? 'Rejected' : ticket?.state === 'needs-input' ? 'Needs your input' : state === 'accepted' ? 'Accepted version'
     : state === 'superseded' ? 'Earlier accepted version'
@@ -1379,8 +1729,9 @@ ui['reject-proposal'].addEventListener('click', () => {
 });
 ui['request-revision'].addEventListener('click', () => {
   const item = backlogItems.find((ticket) => ticket.id === activeTicketId);
-  if (item) void perform(() => reviseTicket(item));
+  if (item) void perform(() => openConversation(item.id, true));
 });
+ui['request-revision'].textContent = 'Continue conversation';
 
 function download(text: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json;charset=utf-8' }));
@@ -1408,17 +1759,18 @@ ui['recover-save'].addEventListener('click', () => {
   catch (error) { report(error, 'Recovery download failed: '); }
 });
 
-ui['import-project'].addEventListener('click', () => {
-  if (busy || !store || writesBlocked) return;
+function chooseProjectImport(): void {
+  if (busy || !serverAvailable) return;
   ui['import-file'].value = '';
   ui['import-file'].click();
-});
+}
+ui['import-project'].addEventListener('click', chooseProjectImport);
+ui['import-server-project'].addEventListener('click', chooseProjectImport);
 
 ui['import-file'].addEventListener('change', () => {
   const file = ui['import-file'].files?.[0];
   if (!file) return;
   void perform(async () => {
-    writableStore();
     if (file.size > MAX_PROJECT_BYTES) throw new Error('Import is too large. Choose a demo JSON file of at most 256 KiB.');
     status('Validating the imported project…');
     const text = await file.text();
@@ -1427,13 +1779,13 @@ ui['import-file'].addEventListener('change', () => {
     if (!confirmReplacement()) { status('Import cancelled. Your current project is unchanged.'); return; }
     activeReview = null;
     await recognizeHousePilot(next);
-    await persist(next);
-    ui['project-name'].value = next.name;
-    activeReview = next.reviewAt(selectedRevision)?.review ?? null;
+    displayAccepted(await projects.register(next));
+    await refreshProjectChoices();
+    activeReview = repo?.reviewAt(selectedRevision)?.review ?? null;
     renderReview();
     closeDialog(ui['start-dialog']);
     showPage('project');
-    status('Imported project validated and saved locally. Its original room is preserved.');
+    status('Import registered on the server. An existing accepted server head always wins; original browser/import bytes are unchanged.');
   });
 });
 
@@ -1488,7 +1840,7 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
   const allWalls = [...walls, ...(reference ? reference.entities.filter(isWall) : [])];
   const coordinates = allWalls.flatMap((wall) => [wall.start, wall.end]);
   if (!coordinates.length) return svg;
-  const focused = identifier === 'selected' && currentPage === 'request' ? spaces(snapshot).find((room) => room.id === focusedRoomId) : null;
+  const focused = identifier === 'selected' ? spaces(snapshot).find((room) => room.id === focusedRoomId) : null;
   const camera = editable && gesture ? gesture.camera : focused ? focused.bounds : {
     minX: Math.min(...coordinates.map(([x]) => x)), maxX: Math.max(...coordinates.map(([x]) => x)),
     minY: Math.min(...coordinates.map(([, y]) => y)), maxY: Math.max(...coordinates.map(([, y]) => y)),
@@ -1736,23 +2088,24 @@ function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamer
 
 function renderVisualPanel(): void {
   const selected = preview?.entities.find((item) => item.id === selectedObject);
+  const reference = visibleReference();
   ui['visual-panel'].hidden = !selected;
   if (!selected || !preview) return;
   ui['visual-context'].textContent = `Reference: ${selected.name}. A location does not imply moving this object or its neighbours. Describe what to create, move or copy.`;
   const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
   ui['visual-wall'].replaceChildren(new Option('Optional wall reference', ''), ...view.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
-  ui['visual-wall'].value = visualDraft?.kind === 'wall-point' ? visualDraft.wallId : '';
+  ui['visual-wall'].value = reference?.kind === 'wall-point' ? reference.wallId : '';
   const locked = busy || Boolean(visualGesture);
   for (const control of [ui['visual-wall'], ui['visual-x'], ui['visual-y'], ui['mark-visual-point']]) control.disabled = locked;
   ui['mark-visual-point'].disabled ||= preview.version === 2 && !activeLevelId;
-  ui['clear-visual-reference'].disabled = locked || !visualDraft;
+  ui['clear-visual-reference'].disabled = locked || !reference;
   ui['describe-visual-reference'].disabled = locked || !visualDraft;
-  if (visualDraft?.kind === 'floor-point') {
-    ui['visual-x'].value = String(visualDraft.positionMm[0]); ui['visual-y'].value = String(visualDraft.positionMm[1]);
+  if (reference?.kind === 'floor-point') {
+    ui['visual-x'].value = String(reference.positionMm[0]); ui['visual-y'].value = String(reference.positionMm[1]);
   }
-  ui['visual-feedback'].textContent = visualDraft
-    ? visualDraft.kind === 'floor-point' ? `Floor reference: ${visualDraft.positionMm.join(', ')} mm. The model is unchanged.`
-      : `Wall reference: ${visualDraft.wallId}, ${visualDraft.alongWallMm} mm from its start. The model is unchanged.`
+  ui['visual-feedback'].textContent = reference
+    ? (visualDraft ? '' : 'Saved evidence · read-only. ') + (reference.kind === 'floor-point' ? `Floor reference: ${reference.positionMm.join(', ')} mm. The model is unchanged.`
+      : `Wall reference: ${reference.wallId}, ${reference.alongWallMm} mm from its start. The model is unchanged.`)
     : 'Drag the teal handle to a floor location or wall, or use the coordinates below. Escape cancels a drag.';
 }
 function stageVisualReference(destination: SpatialReference): void {
@@ -1777,7 +2130,10 @@ ui['mark-visual-point'].addEventListener('click', () => {
     renderComparison(); updateControls();
   } catch (error) { report(error); }
 });
-ui['clear-visual-reference'].addEventListener('click', () => { visualDraft = null; renderComparison(); updateControls(); });
+ui['clear-visual-reference'].addEventListener('click', () => {
+  visualDraft = null; if (inspectedChatView) inspectedChatView = { ...inspectedChatView, reference: null };
+  renderComparison(); updateControls();
+});
 ui['describe-visual-reference'].addEventListener('click', () => { showRequestPane('details'); ui['request-text'].focus(); });
 
 function objectAnchor(item: Entity, snapshot: ModelGraph): Point {
@@ -1803,13 +2159,14 @@ function referencePoint(reference: SpatialReference, snapshot: ModelGraph): Poin
 }
 function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (point: Point) => Point): void {
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
-  if (!selected || writesBlocked || busy) return;
+  if (!selected || !serverAvailable || busy) return;
   const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
   const centre = project(objectAnchor(selected, snapshot));
-  if (visualDraft) {
-    const target = project(referencePoint(visualDraft, snapshot));
+  const reference = visibleReference();
+  if (reference) {
+    const target = project(referencePoint(reference, snapshot));
     svg.append(svgNode('line', { x1: centre[0], y1: centre[1], x2: target[0], y2: target[1], stroke: '#178b79', 'stroke-width': 2 * scale, 'stroke-dasharray': '5 4', class: 'visual-marker' }));
-    svg.append(svgNode('circle', { cx: target[0], cy: target[1], r: 10 * scale, fill: '#ffffffaa', stroke: '#178b79', 'stroke-width': 3 * scale, class: 'visual-marker', 'data-destination': visualDraft.kind }));
+    svg.append(svgNode('circle', { cx: target[0], cy: target[1], r: 10 * scale, fill: '#ffffffaa', stroke: '#178b79', 'stroke-width': 3 * scale, class: 'visual-marker', 'data-destination': reference.kind }));
     svg.append(svgNode('text', { x: target[0], y: target[1] - 18 * scale, fill: '#11594f', 'font-size': 11 * scale, 'text-anchor': 'middle', class: 'visual-marker', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * scale }, 'Reference location'));
   }
   const radius = 22 * scale;
@@ -1854,7 +2211,7 @@ function endVisualGesture(cancel: boolean): void {
 
 ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
   if (event.target instanceof Element && event.target.closest('[data-visual-handle]')) {
-    if (!repo || busy || gesture || visualGesture || writesBlocked || event.button !== 0 || !event.isPrimary) return;
+    if (!repo || busy || gesture || visualGesture || !serverAvailable || event.button !== 0 || !event.isPrimary) return;
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
     if (!root || !preview) return;
     event.preventDefault();
@@ -1874,7 +2231,7 @@ ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
     if (objectId) chooseObject(objectId);
     return;
   }
-  if (writesBlocked || !layout || !preview) return;
+  if (!serverAvailable || !layout || !preview) return;
   if (operation !== 'wall' && operation !== 'door-move' && operation !== 'door-width') return;
   if (invalidInput) { feedback('Fix or discard the invalid input before dragging.', true); return; }
   event.preventDefault();
@@ -2035,9 +2392,10 @@ function renderProperties(original: ModelSnapshot, selected: ModelSnapshot, delt
 
 async function selectRevision(branch: string, revisionId: string): Promise<void> {
   if (busy || gesture || !repo) return;
-  const project = requireRepository();
+  const project = repo;
   if (!await discardRequest('View this saved revision and discard the unsent request?')) return;
-  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; revisionTicketId = null;
+  reviewRepository = null;
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   selectedBranch = branch;
   selectedRevision = revisionId;
   activeReview = project.reviewAt(revisionId)?.review ?? null;
@@ -2062,7 +2420,8 @@ function requireRepository(): RoomRepository {
 }
 
 function renderHistory(): void {
-  const project = requireRepository();
+  if (!repo) return;
+  const project = repo;
   const branches = project.branches();
   ui['branch-count'].textContent = `${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}`;
   ui['history-list'].replaceChildren(...branches.map((branch) => {
@@ -2131,12 +2490,12 @@ function focusRoom(id: string | null): void {
 }
 function renderRoomNavigation(snapshot: ModelSnapshot): void {
   const storeys = levels(snapshot);
-  const needsPlan = modelView === 'plan' || currentPage === 'project';
+  const needsPlan = modelView === 'plan';
   if (activeLevelId && !storeys.some(level => level.id === activeLevelId)) activeLevelId = null;
   if (!activeLevelId && needsPlan && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
   const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
   const rooms = spaces(view);
-  generic('level-navigation').hidden = !storeys.length || !['project', 'request', 'review'].includes(currentPage);
+  generic('level-navigation').hidden = !storeys.length;
   const all = new Option('All storeys · 3D', ''); all.disabled = needsPlan;
   ui['level-focus'].replaceChildren(all, ...storeys.map(level => new Option(`${level.name} · ${number.format(level.elevation)} m`, level.id)));
   ui['level-focus'].value = activeLevelId ?? '';
@@ -2145,7 +2504,8 @@ function renderRoomNavigation(snapshot: ModelSnapshot): void {
     : 'Whole building in 3D. Pick a level to isolate its plan and contents.';
   const objects = view.entities.filter(item => item.type !== 'AssetFamily' && (!activeLevelId || item.type !== 'Level' || item.id === activeLevelId));
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
-  if (!objects.some(item => item.id === selectedObject)) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
+  if (!objects.some(item => item.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
+  if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
   ui['selected-object'].value = selectedObject;
   if (!rooms.some((room) => room.id === focusedRoomId)) focusedRoomId = null;
   generic('room-navigation').hidden = !rooms.length;
@@ -2176,7 +2536,6 @@ button('whole-floor').addEventListener('click', () => focusRoom(null));
 
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
-  if (!inDeltaDialog && currentPage !== 'request' && currentPage !== 'review') { modelViewer?.hide(); return; }
   const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
   const comparison = inDeltaDialog || currentPage === 'review' && reviewDelta ? baseline : null;
   try {
@@ -2187,14 +2546,14 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
     modelViewer ??= new ModelViewer({
       select: chooseObject,
       reference: (destination) => {
-        if (busy || writesBlocked || currentPage !== 'request') return;
+        if (busy || !serverAvailable || currentPage !== 'request') return;
         stageVisualReference(destination); renderComparison(); updateControls();
         feedback('Location marked. Describe what to create, move or copy here; no model objects have moved.');
       },
-      keyboardReference: () => ui['visual-wall'].focus(),
+      keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
     modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
-      interactive: !comparison && currentPage === 'request' && !busy && !writesBlocked, reference: currentPage === 'request' ? visualDraft : null });
+      interactive: !comparison && currentPage === 'request' && !busy && serverAvailable, reference: currentPage === 'request' ? visibleReference() : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
@@ -2210,7 +2569,7 @@ function renderComparison(): void {
   const reviewedRevision = project.reviewAt(selectedRevision);
   const review = reviewedRevision?.review;
   const comparison = reviewedRevision ? project.view(reviewedRevision.comparisonBaseRevisionId).snapshot : original;
-  const comparisonLabel = ui['review-page'].querySelector('.comparison-toolbar span');
+  const comparisonLabel = generic('workspace-review-canvas').querySelector('.comparison-toolbar span');
   if (comparisonLabel) comparisonLabel.textContent = reviewedRevision && reviewedRevision.comparisonBaseRevisionId !== review?.baseRevisionId
     ? 'Applied changes compared with the preceding accepted revision' : 'Compare with this proposal’s bound base';
   const isOriginal = selectedRevision === originalId;
@@ -2255,7 +2614,7 @@ function renderComparison(): void {
   button('changes-3d-tab').setAttribute('aria-pressed', String(changesTab === '3d'));
   button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
   renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
-  ui['selected-title'].textContent = spaces(selected).length && currentPage === 'request' ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
+  ui['selected-title'].textContent = spaces(selected).length ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = spaces(selected).length ? 'Choose a storey for its plan, or explore the whole building in 3D. Select an object and describe a change for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), reviewedRevision
@@ -2263,7 +2622,8 @@ function renderComparison(): void {
 }
 
 function renderProjectOverview(): void {
-  const project = requireRepository();
+  if (!repo) return;
+  const project = repo;
   const revision = project.view(project.head('main'));
   ui['overview-revision'].textContent = revision.id.slice(0, 10);
   ui['overview-entity-count'].textContent = `${revision.snapshot.entities.length} model objects`;
@@ -2296,7 +2656,8 @@ function renderProjectOverview(): void {
 }
 
 function renderConflictChoices(): void {
-  const project = requireRepository();
+  if (!repo) return;
+  const project = repo;
   const alternatives = project.branches().filter((branch) => branch.name !== 'main');
   const choices: Array<[HTMLSelectElement, number]> = [[ui['conflict-left'], 0], [ui['conflict-right'], 1]];
   for (const [choice, defaultIndex] of choices) {
@@ -2367,42 +2728,23 @@ function render(): void {
 async function initialize() {
   let needsStart = false;
   renderAuth();
-  try {
-    authSession = await authRequest('/api/auth/session');
-    renderAuth();
-    if (authSession.status === 'pending') scheduleAuthPoll();
-  } catch (error) {
+  void authRequest('/api/auth/session').then(session => {
+    authSession = session; renderAuth(); if (session.status === 'pending') scheduleAuthPoll();
+  }).catch((error: unknown) => {
     ui['auth-error'].textContent = error instanceof Error ? error.message : 'ChatGPT connection status is unavailable.';
     ui['auth-error'].hidden = false;
-  }
+  });
+  void readLegacyRecovery();
   try {
-    store = await RoomStore.open();
-    const record = await store.load();
-    generation = record.generation;
-    if (record.text === null) { needsStart = true; status('Ready. Create a project or load the sample. Changes are saved only in this browser.'); return; }
-    let restored;
-    try { restored = await RoomRepository.restore(record.text); }
-    catch (error) {
-      writesBlocked = true;
-      showRecovery(record.text);
-      const message = error instanceof Error ? error.message : 'The saved data is invalid.';
-      throw new Error(`The saved project could not be validated: ${message} It has been left intact. Download it below; local writes are blocked to protect it.`);
-    }
-    await recognizeHousePilot(restored);
-    repo = restored;
-    savedText = record.text;
-    selectedBranch = 'main';
-    selectedRevision = repo.head('main');
-    sourcePicker.setProject(restored.projectId);
-    activeReview = repo.reviewAt(selectedRevision)?.review ?? null;
-    resetEditor();
-    ui['project-name'].value = repo.name;
-    render();
-    showPage('project');
-    status('Saved project restored. Open the reference room to continue from its current revision.');
+    await refreshProjectChoices();
+    let remembered: string | null = null;
+    try { remembered = localStorage.getItem(LAST_PROJECT); } catch { /* Optional selection memory. */ }
+    const next = await projects.reopen({ rememberedProjectId: remembered, choices: projectChoices });
+    if (next) await openServerProject(next);
+    else { needsStart = true; status('Ready. Create or import a project to save it on this server.'); }
   } catch (error) {
-    writesBlocked = true;
-    status('Local storage is not ready. No saved data has been changed.');
+    needsStart = true;
+    status('Server project unavailable. Reconnect and retry. Browser recovery bytes remain untouched.');
     report(error);
   } finally {
     busy = false;

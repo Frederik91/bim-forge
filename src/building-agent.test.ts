@@ -316,7 +316,7 @@ test('queued building sources, scope and level references survive processing, re
   const acceptedFixture = result.repository.accept('queued-house', { decisionId: 'accept-fixture-house', actor: 'Fixture reviewer' });
   const project = acceptedFixture.serialize();
   const database = path.join(directory, 'queue.sqlite');
-  let queue = new ChangeRequests(database, () => null);
+  let queue = await ChangeRequests.open(database, () => null);
   t.after(() => queue.close());
   const sourceText = ['Basement plan: retain the existing basement level.', 'Attic plan: retain the existing gabled roof and stair.'];
   const sources: RequestSource[] = [];
@@ -331,7 +331,7 @@ test('queued building sources, scope and level references survive processing, re
   await queue.submit(project, input);
   assert.deepEqual(queue.get(input.requestId).request.visualIntent, input.visualIntent);
   await queue.close();
-  queue = new ChangeRequests(database, () => null);
+  queue = await ChangeRequests.open(database, () => null);
   const restored = queue.get(input.requestId);
   assert.deepEqual(restored.request.visualIntent, input.visualIntent);
   assert.equal(restored.request.authoringScope, 'building-reconstruction');
@@ -368,7 +368,7 @@ test('queued building sources, scope and level references survive processing, re
     ` });
     assert.equal(output.ok, true, JSON.stringify(output)); assert.equal(output.done, true);
   } };
-  queue = new ChangeRequests(database, () => worker);
+  queue = await ChangeRequests.open(database, () => worker);
   await finished(queue, input.requestId);
   const ready = queue.get(input.requestId);
   assert.equal(ready.state, 'ready', ready.error ?? ''); assert.ok(ready.result);
@@ -392,7 +392,7 @@ test('queued building sources, scope and level references survive processing, re
   assert.ok(object(changed)); changed.authoringScope = 'implicit-building';
   await assert.rejects(RoomRepository.restore(JSON.stringify(tampered)), /authoring scope/);
 
-  await queue.close(); queue = new ChangeRequests(database, () => null);
+  await queue.close(); queue = await ChangeRequests.open(database, () => null);
   assert.equal(queue.get(input.requestId).state, 'ready');
   assert.deepEqual(queue.get(input.requestId).request.sources, sources);
   assert.deepEqual(queue.executions(input.requestId), journal);
@@ -407,7 +407,7 @@ test('queued building sources, scope and level references survive processing, re
   assert.equal(current.serialize(), accepted.project);
   assert.equal(current.view(current.head('main')).snapshot.version, 2);
 
-  await queue.close(); queue = new ChangeRequests(database, () => null);
+  await queue.close(); queue = await ChangeRequests.open(database, () => null);
   assert.equal(queue.get(input.requestId).state, 'completed');
   assert.deepEqual(queue.get(input.requestId).request.visualIntent, input.visualIntent);
   assert.equal(queue.project(repository.projectId), accepted.project);

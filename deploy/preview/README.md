@@ -10,6 +10,15 @@ Build an immutable image tag from the exact reviewed commit:
 docker build --file deploy/preview/Dockerfile --tag bim-forge-preview-app:<commit> .
 ```
 
+Build the browser release from the same commit with `npm ci` and `npm run build:demo`
+in the server build container. `dist/demo/manifest.json` binds `index.html`,
+`room-app.mjs`, `room.css` and `request-chat.css` to their exact byte lengths and
+SHA-256 hashes. Publish these four files together as a new static release, verify
+the manifest, and retain the matching runtime image and prior release for rollback.
+Copy file contents into the release directory; copying a `dist` directory inside
+an existing `dist` directory can leave an old bundle active. Do not publish only
+the JavaScript bundle or omit the conversation stylesheet.
+
 The host needs these paths before Compose starts:
 
 ```sh
@@ -45,3 +54,5 @@ The same persistent directory is mounted at `/var/lib/bim-forge/codex`; existing
 ## Roll back
 
 Set `BIM_FORGE_IMAGE` in `/opt/bim-preview/.env` to the previous reviewed image and run `docker compose up --detach --wait`. Restore the previous `compose.yaml` and `nginx.conf` together if their interface changed. The persistent credential directory is not part of an image rollback; do not delete it. Use **Disconnect ChatGPT** to clear this installation's Codex login; manage account access in ChatGPT separately.
+
+An image-only rollback does not reverse a database migration. Before installing the versioned project store, stop ingress and the app, retain a private consistent backup of the complete state directory (including SQLite WAL files), and record the previous image and static release. An older runtime cannot read normalized request references. Returning to it requires the matching pre-migration database state and frontend, with the app stopped during restoration. Preserve the current state separately and reconcile any requests or decisions created after deployment before restoring an older snapshot. Keep credential backups private and preserve their ownership and permissions.

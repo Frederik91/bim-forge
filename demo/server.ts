@@ -7,11 +7,14 @@ import { CodexAccountConnection, CodexAppServerError } from '../src/codex-app-se
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 import { MAX_SOURCE_BYTES, sourceMediaType, sourceName } from '../src/request-sources.ts';
+import { parseModelScopeQuery } from '../src/model-scope-contract.ts';
+import { ScopeStoreConflict } from './model-scope-store.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
   ['/', ['demo/index.html', 'text/html; charset=utf-8']],
   ['/room-app.mjs', ['dist/demo/room-app.mjs', 'text/javascript; charset=utf-8']],
+  ['/request-chat.css', ['demo/request-chat.css', 'text/css; charset=utf-8']],
   ['/room.css', ['demo/room.css', 'text/css; charset=utf-8']],
 ]);
 const MAX_REQUEST_BYTES = 384 * 1024;
@@ -120,15 +123,15 @@ export function parseDemoServerConfig(environment: NodeJS.ProcessEnv = process.e
 
 export type DemoServer = http.Server & { closeModelWorkers(): Promise<void> };
 
-export function createDemoServer({
+export async function createDemoServer({
   modelWorker = null,
   codex = null,
   runtimeMode = 'local',
   publicOrigin = null,
   backlogFile = ':memory:',
-}: DemoServerOptions = {}): DemoServer {
+}: DemoServerOptions = {}): Promise<DemoServer> {
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
-  const backlog = new ChangeRequests(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
+  const backlog = await ChangeRequests.open(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
   let sourceUploads = 0;
   const server = http.createServer(async (request, response) => {
     const allowedHost = /^127\.0\.0\.1(?::[0-9]{1,5})?$|^localhost(?::[0-9]{1,5})?$/;
@@ -198,6 +201,72 @@ export function createDemoServer({
       }
       return;
     }
+    let projectUrl: URL;
+    try { projectUrl = new URL(request.url ?? '/', 'http://localhost'); }
+    catch { send(response, 400, { error: 'Invalid request URL.' }); return; }
+    const scopeRoute = /^\/api\/projects\/([^/]+)\/(scope-preview|scopes)$/.exec(projectUrl.pathname);
+    if (scopeRoute) {
+      try {
+        sameOriginRequest(request, publicOrigin);
+        if (projectUrl.search) throw new Error('Scope endpoints do not accept query parameters.');
+        const projectId = decodeURIComponent(scopeRoute[1] ?? '');
+        if (!backlog.hasProject(projectId)) { send(response, 404, { error: 'Unknown project.' }); return; }
+        if (scopeRoute[2] === 'scope-preview') {
+          if (request.method !== 'POST') { send(response, 405, { error: 'Scope preview requires POST.' }); return; }
+          const value = await readJson(request, 32 * 1024);
+          if (!isRecord(value) || Object.keys(value).length !== 2 || !Object.hasOwn(value, 'query') || typeof value.baseRevisionId !== 'string') {
+            throw new Error('Scope preview requires exactly baseRevisionId and query.');
+          }
+          send(response, 200, backlog.scopePreview(projectId, value.baseRevisionId, value.query));
+        } else if (request.method === 'GET') send(response, 200, { scopes: backlog.savedScopes(projectId) });
+        else if (request.method === 'POST') {
+          const value = await readJson(request, 32 * 1024);
+          if (!isRecord(value) || Object.keys(value).length !== 4 || typeof value.id !== 'string' || typeof value.name !== 'string'
+              || !Object.hasOwn(value, 'query') || (value.expectedVersion !== null && typeof value.expectedVersion !== 'string')) {
+            throw new Error('Saving a scope requires exactly id, name, query and expectedVersion.');
+          }
+          send(response, 200, { scope: backlog.saveModelScope({ projectId, id: value.id, name: value.name,
+            query: parseModelScopeQuery(value.query), expectedVersion: value.expectedVersion }) });
+        } else send(response, 405, { error: 'Saved scopes require GET or POST.' });
+      } catch (error) {
+        send(response, error instanceof ScopeStoreConflict ? error.code === 'not-found' ? 404 : 409 : error instanceof BacklogConflict ? 409 : 400,
+          { error: error instanceof Error ? error.message : 'Scope unavailable.' });
+      }
+      return;
+    }
+    const savedProjectRoute = /^\/api\/projects\/([^/]+)(\/history)?$/.exec(projectUrl.pathname);
+    if (projectUrl.pathname === '/api/projects' || savedProjectRoute) {
+      try {
+        sameOriginRequest(request, publicOrigin);
+        if (!savedProjectRoute) {
+          if (projectUrl.search) throw new Error('The project collection does not accept query parameters.');
+          if (request.method === 'GET') send(response, 200, { projects: backlog.projects() });
+          else if (request.method === 'POST') {
+            const value = await readJson(request);
+            if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.project !== 'string') throw new Error('Project import requires exactly one portable project string.');
+            send(response, 200, { project: await backlog.importProject(value.project) });
+          } else send(response, 405, { error: 'Projects require GET or POST.' });
+        } else {
+          if (request.method !== 'GET') { send(response, 405, { error: 'Saved projects and history require GET.' }); return; }
+          const projectId = decodeURIComponent(savedProjectRoute[1] ?? '');
+          if (!backlog.project(projectId)) { send(response, 404, { error: 'Unknown project.' }); return; }
+          if (savedProjectRoute[2]) {
+            const query = projectUrl.searchParams;
+            if ([...query.keys()].some((key) => key !== 'before' && key !== 'limit') || query.getAll('before').length > 1
+                || query.getAll('limit').length > 1) throw new Error('Unsupported history query.');
+            const limitText = query.get('limit') ?? '20';
+            if (!/^[1-9][0-9]?$/.test(limitText)) throw new Error('History limit must be from 1 through 50.');
+            send(response, 200, backlog.history({ projectId, before: query.get('before'), limit: Number(limitText) }));
+          } else {
+            if (projectUrl.search) throw new Error('Saved projects do not accept query parameters.');
+            send(response, 200, { project: backlog.project(projectId) });
+          }
+        }
+      } catch (error) {
+        send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Project unavailable.' });
+      }
+      return;
+    }
     const sourceRoute = /^\/api\/projects\/([a-f0-9-]{36})\/sources\/([a-f0-9-]{36})$/.exec(request.url ?? '');
     if (sourceRoute) {
       if (request.method === 'POST' && sourceUploads >= 2) { send(response, 429, { error: 'Two files are already uploading. Try again shortly.' }); return; }
@@ -243,7 +312,7 @@ export function createDemoServer({
       return;
     }
     const projectRoute = /^\/api\/projects\/([^/]+)\/change-requests$/.exec(request.url ?? '');
-    const ticketRoute = /^\/api\/change-requests\/([^/]+)(\/decision|\/revision)?$/.exec(request.url ?? '');
+    const ticketRoute = /^\/api\/change-requests\/([^/]+)(\/decision|\/revision|\/messages)?$/.exec(request.url ?? '');
     if (projectRoute || ticketRoute) {
       try {
         sameOriginRequest(request, publicOrigin);
@@ -254,7 +323,10 @@ export function createDemoServer({
           send(response, 200, { tickets: backlog.list(id), project: backlog.project(id) });
         } else if (ticketRoute) {
           const id = decodeURIComponent(ticketRoute[1] ?? '');
-          if (ticketRoute[2] === '/revision') {
+          if (ticketRoute[2] === '/messages') {
+            if (request.method !== 'POST') { send(response, 405, { error: 'Sending a message requires POST.' }); return; }
+            send(response, 202, { ticket: await backlog.appendMessage(id, await readJson(request, 64 * 1024)) });
+          } else if (ticketRoute[2] === '/revision') {
             if (request.method !== 'POST') { send(response, 405, { error: 'A revision requires POST.' }); return; }
             const payload = proposalPayload(await readJson(request));
             send(response, 202, { ticket: await backlog.revise(id, payload.project, payload.request) });
@@ -298,7 +370,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const codex = await CodexAccountConnection.open(connectionOptions);
   const backlogDirectory = config.codexHome ?? path.join(root, '.bim-preview');
   await fs.mkdir(backlogDirectory, { recursive: true, mode: 0o700 });
-  const server = createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin,
+  const server = await createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin,
     backlogFile: path.join(backlogDirectory, 'bim-change-requests.sqlite') });
   server.on('close', () => { void server.closeModelWorkers().finally(() => codex.close()).catch(() => {}); });
   server.on('error', () => { console.error('The BIM Forge preview runtime could not start.'); process.exitCode = 1; });

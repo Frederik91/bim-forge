@@ -13,7 +13,7 @@ if (!output || !path.isAbsolute(output)) throw new Error('Set BIM_BUILDING_EVIDE
 await mkdir(output, { recursive: true });
 const codex = await CodexAccountConnection.open();
 if (!codex.publicSession().connected) { codex.close(); throw new Error('Connect the server ChatGPT session first.'); }
-const queue = new ChangeRequests(path.join(output, `evaluation-${randomUUID()}.sqlite`), () => codex.modelWorker());
+const queue = await ChangeRequests.open(path.join(output, `evaluation-${randomUUID()}.sqlite`), () => codex.modelWorker());
 try {
   const repository = await RoomRepository.create('Synthetic multi-storey evaluation');
   const original = repository.serialize();

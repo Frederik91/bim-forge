@@ -8,8 +8,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { createDemoServer, parseDemoServerConfig } from './server.ts';
 import type { DemoServerOptions } from './server.ts';
-import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewRectangle } from '../src/room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
+import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
 
 interface TestResponse { status: number | undefined; headers: IncomingHttpHeaders; body: string }
 interface TestRequestOptions extends RequestOptions { body?: string }
@@ -29,9 +30,9 @@ async function listen(
   t: TestContext,
   modelWorker: ModelWorker | null = null,
   codex: TestCodex | null = null,
-  serverOptions: Pick<DemoServerOptions, 'runtimeMode' | 'publicOrigin'> = {},
+  serverOptions: Pick<DemoServerOptions, 'runtimeMode' | 'publicOrigin' | 'backlogFile'> = {},
 ): Promise<TestRequester> {
-  const server = createDemoServer({ modelWorker, codex, ...serverOptions });
+  const server = await createDemoServer({ modelWorker, codex, ...serverOptions });
   const directory = process.platform === 'linux' ? fs.mkdtempSync(path.join(os.tmpdir(), 'bim-room-http-')) : null;
   const socketPath = directory && path.join(directory, 'test.sock');
   await new Promise<void>((resolve) => {
@@ -78,6 +79,77 @@ test('local demo serves only explicit assets and exposes only the bounded propos
     assert.equal((await request(target)).status, 404);
   }
   assert.equal((await request('/', { headers: { Host: 'attacker.example' } })).status, 403);
+});
+
+test('scope HTTP previews and saved queries retain host, origin, shape, project and CAS guards without portable history', async t => {
+  const request = await listen(t);
+  const repo = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Scope HTTP', snapshot: multiStoreySnapshot() });
+  const post = { method: 'POST', headers: { 'Content-Type': 'application/json', Host: 'localhost' } };
+  assert.equal((await request('/api/projects', { ...post, body: JSON.stringify({ project: repo.serialize() }) })).status, 200);
+  const endpoint = `/api/projects/${repo.projectId}`;
+  const query = { version: 1, allOf: [{ kind: 'ids', ids: ['level-ground-plant'] }], anyOf: [], excludeIds: [] };
+  const body = JSON.stringify({ baseRevisionId: repo.head('main'), query });
+  const preview = await request(endpoint + '/scope-preview', { ...post, body });
+  assert.equal(preview.status, 200, preview.body);
+  const result = jsonObject(preview.body);
+  assert.deepEqual(Object.keys(result).sort(), ['graph', 'scope']);
+  assert.ok(isRecord(result.scope)); assert.deepEqual(result.scope.targetIds, ['level-ground-plant']);
+  assert.ok(isRecord(result.graph) && Array.isArray(result.graph.entities));
+  assert.ok(result.graph.entities.length < repo.view(repo.head('main')).snapshot.entities.length);
+  const save = { id: 'ground-plant', name: 'Ground plant', query, expectedVersion: null };
+  const saved = await request(endpoint + '/scopes', { ...post, body: JSON.stringify(save) });
+  assert.equal(saved.status, 200, saved.body);
+  const record = jsonObject(saved.body).scope; assert.ok(isRecord(record) && typeof record.version === 'string');
+  assert.equal((await request(endpoint + '/scopes', { ...post, body: JSON.stringify(save) })).status, 200, 'An identical retry returns the existing saved query.');
+  assert.equal((await request(endpoint + '/scopes', { ...post, body: JSON.stringify({ ...save, name: 'Stale edit' }) })).status, 409);
+  assert.equal((await request(endpoint + '/scopes', { ...post, body: JSON.stringify({ ...save, name: 'Renamed', expectedVersion: record.version }) })).status, 200);
+  const listed = jsonObject((await request(endpoint + '/scopes', { headers: { Host: 'localhost' } })).body);
+  assert.ok(Array.isArray(listed.scopes)); assert.equal(listed.scopes.length, 1);
+  const stored = jsonObject((await request(endpoint, { headers: { Host: 'localhost' } })).body).project;
+  assert.equal(stored, repo.serialize(), 'Saving queries must not publish a model revision.');
+  assert.equal((await request(endpoint + '/scope-preview', { ...post, body, headers: { ...post.headers, Host: 'attacker.example' } })).status, 403);
+  assert.equal((await request(endpoint + '/scope-preview', { ...post, body, headers: { ...post.headers, Origin: 'https://attacker.example' } })).status, 400);
+  assert.equal((await request(endpoint + '/scope-preview', { ...post, body: JSON.stringify({ baseRevisionId: repo.head('main'), query, writableIds: ['door-entry'] }) })).status, 400);
+  assert.equal((await request(endpoint + '/scope-preview', { ...post, body: JSON.stringify({ baseRevisionId: repo.head('main'), query: { ...query, allOf: [] } }) })).status, 400);
+  assert.equal((await request(endpoint + '/scope-preview', { ...post, body: ' '.repeat(32769) })).status, 400);
+  assert.equal((await request(endpoint + '/scope-preview?extra=1', { ...post, body })).status, 400);
+  assert.equal((await request(endpoint + '/scope-preview', { headers: { Host: 'localhost' } })).status, 405);
+  assert.equal((await request(`/api/projects/${crypto.randomUUID()}/scopes`, { headers: { Host: 'localhost' } })).status, 404);
+  assert.equal((await request(`/api/projects/${crypto.randomUUID()}/scope-preview`, { ...post, body })).status, 404);
+});
+
+test('server projects recover in a fresh session, imports preserve authority and history refuses invalid cursors', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-project-http-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const backlogFile = path.join(directory, 'projects.sqlite');
+  const request = await listen(t, null, null, { backlogFile });
+  const repo = await RoomRepository.create('Durable browser project');
+  const post = (project: string) => request('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project }) });
+  assert.equal((await post(repo.serialize())).status, 200);
+  assert.equal(jsonObject((await post(repo.serialize())).body).project, repo.serialize());
+  assert.equal(jsonObject((await request(`/api/projects/${repo.projectId}`)).body).project, repo.serialize());
+  const projects = jsonObject((await request('/api/projects')).body).projects;
+  assert.ok(Array.isArray(projects)); assert.equal(projects.length, 1);
+  const history = jsonObject((await request(`/api/projects/${repo.projectId}/history?limit=1`)).body);
+  assert.ok(Array.isArray(history.entries)); assert.equal(history.entries.length, 1); assert.equal(history.nextCursor, null);
+  for (const query of ['limit=0', 'limit=51', 'limit=1.5', 'limit=1&limit=2', `before=${'f'.repeat(64)}`, 'before=', 'other=x']) {
+    assert.equal((await request(`/api/projects/${repo.projectId}/history?${query}`)).status, 400, query);
+  }
+  assert.equal((await request(`/api/projects/${crypto.randomUUID()}`)).status, 404);
+  assert.equal((await request(`/api/projects/${crypto.randomUUID()}/history`)).status, 404);
+  assert.equal((await post('{bad project')).status, 400);
+  const layout = structuredClone(rectangleLayout(repo.view(repo.root()).snapshot)); layout.door.widthMm = 1200;
+  const mismatch = await RoomRepository.createProject({ projectId: repo.projectId, name: repo.name, snapshot: previewRectangle(repo.view(repo.root()).snapshot, layout) });
+  assert.equal((await post(mismatch.serialize())).status, 409);
+  assert.equal(jsonObject((await request(`/api/projects/${repo.projectId}`)).body).project, repo.serialize());
+  const fresh = await listen(t, null, null, { backlogFile });
+  assert.equal(jsonObject((await fresh(`/api/projects/${repo.projectId}`)).body).project, repo.serialize());
+  assert.deepEqual(jsonObject((await fresh(`/api/projects/${repo.projectId}/history?limit=1`)).body), history);
+  for (const target of ['/api/projects', `/api/projects/${repo.projectId}`, `/api/projects/${repo.projectId}/history`]) {
+    assert.equal((await request(target, { headers: { Origin: 'https://attacker.example' } })).status, 400);
+    assert.equal((await request(target, { headers: { Host: 'attacker.example' } })).status, 403);
+  }
+  assert.equal((await request('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project: 'x'.repeat(384 * 1024) }) })).status, 400);
 });
 
 test('remote runtime starts device authorization without exposing credentials', async (t) => {
