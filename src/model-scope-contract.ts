@@ -65,7 +65,43 @@ export const SavedModelScopeSchema = Type.Object({ id, name: Type.String({ minLe
   recordedAt: Type.Integer({ minimum: 0 }) }, exact);
 export type SavedModelScope = Static<typeof SavedModelScopeSchema>;
 
+/** Descriptor-only copy: neither a browser object nor an API caller may run accessors. */
+export function plainScopeData(value: unknown): unknown {
+  function copy(item: unknown, depth: number): unknown {
+    if (depth > 16) throw new Error('Scope data exceeds the nesting bound.');
+    if (item === null || typeof item === 'boolean') return item;
+    if (typeof item === 'string' && item.length <= 65_536) return item;
+    if (typeof item === 'number' && Number.isFinite(item)) return Object.is(item, -0) ? 0 : item;
+    if (typeof item !== 'object' || item === null) throw new Error('Scopes require finite plain JSON data.');
+    const keys = Reflect.ownKeys(item);
+    if (Array.isArray(item)) {
+      if (Object.getPrototypeOf(item) !== Array.prototype || item.length > 100 || keys.length !== item.length + 1) {
+        throw new Error('Scope arrays must be dense and bounded.');
+      }
+      return Array.from({ length: item.length }, (_, index) => {
+        const descriptor = Object.getOwnPropertyDescriptor(item, String(index));
+        if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) throw new Error('Scope accessors are not allowed.');
+        return copy(descriptor.value, depth + 1);
+      });
+    }
+    if (![Object.prototype, null].includes(Object.getPrototypeOf(item)) || keys.length > 128) {
+      throw new Error('Scope objects must be plain and bounded.');
+    }
+    return Object.fromEntries(keys.map(key => {
+      const descriptor = Object.getOwnPropertyDescriptor(item, key);
+      if (typeof key !== 'string' || !descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+        throw new Error('Scope accessors and symbols are not allowed.');
+      }
+      return [key, copy(descriptor.value, depth + 1)];
+    }));
+  }
+  const result = copy(value, 0);
+  if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 256 * 1024) throw new Error('Scope data exceeds the byte bound.');
+  return result;
+}
+
 export function parseModelScopeQuery(value: unknown): ModelScopeQuery {
+  value = plainScopeData(value);
   if (!Check(ModelScopeQuerySchema, value) || value.allOf.length + value.anyOf.length === 0) {
     throw new Error('A model scope requires bounded exact filters and an explicit selection.');
   }
@@ -78,11 +114,13 @@ export function parseModelScopeQuery(value: unknown): ModelScopeQuery {
 }
 
 export function parseScopedRequest(value: unknown): ScopedRequest {
+  value = plainScopeData(value);
   if (!Check(ScopedRequestSchema, value)) throw new Error('Invalid scoped request.');
   return { ...value, query: parseModelScopeQuery(value.query) };
 }
 
 export function parseFrozenModelScope(value: unknown): FrozenModelScope {
+  value = plainScopeData(value);
   if (!Check(FrozenModelScopeSchema, value)) throw new Error('Invalid frozen model scope.');
   return { ...structuredClone(value), query: parseModelScopeQuery(value.query) };
 }
