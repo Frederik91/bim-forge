@@ -13,7 +13,7 @@
     <a class="skip-link" href="#workbench">Skip to workbench</a>
     <header class="app-header">
       <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Room studies</small></span></a>
-      <div class="project-identity"><span class="workspace-label"><i class="live-dot" aria-hidden="true"></i> LOCAL STUDY</span><strong id="project-title">No project open</strong></div>
+      <div class="project-identity"><span class="workspace-label">SERVER PROJECT</span><strong id="project-title">No project open</strong><small id="server-save-status" role="status" aria-live="polite">Connecting to project server…</small></div>
       <div class="header-actions">
         <button id="open-backlog" class="button quiet" type="button" disabled>Change requests</button>
         <button id="project-overview" class="button quiet" type="button" disabled>Overview</button>
@@ -21,7 +21,7 @@
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
         <button id="export-project" class="button quiet" type="button" disabled>Export</button>
         <button id="import-project" class="button quiet" type="button" disabled>Import</button>
-        <button id="new-project" class="button outline" type="button" disabled>New project</button>
+        <button id="new-project" class="button outline" type="button" disabled>Projects</button>
         <input id="import-file" type="file" accept=".json,application/json" hidden aria-label="Choose project JSON file">
       </div>
     </header>
@@ -39,7 +39,7 @@
       <div class="message-area">
         <p id="status" role="status" aria-live="polite" aria-atomic="true">Opening local storage…</p>
         <div id="error" role="alert" aria-atomic="true" hidden></div>
-        <button id="recover-save" type="button" class="text-button" hidden>Download unreadable saved data</button>
+        <button id="recover-save" type="button" class="text-button" hidden>Download browser recovery data</button>
       </div>
 
       <nav id="level-navigation" class="level-navigation" aria-label="Building storeys" hidden>
@@ -186,23 +186,26 @@
 
       <section id="history-page" class="workflow-page" aria-labelledby="history-page-heading" hidden>
         <header class="page-heading"><div><p class="eyebrow">STEP 3 · HISTORY</p><h1 id="history-page-heading">Every outcome stays explainable.</h1><p>Open any accepted model, proposal or ancestor. Comparing alternatives never merges them.</p></div></header>
+        <section class="history-panel server-history" aria-labelledby="server-history-heading"><div class="panel-heading"><div><p class="eyebrow">RETAINED ON SERVER</p><h2 id="server-history-heading">Accepted change history</h2></div><button id="history-newest" class="button outline" type="button">Refresh newest</button></div><p id="server-history-status" role="status" aria-live="polite">Open a server project to read its history.</p><ol id="server-history-list" class="server-history-list" aria-label="Accepted server revision history"></ol><button id="history-older" class="button outline" type="button" disabled>Older accepted changes</button></section>
         <div class="history-layout">
           <section class="history-panel" aria-labelledby="history-heading"><div class="panel-heading"><div><p class="eyebrow">VERSIONED OUTCOMES</p><h2 id="history-heading">Accepted model & proposals</h2></div><span id="branch-count" class="subtle">0 branches</span></div><div id="history-list" class="history-list"><p class="empty-note">The original, accepted model and AI proposals will be listed here.</p></div></section>
           <section class="conflict-panel" aria-labelledby="conflict-heading"><p class="eyebrow">COMPARE ALTERNATIVES</p><h2 id="conflict-heading">Two ideas, one model.</h2><p>Choose two separate proposals to see where a human decision is needed.</p><div class="conflict-selects"><div><label for="conflict-left">First alternative</label><select id="conflict-left" disabled><option value="">Prepare two proposals first</option></select></div><div><label for="conflict-right">Second alternative</label><select id="conflict-right" disabled><option value="">Prepare two proposals first</option></select></div></div><button id="check-conflicts" class="button outline" type="button" disabled>Compare alternatives</button><p id="conflict-result" role="status" aria-live="polite">Comparison only. Nothing is merged or applied.</p></section>
         </div>
       </section>
 
-      <footer class="disclaimer"><span class="pill">Concept demo</span><p>Browser model cache, durable server request backlog and explicit ChatGPT plan connection. No IFC support, construction checks, production model access or automatic merge.</p></footer>
-      <noscript>This workbench requires JavaScript and IndexedDB local storage.</noscript>
+      <footer class="disclaimer"><span class="pill">Concept demo</span><p>Accepted models, requests and decisions are saved on this server. Browser sketches are unsaved; older browser data is recovery only. No offline acceptance or sync, IFC support, construction checks or automatic merge.</p></footer>
+      <noscript>This workbench requires JavaScript and a connection to its project server.</noscript>
     </main>
 
     <dialog id="start-dialog" class="modal start-modal" aria-labelledby="start-heading">
       <div class="modal-hero"><span class="brand-mark" aria-hidden="true">▱</span><p class="eyebrow">BIM FORGE · BUILDING STUDIES</p><h1 id="start-heading">Start your building study.</h1><p>Choose a starting model, mark up an object and describe the outcome. AI prepares a separate proposal for you to review.</p></div>
+      <section class="saved-project-picker" aria-labelledby="saved-project-heading"><h2 id="saved-project-heading">Saved server projects</h2><p id="project-list-status" role="status" aria-live="polite">Reading saved projects…</p><label for="saved-projects">Project</label><select id="saved-projects" disabled></select><div class="project-picker-actions"><button id="open-saved-project" class="button primary" type="button" disabled>Open latest accepted model</button><button id="refresh-projects" class="button outline" type="button">Refresh projects</button><button id="import-server-project" class="button outline" type="button" disabled>Import project JSON</button></div></section>
+      <section id="legacy-recovery" class="legacy-recovery" aria-labelledby="legacy-heading"><h2 id="legacy-heading">Browser recovery</h2><p id="legacy-status" role="status" aria-live="polite">Checking for an older browser project…</p><div class="project-picker-actions"><button id="transfer-legacy" class="button outline" type="button" disabled>Register browser project</button><button id="export-legacy" class="button outline" type="button" disabled>Export recovery bytes</button><button id="retry-legacy" class="text-button" type="button">Retry browser recovery</button></div></section>
       <form id="project-form" class="start-form"><label for="project-template">Starting point</label><select id="project-template"><option value="house">Multi-storey house · basement, ground floor and attic</option><option value="residential">Residential ground floor · 8 rooms</option><option value="room">Single empty room</option></select><p class="editor-help">Start with a connected concept model, then ask the AI to adapt it. The multi-storey house includes stairs, floor slabs and a pitched roof.</p><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="My house study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create project <span aria-hidden="true">→</span></button></form>
       <div class="or"><span>or</span></div>
       <button id="load-sample" class="button outline full" type="button" disabled>Open the House Pilot reference room</button>
       <button id="start-close" class="text-button modal-close" type="button" hidden>Return to current project</button>
-      <p class="modal-footnote"><i class="live-dot" aria-hidden="true"></i> Draft models start in this browser. Submitted requests and accepted outcomes are retained on this server. Demo JSON, not IFC.</p>
+      <p class="modal-footnote">Creation and imports register on the server before opening. Existing accepted server state always wins. Demo JSON, not IFC.</p>
     </dialog>
 
     <dialog id="auth-dialog" class="modal auth-modal" aria-labelledby="auth-heading">
