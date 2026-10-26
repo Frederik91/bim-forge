@@ -20,7 +20,7 @@ interface Manifest {
   name: string;
   revisions: string[];
   branches: { name: string; revisionId: string }[];
-  reviews: unknown[];
+  reviews: { hash: string; decision: unknown }[];
 }
 let savepointSequence = 0;
 const MAX_BYTES = 256 * 1024;
@@ -84,7 +84,9 @@ function manifest(text: string): Manifest {
   return { version: value.version, projectId: string(value.projectId), name: string(value.name),
     revisions: array(value.revisions, 32).map(string), branches: array(value.branches, 32).map((entry) => {
       const branch = object(entry); return { name: string(branch.name), revisionId: string(branch.revisionId) };
-    }), reviews: value.version === 2 ? array(value.reviews, 31) : [] };
+    }), reviews: value.version === 2 ? array(value.reviews, 31).map((entry) => {
+      const review = object(entry); return { hash: string(review.hash), decision: review.decision };
+    }) : [] };
 }
 function delta(text: string): Delta {
   const value = object(parsed(text));
@@ -121,6 +123,8 @@ export class VersionedProjectStore implements VersionedProjects {
         PRIMARY KEY(project_id, id)) STRICT;
       CREATE TABLE IF NOT EXISTS versioned_documents (
         project_id TEXT NOT NULL, id TEXT NOT NULL, manifest TEXT NOT NULL, PRIMARY KEY(project_id, id)) STRICT;
+      CREATE TABLE IF NOT EXISTS versioned_reviews (
+        project_id TEXT NOT NULL, hash TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(project_id, hash)) STRICT;
       CREATE TABLE IF NOT EXISTS versioned_projects (
         project_id TEXT PRIMARY KEY, document_id TEXT NOT NULL, name TEXT NOT NULL, head_revision_id TEXT NOT NULL, recorded_at INTEGER NOT NULL) STRICT;
       CREATE TABLE IF NOT EXISTS versioned_publications (
@@ -169,6 +173,13 @@ export class VersionedProjectStore implements VersionedProjects {
     return this.#atomic(() => {
       const revisions = new Map(state.revisions.map((revision) => [revision.id, revision]));
       for (const revision of state.revisions) {
+        const existing = this.#db.prepare('SELECT parent_id, delta_hash, delta FROM versioned_revisions WHERE project_id = ? AND id = ?').get(state.projectId, revision.id);
+        if (existing) {
+          const text = string(existing.delta);
+          if (existing.parent_id !== revision.parentId || hash(text) !== existing.delta_hash) fail('immutable revision hash corruption.');
+          delta(text);
+          continue;
+        }
         if (hash(canonical({ version: 1, parentId: revision.parentId, snapshot: revision.snapshot })) !== revision.id) fail('portable revision hash corruption.');
         const parent = revision.parentId === null ? undefined : revisions.get(revision.parentId);
         if (revision.parentId !== null && !parent) fail('missing parent revision.');
@@ -181,9 +192,9 @@ export class VersionedProjectStore implements VersionedProjects {
             const text = canonical(item);
             if (old.get(item.id) === text) continue;
             const bodyHash = hash(text);
-            this.#db.prepare('INSERT OR IGNORE INTO versioned_bodies(hash, kind, body) VALUES (?, ?, ?)').run(bodyHash, kind, text);
-            const saved = this.#row('SELECT kind, body FROM versioned_bodies WHERE hash = ?', bodyHash);
-            if (saved.body !== text || saved.kind !== kind) fail('body hash corruption.');
+            const saved = this.#db.prepare('SELECT kind, body FROM versioned_bodies WHERE hash = ?').get(bodyHash);
+            if (saved) { if (saved.body !== text || saved.kind !== kind) fail('body hash corruption.'); }
+            else this.#db.prepare('INSERT INTO versioned_bodies(hash, kind, body) VALUES (?, ?, ?)').run(bodyHash, kind, text);
             result.push({ id: item.id, body: bodyHash });
           }
           for (const item of before) if (!remaining.has(item.id)) result.push({ id: item.id, body: null });
@@ -193,16 +204,23 @@ export class VersionedProjectStore implements VersionedProjects {
           entityOrder: orderChanges(parent?.snapshot.entities.map((item) => item.id) ?? [], revision.snapshot.entities.map((item) => item.id)),
           relationshipOrder: orderChanges(parent?.snapshot.relationships.map((item) => item.id) ?? [], revision.snapshot.relationships.map((item) => item.id)) };
         const text = canonical(patch); const deltaHash = hash(text);
-        this.#db.prepare('INSERT OR IGNORE INTO versioned_revisions(project_id, id, parent_id, delta_hash, delta) VALUES (?, ?, ?, ?, ?)')
+        this.#db.prepare('INSERT INTO versioned_revisions(project_id, id, parent_id, delta_hash, delta) VALUES (?, ?, ?, ?, ?)')
           .run(state.projectId, revision.id, revision.parentId, deltaHash, text);
-        const saved = this.#row('SELECT parent_id, delta_hash, delta FROM versioned_revisions WHERE project_id = ? AND id = ?', state.projectId, revision.id);
-        if (saved.parent_id !== revision.parentId || saved.delta_hash !== deltaHash || saved.delta !== text) fail('immutable revision mismatch.');
       }
+      const reviews = state.version === 2 ? state.reviews.map((review) => {
+        const { decision, ...evidence } = review; const body = canonical(evidence); const reviewHash = hash(body);
+        const saved = this.#db.prepare('SELECT body FROM versioned_reviews WHERE project_id = ? AND hash = ?').get(state.projectId, reviewHash);
+        if (saved) { if (saved.body !== body) fail('review body hash corruption.'); }
+        else this.#db.prepare('INSERT INTO versioned_reviews(project_id, hash, body) VALUES (?, ?, ?)').run(state.projectId, reviewHash, body);
+        return { hash: reviewHash, decision };
+      }) : [];
       const metadata = { version: state.version, projectId: state.projectId, name: state.name,
         revisions: state.revisions.map((revision) => revision.id), branches: state.branches,
-        ...(state.version === 2 ? { reviews: state.reviews } : {}) };
+        ...(state.version === 2 ? { reviews } : {}) };
       const text = canonical(metadata); const documentId = hash(text);
-      this.#db.prepare('INSERT OR IGNORE INTO versioned_documents(project_id, id, manifest) VALUES (?, ?, ?)').run(state.projectId, documentId, text);
+      const saved = this.#db.prepare('SELECT manifest FROM versioned_documents WHERE project_id = ? AND id = ?').get(state.projectId, documentId);
+      if (saved) { if (saved.manifest !== text) fail('document hash corruption.'); }
+      else this.#db.prepare('INSERT INTO versioned_documents(project_id, id, manifest) VALUES (?, ?, ?)').run(state.projectId, documentId, text);
       const reference = { projectId: state.projectId, documentId };
       // Verify the persisted graph, including existing unchanged bodies, before committing a reference.
       if (this.read(reference) !== serialized) fail('portable reconstruction mismatch.');
@@ -273,8 +291,19 @@ export class VersionedProjectStore implements VersionedProjects {
       if (metadata.version === 1 && branch.name === 'main' && load(branch.revisionId).parentId !== null) fail('legacy main must retain root.');
     }
     if (reachable.size !== allowed.size) fail('unreachable revision references.');
+    const reviews = metadata.reviews.map((reference) => {
+      const row = this.#row('SELECT body FROM versioned_reviews WHERE project_id = ? AND hash = ?', metadata.projectId, reference.hash);
+      const body = string(row.body); hydratedBytes += Buffer.byteLength(body);
+      if (hydratedBytes > MAX_BYTES) fail('reconstructed project exceeds the portable bound.');
+      if (hash(body) !== reference.hash) fail('review body hash corruption.');
+      const review = object(parsed(body));
+      if (!allowed.has(string(review.baseRevisionId)) || !allowed.has(string(review.proposalRevisionId))) fail('missing review revision reference.');
+      const decision = object(reference.decision);
+      if (Object.hasOwn(decision, 'appliedRevisionId') && !allowed.has(string(decision.appliedRevisionId))) fail('missing applied review reference.');
+      return { ...review, decision };
+    });
     const text = canonical({ version: metadata.version, projectId: metadata.projectId, name: metadata.name, revisions,
-      branches: metadata.branches, ...(metadata.version === 2 ? { reviews: metadata.reviews } : {}) });
+      branches: metadata.branches, ...(metadata.version === 2 ? { reviews } : {}) });
     if (Buffer.byteLength(text) > MAX_BYTES) fail('reconstructed project exceeds the portable bound.');
     return text;
   }
