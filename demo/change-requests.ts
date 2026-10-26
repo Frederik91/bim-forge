@@ -744,13 +744,14 @@ export class ChangeRequests {
     this.#assertOpen();
     this.#transaction(() => {
       if (this.#submission(reply.messageId, fingerprint)) return;
-      if (this.project(ticket.projectId) !== currentText || JSON.stringify(this.#get(id)) !== JSON.stringify(ticket) || this.#messages(id).length !== reply.expectedSequence) throw new BacklogConflict('The model or conversation changed while sending. Refresh and retry.');
+      const latest = this.#get(id);
+      if (this.project(ticket.projectId) !== currentText || latest.request.requestId !== ticket.request.requestId || latest.fingerprint !== ticket.fingerprint || this.#messages(id).length !== reply.expectedSequence) throw new BacklogConflict('The model or conversation changed while sending. Refresh and retry.');
       if (sources.length) this.#sources.bind(ticket.projectId, sources, reply.messageId);
       const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
         selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
         ...(sources.length ? { sources } : {}), ...(ticket.request.authoringScope ? { authoringScope: ticket.request.authoringScope } : {}), ...(ticket.request.scope ? { scope: ticket.request.scope } : {}) };
-      const next = recordActivity({ ...ticket, request, project: this.#projects.put(repository), fingerprint,
-        history: [...ticket.history, JSON.stringify({ ...ticket, history: [] })], activity: [], state: 'queued', attempts: 0,
+      const next = recordActivity({ ...latest, request, project: this.#projects.put(repository), fingerprint,
+        history: [...latest.history, JSON.stringify({ ...latest, history: [] })], activity: [], state: 'queued', attempts: 0,
         result: null, error: null, decisionId: null, decisionAction: null }, { stage: 'queued', message: 'Reply saved. Earlier messages and proposals remain in the conversation.' });
       this.#put(next);
       if (ticket.state === 'working' || ticket.state === 'queued') {
