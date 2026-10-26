@@ -228,7 +228,7 @@ export async function createDemoServer({
             query: parseModelScopeQuery(value.query), expectedVersion: value.expectedVersion }) });
         } else send(response, 405, { error: 'Saved scopes require GET or POST.' });
       } catch (error) {
-        send(response, error instanceof ScopeStoreConflict || error instanceof BacklogConflict ? 409 : 400,
+        send(response, error instanceof ScopeStoreConflict ? error.code === 'not-found' ? 404 : 409 : error instanceof BacklogConflict ? 409 : 400,
           { error: error instanceof Error ? error.message : 'Scope unavailable.' });
       }
       return;

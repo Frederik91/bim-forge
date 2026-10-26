@@ -3,6 +3,7 @@ import test from 'node:test';
 import { requestContext } from './request-context.ts';
 import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
 import { residentialFloor } from '../src/residential-floor.ts';
+import { freezeModelScope } from '../src/model-scope.ts';
 
 test('opening or revising an attic ticket restores its object, room and level independently of the browsing floor', () => {
   const snapshot = multiStoreySnapshot();
@@ -24,4 +25,13 @@ test('level-qualified destinations restore their floor without persisting a leve
   const level = legacy.entities.find(item => item.type === 'Level'); assert.ok(level);
   assert.equal(requestContext(legacy, [level.id]).levelId, level.id);
   assert.equal(JSON.stringify(legacy), before);
+});
+
+test('a frozen scope restores its target context when the browser selection belongs to another level', () => {
+  const snapshot = multiStoreySnapshot(); const before = JSON.stringify(snapshot);
+  const scope = freezeModelScope({ graph: snapshot, baseRevisionId: 'a'.repeat(64),
+    query: { version: 1, allOf: [{ kind: 'ids', ids: ['level-ground-plant'] }], anyOf: [], excludeIds: [] } });
+  const context = requestContext(snapshot, ['level-attic-plant'], undefined, scope);
+  assert.equal(context.selectedId, 'level-ground-plant'); assert.equal(context.levelId, 'level-ground');
+  assert.equal(JSON.stringify(snapshot), before);
 });
