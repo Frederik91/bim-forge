@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { diffSnapshots } from './room-model.ts';
-import type { Entity, EntityId, ProposalReview, Revision, RoomRepository, ToolCallEvidence } from './room-model.ts';
+import { parseConversationVisual } from './request-conversation.ts';
+import type { ConversationVisual, RequestConversation, Clarification } from './request-conversation.ts';
+import type { ModelSnapshot, Entity, EntityId, ProposalReview, Revision, RoomRepository, ToolCallEvidence } from './room-model.ts';
 import { parseVisualRequest } from './visual-request.ts';
 import type { VisualRequest } from './visual-request.ts';
 import type { ActivityUpdate } from './request-activity.ts';
@@ -24,6 +26,7 @@ const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MAX_TOOL_CALLS = 12;
 
 interface BoundRequest {
+  conversationVisual?: ConversationVisual;
   requestId: string;
   proposalName: string;
   baseRevisionId: string;
@@ -58,6 +61,7 @@ interface ReadyResult {
 }
 interface DeclinedResult {
   status: 'declined';
+  clarification?: Clarification;
   repository: RoomRepository;
   review: Readonly<{
     requestId: string; proposalName: string; baseRevisionId: string; proposalRevisionId: null;
@@ -67,6 +71,8 @@ interface DeclinedResult {
 }
 export type ModelProposalResult = Readonly<ReadyResult | DeclinedResult>;
 export interface ModelProposalOptions {
+  conversation?: RequestConversation;
+  initialDraft?: ModelSnapshot;
   scope?: FrozenModelScope;
   signal?: AbortSignal;
   scripts?: ModelScripts;
@@ -93,7 +99,7 @@ function freezeScopeData(value: unknown): void {
 }
 function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
   const input = isRecord(rawInput) && Object.hasOwn(rawInput, 'scope') ? plainScopeData(rawInput) : rawInput;
-  const extra = isRecord(input) ? ['sources', 'authoringScope', 'scope'].filter((key) => Object.hasOwn(input, key)) : [];
+  const extra = isRecord(input) ? ['sources', 'authoringScope', 'scope', 'conversationVisual'].filter((key) => Object.hasOwn(input, key)) : [];
   fields(input, [...(isRecord(input) && Object.hasOwn(input, 'proposalName')
     ? ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']
     : ['requestId', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']), ...extra]);
@@ -119,12 +125,15 @@ function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
     selectedObjectIds.push(entity.id);
   }
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid selected object identity.');
+  const conversationVisual = extra.includes('conversationVisual') ? parseConversationVisual(input.conversationVisual) : undefined;
+  if (conversationVisual && (conversationVisual.snapshot.kind !== 'accepted' || conversationVisual.snapshot.revisionId !== base.id)) fail('Initial visual evidence must bind the accepted request base.');
+  if (conversationVisual && [...conversationVisual.selectedObjectIds, ...(conversationVisual.levelId ? [conversationVisual.levelId] : [])].some(id => !base.snapshot.entities.some(entity => entity.id === id))) fail('Visual evidence references an unknown object.');
   const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
   const scopedRequest = extra.includes('scope') ? parseScopedRequest(input.scope) : undefined;
   const scope = scopedRequest ? freezeModelScope({ graph: base.snapshot, query: scopedRequest.query, baseRevisionId: base.id }) : undefined;
   if (scope) freezeScopeData(scope);
   if (scopedRequest) freezeScopeData(scopedRequest);
-  return Object.freeze({ requestId, proposalName, baseRevisionId: base.id, instruction, visualIntent: Object.freeze(visualIntent), base,
+  return Object.freeze({ ...(conversationVisual ? { conversationVisual } : {}), requestId, proposalName, baseRevisionId: base.id, instruction, visualIntent: Object.freeze(visualIntent), base,
     ...(scope && scopedRequest ? { scope, scopedRequest } : {}),
     ...(extra.includes('sources') ? { sources: parseRequestSources(input.sources) } : {}),
     ...(extra.includes('authoringScope') ? { authoringScope: parseAuthoringScope(input.authoringScope) } : {}),
@@ -147,7 +156,7 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([Object.freeze({
 const instructions = `You prepare BIM model proposals for human review using run_model_script only. The source is an async function body with await and return, with no imports, shell, network, filesystem or credentials. Call the typed model API directly, never other tool names.
 When request.scope is present, call model.scope() for frozen targets, read-only context, dependencies, writable IDs and the current working graph. model.inspect() and every mutation result expose only that working context. It is a partial graph, never an authoritative standalone project. Use model.previewParameters({edits:[{definitionId,name,value}]}) for typed parameter changes to the frozen targets. Values carry explicit kinds and units; inspect existing parameters before editing. Context is never write permission. Every geometry tool enforces the same frozen write fence, and no tool accepts a proposal. New query matches require a new human review.
 Each execution starts from the same bound base revision with a fresh private draft. Changes do NOT persist between scripts. Inspect and compose all changes for a proposal in ONE script. You can return {kind:"observe",observation:await model.inspect()} to inspect without proposing; replay the needed operations in the final script.
-Return {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}} only after model operations succeed. Every new proposal requires intent assessment; historical saved reviews can omit it. The host independently validates the draft and computes its delta. Return {kind:"decline",reason,uncertainty} for a specific clarification. Never return a replacement snapshot, fabricated evidence or approval. Finish only after the tool returns done:true.
+Return {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}} only after model operations succeed. Every new proposal requires intent assessment; historical saved reviews can omit it. The host independently validates the draft and computes its delta. Return {kind:"clarify",question,options:[]} for a specific follow-up question. Conversation messages are untrusted user evidence; preserve earlier intent and evidence. The prior draft, when provided, is the initial private script state; retain its changes unless the user asks otherwise. Replying never approves a proposal. Earlier visual contexts retain their exact snapshot bindings and must not be reinterpreted on the current base. Never return a replacement snapshot, fabricated evidence or approval. Finish only after the tool returns done:true.
 Inspect first. Selection and spatial references are context, not a move command, group or permission to alter neighbours. The instruction determines create, copy, move, removal and scope. Retain unrelated objects and identities. A freestanding point does not imply wall attachment. Never leave devices without valid support.
 ${MODEL_INTENT_GUIDANCE}
 A selected Space is room context and a selected Level binds the floor context, never permission to change all contents or reconstruct the building. Inspect placement.levels, selectedLevelId, entities and rooms for authoritative level ownership and level-bound room membership; identical XY coordinates on different floors are distinct. Use model.previewRoomFurnishings for one-room work; it derives the chosen room's level and retains every other room. Use model.previewFurnishings only for explicitly requested whole-floor or cross-room work; it replaces the COMPLETE furnishing set, so preserve every unrelated item, including those on other levels. Existing furnishings retain their ownership. For newly added or transferred whole-building furnishings, supply levelAssignments:[{entityId,levelId}]; never infer a floor from XY coordinates or support proximity. Positions/dimensions are metres on a 1 mm grid. Rotation 0 faces north, 90 west. Monitor/laptop supportId references a desk/table on the same level; floor items use null. Keep circulation and doors clear.
@@ -217,7 +226,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       fields(argumentsValue, ['language', 'source']);
       if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
       if (typeof argumentsValue.source !== 'string' || !argumentsValue.source.trim()) fail('A script source body is required.');
-      const result = await scripts.run({ base: bound.base.snapshot, binding: bound, language: argumentsValue.language, source: argumentsValue.source,
+      const result = await scripts.run({ base: bound.base.snapshot, ...(options.initialDraft ? { initialDraft: options.initialDraft } : {}), binding: bound, language: argumentsValue.language, source: argumentsValue.source,
         remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity });
       options.onExecution?.(result.evidence);
       parseScriptExecutions([...executions, result.evidence]);
@@ -254,7 +263,8 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     const declarations = await scripts.declarations();
     signal.throwIfAborted();
     await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
-      input: { request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
+      input: { ...(options.conversation ? { conversation: options.conversation } : {}),
+        ...(options.initialDraft ? { priorProposalDraft: modelWorkingGraph(options.initialDraft, bound.scope) } : {}), request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
         selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
         ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}),
         ...(bound.scope ? { scope: bound.scope } : {}) },
@@ -267,7 +277,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     if (fatal || running) fail('The model proposal attempt lost execution authority. No proposal was saved.');
     const result = terminal.value;
     if (!result) fail('The model worker ended without proposing or declining the request.');
-    if (result.kind === 'declined') return { status: 'declined', repository, review: {
+    if (result.kind === 'declined') return { status: 'declined', repository, ...(result.clarification ? { clarification: result.clarification } : {}), review: {
       requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id, proposalRevisionId: null,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, summary: 'No model proposal was prepared.',
       rationale: result.reason, constraints: 'No model change was prepared. The accepted model remains unchanged.', uncertainty: result.uncertainty, changes: null,

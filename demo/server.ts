@@ -14,6 +14,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
   ['/', ['demo/index.html', 'text/html; charset=utf-8']],
   ['/room-app.mjs', ['dist/demo/room-app.mjs', 'text/javascript; charset=utf-8']],
+  ['/request-chat.css', ['demo/request-chat.css', 'text/css; charset=utf-8']],
   ['/room.css', ['demo/room.css', 'text/css; charset=utf-8']],
 ]);
 const MAX_REQUEST_BYTES = 384 * 1024;
@@ -311,7 +312,7 @@ export async function createDemoServer({
       return;
     }
     const projectRoute = /^\/api\/projects\/([^/]+)\/change-requests$/.exec(request.url ?? '');
-    const ticketRoute = /^\/api\/change-requests\/([^/]+)(\/decision|\/revision)?$/.exec(request.url ?? '');
+    const ticketRoute = /^\/api\/change-requests\/([^/]+)(\/decision|\/revision|\/messages)?$/.exec(request.url ?? '');
     if (projectRoute || ticketRoute) {
       try {
         sameOriginRequest(request, publicOrigin);
@@ -322,7 +323,10 @@ export async function createDemoServer({
           send(response, 200, { tickets: backlog.list(id), project: backlog.project(id) });
         } else if (ticketRoute) {
           const id = decodeURIComponent(ticketRoute[1] ?? '');
-          if (ticketRoute[2] === '/revision') {
+          if (ticketRoute[2] === '/messages') {
+            if (request.method !== 'POST') { send(response, 405, { error: 'Sending a message requires POST.' }); return; }
+            send(response, 202, { ticket: await backlog.appendMessage(id, await readJson(request, 64 * 1024)) });
+          } else if (ticketRoute[2] === '/revision') {
             if (request.method !== 'POST') { send(response, 405, { error: 'A revision requires POST.' }); return; }
             const payload = proposalPayload(await readJson(request));
             send(response, 202, { ticket: await backlog.revise(id, payload.project, payload.request) });

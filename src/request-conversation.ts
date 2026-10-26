@@ -64,3 +64,9 @@ export function parseClarification(input: unknown): Clarification {
   if (!Check(ClarificationSchema, value)) throw new Error('A clarification requires a question and up to six answer options.');
   return value;
 }
+
+export function parseConversationVisual(input: unknown): ConversationVisual {
+  const value = plainScopeData(input);
+  if (!Check(ConversationVisualSchema, value)) throw new Error('Invalid snapshot-bound visual evidence.');
+  return value;
+}

@@ -19,6 +19,8 @@ import { levels, entityLevel, entityElevation, levelView } from './building-leve
 import { AssetFamilySchema, AssetInstanceSchema, AssetEditSchema } from './asset-family.ts';
 import type { AuthoringScope } from './request-sources.ts';
 import { ModelParametersSchema, ModelParameterSchema } from './model-scope-contract.ts';
+import { parseClarification } from './request-conversation.ts';
+import type { Clarification } from './request-conversation.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
 import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
@@ -104,7 +106,7 @@ export interface ScriptDiagnostic { code: string; message: string; line: number 
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
   | { kind: 'proposal'; snapshot: ModelSnapshot; review: ScriptReviewText; evidence: ScriptExecutionEvidence }
-  | { kind: 'declined'; reason: string; uncertainty: string; intent?: IntentAssessment; evidence: ScriptExecutionEvidence }
+  | { kind: 'declined'; reason: string; uncertainty: string; clarification?: Clarification; intent?: IntentAssessment; evidence: ScriptExecutionEvidence }
   | { kind: 'failed'; diagnostic: ScriptDiagnostic; evidence: ScriptExecutionEvidence };
 
 interface Draft {
@@ -116,6 +118,7 @@ interface Draft {
 }
 interface RunInput {
   base: ModelSnapshot;
+  initialDraft?: ModelSnapshot;
   binding: ModelScriptBinding;
   source: string;
   language: 'javascript' | 'typescript';
@@ -148,6 +151,7 @@ function text(value: unknown, maximum: number): string {
 function decision(value: unknown):
   | { kind: 'observe'; observation: JsonValue }
   | { kind: 'propose'; review: ScriptReviewText }
+  | { kind: 'clarify'; clarification: Clarification }
   | { kind: 'decline'; reason: string; uncertainty: string; intent?: IntentAssessment } {
   if (!record(value)) throw new Error('Return an observe, propose or decline decision.');
   if (value.kind === 'observe') {
@@ -161,6 +165,10 @@ function decision(value: unknown):
     return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
       constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
       intent: parseIntentAssessment(value.review.intent) } };
+  }
+  if (value.kind === 'clarify') {
+    fields(value, ['kind', 'question', 'options']);
+    return { kind: 'clarify', clarification: parseClarification({ question: value.question, options: value.options }) };
   }
   if (value.kind === 'decline') {
     const hasIntent = Object.hasOwn(value, 'intent');
@@ -338,7 +346,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'Roof clearance and stair geometry are concept evidence, never structural, headroom or building-code certification. ' +
   'Monitor/laptop supportId must refer to a desk/table. No implicit workstation or proximity group exists. ' +
   'Return {kind:"observe",observation:value}, {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}}, ' +
-  'or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
+  'or {kind:"clarify",question,options:[]} for a user question, or {kind:"decline",reason,uncertainty}. Propose only after authoring the complete change in this script. ' +
   'Only trusted application code validates the proposal, and only a separate human decision accepts it. ' + MODEL_INTENT_GUIDANCE)
   .addFile('/guides/assets.md', 'Author and reuse custom asset recipes from the user request.', [
     'Inspect the bound model first. Design a compact primitive recipe for the requested object, rather than looking for a preconfigured catalog category. The host has no built-in person family.',
@@ -391,7 +399,7 @@ export class ModelScripts {
       assertModelScopeFresh({ base: input.base, current: input.base, binding: binding.scope });
     }
     const runtime = await this.#get();
-    const draft: Draft = { base: input.base, snapshot: input.base, binding, signal: input.signal, onActivity: input.onActivity };
+    const draft: Draft = { base: input.base, snapshot: input.initialDraft ?? input.base, binding, signal: input.signal, onActivity: input.onActivity };
     const session = runtime.createSession({ context: draft,
       capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
         ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
@@ -425,6 +433,7 @@ export class ModelScripts {
     try {
       const result = decision(outcome.value);
       if (result.kind === 'observe') return { kind: 'observation', observation: result.observation, evidence: evidence('observation', 'not-run', null) };
+      if (result.kind === 'clarify') return { kind: 'declined', reason: result.clarification.question, uncertainty: 'Awaiting user clarification.', clarification: result.clarification, evidence: evidence('declined', 'not-run', null) };
       if (result.kind === 'decline') return { kind: 'declined', reason: result.reason, uncertainty: result.uncertainty,
         ...(result.intent ? { intent: result.intent } : {}), evidence: evidence('declined', 'not-run', null) };
       const candidate = validateSnapshot(draft.snapshot);
