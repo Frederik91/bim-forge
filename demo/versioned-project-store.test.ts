@@ -169,7 +169,10 @@ test('legacy repository documents and current multi-storey snapshot versions rou
   const house = await createMultiStoreyProject('Snapshot version two'); const reference = store.put(house);
   const restored = await RoomRepository.restore(store.read(reference)); assert.equal(restored.serialize(), house.serialize());
   assert.equal(restored.view(restored.root()).snapshot.version, 2);
-  const proposed = await wider(house); assert.equal(store.read(store.put(proposed)), proposed.serialize());
+  const snapshot = structuredClone(house.view(house.root()).snapshot);
+  const furnishing = snapshot.entities.find((item) => item.type === 'Furniture'); assert.ok(furnishing);
+  furnishing.name = 'Recorded plant';
+  const proposed = await proposal(house, snapshot); assert.equal(store.read(store.put(proposed)), proposed.serialize());
 });
 
 test('accepted history is root plus two applied revisions and never contains private proposals', async (t) => {
@@ -248,10 +251,10 @@ test('oversize typed persistence is refused before writes and preserves the acce
   // Simulate a typed future repository mutator that omits a whole-document bound.
   const oversized = Object.freeze({ ...state, name: '界'.repeat(90_000) });
   assert.ok(Buffer.byteLength(canonical(oversized)) > 256 * 1024);
-  const persistence = t.mock.method(root, 'persistence', () => oversized);
+  Object.defineProperty(root, 'persistence', { configurable: true, value: () => oversized });
   db.exec("CREATE TRIGGER no_body_write BEFORE INSERT ON versioned_bodies BEGIN SELECT RAISE(ABORT, 'unexpected write'); END;");
   assert.throws(() => store.put(root), /256 KiB/);
-  persistence.mock.restore();
+  Reflect.deleteProperty(root, 'persistence');
   assert.deepEqual(store.current(root.projectId), current); assert.equal(store.read(current), root.serialize());
   assert.deepEqual([count(db, 'bodies'), count(db, 'revisions'), count(db, 'documents'), count(db, 'publications')], before);
 });
@@ -260,8 +263,8 @@ test('oversize state arrays are refused before writes without raising portable l
   const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
   const root = await RoomRepository.create(); const current = initial(store, root); const state = root.persistence();
   const revisions = Array.from({ length: 101 }, () => state.revisions[0]);
-  const persistence = t.mock.method(root, 'persistence', () => Object.freeze({ ...state, revisions }));
-  assert.throws(() => store.put(root), /bounded collection/); persistence.mock.restore();
+  Object.defineProperty(root, 'persistence', { configurable: true, value: () => Object.freeze({ ...state, revisions }) });
+  assert.throws(() => store.put(root), /bounded collection/); Reflect.deleteProperty(root, 'persistence');
   assert.deepEqual(store.current(root.projectId), current); assert.equal(count(db, 'revisions'), 1);
   assert.equal(count(db, 'documents'), 1); assert.equal(store.read(current), root.serialize());
 });
