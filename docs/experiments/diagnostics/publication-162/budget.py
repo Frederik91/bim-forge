@@ -8,18 +8,31 @@ import subprocess
 import time
 
 GIB = 1024 ** 3
+ROOT = pathlib.Path('/e')
 
 
 def allocated(path):
-    result = subprocess.run(['du', '-sx', '-B1', str(path)], capture_output=True, text=True,
-                            timeout=8, env={**os.environ, 'LC_ALL': 'C'})
-    warnings = result.stderr.splitlines()
-    # A disappearing temporary file occupies no space after its removal.
-    # Every other scan error invalidates the monitor instead of becoming zero.
-    if result.returncode != 0 and (result.returncode != 1 or not warnings or
-            not all(re.fullmatch(r"du: cannot access '.+': No such file or directory", line) for line in warnings)):
-        raise RuntimeError('Allocation scan failed: ' + result.stderr)
-    return int(result.stdout.split()[0]), warnings
+    failures = []
+    for attempt in range(1, 4):
+        started = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            result = subprocess.run(['du', '-sx', '-B1', str(path)], capture_output=True, text=True,
+                                    timeout=8, env={**os.environ, 'LC_ALL': 'C'})
+        except subprocess.TimeoutExpired:
+            failures.append({'attempt': attempt, 'error': 'Eight-second scan timeout'})
+            continue
+        if result.returncode != 0:
+            # Discard all stdout from an incomplete scan, including ENOENT races.
+            failures.append({'attempt': attempt, 'exitCode': result.returncode, 'error': result.stderr})
+            continue
+        if result.stderr:
+            raise RuntimeError('Successful allocation scan emitted an unexpected diagnostic: ' + result.stderr)
+        match = re.fullmatch(r'([0-9]+)\t' + re.escape(str(path)) + r'\n?', result.stdout)
+        if match is None:
+            raise RuntimeError('Malformed successful allocation scan output for ' + str(path))
+        return int(match.group(1)), {'attempt': attempt, 'startedAt': started,
+            'finishedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'failedAttempts': failures}
+    raise RuntimeError('No complete successful allocation scan after three attempts: ' + json.dumps(failures))
 
 
 def breaches(row):
@@ -34,13 +47,13 @@ def breaches(row):
 
 
 def main():
-    root = pathlib.Path('/e')
+    root = ROOT
     while True:
         started = time.monotonic()
         try:
-            aggregate, warnings = allocated('/all')
-            new, new_warnings = allocated('/e')
-            prepared, prepared_warnings = allocated('/prepared')
+            aggregate, aggregate_scan = allocated('/all')
+            new, new_scan = allocated('/e')
+            prepared, prepared_scan = allocated('/prepared')
             ssd, hostroot = os.statvfs('/all'), os.statvfs('/host-root')
             memory = next(int(line.split()[1]) * 1024 for line in pathlib.Path('/proc/meminfo').read_text().splitlines()
                           if line.startswith('MemAvailable:'))
@@ -49,7 +62,7 @@ def main():
                    'ssdAvailableBytes': ssd.f_bavail * ssd.f_frsize,
                    'rootAvailableBytes': hostroot.f_bavail * hostroot.f_frsize,
                    'hostAvailableMemoryBytes': memory, 'scanSeconds': time.monotonic() - started,
-                   'vanishedPathWarnings': warnings + new_warnings + prepared_warnings}
+                   'completeScans': {'aggregate': aggregate_scan, 'run': new_scan, 'preparation': prepared_scan}}
             if row['scanSeconds'] > 10:
                 raise RuntimeError('Budget scan exceeded freshness envelope')
             row['breaches'] = breaches(row)
