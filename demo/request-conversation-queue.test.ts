@@ -99,7 +99,7 @@ test('reply supersedes a working turn without a late response overwriting it; pe
   assert.equal(maximum, 1);
   assert.equal(queue.get('old-turn').state, 'needs-input', queue.get('old-turn').error ?? '');
   const messages = queue.get('old-turn').conversation?.messages;
-  assert.equal(messages?.length, 3);
+  assert.equal(messages?.length, 4);
   assert.ok(!JSON.stringify(messages).includes('Late question?'));
   assert.equal(queue.project(repo.projectId), repo.serialize());
 });

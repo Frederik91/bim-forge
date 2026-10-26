@@ -88,8 +88,8 @@ function isModelWorker(value: unknown): value is ModelWorker { return isRecord(v
 function fields(value: unknown, expected: readonly string[]): asserts value is Record<string, unknown> {
   if (!isRecord(value) || Object.keys(value).length !== expected.length || !expected.every((key) => Object.hasOwn(value, key))) fail('Unexpected proposal request fields.');
 }
-function text(value: unknown, name: string, maximum: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) fail(`${name} must contain readable text no longer than ${maximum} characters.`);
+function text(value: unknown, name: string, maximum: number, multiline = false): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > maximum || (multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/ : /[\u0000-\u001f]/).test(value)) fail(`${name} must contain readable text no longer than ${maximum} characters.`);
   return value.trim();
 }
 function freezeScopeData(value: unknown): void {
@@ -105,7 +105,7 @@ function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
     : ['requestId', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']), ...extra]);
   const requestId = text(input.requestId, 'Request identity', 128);
   if (!REQUEST_ID.test(requestId)) fail('Request identity contains unsupported characters.');
-  const instruction = text(input.instruction, 'Change request', 1000);
+  const instruction = text(input.instruction, 'Change request', 1000, true);
   if (input.proposalName !== undefined && typeof input.proposalName !== 'string') fail('Proposal name must be text when provided.');
   if (typeof input.proposalName === 'string' && (input.proposalName.length > 64 || /[\u0000-\u001f]/.test(input.proposalName))) fail('Proposal name must contain at most 64 readable characters.');
   const suffix = createHash('sha256').update(requestId).digest('hex').slice(0, 32).replace(/[0-9a-f]/g, (digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)));

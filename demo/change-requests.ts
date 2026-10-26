@@ -702,7 +702,7 @@ export class ChangeRequests {
     const ticket = this.#get(id);
     const conversation = this.#conversation(id);
     if (conversation.sequence !== reply.expectedSequence) throw new BacklogConflict('The conversation changed. Refresh before sending.');
-    if (conversation.messages.length > CONVERSATION_LIMITS.messages - 3 || conversation.messages.filter(message => message.kind === 'user').length >= CONVERSATION_LIMITS.userTurns) throw new Error('This conversation reached its preview limit. Export its history before starting another request.');
+    if (conversation.messages.length > CONVERSATION_LIMITS.messages - ((ticket.state === 'working' || ticket.state === 'queued') ? 4 : 3) || conversation.messages.filter(message => message.kind === 'user').length >= CONVERSATION_LIMITS.userTurns) throw new Error('This conversation reached its preview limit. Export its history before starting another request.');
     if (ticket.history.length >= 20) throw new Error('This ticket reached its twenty-turn history limit.');
     const currentText = this.project(ticket.projectId);
     if (!currentText) throw new Error('Missing accepted model.');
@@ -743,7 +743,12 @@ export class ChangeRequests {
         history: [...ticket.history, JSON.stringify({ ...ticket, history: [] })], activity: [], state: 'queued', attempts: 0,
         result: null, error: null, decisionId: null, decisionAction: null }, { stage: 'queued', message: 'Reply saved. Earlier messages and proposals remain in the conversation.' });
       this.#put(next);
-      this.#appendMessage(id, { kind: 'user', id: reply.messageId, sequence: conversation.sequence + 1, at: Date.now(), requestId: reply.messageId,
+      if (ticket.state === 'working' || ticket.state === 'queued') {
+        this.#appendMessage(id, { kind: 'assistant', id: `superseded:${createHash('sha256').update(ticket.request.requestId).digest('hex')}`, sequence: this.#messages(id).length + 1, at: Date.now(),
+          requestId: ticket.request.requestId, baseRevisionId: ticket.request.baseRevisionId, replyTo: ticket.request.requestId,
+          content: { kind: 'explanation', text: 'This turn was superseded by a later message. Its late result cannot change the conversation or accepted model.' } });
+      }
+      this.#appendMessage(id, { kind: 'user', id: reply.messageId, sequence: this.#messages(id).length + 1, at: Date.now(), requestId: reply.messageId,
         baseRevisionId: reply.baseRevisionId, text: reply.text, sources: reply.sources, visual: reply.visual });
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(reply.messageId, id, fingerprint);
       this.#db.prepare('INSERT INTO request_continuations(request_id,ticket_id) VALUES(?,?)').run(reply.messageId, id);
