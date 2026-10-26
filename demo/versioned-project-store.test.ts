@@ -86,7 +86,8 @@ test('deletion uses tombstones, relationship edits persist and sparse ordering r
   const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
   const root = await RoomRepository.create(); store.put(root);
   const snapshot = structuredClone(root.view(root.root()).snapshot);
-  snapshot.entities = snapshot.entities.filter((item) => item.type !== 'Door'); snapshot.relationships = [];
+  for (let index = snapshot.entities.length - 1; index >= 0; index -= 1) if (snapshot.entities[index].type === 'Door') snapshot.entities.splice(index, 1);
+  snapshot.relationships = [];
   const deleted = await proposal(root, snapshot, 'deleted'); const reference = store.put(deleted);
   assert.equal(count(db, 'bodies'), 6); assert.equal(store.read(reference), deleted.serialize());
   const row = db.prepare('SELECT delta FROM versioned_revisions WHERE project_id = ? AND id = ?').get(root.projectId, deleted.head('deleted'));
