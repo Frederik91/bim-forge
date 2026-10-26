@@ -2393,7 +2393,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
         stageVisualReference(destination); renderComparison(); updateControls();
         feedback('Location marked. Describe what to create, move or copy here; no model objects have moved.');
       },
-      keyboardReference: () => ui['visual-wall'].focus(),
+      keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
     modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
       interactive: !comparison && currentPage === 'request' && !busy && serverAvailable, reference: currentPage === 'request' ? visualDraft : null });
