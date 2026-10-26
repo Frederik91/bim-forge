@@ -128,7 +128,7 @@ test('old needs-input tickets recover on opening without revising or rerunning t
   const legacy = { ...queue.get('main-bed'), state: 'needs-input', error: 'The accepted model changed. Revise this request against the current model before accepting.' };
   await queue.close();
   const db = new DatabaseSync(file);
-  db.prepare('UPDATE requests SET state=?,body=json_set(body, ''$.state'', ?, ''$.error'', ?) WHERE id=?').run(legacy.state, legacy.state, legacy.error, legacy.id); db.close();
+  db.prepare("UPDATE requests SET state=?,body=json_set(body, '$.state', ?, '$.error', ?) WHERE id=?").run(legacy.state, legacy.state, legacy.error, legacy.id); db.close();
   const reopened = await ChangeRequests.open(file, () => null); t.after(() => reopened.close());
   assert.equal((await reopened.refreshProposal('main-bed')).state, 'ready');
   await assertBothChanges((await accept(reopened, 'main-bed')).project);
