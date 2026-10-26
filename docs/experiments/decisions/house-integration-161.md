@@ -29,6 +29,8 @@ Artifacts live below `/ssd1/bim-forge-qualification/house-161`.
 
 The full run includes the single maintainer-approved rerun of the corrected persistence fixtures. Its core source/test blobs match `eb5cfba`; all 15 persistence tests passed. The two skipped cases are the existing administrator-dispatch/symlink tests. This is not a pass for those platform-specific cases.
 
+The aggregate [draft PR #170](https://github.com/Frederik91/bim-forge/pull/170) also passed [GitHub CI at `a3bf2eb`](https://github.com/Frederik91/bim-forge/actions/runs/40278164119). That Ubuntu runner reported 465 main tests: 464 passed, zero failed, one skipped; the asset suite passed 21/21. The skipped case was the existing protected-file different-owner test. This differs from the server container's administrator skips because the environments exercise different privilege conditions. Root validation and all 30 changed-path checks passed.
+
 The two HTTP integration cases use actual ScriptBox proposals and accept desk then bed, and bed then desk. Each proves asynchronous acknowledgment, unchanged accepted state before the worker finishes, a bound 3D delta, independent acceptance, stale browser import refusal, restart recovery, bounded accepted-history paging, retained execution evidence and idempotent decision replay. Their model delta is two modified furnishing IDs and zero relationship changes.
 
 ## Browser qualification
@@ -56,6 +58,10 @@ The [rotated 3D review](../evidence/house-161/rotated-review.jpg) was captured a
 ![Two accepted changes retained after server replacement](../evidence/house-161/recovered-history.jpg)
 
 ## Boundaries and next qualification
+
+The separate publication investigation executed one instrumented reduced case against measured source `3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098`, using controller/instrumentation `de4762f48d33365ea499e229dfb71c00031711fe`. Its original source/body/property/readback oracles passed for 270,205 records and all three actual plans were retained. FK trigger work and visibility insertion are material in this reduced case; the visibility join spilled. This does not identify the full-scale limiter or establish a speedup.
+
+Its overall harness status is ISSUES: controller collection collided with root-owned client log names and failed to write its native terminal receipt. After the owned containers had stopped, the watchdog reported stale budget telemetry. Post hoc recovery is explicitly labeled; it does not fabricate the missing receipt. A future finalization correction was separately tested without another database case. The investigation report and exact raw identities remain in [draft PR #166](https://github.com/Frederik91/bim-forge/pull/166). All owned diagnostic containers are stopped, the historical cluster states are preserved, and no fourth full admission occurred.
 
 This is a house-scale integration using SQLite, not adoption of the experimental hospital database. Portable runtime projections still hydrate the bounded house document. Existing 256 KiB, revision and array limits remain. Changed-only persistence does not imply a level-streaming API or constant-time hydration.
 

@@ -7,7 +7,7 @@ Issue #161. Source baseline `8a1f3a955ecea90bceef574ff8b9eab4249669ce`.
 - [x] Frame: inspect live source, pin baseline, define ownership and completion.
 - [x] Fan out: disjoint persistence, request/server, browser and publication-investigation workers.
 - [x] Aggregate: coordinator reviews/integrates changes and runs server behavior/UI checks.
-- [ ] Report: draft PRs with source-bound evidence, limitations and model deltas.
+- [x] Report: draft PRs with source-bound evidence, limitations and model deltas.
 
 Before this slice, the browser used IndexedDB and the server queue stored complete project/history strings. RoomRepository already validated bounded models, reconciled proposals and exposed 3D review. This implementation retains those semantics and replaces durable full-document copies with immutable references, per-item content versions and revision deltas. SQLite remains the existing local installation store for this bounded slice, with one atomic transaction for accepted head, request decision and retained review evidence. This does not select a hospital-scale storage engine or add a speculative database adapter. The PostgreSQL investigation separately examines the measured large-installation publication path.
 
@@ -53,3 +53,5 @@ An entity keeps its identity when its content changes; unchanged content reuses 
 This is a bounded house integration. Runtime proposals and HTTP projections still hydrate a complete portable house document; this is not a level-streaming API. The existing 256 KiB document, 32 revision and 100-item array limits remain. No hospital-scale performance result, database-engine adoption, Rust speedup, disconnected synchronization or new geometry capability follows from these changes. Those require separate qualification.
 
 Source-bound checks, the inspectable two-furnishing model delta and desktop/phone screenshots are retained in the [integration evidence](../experiments/decisions/house-integration-161.md).
+
+The product changes are combined for review in [draft PR #170](https://github.com/Frederik91/bim-forge/pull/170). The separate [investigation PR #166](https://github.com/Frederik91/bim-forge/pull/166) reports a successful reduced workload with a harness-finalization issue; it does not qualify the full hospital scale. No merge or live-preview deployment is part of this delivery.
