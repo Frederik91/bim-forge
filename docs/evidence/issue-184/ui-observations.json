@@ -1,0 +1,214 @@
+{
+  "source": "79e078d48a03203760022b97178d48916f6c4336",
+  "baseline": "1643595c193f408f9840f1544c732b481390a158",
+  "method": "Native Chrome through documented CUA viewport capability. Read-only DOM bounds and real controls, including keyboard navigation. Baseline screenshot from the exact base in a separate disposable container.",
+  "observations": [
+    {
+      "label": "desktop-request",
+      "canvases": 1,
+      "context": "Change request",
+      "contextOpen": true,
+      "contextScroll": 0,
+      "document": [
+        1440,
+        900
+      ],
+      "navigationOpen": true,
+      "stageHeight": 743.21875,
+      "stageWidth": 864,
+      "viewport": [
+        1440,
+        900
+      ]
+    },
+    {
+      "label": "keyboard-location-tools",
+      "contextOpen": true,
+      "focus": "visual-wall"
+    },
+    {
+      "label": "desktop-review",
+      "canvases": 1,
+      "context": "Proposal review",
+      "contextOpen": true,
+      "contextScroll": 0,
+      "document": [
+        1440,
+        900
+      ],
+      "navigationOpen": true,
+      "stageHeight": 743.21875,
+      "stageWidth": 864,
+      "viewport": [
+        1440,
+        900
+      ]
+    },
+    {
+      "label": "property-delta",
+      "text": "Comparison baseline and selected room properties\nProperty\tProposal base c050c7bdae\tSelected revision\tDifference\nEntrance width\t900 mm\t1,200 mm\t+300 mm\nDoor height\t2,100 mm\t2,100 mm\tUnchanged\nHost wall\tSouth wall\tSouth wall\tUnchanged\nOffset along host wall\t2,400 mm\t2,400 mm\tUnchanged\nHost wall height\t3,000 mm\t3,000 mm\tUnchanged\nEast wall length\t4,000 mm\t4,000 mm\tUnchanged\nNorth wall length\t6,000 mm\t6,000 mm\tUnchanged\nSouth wall length\t6,000 mm\t6,000 mm\tUnchanged\nWest wall length\t4,000 mm\t4,000 mm\tUnchanged\nEntry door \u00c2\u00b7 width\t900 mm\t1,200 mm\tChanged"
+    },
+    {
+      "label": "phone-review",
+      "canvases": 1,
+      "context": "Proposal review",
+      "contextOpen": true,
+      "contextScroll": 596,
+      "document": [
+        390,
+        844
+      ],
+      "navigationOpen": false,
+      "stageHeight": 407.859375,
+      "stageWidth": 390,
+      "viewport": [
+        390,
+        844
+      ]
+    },
+    {
+      "label": "phone-review-drawing",
+      "height": 248.859375
+    },
+    {
+      "label": "phone-composer-and-mounts",
+      "chatMounts": 1,
+      "requestText": "Keep the entrance clear.",
+      "scopeMounts": 1,
+      "sourcesEnabled": true
+    },
+    {
+      "label": "phone-scope",
+      "ready": true,
+      "targets": true
+    },
+    {
+      "label": "phone-scope-scroll",
+      "canvases": 1,
+      "context": "Change request",
+      "contextOpen": true,
+      "contextScroll": 3358,
+      "document": [
+        390,
+        844
+      ],
+      "navigationOpen": false,
+      "stageHeight": 407.859375,
+      "stageWidth": 390,
+      "viewport": [
+        390,
+        844
+      ]
+    },
+    {
+      "label": "phone-history-reset",
+      "canvases": 1,
+      "context": "Model history",
+      "contextOpen": true,
+      "contextScroll": 0,
+      "document": [
+        390,
+        844
+      ],
+      "navigationOpen": false,
+      "stageHeight": 407.859375,
+      "stageWidth": 390,
+      "viewport": [
+        390,
+        844
+      ]
+    },
+    {
+      "label": "phone-panels-collapsed",
+      "canvases": 1,
+      "context": "Model history",
+      "contextOpen": false,
+      "contextScroll": 0,
+      "document": [
+        390,
+        844
+      ],
+      "navigationOpen": false,
+      "stageHeight": 710,
+      "stageWidth": 390,
+      "viewport": [
+        390,
+        844
+      ]
+    },
+    {
+      "label": "escape-focus",
+      "focus": "workspace-context-toggle"
+    },
+    {
+      "label": "phone-review-drawing",
+      "height": 248.859375
+    },
+    {
+      "label": "phone-level-room-navigation",
+      "contextOpen": false,
+      "document": [
+        390,
+        844
+      ],
+      "heading": "Ground floor west room",
+      "level": "level-ground",
+      "menuClosed": true,
+      "navigationOpen": true,
+      "room": "level-ground-west"
+    },
+    {
+      "label": "phone-activity",
+      "viewport": [
+        390,
+        844
+      ],
+      "document": [
+        390,
+        844
+      ],
+      "context": "Agent activity",
+      "contextScroll": 0,
+      "contextOpen": true,
+      "navigationOpen": false,
+      "canvases": 1,
+      "stageWidth": 390,
+      "stageHeight": 407.859375
+    },
+    {
+      "label": "laptop",
+      "viewport": [
+        1280,
+        800
+      ],
+      "document": [
+        1280,
+        800
+      ],
+      "context": "Project overview",
+      "contextOpen": false,
+      "navigationOpen": true,
+      "canvases": 0,
+      "stageWidth": 1064,
+      "stageHeight": 643.21875
+    },
+    {
+      "label": "small-phone-history",
+      "viewport": [
+        375,
+        812
+      ],
+      "document": [
+        375,
+        812
+      ],
+      "context": "Model history",
+      "contextScroll": 0,
+      "contextOpen": true,
+      "navigationOpen": false,
+      "canvases": 0,
+      "stageWidth": 375,
+      "stageHeight": 389.484375
+    }
+  ]
+}
