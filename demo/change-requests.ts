@@ -19,7 +19,7 @@ import type { RepositoryReference, VersionedProjects } from './versioned-project
 import { parseScopedRequest, parseFrozenModelScope, parseModelScopeQuery } from '../src/model-scope-contract.ts';
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from '../src/model-scope.ts';
-import { CONVERSATION_LIMITS, parseConversationReply, parseConversationMessage, parseConversationVisual } from '../src/request-conversation.ts';
+import { CONVERSATION_LIMITS, parseConversationReply, parseConversationMessage, parseConversationVisual, parseRequestConversation } from '../src/request-conversation.ts';
 import type { RequestConversation, ConversationMessage } from '../src/request-conversation.ts';
 import { ModelScopeStore } from './model-scope-store.ts';
 
@@ -27,6 +27,7 @@ export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'com
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
 type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope' | 'conversationVisual'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
 interface RequestTicket<Project> {
+  conversation?: RequestConversation;
   id: string;
   projectId: string;
   state: RequestState;
@@ -46,7 +47,7 @@ interface RequestTicket<Project> {
 }
 type Ticket = RequestTicket<RepositoryReference>;
 type TicketProjection = RequestTicket<string> & { conversation?: RequestConversation };
-export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity'>;
+export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity' | 'conversation'>;
 export class BacklogConflict extends Error {}
 
 type ProposalReadiness = { state: 'ready'; error: null } | { state: 'needs-input'; error: string };
@@ -129,7 +130,7 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
     throw new Error('The stored change request is invalid.');
   }
   // The payload is parsed by the model request boundary again before every run.
-  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope']);
+  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation']);
   const r = value.request;
   fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope', 'conversationVisual']);
   const scopedRequest = Object.hasOwn(r, 'scope') ? parseScopedRequest(r.scope) : undefined;
@@ -164,7 +165,9 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   if ((state === 'ready' && result?.status !== 'ready')
       || (state === 'completed' && (result?.status !== 'ready' || value.decisionAction !== 'accept'))
       || (state === 'cancelled' && value.decisionAction !== 'cancel') || (state === 'rejected' && value.decisionAction !== 'reject')) throw new Error('Stored state and decision do not match.');
-  return { id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
+  const conversation = Object.hasOwn(value, 'conversation') ? parseRequestConversation(value.conversation) : undefined;
+  if (conversation && conversation.ticketId !== value.id) throw new Error('Conversation belongs to another ticket.');
+  return { ...(conversation ? { conversation } : {}), id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
     ...(scope ? { scope } : {}),
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history, activity,
@@ -387,7 +390,13 @@ export class ChangeRequests {
     return rows.map((row) => { if (typeof row.body !== 'string') throw new Error('Unreadable request store.'); return parseTicket(row.body, reference); });
   }
   #put(ticket: Ticket): void {
-    this.#db.prepare('INSERT INTO requests(id, project_id, state, body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, body=excluded.body').run(ticket.id, ticket.projectId, ticket.state, JSON.stringify(ticket));
+    const { conversation, ...stored } = ticket;
+    if (conversation) {
+      const existing = this.#messages(ticket.id);
+      if (existing.length && !isDeepStrictEqual(existing, conversation.messages)) throw new Error('Imported conversation differs from the immutable journal.');
+    }
+    this.#db.prepare('INSERT INTO requests(id, project_id, state, body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, body=excluded.body').run(ticket.id, ticket.projectId, ticket.state, JSON.stringify(stored));
+    if (conversation && !this.#messages(ticket.id).length) for (const message of conversation.messages) this.#appendMessage(ticket.id, message);
   }
   #withState(state: RequestState): Ticket[] {
     return this.#db.prepare('SELECT body FROM requests WHERE state=? ORDER BY rowid').all(state).map((row) => {
@@ -592,7 +601,7 @@ export class ChangeRequests {
     return this.#sources.get(identifier(projectId), identifier(id));
   }
   list(projectId: string): TicketSummary[] {
-    return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, ...summary }) => summary);
+    return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, conversation: _conversation, ...summary }) => summary);
   }
   async submit(project: unknown, input: unknown): Promise<TicketSummary> {
     this.#assertOpen();
@@ -718,6 +727,7 @@ export class ChangeRequests {
         const proposed = await RoomRepository.restore(this.#projects.read(version.result.project));
         snapshot = proposed.view(visual.revisionId).snapshot;
       } else if (reply.visual.snapshot.revisionId !== reply.baseRevisionId) throw new BacklogConflict('Accepted visual evidence is stale. Capture it again.');
+      if (reply.visual.levelId && !snapshot.entities.some(entity => entity.id === reply.visual?.levelId && entity.type === 'Level')) throw new Error('Visual level context must name a Level.');
       if ([...reply.visual.selectedObjectIds, ...(reply.visual.levelId ? [reply.visual.levelId] : [])].some(id => !snapshot.entities.some(entity => entity.id === id))) throw new Error('Visual evidence references an unknown object.');
     }
     const earlierSources = conversation.messages.flatMap(message => message.kind === 'user' ? message.sources : []);

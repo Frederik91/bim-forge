@@ -119,3 +119,36 @@ test('legacy tickets seed transcript once without rewriting their review or mode
   assert.deepEqual(queue.get('legacy-question').result, original.result);
   assert.equal(queue.project(repo.projectId), repo.serialize());
 });
+
+test('continuation begins with the earlier private draft and retains its review and explicit rejection', async t => {
+  let runs = 0;
+  const worker: ModelWorker = { identity: { provider: 'test', model: 'draft-refinement' }, async run(session) {
+    runs++;
+    assert.ok(session.input && typeof session.input === 'object');
+    if (runs === 2) assert.ok('priorProposalDraft' in session.input);
+    const result = await session.executeTool('run_model_script', { language: 'typescript', source: `
+      const inspected = await model.inspect();
+      const layout = inspected.placement.layout;
+      if (!layout) throw new Error('Missing layout');
+      ${runs === 1 ? "await model.previewRectangle({...layout,door:{...layout.door,widthMm:1200}});" : "if (layout.door.widthMm !== 1200) throw new Error('Earlier width was lost'); await model.previewRectangle({...layout,door:{...layout.door,offsetMm:2000}});"}
+      return {kind:'propose',review:{summary:'Refine entry.',rationale:'Retain earlier width and refine offset.',constraints:'Keep shell.',uncertainty:'Concept only.',intent:{interpretation:'Refine door.',assumptions:[],certainty:95,basis:'Explicit reply.'}}};
+    ` });
+    assert.equal(result.done, true, JSON.stringify(result));
+  } };
+  const repo = await RoomRepository.create();
+  const queue = await ChangeRequests.open(':memory:', () => worker); t.after(() => queue.close());
+  await queue.submit(repo.serialize(), initial(repo, 'draft-first')); await settled(queue, 'draft-first');
+  const first = queue.get('draft-first'); assert.equal(first.state, 'ready', first.error ?? '');
+  await queue.decide('draft-first', { action: 'reject', decisionId: 'reject-first', expectedRequestId: 'draft-first' });
+  await queue.appendMessage('draft-first', reply(queue, 'draft-first', 'draft-refine', 'Retain the width and move the entry offset to 2000 mm.', repo.head('main')));
+  await settled(queue, 'draft-first');
+  const refined = queue.get('draft-first'); assert.equal(refined.state, 'ready', refined.error ?? '');
+  const proposed = await RoomRepository.restore(refined.result?.project);
+  const layout = rectangleLayout(proposed.view(proposed.head(refined.request.proposalName)).snapshot);
+  assert.equal(layout.door.widthMm, 1200); assert.equal(layout.door.offsetMm, 2000);
+  const archived: unknown = JSON.parse(refined.history[0] ?? 'null');
+  assert.ok(archived && typeof archived === 'object' && 'result' in archived && 'decisionId' in archived);
+  assert.deepEqual(archived.result, first.result); assert.equal(archived.decisionId, 'reject-first');
+  assert.ok(refined.conversation?.messages.some(message => message.kind === 'decision' && message.action === 'reject'));
+  assert.equal(queue.project(repo.projectId), repo.serialize());
+});

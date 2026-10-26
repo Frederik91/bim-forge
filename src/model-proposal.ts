@@ -127,6 +127,7 @@ function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid selected object identity.');
   const conversationVisual = extra.includes('conversationVisual') ? parseConversationVisual(input.conversationVisual) : undefined;
   if (conversationVisual && (conversationVisual.snapshot.kind !== 'accepted' || conversationVisual.snapshot.revisionId !== base.id)) fail('Initial visual evidence must bind the accepted request base.');
+  if (conversationVisual?.levelId && !base.snapshot.entities.some(entity => entity.id === conversationVisual.levelId && entity.type === 'Level')) fail('Visual level context must name a Level.');
   if (conversationVisual && [...conversationVisual.selectedObjectIds, ...(conversationVisual.levelId ? [conversationVisual.levelId] : [])].some(id => !base.snapshot.entities.some(entity => entity.id === id))) fail('Visual evidence references an unknown object.');
   const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
   const scopedRequest = extra.includes('scope') ? parseScopedRequest(input.scope) : undefined;
