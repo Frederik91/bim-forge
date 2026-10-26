@@ -1,5 +1,4 @@
 import http from 'node:http';
-import https from 'node:https';
 import fs from 'node:fs/promises';
 import { createDemoServer } from '../server.ts';
 import { createResidentialProject } from '../../src/residential-floor.ts';
@@ -11,7 +10,7 @@ if (process.env.BIM_FORGE_FIXTURE !== 'versioned-house-161') throw new Error('Ex
 const directory = process.env.BIM_FORGE_FIXTURE_DIRECTORY;
 if (!directory || !/^\/work\/[A-Za-z0-9/_-]+$/.test(directory)) throw new Error('Fixture data must be inside its disposable /work mount.');
 const origin = process.env.BIM_FORGE_FIXTURE_ORIGIN;
-if (!origin || !/^https:\/\/192\.168\.1\.17:9491$/.test(origin)) throw new Error('Fixture uses its separate declared HTTPS origin.');
+if (origin !== 'http://127.0.0.1:9492') throw new Error('Fixture uses its declared loopback origin through the authenticated SSH tunnel.');
 const fixtureUrl = new URL(origin);
 await fs.mkdir(directory, { recursive: true });
 const seedFile = `${directory}/seed-project.json`;
@@ -23,17 +22,18 @@ catch (error) {
   await fs.writeFile(seedFile, repository.serialize(), { flag: 'wx' });
 }
 const socketPath = `${directory}/house.sock`;
-const server = await createDemoServer({ runtimeMode: 'remote', publicOrigin: origin,
+const server = await createDemoServer({ runtimeMode: 'local',
   backlogFile: `${directory}/house.sqlite`, modelWorker: houseFixtureWorker(repository) });
 await new Promise<void>((resolve) => server.listen(socketPath, resolve));
-const proxy = https.createServer({ key: await fs.readFile(`${directory}/tls/key.pem`), cert: await fs.readFile(`${directory}/tls/cert.pem`) }, (request, response) => {
+// Docker publishes this port on the server's loopback interface only; SSH carries remote browser traffic.
+const proxy = http.createServer((request, response) => {
   const upstream = http.request({ socketPath, path: request.url ?? '/', method: request.method ?? 'GET', headers: request.headers }, (result) => {
     response.writeHead(result.statusCode ?? 502, result.headers); result.pipe(response);
   });
   upstream.on('error', () => { if (!response.headersSent) response.writeHead(502); response.end(); });
   request.once('aborted', () => upstream.destroy()); request.pipe(upstream);
 });
-await new Promise<void>((resolve) => proxy.listen(9491, '0.0.0.0', resolve));
+await new Promise<void>((resolve) => proxy.listen(9492, '0.0.0.0', resolve));
 
 async function post(target: string, value: unknown): Promise<void> {
   const bytes = JSON.stringify(value);
