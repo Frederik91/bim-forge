@@ -20,6 +20,9 @@ test('the built preview is one complete hashed release with every referenced bro
     assert.equal(createHash('sha256').update(bytes).digest('hex'), file.sha256);
   }
   const html = await fs.readFile(new URL('index.html', root), 'utf8');
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(new Set(ids).size, ids.length, 'Merged panels must not duplicate DOM identities.');
+  assert.equal(ids.filter(id => id === 'request-chat-mount').length, 1);
   const references = [...html.matchAll(/(?:href|src)="\.\/([^"]+)"/g)].map(match => match[1]);
   assert.ok(references.length >= 3);
   assert.ok(references.every(name => value.files.some(file => file.name === name)), 'A page cannot load CSS or JavaScript from another release.');
