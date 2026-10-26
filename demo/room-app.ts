@@ -27,6 +27,10 @@ import { RequestSourcePicker, parseSourceContext, renderSourceContext } from './
 import type { RequestSourceContext } from './request-source-ui.ts';
 import { ModelScopeBuilder, renderScopeEvidence, requestScopeContext, reviewScopeContext } from './model-scope-client.ts';
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
+import { RequestChat, conversationFromTicket } from './request-chat.ts';
+import { captureConversationVisual, requireCurrentVisual, visualLabel } from './request-chat-evidence.ts';
+import { parseConversationReply } from '../src/request-conversation.ts';
+import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
 
 type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
@@ -275,6 +279,10 @@ let backlogItems: BacklogItem[] = [];
 let serverProjectText: string | null = null;
 let serverHeadRevisionId: string | null = null;
 let submission: { fingerprint: string; requestId: string } | null = null;
+let chatTicketId: string | null = null;
+let chatVisual: ConversationVisual | null = null;
+let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
+let chatRefreshing = false;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = '3d';
@@ -318,6 +326,23 @@ const sourcePicker = new RequestSourcePicker({ input: ui['request-source-files']
 const scopeBuilder = new ModelScopeBuilder({ host: generic('model-scope-builder'), changed: updateControls,
   context: () => repo && preview ? { projectId: repo.projectId, baseRevisionId: selectedRevision, selectedIds: selectedObject ? [selectedObject] : [],
     roomId: focusedRoomId, levelId: activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null } : null });
+const requestChat = new RequestChat(generic('request-chat-mount'), {
+  close: () => { void perform(async () => { if (await beginRequest()) status('New request. The earlier conversation remains in the backlog.'); }); },
+  answer: text => { ui['request-text'].value = text; ui['request-text'].focus(); },
+  proposal: message => { void perform(() => openChatProposal(message)); },
+  inspect: visual => { void perform(() => inspectChatVisual(visual)); },
+  attach: () => {
+    try {
+      if (!preview) throw new Error('Open a model before attaching its view.');
+      const snapshot = displayedChatSnapshot();
+      if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved snapshot before capturing a chat attachment. The unsent sketch is not a model revision.');
+      chatVisual = captureConversationVisual({ graph: preview, snapshot, view: modelView === 'plan' ? '2d' : '3d',
+        levelId: activeLevelId, selectedObjectIds: selectedObject ? [selectedObject] : [], reference: visualDraft });
+      requestChat.setVisual(chatVisual); status(`Attached ${visualLabel(chatVisual)}. The model is unchanged.`);
+    } catch (error) { report(error); }
+  },
+  remove: () => { chatVisual = null; requestChat.setVisual(null); },
+});
 ui['request-reconstruct'].addEventListener('change', updateControls);
 
 function clearRequestSources(): void {
@@ -325,7 +350,7 @@ function clearRequestSources(): void {
 }
 
 function requestDirty(): boolean {
-  return dirty() || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
+  return dirty() || Boolean(chatVisual) || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
 async function discardRequest(message: string): Promise<boolean> {
@@ -629,22 +654,23 @@ function updateControls() {
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
-  for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture);
+  for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture) || Boolean(chatTicketId);
   ui['project-template'].disabled = !writable;
   ui['room-focus'].disabled = busy || dragging || !repo;
   button('whole-floor').disabled = busy || dragging || !repo;
   ui['selected-object'].disabled = busy || !preview || dragging;
-  ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture);
+  ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture) || Boolean(chatTicketId);
   ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
-  sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository));
-  scopeBuilder.setDisabled(!writable || !preview || Boolean(reviewRepository));
-  ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository);
+  sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository && !chatTicketId));
+  scopeBuilder.setDisabled(!writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
+  ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
   ui['level-focus'].disabled = busy || dragging || !repo;
   ui['whole-building'].disabled = busy || dragging || !repo;
   ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
   ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready;
-  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
+  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : chatTicketId ? 'Send reply →' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
+  requestChat.setDisabled(!writable || !preview);
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
   ui['discard-preview'].disabled = busy || !repo || !dirty() || dragging;
@@ -835,7 +861,7 @@ function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
-  if (projectChanged) { backlogItems = []; ticketScopes.clear(); revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; }
+  if (projectChanged) { backlogItems = []; ticketScopes.clear(); revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
   serverProjectText = text;
   serverHeadRevisionId = next.head('main');
   historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
@@ -1029,6 +1055,7 @@ ui['open-room'].addEventListener('click', () => {
 async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
   if (!await discardRequest('Return to the accepted model and discard the unsent request?')) return false;
+  closeChat();
   reviewRepository = null; activeTicketId = null; activeReview = null; revisionTicketId = null;
   selectedBranch = 'main'; selectedRevision = repo.head('main');
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
@@ -1195,6 +1222,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
   void perform(async () => {
     if (!serverAvailable) throw new Error('Reconnect to the project server before submitting.');
     if (!repo || !preview || invalidInput) throw new Error('Open a project and fix the request input first.');
+    if (chatTicketId) { await sendChatReply(); return; }
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
     if (name && (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main')) throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
@@ -1209,6 +1237,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
       selectedObjectIds: [...new Set([selectedObject, ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
+      ...(chatVisual ? { conversationVisual: checkedChatVisual() } : {}),
       ...(scope ? { scope } : {}),
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
     const fingerprint = JSON.stringify(content);
@@ -1219,13 +1248,16 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     });
     const acknowledgement = await proposalJson(response);
     if (!isRecord(acknowledgement)) throw new Error('Invalid request acknowledgement.');
-    const submittedName = parseBacklogItem(acknowledgement.ticket).request.proposalName;
+    const submittedTicket = parseBacklogItem(acknowledgement.ticket);
+    const submittedName = submittedTicket.request.proposalName;
     submission = null; revisionTicketId = null;
     clearRequestSources();
+    chatVisual = null; requestChat.setVisual(null);
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
     resetEditor(); renderComparison();
     await refreshBacklog();
-    status(`“${requestLabel(submittedName)}” sent to the backlog. Keep exploring or send another request; the agent works on the server.`);
+    showChatTicket(acknowledgement.ticket);
+    status(`“${requestLabel(submittedName)}” started. Continue this conversation below while the agent works.`);
     showRequestPane('details');
   });
 });
@@ -1235,6 +1267,134 @@ async function proposalJson(response: Response): Promise<unknown> {
   try { value = await response.json(); } catch { throw new Error(`The request service returned unreadable data (HTTP ${response.status}). Retry the same submission safely.`); }
   if (!response.ok) throw new Error(isRecord(value) && typeof value.error === 'string' ? value.error : `Request service failed (HTTP ${response.status}).`);
   return value;
+}
+
+function closeChat(): void {
+  chatTicketId = null; chatVisual = null; chatReply = null; requestChat.close();
+}
+
+function displayedChatSnapshot(): ConversationVisual['snapshot'] {
+  if (!repo) throw new Error('Open a project before attaching model evidence.');
+  if (reviewRepository && activeReview?.proposalRevisionId === selectedRevision) return {
+    kind: 'proposal', revisionId: selectedRevision, proposalName: activeReview.proposalName,
+  };
+  if (selectedBranch !== 'main') throw new Error('Open an accepted snapshot or a bound proposal before attaching it.');
+  return { kind: 'accepted', revisionId: selectedRevision };
+}
+
+function checkedChatVisual(): ConversationVisual | null {
+  if (chatVisual) requireCurrentVisual(chatVisual, displayedChatSnapshot());
+  return chatVisual;
+}
+
+function showChatTicket(value: unknown): void {
+  const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
+  if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
+  chatTicketId = ticket.id;
+  requestChat.show({ conversation, projectId: ticket.projectId, title: requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state] });
+}
+
+async function openConversation(id: string, keepProposal = false): Promise<void> {
+  if (!repo || !await discardRequest('Open this conversation and discard the unsent message?')) return;
+  const projectId = repo.projectId;
+  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+  if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing conversation.');
+  const ticket = parseBacklogItem(value.ticket);
+  if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
+  if (!keepProposal) displayAccepted(await projects.read(projectId));
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
+  chatVisual = null; chatReply = null; requestChat.setVisual(null); revisionTicketId = null;
+  showChatTicket(value.ticket); render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
+  status('Conversation opened. Add a reply or attach evidence from the displayed snapshot. A reply never approves a proposal.');
+}
+
+async function refreshConversation(): Promise<void> {
+  const id = chatTicketId; const projectId = repo?.projectId;
+  if (!id || !projectId || chatRefreshing) return;
+  chatRefreshing = true;
+  try {
+    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+    if (chatTicketId !== id || repo?.projectId !== projectId) return;
+    if (!isRecord(value)) throw new Error('Missing conversation.');
+    showChatTicket(value.ticket);
+  } catch (error) {
+    if (chatTicketId === id) status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`);
+  } finally { chatRefreshing = false; }
+}
+
+async function sendChatReply(): Promise<void> {
+  const id = chatTicketId; const conversation = requestChat.conversation;
+  if (!id || !conversation || !repo) throw new Error('Open this conversation again before replying.');
+  const content = { baseRevisionId: repo.head('main'), text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual() };
+  const fingerprint = JSON.stringify(content);
+  if (!chatReply || chatReply.fingerprint !== fingerprint) chatReply = { fingerprint, body: parseConversationReply({
+    ...content, messageId: globalThis.crypto.randomUUID(), expectedSequence: conversation.sequence,
+  }) };
+  const response = await fetch(`/api/change-requests/${encodeURIComponent(id)}/messages`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatReply.body),
+  });
+  if (response.status === 409) {
+    chatReply = null; await refreshConversation();
+    throw new Error('The conversation changed while this reply was being sent. Review the latest messages and send again. Your draft and attachments are retained.');
+  }
+  const value = await proposalJson(response);
+  if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
+  showChatTicket(value.ticket); chatReply = null; chatVisual = null; requestChat.setVisual(null);
+  clearRequestSources(); ui['request-text'].value = ''; visualDraft = null; renderComparison();
+  await refreshBacklog(); status('Reply saved on this request. The assistant will continue with the complete conversation and earlier proposal.');
+}
+
+function archivedTickets(ticket: Record<string, unknown>): Record<string, unknown>[] {
+  const versions: Record<string, unknown>[] = [ticket];
+  if (Array.isArray(ticket.history)) for (const text of ticket.history) {
+    if (typeof text !== 'string') throw new Error('Invalid earlier conversation proposal.');
+    const value: unknown = JSON.parse(text); if (!isRecord(value)) throw new Error('Invalid earlier conversation proposal.'); versions.push(value);
+  }
+  return versions;
+}
+
+function boundChatProposal(ticket: Record<string, unknown>, message: ConversationMessage): unknown {
+  if (message.kind !== 'assistant' || message.content.kind !== 'proposal') throw new Error('This message does not contain a model proposal.');
+  const content = message.content;
+  for (const version of archivedTickets(ticket)) {
+    if (!isRecord(version.result) || !isRecord(version.result.review)) continue;
+    const review = version.result.review;
+    if (review.requestId === message.requestId && review.proposalName === content.proposalName && review.proposalRevisionId === content.proposalRevisionId) return version.result;
+  }
+  throw new Error('The proposal bound to this conversation turn is unavailable. Its message remains preserved.');
+}
+
+async function openChatProposal(message: ConversationMessage): Promise<void> {
+  if (!chatTicketId) throw new Error('Open this conversation before inspecting its proposal.');
+  await openTicket(chatTicketId, message);
+}
+
+async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
+  if (!repo || !await discardRequest('Inspect this saved visual evidence and discard the unsent message?')) return;
+  let model = repo;
+  if (chatTicketId) {
+    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(chatTicketId)}`));
+    if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing evidence provenance.');
+    for (const version of archivedTickets(value.ticket)) {
+      const project = isRecord(version.result) && typeof version.result.project === 'string' ? version.result.project : version.project;
+      if (typeof project !== 'string') continue;
+      const candidate = await RoomRepository.restore(project);
+      if (candidate.projectId !== repo.projectId || candidate.root() !== repo.root()) throw new Error('Visual evidence project mismatch.');
+      try { candidate.view(visual.snapshot.revisionId); model = candidate; break; } catch { /* Search other retained snapshots. */ }
+    }
+  }
+  const graph = model.view(visual.snapshot.revisionId).snapshot;
+  if (visual.selectedObjectIds.some(id => !graph.entities.some(item => item.id === id))) throw new Error('The stored selection is absent from its bound snapshot.');
+  reviewRepository = model; selectedRevision = visual.snapshot.revisionId;
+  selectedBranch = visual.snapshot.kind === 'proposal' ? visual.snapshot.proposalName : 'main';
+  activeLevelId = visual.levelId; focusedRoomId = null; modelView = visual.view === '2d' ? 'plan' : '3d';
+  selectedObject = visual.selectedObjectIds[0] ?? selectedObject; resetEditor();
+  const pin = visual.annotations.find(annotation => annotation.kind === 'pin');
+  if (pin?.kind === 'pin') visualDraft = graph.version === 2 && visual.levelId
+    ? { kind: 'floor-point', levelId: visual.levelId, positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] }
+    : { kind: 'floor-point', positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] };
+  chatVisual = null; requestChat.setVisual(null); clearRequestSources(); ui['request-text'].value = '';
+  render(); showPage('request'); showRequestPane('canvas'); status(`Inspecting ${visualLabel(visual)}. Coordinates belong to this saved snapshot.`);
 }
 
 interface BacklogItem {
@@ -1369,10 +1529,10 @@ function renderBacklog(): void {
     const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
     if (item.request.scope && !item.scope) add('Inspect frozen scope', () => { void perform(() => inspectTicketScope(item)); });
     add(item.state === 'queued' || item.state === 'working' ? 'View progress' : 'View activity', () => { void perform(() => openActivity(item.id)); });
-    if (item.state === 'ready' || item.state === 'needs-input' || item.state === 'completed' || item.state === 'rejected') add('Open request', () => { void perform(() => openTicket(item.id)); });
+    add('Open conversation', () => { void perform(() => openConversation(item.id)); });
+    if (item.state === 'ready' || item.state === 'completed' || item.state === 'rejected') add('Review latest proposal', () => { void perform(() => openTicket(item.id)); });
     if (item.state === 'queued' || item.state === 'working') add('Cancel request', () => { void perform(() => decideTicket(item.id, 'cancel')); });
     if (item.state === 'failed' && item.attempts < 3) add('Retry agent', () => { void perform(() => decideTicket(item.id, 'retry')); });
-    if (item.state === 'failed' || item.state === 'needs-input' || item.state === 'ready') add('Revise request', () => { void perform(() => reviseTicket(item)); });
     card.append(actions); return card;
   }));
   if (!visible.length) ui['backlog-list'].append(element('p', empty, 'empty-note'));
@@ -1435,7 +1595,7 @@ for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventL
   if (activityTicketId) void perform(async () => { await decideTicket(activityTicketId ?? '', action, activityRequestId); });
 });
 
-async function openTicket(id: string): Promise<void> {
+async function openTicket(id: string, message?: ConversationMessage): Promise<void> {
   if (!await discardRequest('Open this saved request and discard the unsent request?')) return;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
@@ -1443,7 +1603,7 @@ async function openTicket(id: string): Promise<void> {
   if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
   backlogItems = backlogItems.map((item) => item.id === ticket.id ? ticket : item);
   if (!isRecord(value.ticket.request)) throw new Error('Missing request binding.');
-  const result = parseProposalResponse(value.ticket.result ?? { status: 'declined', project: value.ticket.project, review: {
+  const result = parseProposalResponse((message ? boundChatProposal(value.ticket, message) : value.ticket.result) ?? { status: 'declined', project: value.ticket.project, review: {
     ...value.ticket.request, proposalRevisionId: null, summary: 'No model proposal is available for this attempt.',
     rationale: ticket.error ?? `Request ${stateLabels[ticket.state].toLowerCase()}.`, constraints: 'The accepted model has not been changed by this attempt.', uncertainty: 'No validated proposal was produced.',
   } });
@@ -1532,7 +1692,7 @@ ui['open-current-model'].addEventListener('click', () => {
     status('Opened the current accepted server model.');
   });
 });
-window.setInterval(() => { void refreshBacklog(); void refreshActivity(); }, 2000);
+window.setInterval(() => { void refreshBacklog(); void refreshActivity(); void refreshConversation(); }, 2000);
 
 function renderReview() {
   const review = activeReview;
@@ -1572,7 +1732,7 @@ ui['reject-proposal'].addEventListener('click', () => {
 });
 ui['request-revision'].addEventListener('click', () => {
   const item = backlogItems.find((ticket) => ticket.id === activeTicketId);
-  if (item) void perform(() => reviseTicket(item));
+  if (item) void perform(() => openConversation(item.id, true));
 });
 
 function download(text: string, filename: string): void {

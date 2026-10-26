@@ -1,0 +1,16 @@
+.request-chat { min-width: 0; margin-block: 1rem; }
+.request-chat > header { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.request-chat > header h3 { flex: 1 1 10rem; margin: 0; overflow-wrap: anywhere; }
+.request-chat-transcript { display: grid; gap: .75rem; padding: 0; margin-block: 1rem; list-style: none; }
+.request-chat-message { min-width: 0; padding: .8rem; border: 1px solid #d3e0dd; border-radius: .65rem; background: #fff; overflow-wrap: anywhere; }
+.request-chat-message > small { display: block; margin-top: .25rem; color: #596f74; font-size: .72rem; }
+.request-chat-message > p { margin-block: .6rem; white-space: pre-wrap; }
+.request-chat-assistant { background: #eef7f3; border-color: #bad9cd; }
+.request-chat-decision { background: #f3f4f5; }
+.request-chat-attachments { display: grid; gap: .6rem; padding-block: .8rem; border-block: 1px solid #d3e0dd; }
+.request-chat-attachments > .button { justify-self: start; max-width: 100%; white-space: normal; }
+.request-chat-visual { min-width: 0; font-size: .8rem; overflow-wrap: anywhere; }
+.request-chat-visual > p { margin-block: .5rem; }
+.request-chat .source-preview { max-width: 100%; max-height: 12rem; object-fit: contain; }
+.request-chat .ticket-actions { flex-wrap: wrap; }
+.request-chat button { max-width: 100%; white-space: normal; text-align: start; }
