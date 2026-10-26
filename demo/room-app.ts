@@ -1689,7 +1689,7 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
   const allWalls = [...walls, ...(reference ? reference.entities.filter(isWall) : [])];
   const coordinates = allWalls.flatMap((wall) => [wall.start, wall.end]);
   if (!coordinates.length) return svg;
-  const focused = identifier === 'selected' && currentPage === 'request' ? spaces(snapshot).find((room) => room.id === focusedRoomId) : null;
+  const focused = identifier === 'selected' ? spaces(snapshot).find((room) => room.id === focusedRoomId) : null;
   const camera = editable && gesture ? gesture.camera : focused ? focused.bounds : {
     minX: Math.min(...coordinates.map(([x]) => x)), maxX: Math.max(...coordinates.map(([x]) => x)),
     minY: Math.min(...coordinates.map(([, y]) => y)), maxY: Math.max(...coordinates.map(([, y]) => y)),
@@ -2457,7 +2457,7 @@ function renderComparison(): void {
   button('changes-3d-tab').setAttribute('aria-pressed', String(changesTab === '3d'));
   button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
   renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
-  ui['selected-title'].textContent = spaces(selected).length && currentPage === 'request' ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
+  ui['selected-title'].textContent = spaces(selected).length ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = spaces(selected).length ? 'Choose a storey for its plan, or explore the whole building in 3D. Select an object and describe a change for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), reviewedRevision
