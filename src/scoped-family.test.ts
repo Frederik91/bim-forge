@@ -26,6 +26,10 @@ test('scoped subset variants create only a definition used by existing writable 
   const instance=after.entities.find(entity=>entity.id==='living-person');assert.ok(instance?.type==='AssetInstance');
   const extra=previewAssets(after,{families:[],instances:[{...instance,id:'unapproved-person',position:[4.5,2.8]}],removeInstanceIds:[]});
   assert.throws(()=>assertModelScopeWrites({before,after:extra,binding}),/out-of-scope/i);
+  const alternate=previewAssets(before,{families:[{...original,id:'unobserved-family'}],instances:[],removeInstanceIds:[]});
+  const alternateBinding=freezeModelScope({graph:alternate,query,baseRevisionId:'b'.repeat(64)});
+  const rebound=previewAssets(alternate,{families:[],instances:[{...instance,familyId:'unobserved-family'}],removeInstanceIds:[]});
+  assert.throws(()=>assertModelScopeWrites({before:alternate,after:rebound,binding:alternateBinding}),/out-of-scope family dependency/i);
 });
 
 test('a real scoped ScriptBox variant stays visible and accepts without changing its shared original or sibling',async()=>{

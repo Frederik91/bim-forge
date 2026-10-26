@@ -352,6 +352,10 @@ export function assertModelScopeWrites({ before, after, binding: input }: { befo
   if (before.version !== after.version || before.units !== after.units) throw new Error('Out-of-scope model format change.');
   for (const id of new Set([...before.entities, ...after.entities].map((entity) => entity.id))) {
     const previous = before.entities.find(entity => entity.id === id); const next = after.entities.find(entity => entity.id === id);
+    if (previous?.type === 'AssetInstance' && next?.type === 'AssetInstance' && previous.familyId !== next.familyId
+        && before.entities.some(entity => entity.id === next.familyId) && !readable.has(next.familyId)) {
+      throw new Error(`Out-of-scope family dependency: ${next.familyId}.`);
+    }
     if (!previous && next?.type === 'AssetFamily') {
       const instances = after.entities.filter(entity => entity.type === 'AssetInstance').filter(entity => entity.familyId === id);
       const originals = instances.map(instance => before.entities.find(entity => entity.id === instance.id));
