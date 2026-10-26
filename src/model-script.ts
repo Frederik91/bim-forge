@@ -18,7 +18,7 @@ import { FloorLayoutSchema, BuildingLayoutSchema } from './building-schema.ts';
 import { levels, entityLevel, entityElevation, levelView } from './building-levels.ts';
 import { AssetFamilySchema, AssetInstanceSchema, AssetEditSchema } from './asset-family.ts';
 import type { AuthoringScope } from './request-sources.ts';
-import { FrozenModelScopeSchema, ModelParametersSchema, ModelParameterSchema } from './model-scope-contract.ts';
+import { ModelParametersSchema, ModelParameterSchema } from './model-scope-contract.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
 import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
@@ -49,24 +49,29 @@ const relationships = Type.Array(Type.Object({
   id: identifier, type: Type.Literal('hosted-by'), source: identifier, target: identifier, offset: Type.Number(),
 }), { maxItems: 100 });
 // Read contract only: core validation enforces required V2 ownership before staging/persistence.
-const entityBody = Type.Union([
-  Type.Object({ ...wall.properties, levelId: Type.Optional(identifier) }),
-  Type.Object({ ...equipment.properties, levelId: Type.Optional(identifier) }),
-  Type.Object({ ...furniture.properties, levelId: Type.Optional(identifier) }),
-  door, window, space,
-  Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
-  Type.Object({ id: identifier, type: Type.Literal('Slab'), name, levelId: identifier, bounds, thickness: Type.Number() }),
-  Type.Object({ id: identifier, type: Type.Literal('Stair'), name, fromLevelId: identifier, toLevelId: identifier,
+const parameterFields = { parameters: Type.Optional(ModelParametersSchema) };
+const entity = Type.Union([
+  Type.Object({ ...wall.properties, ...parameterFields, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...equipment.properties, ...parameterFields, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...furniture.properties, ...parameterFields, levelId: Type.Optional(identifier) }),
+  Type.Object({ ...door.properties, ...parameterFields }), Type.Object({ ...window.properties, ...parameterFields }), Type.Object({ ...space.properties, ...parameterFields }),
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() }),
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Slab'), name, levelId: identifier, bounds, thickness: Type.Number() }),
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Stair'), name, fromLevelId: identifier, toLevelId: identifier,
     start: point, end: point, width: Type.Number(), steps: Type.Integer() }),
-  Type.Object({ id: identifier, type: Type.Literal('Roof'), name, levelId: identifier, bounds, thickness: Type.Number(), profile: Type.Union([
+  Type.Object({ ...parameterFields, id: identifier, type: Type.Literal('Roof'), name, levelId: identifier, bounds, thickness: Type.Number(), profile: Type.Union([
     Type.Object({ kind: Type.Literal('flat'), height: Type.Number() }),
     Type.Object({ kind: Type.Literal('gable'), eaveHeight: Type.Number(), ridgeHeight: Type.Number(), ridgeAxis: Type.Union([Type.Literal('x'), Type.Literal('y')]) }),
   ]) }),
-  AssetFamilySchema, AssetInstanceSchema,
+  Type.Object({ ...AssetFamilySchema.properties, ...parameterFields }), Type.Object({ ...AssetInstanceSchema.properties, ...parameterFields }),
 ], { title: 'ModelEntity' });
-const entity = Type.Intersect([entityBody, Type.Object({ parameters: Type.Optional(ModelParametersSchema) })]);
 const snapshot = Type.Object({ version: Type.Optional(Type.Literal(2)), units: Type.Literal('m'),
   entities: Type.Array(entity, { maxItems: 100 }), relationships }, { title: 'ModelSnapshot', additionalProperties: false });
+// The guest only reads this host-validated query. ScriptBox's closed read schema
+// cannot express the wire schema's uniqueItems constraint; no authority is parsed here.
+const scopeReadIds = Type.Array(identifier, { maxItems: 100 });
+const scopeRead = Type.Object({ version: Type.Literal(1), baseRevisionId: Type.String(), query: Type.Unknown(),
+  targetIds: scopeReadIds, contextIds: scopeReadIds, dependentIds: scopeReadIds, writableIds: scopeReadIds, relationshipIds: scopeReadIds });
 const collectionChanges = Type.Object({ added: Type.Array(identifier), removed: Type.Array(identifier), modified: Type.Array(identifier) });
 const changes = Type.Object({ entities: collectionChanges, relationships: collectionChanges });
 const inspection = Type.Object({
@@ -223,7 +228,7 @@ function selectedLevel(current: ModelGraph, binding: ModelScriptBinding) {
 const api = createApiKit<Draft>();
 const model = api.namespace({ name: 'model', description: 'Read a bound model and stage validated changes in this script only. Nothing here accepts or saves a project.', methods: {
   scope: api.method({ summary: 'Read the frozen request scope and live working graph. Context is read-only; this graph is not a complete project.',
-    effect: 'read', result: Type.Object({ scope: Type.Union([FrozenModelScopeSchema, Type.Null()]), graph: snapshot }),
+    effect: 'read', result: Type.Object({ scope: Type.Union([scopeRead, Type.Null()]), graph: snapshot }),
     handler: (_args, call) => {
       call.context.onActivity({ stage: 'inspecting', message: 'Inspecting frozen scope targets, read-only context, dependencies and write authority.' });
       return { scope: call.context.binding.scope ?? null, graph: modelWorkingGraph(call.context.snapshot, call.context.binding.scope) };
