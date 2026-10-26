@@ -4,7 +4,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { RoomRepository } from '../src/room-model.ts';
+import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
 import type { ModelSnapshot } from '../src/room-model.ts';
 import { VersionedProjectStore } from './versioned-project-store.ts';
 import type { RepositoryReference } from './versioned-project-contract.ts';
@@ -147,4 +149,86 @@ test('failed immutable write rolls back inserted bodies and preserves an enclosi
   assert.throws(() => store.put(proposed), /injected failure/); assert.equal(count(db, 'bodies'), 6); assert.equal(count(db, 'revisions'), 1);
   assert.equal(db.prepare('SELECT value FROM caller_state').get()?.value, 'keep'); db.exec('COMMIT');
   assert.equal(db.prepare('SELECT value FROM caller_state').get()?.value, 'keep');
+});
+
+test('legacy repository documents and current multi-storey snapshot versions round-trip unchanged', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); const state = root.persistence();
+  const legacy = await RoomRepository.restore(JSON.stringify({ version: 1, projectId: state.projectId, name: state.name,
+    revisions: state.revisions, branches: state.branches }));
+  const oldReference = store.put(legacy); assert.equal(store.read(oldReference), legacy.serialize());
+  assert.equal((await RoomRepository.restore(store.read(oldReference))).persistence().version, 1);
+  const house = await createMultiStoreyProject('Snapshot version two'); const reference = store.put(house);
+  const restored = await RoomRepository.restore(store.read(reference)); assert.equal(restored.serialize(), house.serialize());
+  assert.equal(restored.view(restored.root()).snapshot.version, 2);
+  const proposed = await wider(house); assert.equal(store.read(store.put(proposed)), proposed.serialize());
+});
+
+test('accepted history is root plus two applied revisions and never contains private proposals', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); let current = initial(store, root);
+  const first = await wider(root, 1.2, 'first'); const second = await wider(root, 1, 'second');
+  store.put(second);
+  let accepted = await root.acceptFrom(first, 'first', { decisionId: 'decision-first', actor: 'human' });
+  const firstAccepted = accepted.head('main'); let next = store.put(accepted); publish(store, next, current); current = next;
+  const secondSnapshot = structuredClone(root.view(root.root()).snapshot);
+  const host = secondSnapshot.relationships[0]; assert.ok(host); host.offset += .2;
+  const independent = await proposal(root, secondSnapshot, 'independent'); store.put(independent);
+  accepted = await accepted.acceptFrom(independent, 'independent', { decisionId: 'decision-second', actor: 'human' });
+  next = store.put(accepted); publish(store, next, current);
+  const history = store.history({ projectId: root.projectId, before: null, limit: 50 });
+  assert.deepEqual(history.entries.map((entry) => entry.revisionId), [accepted.head('main'), firstAccepted, root.root()]);
+  assert.ok(!history.entries.some((entry) => entry.revisionId === second.head('second') || entry.revisionId === independent.head('independent')));
+  assert.deepEqual(history.entries[0]?.changedRelationshipIds, ['host-entry']);
+  assert.deepEqual(history.entries[0]?.changedEntityIds, []);
+  assert.throws(() => store.history({ projectId: root.projectId, before: independent.head('independent'), limit: 20 }), /cursor/);
+  const reconstructed = await RoomRepository.restore(store.read(next)); assert.equal(reconstructed.serialize(), accepted.serialize());
+});
+
+test('a publication with a replacement root is refused even when the project ID matches', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); const current = initial(store, root); const changed = await wider(root);
+  const replacement = await RoomRepository.createProject({ projectId: root.projectId, name: root.name, snapshot: changed.view(changed.head('study')).snapshot });
+  const other = store.put(replacement); assert.throws(() => publish(store, other, current), /ancestry/);
+  assert.deepEqual(store.current(root.projectId), current);
+});
+
+test('failed head write rolls back its history inside a caller savepoint', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); const current = initial(store, root);
+  const proposed = await wider(root); const accepted = proposed.accept('study', { decisionId: 'decision-study', actor: 'human' });
+  const reference = store.put(accepted);
+  db.exec("SAVEPOINT caller; CREATE TRIGGER refuse_head BEFORE UPDATE ON versioned_projects BEGIN SELECT RAISE(ABORT, 'head failure'); END;");
+  assert.throws(() => publish(store, reference, current), /head failure/);
+  assert.deepEqual(store.current(root.projectId), current); assert.equal(count(db, 'publications'), 1);
+  db.exec('ROLLBACK TO caller; RELEASE caller'); publish(store, reference, current);
+  assert.equal(count(db, 'publications'), 2);
+});
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value !== null && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, entry]) => `${JSON.stringify(key)}:${canonical(entry)}`).join(',')}}`;
+  return JSON.stringify(value);
+}
+function hash(text: string): string { return createHash('sha256').update(text).digest('hex'); }
+
+test('a hash-valid but broken hosting graph is refused before read returns', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); store.put(root); const snapshot = root.view(root.root()).snapshot;
+  const host = snapshot.relationships[0]; assert.ok(host); const invalidHost = { ...host, target: 'missing-wall' };
+  const body = canonical(invalidHost); const bodyHash = hash(body);
+  db.prepare('INSERT INTO versioned_bodies(hash, kind, body) VALUES (?, ?, ?)').run(bodyHash, 'relationship', body);
+  const row = db.prepare('SELECT delta FROM versioned_revisions WHERE project_id = ? AND id = ?').get(root.projectId, root.root());
+  assert.ok(row && typeof row.delta === 'string'); const patch: unknown = JSON.parse(row.delta);
+  assert.ok(patch && typeof patch === 'object' && !Array.isArray(patch));
+  const deltaText = canonical({ ...patch, relationships: [{ id: host.id, body: bodyHash }] });
+  const revisionId = hash(canonical({ version: 1, parentId: null, snapshot: { ...snapshot, relationships: [invalidHost] } }));
+  db.prepare('INSERT INTO versioned_revisions(project_id, id, parent_id, delta_hash, delta) VALUES (?, ?, NULL, ?, ?)')
+    .run(root.projectId, revisionId, hash(deltaText), deltaText);
+  const metadata = canonical({ version: 2, projectId: root.projectId, name: root.name, revisions: [revisionId],
+    branches: [{ name: 'main', revisionId }], reviews: [] });
+  const documentId = hash(metadata);
+  db.prepare('INSERT INTO versioned_documents(project_id, id, manifest) VALUES (?, ?, ?)').run(root.projectId, documentId, metadata);
+  assert.throws(() => store.read({ projectId: root.projectId, documentId }), /Hosting references/);
 });
