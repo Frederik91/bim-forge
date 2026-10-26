@@ -25,3 +25,5 @@ Root validation and changed-path policy checks run in an isolated server contain
 A disposable fixture uses a deterministic worker with the real ScriptBox executor and model validators. Browser proof covers a follow-up question, a reply with a file and snapshot-bound visual evidence, a continuation proposal, explicit review, reload, and desktop and phone layouts. The fixture uses fresh project data and never reads live preview state.
 
 Builds and tests use SSH to `frederik@192.168.1.17`, cached image `bim-qvm-tools:20261025`, immutable Git bundle source, a unique `/ssd1/bim-forge-qualification/181-<sha>` directory, at most 0.5 CPU, 1 GiB memory, and no swap. Publication remains a draft stacked on PR #180. Human review is required for persistence and model behavior.
+
+Completed results and the inspectable model delta are recorded in [Request conversation qualification](../evidence/request-conversations-181.md).
