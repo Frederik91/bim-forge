@@ -466,3 +466,23 @@ thead th, tbody th { font-weight: 600; }
 .project-identity { flex-direction: column; align-items: stretch; gap: 2px; }
 #server-save-status { color: #b5e2d8; }
 #server-save-status[data-state="disconnected"] { color: #ffd6a4; }
+
+.model-scope-panel { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #f5faf7; }
+.model-scope-panel summary { cursor: pointer; font-weight: 650; min-height: 32px; }
+#model-scope-builder { display: grid; gap: 12px; min-width: 0; padding-top: 10px; }
+#model-scope-builder fieldset { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; }
+#model-scope-builder legend { font-weight: 650; }
+#model-scope-builder label { display: grid; gap: 5px; min-width: 0; margin: 0; }
+#model-scope-builder label:has(input[type=checkbox]) { display: flex; align-items: center; }
+#model-scope-builder input[type=checkbox] { width: 20px; min-height: 20px; margin: 0; }
+#model-scope-builder small { overflow-wrap: anywhere; }
+#model-scope-builder code { white-space: pre-wrap; overflow-wrap: anywhere; }
+#model-scope-builder details { min-width: 0; display: grid; gap: 10px; }
+.scope-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.scope-actions button { flex: 1 1 130px; white-space: normal; }
+.scope-evidence { font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #f5faf7; }
+@media (max-width: 600px) {
+  #model-scope-builder fieldset { padding: 8px; }
+  #model-scope-builder .button { width: 100%; white-space: normal; }
+  .scope-evidence { font-size: 11px; }
+}
