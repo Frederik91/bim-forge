@@ -19,8 +19,8 @@ export function conversationFromTicket(ticket: unknown): RequestConversation {
 }
 
 interface ChatActions {
-  close: () => void; answer: (text: string) => void; proposal: (message: ConversationMessage) => void;
-  inspect: (visual: ConversationVisual) => void; attach: () => void; remove: () => void;
+  answer: (text: string) => void; proposal: (message: ConversationMessage) => void;
+  inspect: (visual: ConversationVisual) => void;
 }
 
 export class RequestChat {
@@ -30,7 +30,6 @@ export class RequestChat {
   #projectId = '';
   #title = '';
   #state = '';
-  #visual: ConversationVisual | null = null;
   #disabled = false;
   #signature = '';
 
@@ -43,32 +42,31 @@ export class RequestChat {
   show(input: { conversation: RequestConversation; projectId: string; title: string; state: string }): void {
     this.#conversation = input.conversation; this.#projectId = input.projectId; this.#title = input.title; this.#state = input.state; this.#render();
   }
-  close(): void { this.#conversation = null; this.#visual = null; this.#signature = ''; this.#render(); }
-  setVisual(visual: ConversationVisual | null): void { this.#visual = visual; this.#render(); }
+  close(): void { this.#conversation = null; this.#signature = ''; this.#render(); }
   setDisabled(disabled: boolean): void { this.#disabled = disabled; for (const button of this.#host.querySelectorAll('button')) button.disabled = disabled; }
 
   #render(): void {
-    const signature = JSON.stringify([this.#conversation, this.#projectId, this.#title, this.#state, this.#visual]);
+    const signature = JSON.stringify([this.#conversation, this.#projectId, this.#title, this.#state]);
     if (signature === this.#signature) return;
     this.#signature = signature;
     const root = node('section', undefined, 'request-chat'); root.id = 'request-chat';
     root.setAttribute('aria-label', 'Request conversation');
     if (this.#conversation) {
-      const header = node('header'); header.append(node('h3', this.#title), node('span', this.#state, 'pill'), control('New request', this.#actions.close)); root.append(header);
+      const header = node('header'); header.append(node('h3', this.#title), node('span', this.#state, 'pill')); root.append(header);
       const transcript = node('ol', undefined, 'request-chat-transcript'); transcript.id = 'request-chat-transcript';
       for (const message of this.#conversation.messages) transcript.append(this.#message(message));
-      root.append(transcript, node('p', `${this.#conversation.messages.filter(message => message.kind === 'user').length}/${CONVERSATION_LIMITS.userTurns} messages sent · Up to ${CONVERSATION_LIMITS.sourceFiles} source files and 12 MiB across this conversation. Every reply continues this request. Proposals need an explicit review decision.`, 'editor-help'));
-    } else root.append(node('p', 'Start a request, then continue the conversation here.', 'editor-help'));
-    const attachments = node('div', undefined, 'request-chat-attachments');
-    attachments.append(control('Attach current selection / marker', this.#actions.attach));
-    if (this.#visual) {
-      attachments.append(this.#visualEvidence(this.#visual), control('Remove visual attachment', this.#actions.remove));
-    } else attachments.append(node('small', 'Optional: select an object or mark a location in 2D or 3D, then attach it.'));
-    root.append(attachments); this.#host.replaceChildren(root); this.setDisabled(this.#disabled);
+      root.append(transcript, node('p', `${this.#conversation.messages.filter(message => message.kind === 'user').length}/${CONVERSATION_LIMITS.userTurns} turns · Proposals need your review`, 'chat-turn-count'));
+    } else {
+      const welcome = node('div', undefined, 'chat-welcome');
+      welcome.append(node('span', '✦', 'chat-welcome-mark'), node('h3', 'What would you like to change?'),
+        node('p', 'Describe an idea, paste a plan, or reference an item in the model. Your AI will prepare a proposal to review.'));
+      root.append(welcome);
+    }
+    this.#host.replaceChildren(root); this.setDisabled(this.#disabled);
   }
 
   #visualEvidence(visual: ConversationVisual): HTMLElement {
-    const details = node('details', undefined, 'request-chat-visual'); details.open = true;
+    const details = node('details', undefined, 'request-chat-visual');
     details.append(node('summary', visualLabel(visual)), node('p', `Selected IDs: ${visual.selectedObjectIds.join(', ') || 'None'}`));
     for (const annotation of visual.annotations) details.append(node('p', annotation.kind === 'pin'
       ? `● ${annotation.label}: ${annotation.position.join(', ')} m`

@@ -29,6 +29,7 @@ import type { RequestSourceContext } from './request-source-ui.ts';
 import { ModelScopeBuilder, renderScopeEvidence, requestScopeContext, reviewScopeContext } from './model-scope-client.ts';
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 import { RequestChat, conversationFromTicket } from './request-chat.ts';
+import { RequestComposer } from './request-composer.ts';
 import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
 import { parseConversationReply } from '../src/request-conversation.ts';
 import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
@@ -284,6 +285,8 @@ let chatTicketId: string | null = null;
 let chatVisual: ConversationVisual | null = null;
 let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
 let chatRefreshing = false;
+let newDraftId = 'new';
+const chatDrafts = new Map<string, ReturnType<typeof captureChatDraft>>();
 let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
@@ -324,27 +327,40 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
 }
 
 const sourcePicker = new RequestSourcePicker({ input: ui['request-source-files'], list: ui['request-source-list'],
-  status: ui['request-source-status'], error: ui['request-source-error'] }, updateControls);
+  status: ui['request-source-status'], error: ui['request-source-error'], paste: ui['request-text'] }, updateControls);
 const scopeBuilder = new ModelScopeBuilder({ host: generic('model-scope-builder'), changed: updateControls,
   context: () => repo && preview ? { projectId: repo.projectId, baseRevisionId: selectedRevision, selectedIds: selectedObject ? [selectedObject] : [],
     roomId: focusedRoomId, levelId: activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null } : null });
 const requestChat = new RequestChat(generic('request-chat-mount'), {
-  close: () => { void perform(async () => { if (await beginRequest()) status('New request. The earlier conversation remains in the backlog.'); }); },
-  answer: text => { ui['request-text'].value = text; ui['request-text'].focus(); },
+  answer: text => { ui['request-text'].value = text; ui['request-text'].focus(); composer.refresh(); updateControls(); },
   proposal: message => { void perform(() => openChatProposal(message)); },
   inspect: visual => { void perform(() => inspectChatVisual(visual)); },
-  attach: () => {
-    try {
-      if (!preview) throw new Error('Open a model before attaching its view.');
-      const snapshot = displayedChatSnapshot();
-      if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved snapshot before capturing a chat attachment. The unsent sketch is not a model revision.');
-      chatVisual = captureConversationVisual({ graph: preview, snapshot, view: modelView === 'plan' ? '2d' : '3d',
-        levelId: activeLevelId, selectedObjectIds: selectedObject ? [selectedObject] : [], reference: visibleReference() });
-      requestChat.setVisual(chatVisual); status(`Attached ${visualLabel(chatVisual)}. The model is unchanged.`);
-    } catch (error) { report(error); }
-  },
-  remove: () => { chatVisual = null; requestChat.setVisual(null); },
 });
+const composer = new RequestComposer({ root: generic('request-composer'), form: ui['proposal-form'], input: ui['request-text'],
+  add: button('composer-add'), menu: generic('composer-menu'), visual: generic('composer-model-context') }, {
+  items: () => (preview?.entities ?? []).map(({ id, name, type }) => ({ id, name, type })),
+  action: action => {
+    if (action === 'files') return sourcePicker.chooseFiles();
+    if (action === 'view') return attachChatContext(selectedObject ? [selectedObject] : []);
+    const options = requiredElement('request-options', HTMLDetailsElement); options.open = true;
+    const details = action === 'scope' ? requiredElement('composer-scope-options', HTMLDetailsElement) : options;
+    details.open = true; details.querySelector('summary')?.focus(); details.scrollIntoView({ block: 'nearest' }); return true;
+  },
+  mention: id => attachChatContext([...new Set([...(chatVisual?.selectedObjectIds ?? []), id])]),
+  remove: id => { chatVisual = id && chatVisual ? { ...chatVisual, selectedObjectIds: chatVisual.selectedObjectIds.filter(item => item !== id) } : null; composer.setVisual(chatVisual); updateControls(); },
+  changed: updateControls,
+});
+
+function attachChatContext(ids: readonly string[]): boolean {
+  try {
+    if (!preview) throw new Error('Open a model before attaching its view.');
+    if (chatVisual) requireCurrentVisual(chatVisual, displayedChatSnapshot());
+    if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved snapshot before capturing context. The unsent sketch is not a model revision.');
+    chatVisual = captureConversationVisual({ graph: preview, snapshot: displayedChatSnapshot(), view: modelView === 'plan' ? '2d' : '3d',
+      levelId: activeLevelId, selectedObjectIds: ids, reference: visibleReference() });
+    composer.setVisual(chatVisual); status(`Attached ${visualLabel(chatVisual)}. The model is unchanged.`); return true;
+  } catch (error) { report(error); return false; }
+}
 ui['request-reconstruct'].addEventListener('change', updateControls);
 
 function clearRequestSources(): void {
@@ -355,13 +371,76 @@ function requestDirty(): boolean {
   return dirty() || Boolean(chatVisual) || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
+function currentChatKey(): string { return `${repo?.projectId ?? 'none'}:${chatTicketId ?? newDraftId}`; }
+function captureChatDraft() {
+  return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
+    model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, selection: selectedObject,
+    room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
+    invalid: invalidInput, reply: chatReply, scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
+    reconstructionScope: ui['reconstruction-scope'].value, updatedAt: Date.now() };
+}
+function saveChatDraft(): void {
+  if (!repo) return;
+  const key = currentChatKey();
+  if (requestDirty()) chatDrafts.set(key, captureChatDraft()); else chatDrafts.delete(key);
+}
+function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
+  if (!draft.model) return;
+  repo = draft.model; reviewRepository = draft.reviewModel; selectedRevision = draft.revision; selectedBranch = draft.branch;
+  selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
+  preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
+  invalidInput = draft.invalid; chatReply = draft.reply; newDraftId = draft.draftId;
+  ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
+  ui['request-reconstruct'].checked = draft.reconstruction; ui['reconstruction-scope'].value = draft.reconstructionScope;
+  scopeBuilder.restoreDraft(draft.scope); composer.setVisual(chatVisual); composer.refresh();
+}
+
+let chatListSignature = '';
+function renderChatSwitcher(): void {
+  const projectId = repo?.projectId; const query = input('chat-search').value.toLowerCase();
+  const drafts = [...chatDrafts].filter(([, draft]) => draft.projectId === projectId && !draft.ticketId).map(([key, draft]) => ({
+    key, ticket: null, title: draft.text.trim().slice(0, 64) || 'New chat draft', state: 'Unsent draft', at: draft.updatedAt, draft: true,
+  }));
+  const tickets = backlogItems.map(ticket => ({ key: `${projectId}:${ticket.id}`, ticket: ticket.id, title: requestLabel(ticket.request.proposalName),
+    state: stateLabels[ticket.state], at: ticket.updatedAt, draft: chatDrafts.has(`${projectId}:${ticket.id}`) || ticket.id === chatTicketId && requestDirty() }));
+  const entries = [...drafts, ...tickets].sort((a, b) => b.at - a.at);
+  generic('chat-count').textContent = String(entries.length);
+  const signature = JSON.stringify([projectId, query, currentChatKey(), entries]); if (signature === chatListSignature) return; chatListSignature = signature;
+  const host = generic('chat-list'); host.replaceChildren();
+  for (const entry of entries.filter(entry => `${entry.title} ${entry.state}`.toLowerCase().includes(query))) {
+    const control = element('button', undefined, 'chat-switcher-item'); control.type = 'button';
+    control.setAttribute('aria-current', String(entry.key === currentChatKey()));
+    control.append(element('strong', entry.title), element('small', `${entry.state}${entry.draft && entry.ticket ? ' · unsent reply' : ''}`));
+    control.addEventListener('click', () => { void perform(async () => {
+      if (entry.ticket) await openConversation(entry.ticket);
+      else {
+        const draft = chatDrafts.get(entry.key); if (!draft) return;
+        saveChatDraft(); closeChat(); chatTicketId = null; sourcePicker.switchDraft(entry.key); restoreChatDraft(draft);
+        activeReview = null; activeTicketId = null; render(); showPage('request'); showRequestPane('details');
+      }
+      closeChatSwitcher(); ui['request-text'].focus();
+    }); }); host.append(control);
+  }
+  if (!host.childElementCount) host.append(element('p', query ? 'No matching chats.' : 'Your chats will appear here. Start a new one at any time.', 'chat-list-empty'));
+}
+function closeChatSwitcher(): void { generic('chat-switcher').hidden = true; button('chat-switcher-button').setAttribute('aria-expanded', 'false'); }
+button('chat-switcher-button').addEventListener('click', () => {
+  const panel = generic('chat-switcher'); panel.hidden = !panel.hidden; button('chat-switcher-button').setAttribute('aria-expanded', String(!panel.hidden));
+  if (!panel.hidden) { saveChatDraft(); renderChatSwitcher(); input('chat-search').focus(); }
+});
+input('chat-search').addEventListener('input', renderChatSwitcher);
+generic('chat-switcher').addEventListener('keydown', event => {
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeChatSwitcher(); button('chat-switcher-button').focus(); }
+});
+button('new-chat').addEventListener('click', () => { void perform(async () => { await beginRequest(); closeChatSwitcher(); showRequestPane('details'); ui['request-text'].focus(); }); });
+
 async function discardRequest(message: string): Promise<boolean> {
   if (!requestDirty()) return true;
   const target = dialog('discard-request-dialog');
   generic('discard-request-message').textContent = message;
   target.returnValue = 'keep';
   return new Promise<boolean>((resolve) => {
-    target.addEventListener('close', () => resolve(target.returnValue === 'discard'), { once: true });
+    target.addEventListener('close', () => { if (target.returnValue === 'discard') chatDrafts.delete(currentChatKey()); resolve(target.returnValue === 'discard'); }, { once: true });
     openDialog(target);
   });
 }
@@ -675,8 +754,13 @@ function updateControls() {
   ui['level-focus'].disabled = busy || dragging || !repo;
   ui['whole-building'].disabled = busy || dragging || !repo;
   ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
-  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready;
-  ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : chatTicketId ? 'Send reply →' : 'Send change request →';
+  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready || !ui['request-text'].value.trim();
+  ui['save-proposal'].textContent = sourcePicker.uploading || busy ? '…' : '↑';
+  ui['save-proposal'].setAttribute('aria-label', sourcePicker.uploading ? 'Uploading attachments' : busy ? 'Sending message' : 'Send message');
+  composer.setDisabled(!writable || !preview); composer.refresh();
+  button('new-chat').disabled = busy || !repo; button('chat-switcher-button').disabled = busy || !repo;
+  renderChatSwitcher();
+  generic('request-options-summary').textContent = [scopeBuilder.dirty ? 'Scope enabled' : '', ui['request-reconstruct'].checked ? 'Reconstruction enabled' : ''].filter(Boolean).join(' · ');
   requestChat.setDisabled(!writable || !preview);
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
@@ -766,7 +850,7 @@ function syncInspector() {
   const isWall = object?.type === 'Wall';
   ui['door-fields'].hidden = !isDoor || !layout;
   ui['wall-fields'].hidden = !isWall || !layout;
-  ui['editor-base'].textContent = `Request bound to ${selectedBranch} · ${selectedRevision.slice(0, 10)}. The original is preserved in history. Unsaved request sketches are lost on reload.`;
+  ui['editor-base'].textContent = `${object?.name ?? 'Model'} · ${selectedBranch} · ${selectedRevision.slice(0, 7)}`;
   renderKnowledge();
   const assetPanel = generic('asset-details');
   assetPanel.hidden = object?.type !== 'AssetInstance';
@@ -853,7 +937,7 @@ ui['discard-preview'].addEventListener('click', () => {
   if (busy || gesture || visualGesture || !repo) return;
   resetEditor(); renderComparison(); updateControls(); status('Visual request sketch discarded. Saved model history is unchanged.');
 });
-window.addEventListener('beforeunload', (event) => { if (requestDirty()) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', (event) => { if (requestDirty() || chatDrafts.size || sourcePicker.hasAnySources) { event.preventDefault(); event.returnValue = ''; } });
 
 async function perform(action: () => void | Promise<void>): Promise<void> {
   if (busy || gesture || visualGesture) return;
@@ -874,7 +958,7 @@ function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
-  if (projectChanged) { backlogItems = []; ticketScopes.clear(); submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
+  if (projectChanged) { newDraftId = 'new'; backlogItems = []; ticketScopes.clear(); submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
   serverProjectText = text;
   serverHeadRevisionId = next.head('main');
   historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
@@ -1068,8 +1152,12 @@ ui['open-room'].addEventListener('click', () => {
 });
 async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
-  if (!await discardRequest('Return to the accepted model and discard the unsent request?')) return false;
+  const accepted = await projects.read(repo.projectId);
+  saveChatDraft();
   closeChat();
+  newDraftId = `draft-${crypto.randomUUID()}`;
+  sourcePicker.switchDraft(`${repo.projectId}:${newDraftId}`);
+  displayAccepted(accepted);
   reviewRepository = null; activeTicketId = null; activeReview = null;
   selectedBranch = 'main'; selectedRevision = repo.head('main');
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
@@ -1087,7 +1175,7 @@ function openRoomRequest(roomId: string | null): void {
     renderComparison(); syncInspector();
   });
 }
-ui['nav-request'].addEventListener('click', () => { void perform(async () => { await beginRequest(); }); });
+ui['nav-request'].addEventListener('click', () => { showPage('request'); showRequestPane('details'); });
 for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
   showPage('backlog'); void refreshBacklog();
 });
@@ -1234,6 +1322,7 @@ function parseProposalResponse(value: unknown): ProposalResponse {
 ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
   void perform(async () => {
+    const draftKey = currentChatKey();
     if (!serverAvailable) throw new Error('Reconnect to the project server before submitting.');
     if (!repo || !preview || invalidInput) throw new Error('Open a project and fix the request input first.');
     if (chatTicketId) { await sendChatReply(); return; }
@@ -1248,7 +1337,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: selectedRevision,
-      selectedObjectIds: [...new Set([selectedObject, ...(focusedRoomId ? [focusedRoomId] : []),
+      selectedObjectIds: [...new Set([...(selectedObject ? [selectedObject] : []), ...(chatVisual?.selectedObjectIds ?? []), ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
       ...(chatVisual ? { conversationVisual: checkedChatVisual() } : {}),
@@ -1267,7 +1356,8 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     chatTicketId = submittedTicket.id;
     submission = null;
     clearRequestSources();
-    chatVisual = null; requestChat.setVisual(null);
+    chatDrafts.delete(draftKey); sourcePicker.switchDraft(currentChatKey());
+    chatVisual = null; composer.setVisual(null);
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
     resetEditor(); renderComparison();
     await refreshBacklog();
@@ -1285,7 +1375,7 @@ async function proposalJson(response: Response): Promise<unknown> {
 }
 
 function closeChat(): void {
-  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close();
+  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
 }
 
 function displayedChatSnapshot(): ConversationVisual['snapshot'] {
@@ -1313,13 +1403,16 @@ function showChatTicket(value: unknown): void {
 }
 
 async function openConversation(id: string, keepProposal = false): Promise<void> {
-  if (!repo || !await discardRequest('Open this conversation and discard the unsent message?')) return;
+  if (!repo) return;
+  saveChatDraft();
   const projectId = repo.projectId;
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing conversation.');
   const ticket = parseBacklogItem(value.ticket);
   if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
+  const key = `${projectId}:${id}`; const draft = chatDrafts.get(key);
   if (!keepProposal) displayAccepted(await projects.read(projectId));
+  sourcePicker.switchDraft(key);
   const conversation = conversationFromTicket(value.ticket);
   const latestUser = [...conversation.messages].reverse().find(message => message.kind === 'user');
   const visual = latestUser?.kind === 'user' ? latestUser.visual : null;
@@ -1331,10 +1424,13 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   if (!context.selectedId) {
     selectedObject = ''; ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', '', true, true)); syncInspector();
   }
-  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
-  chatVisual = null; chatReply = null; requestChat.setVisual(null);
-  showChatTicket(value.ticket); render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
-  status(context.selectedId ? 'Conversation reference restored. Inspect a message to view its original snapshot and pins. A reply never approves a proposal.'
+  if (!draft) clearRequestSources();
+  ui['request-text'].value = ''; ui['proposal-name'].value = '';
+  chatVisual = null; chatReply = null; composer.setVisual(null);
+  showChatTicket(value.ticket);
+  if (draft) restoreChatDraft(draft);
+  render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus(); closeChatSwitcher();
+  status(draft ? 'Chat reopened with its unsent message and attachments. Drafts stay in this tab until sent.' : context.selectedId ? 'Conversation reference restored. Inspect a message to view its original snapshot and pins. A reply never approves a proposal.'
     : 'Conversation opened; its saved reference is absent from the current model. Choose an item or inspect its retained evidence.');
 }
 
@@ -1369,7 +1465,8 @@ async function sendChatReply(): Promise<void> {
   }
   const value = await proposalJson(response);
   if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
-  showChatTicket(value.ticket); chatReply = null; chatVisual = null; requestChat.setVisual(null);
+  showChatTicket(value.ticket); chatReply = null; chatVisual = null; composer.setVisual(null);
+  chatDrafts.delete(currentChatKey());
   clearRequestSources(); ui['request-text'].value = ''; visualDraft = null; renderComparison();
   await refreshBacklog(); status('Reply saved on this request. The assistant will continue with the complete conversation and earlier proposal.');
 }
@@ -1419,7 +1516,7 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
   selectedBranch = visual.snapshot.kind === 'proposal' ? visual.snapshot.proposalName : 'main';
   activeLevelId = inspection.context.levelId; focusedRoomId = inspection.context.roomId; modelView = visual.view === '2d' ? 'plan' : '3d';
   selectedObject = inspection.context.selectedId ?? ''; resetEditor(); inspectedChatView = inspection;
-  chatVisual = null; requestChat.setVisual(null); clearRequestSources(); ui['request-text'].value = '';
+  chatVisual = null; composer.setVisual(null); clearRequestSources(); ui['request-text'].value = '';
   render(); showPage('request'); showRequestPane('canvas'); status(`Inspecting ${visualLabel(visual)}. Coordinates belong to this saved snapshot.`);
 }
 

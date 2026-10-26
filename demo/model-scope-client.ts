@@ -176,6 +176,27 @@ export class ModelScopeBuilder {
   #generation = 0;
   #loading = false;
 
+  captureDraft() {
+    return { query: structuredClone(this.#query), enabled: this.#enabled.checked, exclude: this.#exclude.value,
+      preview: this.#preview, savedScope: this.#savedScope, savedScopeId: this.#savedScopeId, status: this.#status.textContent,
+      inputs: [...this.#host.querySelectorAll('input,select')].flatMap(control => control instanceof HTMLInputElement
+        ? [{ value: control.value, checked: control.checked }] : control instanceof HTMLSelectElement ? [{ value: control.value, checked: false }] : []) };
+  }
+
+  restoreDraft(draft: ReturnType<ModelScopeBuilder['captureDraft']>): void {
+    this.#generation += 1; this.#loading = false;
+    this.#query = structuredClone(draft.query); this.#enabled.checked = draft.enabled; this.#exclude.value = draft.exclude;
+    this.#preview = draft.preview; this.#savedScope = draft.savedScope; this.#savedScopeId = draft.savedScopeId;
+    this.#controls.hidden = !draft.enabled; this.#renderClauses();
+    const controls = [...this.#host.querySelectorAll('input,select')].filter(control => control instanceof HTMLInputElement || control instanceof HTMLSelectElement);
+    for (const [index, control] of controls.entries()) {
+      const value = draft.inputs[index]; if (!value) continue;
+      control.value = value.value; if (control instanceof HTMLInputElement) control.checked = value.checked;
+    }
+    if (draft.preview) renderScopeEvidence(this.#evidence, draft.preview.scope); else this.#evidence.hidden = true;
+    this.#status.textContent = draft.status; this.#changed();
+  }
+
   constructor(input: { host: HTMLElement; context: () => ScopeContext | null; changed: () => void; client?: ModelScopeClient }) {
     this.#host = input.host; this.#context = input.context; this.#changed = input.changed; this.#client = input.client ?? new ModelScopeClient();
     this.#enabled.type = 'checkbox'; field(this.#host, 'Use a model scope (optional)', this.#enabled);

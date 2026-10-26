@@ -71,6 +71,18 @@ type UploadState = { kind: 'pending' } | { kind: 'uploading'; controller: AbortC
 type PickedSource = { kind: 'picked'; id: string; name: string; file: File; mediaType: SourceMediaType; previewUrl: string | null; upload: UploadState };
 type SourceEntry = PickedSource | { kind: 'retained'; source: RequestSource };
 
+export function admitSourceFiles(files: readonly File[], existing: { count: number; bytes: number }) {
+  if (existing.count + files.length > MAX_REQUEST_SOURCES) throw new Error('Choose at most four source files.');
+  if (existing.bytes + files.reduce((sum, file) => sum + file.size, 0) > MAX_REQUEST_SOURCE_BYTES) throw new Error('Sources must total at most 12 MiB.');
+  return files.map(file => {
+    if (!file.size || file.size > MAX_SOURCE_BYTES) throw new Error('Each source must contain between 1 byte and 6 MiB.');
+    const name = sourceName(file.name);
+    const extension = name.split('.').pop()?.toLowerCase();
+    const mediaType = sourceMediaType(extension === 'md' ? 'text/markdown' : extension === 'txt' ? 'text/plain' : file.type);
+    return { file, name, mediaType };
+  });
+}
+
 function reference(entry: SourceEntry): RequestSource | null {
   return entry.kind === 'retained' ? entry.source : entry.upload.kind === 'ready' ? entry.upload.source : null;
 }
@@ -81,40 +93,53 @@ export class RequestSourcePicker {
   #disabled = true;
   #draining = false;
   #error = '';
+  #draftKey = '';
+  readonly #drafts = new Map<string, { entries: SourceEntry[]; error: string }>();
   readonly #ui: { input: HTMLInputElement; list: HTMLElement; status: HTMLElement; error: HTMLElement };
   readonly #changed: () => void;
 
-  constructor(ui: { input: HTMLInputElement; list: HTMLElement; status: HTMLElement; error: HTMLElement }, changed: () => void) {
+  constructor(ui: { input: HTMLInputElement; list: HTMLElement; status: HTMLElement; error: HTMLElement; paste: HTMLTextAreaElement }, changed: () => void) {
     this.#ui = ui; this.#changed = changed;
     ui.input.addEventListener('change', () => {
       const files = Array.from(ui.input.files ?? []); ui.input.value = '';
-      if (this.#disabled || !this.#projectId || !files.length) return;
-      try {
-        if (this.#entries.length + files.length > MAX_REQUEST_SOURCES) throw new Error('Choose at most four source files.');
-        const total = this.#entries.reduce((sum, entry) => sum + (entry.kind === 'picked' ? entry.file.size : entry.source.byteLength), 0);
-        if (total + files.reduce((sum, file) => sum + file.size, 0) > MAX_REQUEST_SOURCE_BYTES) throw new Error('Sources must total at most 12 MiB.');
-        const admitted = files.map(file => {
-          if (!file.size || file.size > MAX_SOURCE_BYTES) throw new Error('Each source must contain between 1 byte and 6 MiB.');
-          const name = sourceName(file.name);
-          const extension = name.split('.').pop()?.toLowerCase();
-          // Browsers commonly omit MIME types for Markdown and plain-text files.
-          const mediaType = sourceMediaType(extension === 'md' ? 'text/markdown' : extension === 'txt' ? 'text/plain' : file.type);
-          return { file, name, mediaType };
-        });
+      this.addFiles(files);
+    });
+    ui.paste.addEventListener('paste', event => {
+      const files = Array.from(event.clipboardData?.files ?? []);
+      if (!files.length || this.#disabled) return;
+      // Leave mixed text/file paste to the browser's native text insertion.
+      if (!event.clipboardData?.getData('text/plain')) event.preventDefault();
+      this.addFiles(files);
+    });
+  }
+
+  chooseFiles(): boolean {
+    if (this.#ui.input.disabled) {
+      this.#error = 'Remove an attachment before adding more files.'; this.#render(); return false;
+    }
+    this.#ui.input.click(); return true;
+  }
+
+  addFiles(files: readonly File[]): void {
+    if (this.#disabled || !this.#projectId || !files.length) return;
+    try {
+        const admitted = admitSourceFiles(files, { count: this.#entries.length,
+          bytes: this.#entries.reduce((sum, entry) => sum + (entry.kind === 'picked' ? entry.file.size : entry.source.byteLength), 0) });
         const entries = admitted.map(({ file, name, mediaType }): PickedSource => ({
           kind: 'picked', id: crypto.randomUUID(), file, name, mediaType,
           previewUrl: mediaType.startsWith('image/') ? URL.createObjectURL(file) : null, upload: { kind: 'pending' },
         }));
         this.#entries.push(...entries); this.#error = ''; this.#render();
         void this.#drainUploads();
-      } catch (error) {
+    } catch (error) {
         this.#error = error instanceof Error ? error.message : 'These files could not be attached.';
         this.#render();
-      }
-    });
+    }
   }
 
   get hasSources(): boolean { return this.#entries.length > 0; }
+  hasDraft(key: string): boolean { return key === this.#draftKey ? this.hasSources : Boolean(this.#drafts.get(key)?.entries.length); }
+  get hasAnySources(): boolean { return this.hasSources || [...this.#drafts].some(([key, draft]) => key !== this.#draftKey && draft.entries.length > 0); }
   get ready(): boolean { return this.#entries.every(entry => reference(entry) !== null); }
   get uploading(): boolean { return this.#entries.some(entry => entry.kind === 'picked' && (entry.upload.kind === 'uploading' || entry.upload.kind === 'pending')); }
   get sources(): readonly RequestSource[] {
@@ -133,7 +158,17 @@ export class RequestSourcePicker {
 
   setProject(projectId: string | null): void {
     if (projectId === this.#projectId) return;
-    this.#projectId = projectId; this.clear();
+    this.#drafts.set(this.#draftKey, { entries: this.#entries, error: this.#error });
+    this.#projectId = projectId; this.#draftKey = `${projectId}:new`;
+    const draft = this.#drafts.get(this.#draftKey);
+    this.#entries = draft?.entries ?? []; this.#error = draft?.error ?? ''; this.#render();
+  }
+
+  switchDraft(key: string): void {
+    if (key === this.#draftKey) return;
+    this.#drafts.set(this.#draftKey, { entries: this.#entries, error: this.#error });
+    this.#draftKey = key; const draft = this.#drafts.get(key);
+    this.#entries = draft?.entries ?? []; this.#error = draft?.error ?? ''; this.#render(); void this.#drainUploads();
   }
 
   restore(projectId: string, sources: readonly RequestSource[]): void {
@@ -143,11 +178,11 @@ export class RequestSourcePicker {
 
   clear(): void {
     for (const entry of this.#entries) this.#release(entry);
-    this.#entries = []; this.#error = ''; this.#ui.input.value = ''; this.#render();
+    this.#entries = []; this.#drafts.delete(this.#draftKey); this.#error = ''; this.#ui.input.value = ''; this.#render();
   }
 
   releasePreviews(): void {
-    for (const entry of this.#entries) {
+    for (const entry of new Set([...this.#entries, ...[...this.#drafts.values()].flatMap(draft => draft.entries)])) {
       if (entry.kind === 'picked' && entry.previewUrl) { URL.revokeObjectURL(entry.previewUrl); entry.previewUrl = null; }
     }
   }
@@ -173,6 +208,7 @@ export class RequestSourcePicker {
   async #upload(entry: PickedSource): Promise<void> {
     const projectId = this.#projectId;
     if (!projectId || !this.#entries.includes(entry) || entry.upload.kind === 'uploading' || entry.upload.kind === 'ready') return;
+    const entries = this.#entries;
     const controller = new AbortController(); entry.upload = { kind: 'uploading', controller }; this.#render();
     try {
       const response = await fetch(sourceUrl(projectId, entry.id), {
@@ -194,14 +230,14 @@ export class RequestSourcePicker {
       if (!value || typeof value !== 'object' || !('source' in value)) throw new Error('Upload returned an invalid source reference.');
       const source = parseRequestSources([value.source])[0];
       if (!source || source.id !== entry.id || source.name !== entry.name || source.mediaType !== entry.mediaType || source.byteLength !== entry.file.size) throw new Error('Upload returned a different source reference.');
-      if (!controller.signal.aborted && this.#projectId === projectId && this.#entries.includes(entry)) {
+      if (!controller.signal.aborted && entries.includes(entry)) {
         entry.upload = { kind: 'ready', source };
         if (entry.previewUrl) { URL.revokeObjectURL(entry.previewUrl); entry.previewUrl = null; }
       }
     } catch (error) {
-      if (!controller.signal.aborted && this.#entries.includes(entry)) entry.upload = { kind: 'failed', message: error instanceof Error ? error.message : 'Upload interrupted. Retry this file.' };
+      if (!controller.signal.aborted && entries.includes(entry)) entry.upload = { kind: 'failed', message: error instanceof Error ? error.message : 'Upload interrupted. Retry this file.' };
     } finally {
-      if (this.#projectId === projectId && this.#entries.includes(entry)) this.#render();
+      if (this.#entries === entries && entries.includes(entry)) this.#render(); else this.#changed();
     }
   }
 
@@ -218,7 +254,6 @@ export class RequestSourcePicker {
       const state = source ? `Uploaded · ${sizeLabel(source.byteLength)}` : entry.kind === 'picked' && entry.upload.kind === 'failed' ? entry.upload.message
         : entry.kind === 'picked' && entry.upload.kind === 'pending' ? 'Waiting to upload…' : 'Uploading…';
       copy.append(node('small', state));
-      if (source) copy.append(referenceDetails(source));
       const actions = node('div', undefined, 'source-actions');
       if (entry.kind === 'picked' && entry.upload.kind === 'failed') {
         const retry = node('button', 'Retry upload', 'text-button'); retry.type = 'button'; retry.setAttribute('aria-label', `Retry upload of ${name}`);
@@ -226,12 +261,14 @@ export class RequestSourcePicker {
       }
       const remove = node('button', 'Remove', 'text-button'); remove.type = 'button'; remove.setAttribute('aria-label', `Remove ${name} from this request`);
       remove.addEventListener('click', () => {
-        this.#release(entry); this.#entries = this.#entries.filter(item => item !== entry); this.#error = ''; this.#render(); this.#ui.input.focus();
+        this.#release(entry); this.#entries = this.#entries.filter(item => item !== entry); this.#error = ''; this.#render();
+        const composer = document.getElementById('request-text'); if (composer instanceof HTMLTextAreaElement) composer.focus();
       });
       actions.append(remove); item.append(copy, actions); this.#ui.list.append(item);
     }
     this.#ui.status.textContent = this.uploading ? 'Uploading sources before submission…' : !this.ready ? 'Retry or remove failed uploads before sending.'
-      : this.hasSources ? `${this.#entries.length} of 4 sources ready. Removing a file only removes it from this request.` : 'No sources attached.';
+      : this.hasSources ? `${this.#entries.length} of 4 files ready` : '';
+    this.#ui.status.hidden = !this.hasSources;
     this.#ui.list.setAttribute('aria-busy', String(this.uploading));
     this.#ui.error.textContent = this.#error; this.#ui.error.hidden = !this.#error;
     this.setDisabled(this.#disabled); this.#changed();

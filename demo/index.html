@@ -81,9 +81,37 @@
         <aside id="workspace-context" class="workspace-context" aria-labelledby="workspace-context-heading">
           <div class="workspace-panel-heading"><div><p class="eyebrow">MODEL CONTEXT</p><h2 id="workspace-context-heading">Change request</h2></div><button id="workspace-context-close" class="icon-button" type="button" aria-label="Close context panel">×</button></div>
           <div id="workspace-context-content" class="workspace-context-content">
-          <section id="editor-panel" class="editor-panel request-pane" data-active="false" aria-labelledby="proposal-heading">
-            <div class="panel-heading"><div><p class="eyebrow">INTENT DETAILS</p><h2 id="proposal-heading">Describe the outcome</h2></div><div class="panel-links"><button id="back-to-canvas" class="text-button mobile-only" type="button">← Plan</button><button id="discard-preview" class="text-button" type="button" disabled>Reset markup</button></div></div>
+          <section id="editor-panel" class="editor-panel request-pane chat-workspace" data-active="false" aria-label="Request chats">
+            <div class="chat-toolbar"><button id="chat-switcher-button" class="button quiet" type="button" aria-expanded="false" aria-controls="chat-switcher">Chats <span id="chat-count">0</span> <span aria-hidden="true">⌄</span></button><button id="new-chat" class="button outline" type="button">+ New chat</button></div>
+            <section id="chat-switcher" class="chat-switcher" aria-label="Project chats" hidden><label class="sr-only" for="chat-search">Search chats</label><input id="chat-search" type="search" placeholder="Search chats…" autocomplete="off"><div id="chat-list" class="chat-list"></div></section>
+            <h2 id="proposal-heading" class="sr-only">Chat about a change</h2>
             <div id="request-chat-mount"></div>
+            <form id="proposal-form" class="proposal-form chat-composer-form">
+              <p id="editor-base" class="composer-binding">Open a model to start.</p>
+              <div id="request-composer" class="request-composer">
+                <div id="composer-model-context" class="composer-model-context" aria-label="Attached model context" hidden></div>
+                <ul id="request-source-list" class="source-list composer-source-list" aria-label="Attached request sources"></ul>
+                <div class="composer-input-row">
+                  <button id="composer-add" class="composer-icon" type="button" aria-label="Add files or context" aria-controls="composer-menu" aria-expanded="false" title="Add files or context" disabled>+</button>
+                  <label class="sr-only" for="request-text">Message</label><textarea id="request-text" maxlength="1000" rows="2" placeholder="Ask for a change…" aria-describedby="proposal-help request-source-status" aria-controls="composer-menu" aria-expanded="false" aria-autocomplete="list" required disabled></textarea>
+                  <button id="save-proposal" type="submit" class="composer-send" aria-label="Send message" title="Send message" disabled><span aria-hidden="true">↑</span></button>
+                </div>
+                <div id="composer-menu" class="composer-menu" popover="manual" role="listbox" aria-label="Add to this chat" hidden></div>
+              </div>
+              <input id="request-source-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown" aria-label="Attach files to this chat" hidden disabled>
+              <p id="request-source-status" class="composer-upload-status" role="status" aria-live="polite" aria-atomic="true"></p>
+              <p id="request-source-error" class="source-error" role="alert" hidden></p>
+              <p id="proposal-help" class="composer-help">Paste files · @ reference · / shortcuts <span>Enter to send · Shift+Enter for a new line</span></p>
+              <div class="proposal-connection composer-connection"><p><strong id="proposal-auth-copy">Connect ChatGPT</strong></p><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
+              <details id="request-options" class="request-options"><summary>Request options <span id="request-options-summary"></span></summary>
+              <details id="composer-scope-options" class="model-scope-panel"><summary>Model scope · optional</summary><div id="model-scope-builder"></div></details>
+              <div class="reconstruction-scope">
+                <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Allow layout reconstruction</span></label>
+                <label for="reconstruction-scope">Layout scope</label><select id="reconstruction-scope" disabled><option value="floor-plan-reconstruction">One storey · retain the other levels</option><option value="building-reconstruction">Whole building · levels, stairs and roof</option></select>
+                <p id="reconstruction-help" class="editor-help">The original stays preserved. Existing furniture is kept unless separately requested. Choose whole building to add a basement or attic. Check proposed levels, scale, dimensions and roof assumptions before accepting.</p>
+              </div>
+                <label for="proposal-name">Request name · optional</label><input id="proposal-name" placeholder="Named automatically" pattern="[a-z]+(-[a-z]+)*" maxlength="64" disabled>
+                <details class="request-reference-options"><summary>Model reference and markup</summary>
             <section id="visual-panel" class="visual-panel" aria-labelledby="visual-heading" hidden>
               <div><p class="eyebrow">SPATIAL CONTEXT</p><h3 id="visual-heading">Point to a location</h3><p id="visual-context"></p></div>
               <p id="visual-feedback" role="status" aria-live="polite"></p>
@@ -91,7 +119,6 @@
               <div class="dimension-grid"><div><label for="visual-x">Floor X · mm</label><input id="visual-x" type="number" step="1" value="3000"></div><div><label for="visual-y">Floor Y · mm</label><input id="visual-y" type="number" step="1" value="2000"></div></div>
               <div class="visual-actions"><button id="mark-visual-point" type="button" class="button outline">Mark floor location</button><button id="describe-visual-reference" type="button" class="button primary">Describe the request →</button></div>
             </section>
-            <p id="editor-base" class="editor-help">Load a room to begin.</p>
             <div class="editor-fields">
               <div><label for="selected-object">Reference object</label><select id="selected-object" disabled><option value="door-entry">Entry door</option></select></div>
               <div id="door-fields" class="dimension-grid"><div><label for="door-width">Door width <span>mm</span></label><input id="door-width" type="number" min="1" max="100000" step="1" inputmode="numeric" aria-describedby="edit-feedback" disabled></div><div><label for="door-offset">Offset from host start <span>mm</span></label><input id="door-offset" type="number" min="0" max="1000000" step="1" inputmode="numeric" aria-describedby="edit-feedback" disabled></div></div>
@@ -106,26 +133,9 @@
               <p class="knowledge-readonly"><i aria-hidden="true">↗</i> Evidence inspection is read-only. It cannot change this revision.</p>
             </section>
             <p id="edit-feedback" class="editor-feedback" role="status" aria-live="polite">The markup communicates intent. It is never committed directly.</p>
-            <form id="proposal-form" class="proposal-form">
-              <div class="proposal-connection"><div><span class="connection-dot" aria-hidden="true"></span><p><strong id="proposal-auth-copy">Connect ChatGPT to prepare this proposal</strong><small>Uses your eligible ChatGPT plan. No API key is required.</small></p></div><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
-              <div><label for="request-text">What do you want the AI to achieve?</label><textarea id="request-text" maxlength="1000" rows="3" aria-describedby="proposal-help" required disabled></textarea></div>
-              <details class="model-scope-panel"><summary>Model scope · optional</summary><div id="model-scope-builder"></div></details>
-              <fieldset class="request-sources">
-                <legend>Source files <span>optional</span></legend>
-                <label for="request-source-files">Attach a sketch or document</label>
-                <input id="request-source-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown" aria-describedby="request-source-help request-source-status" disabled>
-                <p id="request-source-help" class="editor-help">PNG, JPEG, WebP, PDF, text or Markdown. Up to 4 files · 6 MiB each · 12 MiB total. Sources stay with the submitted request.</p>
-                <p id="request-source-status" class="editor-help" role="status" aria-live="polite" aria-atomic="true">No sources attached.</p>
-                <p id="request-source-error" class="source-error" role="alert" hidden></p>
-                <ul id="request-source-list" class="source-list" aria-label="Attached request sources"></ul>
-              </fieldset>
-              <div class="reconstruction-scope">
-                <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Allow layout reconstruction</span></label>
-                <label for="reconstruction-scope">Layout scope</label><select id="reconstruction-scope" disabled><option value="floor-plan-reconstruction">One storey · retain the other levels</option><option value="building-reconstruction">Whole building · levels, stairs and roof</option></select>
-                <p id="reconstruction-help" class="editor-help">The original stays preserved. Existing furniture is kept unless separately requested. Choose whole building to add a basement or attic. Check proposed levels, scale, dimensions and roof assumptions before accepting.</p>
-              </div>
-              <div class="proposal-footer"><div><label for="proposal-name">Request name <span>optional</span></label><input id="proposal-name" placeholder="Named automatically from your request" pattern="[a-z]+(-[a-z]+)*" maxlength="64" aria-describedby="proposal-help" disabled></div><button id="save-proposal" type="submit" class="button primary" disabled>Send change request <span aria-hidden="true">→</span></button></div>
-              <p id="proposal-help" class="editor-help">Send this to the project backlog and keep working. Agents process requests on the server, even when you close this page. Every proposal still needs review.</p>
+                <div class="panel-links"><button id="back-to-canvas" class="text-button mobile-only" type="button">← Model</button><button id="discard-preview" class="text-button" type="button" disabled>Reset markup</button></div></details>
+                <p id="request-source-help" class="editor-help">PNG, JPEG, WebP, PDF, text or Markdown. Up to 4 files · 6 MiB each · 12 MiB total. Every proposal needs your review.</p>
+              </details>
             </form>
           </section>
       <section id="project-page" class="workflow-page project-overview" aria-labelledby="project-page-heading" hidden>
