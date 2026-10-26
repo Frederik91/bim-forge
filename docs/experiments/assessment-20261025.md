@@ -1,6 +1,6 @@
 # QVM-01 design assessment
 
-Working assessment, 25 October 2026. Two execution rounds are reviewed. Both full hospital admissions timed out before publication; see the [second full-load review](decisions/full-hospital-round2-review-20261025.md). This document proposes the next design to review; it does not adopt a schema, approve engineering changes or authorize merging.
+Working assessment, updated 26 October 2026. Three execution rounds are reviewed. The first two full hospital admissions timed out. The third stopped on a budget-monitor race after complete staging, without publication or complete readback; see the [third full-load review](decisions/full-hospital-round3-review-20261026.md). This document proposes the next design to review; it does not adopt a schema, approve engineering changes or authorize merging.
 
 ## Suggested model direction
 
@@ -20,7 +20,7 @@ Acceptance should combine a small atomic database publication with semantic assu
 | Geometric references | Real OCCT face split and traversal permutation; ambiguous anchors remain pending | Curved faces, tolerance sweeps, reload, general topological naming and kernel upgrades |
 | IFC exchange | Real controlled IFC files, geometry/coordinate checks and an actual bounded-property preservation failure | A loss-aware exchange contract, independent vendor/MVD coverage and the latest complete engine rerun |
 | History and recovery | 1,000-revision small-model aging, six real PG recovery cases, portable divergence and partial reader upgrades | Full-model history combinations, old/new kernel execution and independent authentication/host failures |
-| Storage capacity | Five alternating reduced admissions per variant preserved fidelity; a separate reduced stage passed bounded queries, two durable edits and independent metadata inspection; second full trial timed out with 23,791,755 unpublished staged versions | Completed full admission, full working-set latency and the unexecuted branch/client/history matrix |
+| Storage capacity | Repeated reduced comparisons preserved fidelity; separate reduced continuation passed durable edits and independent inspection; medium admission verified 2,702,011 records. Third full trial retained all 27,020,089 staged versions but stopped on monitoring failure with zero published revisions | Reliable monitoring, completed full admission, full working-set latency and the unexecuted branch/client/history matrix |
 
 Links to original immutable results and separate reviews are in [the registry](registry.json). Each tested capability remains bounded by its fixture, actual source and environment. A passing case does not turn a partially covered experiment into a production qualification.
 
@@ -34,11 +34,15 @@ The prepared-record path now reuses a verified canonical serialization and hash 
 
 Bulk import and interactive acceptance should be measured as separate phases. Any staged publication design must retain complete validation, atomic visibility of the accepted revision, exact retry receipts and the last complete usable state. Small edits need scoped validation that still covers incoming references, semantic query assumptions and evaluated dependants. Simply omitting expensive checks would invalidate the experiment.
 
+The [third-round review](decisions/full-hospital-round3-review-20261026.md) records a predeclared 5,000-row candidate with the same byte trigger: reduced complete-job median 91.842 s versus 106.019 s, with non-overlapping ranges and full fidelity in all ten cases. The medium case completed in 25 min 27 s. The separately declared six-hour full run was stopped after 4 h 04 m 36 s by a transient allocation-scan failure. Complete staging is not complete admission. Two point observations caught database file-read waits during the initial change-set insertion; no exact overall bottleneck fraction or Rust speedup was measured.
+
+Permanent constraints justify native ownership for new engineering geometry and heavy spatial/numerical work from inception, as proposed in [#154](https://github.com/Frederik91/bim-forge/pull/154). They do not establish an inevitable whole-backend rewrite. Keep data transfer and working sets bounded across language boundaries. Review the separately tested monitoring correction and publication plans before declaring another full trial; no fourth full attempt was launched after the three-attempt escalation.
+
 ## Adoption sequence to review
 
 1. Combine the semantic prototype and governed policy/evidence checks with actual persistent transactions, replaying the same positive and negative cases.
 2. Specify the loss-aware IFC/property contract and execute the latest complete exchange slice after the retry escalation is reviewed.
-3. Investigate the remaining full bulk-load limit, then declare a fresh trial and resource envelope. Complete full admission before testing full working sets, history and contention. Preserve both failed full attempts and the successful bounded reduced checks.
+3. Review the bounded monitoring correction and investigate initial publication costs, then review the retry escalation before declaring a fresh full trial and resource envelope. Complete full admission before testing full working sets, history and contention. Preserve all three failed full attempts and the successful bounded reduced/medium checks.
 4. Execute pinned old/new kernel interpretation and broader reference cases before claiming historical geometry compatibility.
 
 The renderer, AI service calls, VR interactions, engineering/code compliance, real hospital completeness and production security remain outside this qualification. Existing preview behavior and accepted model data are unchanged by these experiments.
