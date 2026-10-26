@@ -71,6 +71,9 @@ export interface StoredExecution {
 }
 
 function object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function fields(value: Record<string, unknown>, required: readonly string[], optional: readonly string[] = []): void {
+  if (!required.every((key) => Object.hasOwn(value, key)) || Object.keys(value).some((key) => !required.includes(key) && !optional.includes(key))) throw new Error('Unexpected stored request fields.');
+}
 function identifier(value: unknown): string {
   if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error('Invalid request or project identity.');
   return value;
@@ -109,7 +112,9 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
     throw new Error('The stored change request is invalid.');
   }
   // The payload is parsed by the model request boundary again before every run.
+  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity']);
   const r = value.request;
+  fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope']);
   const activity = parseRequestActivity(value.activity);
   if (activity.some((event) => event.requestId !== r.requestId)) throw new Error('Activity belongs to another request revision.');
   if (typeof r.requestId !== 'string' || typeof r.proposalName !== 'string' || typeof r.baseRevisionId !== 'string'
@@ -128,6 +133,7 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   let result: RequestTicket<Project>['result'] = null;
   if (value.result !== null) {
     if (!object(value.result) || (value.result.status !== 'ready' && value.result.status !== 'declined') || !object(value.result.review)) throw new Error('Invalid stored proposal result.');
+    fields(value.result, ['status', 'project', 'review']);
     result = { status: value.result.status, project: parseProject(value.result.project), review: value.result.review };
   }
   return { id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
@@ -146,24 +152,30 @@ function recordActivity(ticket: Ticket, update: ActivityUpdate): Ticket {
 }
 
 function storedVisual(value: Record<string, unknown>): RequestInput['visualIntent'] {
-  if (value.kind === 'selection') return { kind: 'selection' };
+  if (value.kind === 'selection') { fields(value, ['kind']); return { kind: 'selection' }; }
   if (value.kind === 'spatial-reference' && object(value.destination)) {
+    fields(value, ['kind', 'destination']);
     const d = value.destination;
     if (d.kind === 'floor-point' && Array.isArray(d.positionMm) && d.positionMm.length === 2
         && typeof d.positionMm[0] === 'number' && typeof d.positionMm[1] === 'number') {
       if (Object.hasOwn(d, 'levelId')) {
+        fields(d, ['kind', 'levelId', 'positionMm']);
         if (typeof d.levelId !== 'string') throw new Error('Invalid stored floor level.');
         const positionMm: Point = [d.positionMm[0], d.positionMm[1]];
         return { kind: 'spatial-reference', destination: { kind: 'floor-point', levelId: d.levelId, positionMm } };
       }
+      fields(d, ['kind', 'positionMm']);
       return { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [d.positionMm[0], d.positionMm[1]] } };
     }
     if (d.kind === 'wall-point' && typeof d.wallId === 'string' && typeof d.alongWallMm === 'number') {
+      fields(d, ['kind', 'wallId', 'alongWallMm']);
       return { kind: 'spatial-reference', destination: { kind: 'wall-point', wallId: d.wallId, alongWallMm: d.alongWallMm } };
     }
   }
   if (value.kind === 'rectangle-layout-sketch' && object(value.layout) && object(value.layout.boundsMm) && object(value.layout.door)) {
+    fields(value, ['kind', 'layout']); fields(value.layout, ['boundsMm', 'door']);
     const b = value.layout.boundsMm; const d = value.layout.door;
+    fields(b, ['minX', 'minY', 'maxX', 'maxY']); fields(d, ['widthMm', 'offsetMm']);
     if (typeof b.minX === 'number' && typeof b.minY === 'number' && typeof b.maxX === 'number' && typeof b.maxY === 'number'
         && typeof d.widthMm === 'number' && typeof d.offsetMm === 'number') return { kind: 'rectangle-layout-sketch', layout: {
       boundsMm: { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY }, door: { widthMm: d.widthMm, offsetMm: d.offsetMm } } };
@@ -227,6 +239,7 @@ export class ChangeRequests {
         origin: 'imported', requestId: null, decisionId: null });
     }
     const submissions = new Map<string, { ticketId: string; fingerprint: string; projectId: string; sources: readonly RequestSource[] }>();
+    const reviewedExecutions: { ticketId: string; requestId: string; attempt: number; evidence: ScriptExecutionEvidence }[] = [];
     const convert = async (ticket: TicketProjection, archived: boolean): Promise<Ticket> => {
       if (archived && ticket.history.length) throw new Error('Nested legacy archives are invalid.');
       const repository = await RoomRepository.restore(ticket.project);
@@ -248,9 +261,11 @@ export class ChangeRequests {
           const record = proposed.review(ticket.request.proposalName);
           const expected = { ...record, changes: summarizeModelDelta(diffSnapshots(proposed.view(record.baseRevisionId).snapshot, proposed.view(record.proposalRevisionId).snapshot)) };
           if (!isDeepStrictEqual(expected, review)) throw new Error('Legacy result review evidence mismatch.');
+          for (const evidence of record.scriptExecutions ?? []) reviewedExecutions.push({ ticketId: ticket.id, requestId: ticket.request.requestId, attempt: ticket.attempts, evidence });
         } else if (review.proposalRevisionId !== null || review.changes !== null
             || !['summary', 'rationale', 'constraints', 'uncertainty'].every((key) => typeof review[key] === 'string' && review[key].length > 0 && review[key].length <= 4000)
             || proposed.serialize() !== repository.serialize()) throw new Error('Invalid legacy declined result.');
+        if (ticket.result.status === 'declined') fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints', 'uncertainty', 'changes'], ['intent']);
         if (Object.hasOwn(review, 'intent')) parseIntentAssessment(review.intent);
         result = { ...ticket.result, project: this.#projects.put(proposed) };
       }
@@ -280,6 +295,11 @@ export class ChangeRequests {
       const evidence = parseScriptExecutionEvidence(JSON.parse(row.body));
       if (evidence.executionId !== row.execution_id) throw new Error('Legacy execution identity mismatch.');
     }
+    for (const record of reviewedExecutions) {
+      const row = this.#db.prepare('SELECT body FROM request_executions WHERE ticket_id=? AND request_id=? AND attempt=? AND execution_id=?')
+        .get(record.ticketId, record.requestId, record.attempt, record.evidence.executionId);
+      if (!row || typeof row.body !== 'string' || !isDeepStrictEqual(parseScriptExecutionEvidence(JSON.parse(row.body)), record.evidence)) throw new Error('Legacy reviewed execution evidence is missing or mismatched.');
+    }
     for (const row of this.#db.prepare('SELECT request_id, project_id, manifest FROM request_source_bindings').all()) {
       const bound = typeof row.request_id === 'string' ? submissions.get(row.request_id) : undefined;
       if (!bound || bound.projectId !== row.project_id || JSON.stringify(bound.sources) !== row.manifest) throw new Error('Legacy source binding mismatch.');
@@ -292,6 +312,12 @@ export class ChangeRequests {
       const [source] = parseRequestSources([JSON.parse(row.manifest)]);
       if (!source || source.id !== row.id) throw new Error('Legacy source identity mismatch.');
       identifier(row.project_id);
+      const blob = this.#db.prepare('SELECT project_id, name, media_type, byte_length, sha256 FROM request_source_blobs WHERE id=?').get(source.id);
+      if (blob && (blob.project_id !== row.project_id || blob.name !== source.name || blob.media_type !== source.mediaType
+          || blob.byte_length !== source.byteLength || blob.sha256 !== source.sha256)) throw new Error('Legacy source manifest does not match its bytes.');
+    }
+    for (const [requestId, bound] of submissions) {
+      if (bound.sources.length && !this.#db.prepare('SELECT request_id FROM request_source_bindings WHERE request_id=?').get(requestId)) throw new Error('Legacy request source binding is missing.');
     }
     if (this.#db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Legacy database relationships are invalid.');
     this.#db.exec("UPDATE projects SET body='versioned'; INSERT INTO queue_storage_metadata(version) VALUES(1);");

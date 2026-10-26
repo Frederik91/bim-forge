@@ -100,7 +100,7 @@ test('server projects recover in a fresh session, imports preserve authority and
   assert.equal((await request(`/api/projects/${crypto.randomUUID()}`)).status, 404);
   assert.equal((await request(`/api/projects/${crypto.randomUUID()}/history`)).status, 404);
   assert.equal((await post('{bad project')).status, 400);
-  const layout = rectangleLayout(repo.view(repo.root()).snapshot); layout.door.widthMm = 1200;
+  const layout = structuredClone(rectangleLayout(repo.view(repo.root()).snapshot)); layout.door.widthMm = 1200;
   const mismatch = await RoomRepository.createProject({ projectId: repo.projectId, name: repo.name, snapshot: previewRectangle(repo.view(repo.root()).snapshot, layout) });
   assert.equal((await post(mismatch.serialize())).status, 409);
   assert.equal(jsonObject((await request(`/api/projects/${repo.projectId}`)).body).project, repo.serialize());
