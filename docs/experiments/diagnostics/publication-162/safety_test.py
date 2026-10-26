@@ -21,6 +21,42 @@ control, budget, instrumentation = (module(name) for name in ('control', 'budget
 
 
 class Safety(unittest.TestCase):
+    def test_inspect_accepts_both_docker_capitalizations_for_exact_absence(self):
+        name = control.NAMES['pg']
+        for prefix in ('Error: No such object: ', 'error: no such object: ',
+                       'Error response from daemon: No such container: ',
+                       'No such container: '):
+            for output in ('', '[]\n'):
+                with self.subTest(prefix=prefix, output=output), patch.object(control, 'command',
+                        return_value=subprocess.CompletedProcess([], 1, output, prefix + name + '\n')) as execute:
+                    self.assertIsNone(control.inspect(name))
+                    execute.assert_called_once_with(['docker', 'inspect', name], check=False)
+
+    def test_inspect_refuses_real_errors_mismatched_names_and_mixed_output(self):
+        name = control.NAMES['pg']
+        errors = [
+            (1, '', 'permission denied while trying to connect to the Docker daemon socket'),
+            (1, '', 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock'),
+            (1, '', 'error: no such object: someone-else'),
+            (1, '', 'error: no such object: ' + name.upper()),
+            (1, '', 'warning: daemon unavailable\nerror: no such object: ' + name),
+            (1, '', 'error: no such object: ' + name + '\npermission denied'),
+            (2, '', 'error: no such object: ' + name),
+            (1, '[{"Id":"unexpected-existing-object"}]', 'error: no such object: ' + name),
+            (1, '', 'connection failed, previously reported no such container: ' + name),
+            (1, '', ''),
+        ]
+        for code, output, error in errors:
+            with self.subTest(code=code, output=output, error=error), patch.object(control, 'command',
+                    return_value=subprocess.CompletedProcess([], code, output, error)):
+                with self.assertRaises(RuntimeError):
+                    control.inspect(name)
+
+    def test_inspect_keeps_successful_object_result(self):
+        expected = {'Name': '/' + control.NAMES['pg'], 'Id': 'existing-id'}
+        with patch.object(control, 'command', return_value=subprocess.CompletedProcess([], 0, json.dumps([expected]), '')):
+            self.assertEqual(control.inspect(control.NAMES['pg']), expected)
+
     def test_transient_scan_discards_partial_output_and_returns_fresh_success(self):
         failed = subprocess.CompletedProcess([], 1, '123456789\t/all\n', "du: cannot access '/all/gone': No such file or directory\n")
         complete = subprocess.CompletedProcess([], 0, '8192\t/all\n', '')

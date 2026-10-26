@@ -20,7 +20,7 @@ SOURCE = '3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098'
 TOOLS = 'sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff'
 PG = 'sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc'
 HOUSE = pathlib.Path('/ssd1/bim-forge-qualification/house-161')
-PREP = HOUSE / 'issue162-reduced-profile-prep-b-20261026a'
+PREP = HOUSE / 'issue162-reduced-profile-prep-c-20261026a'
 RUN = HOUSE / 'issue162-reduced-profile-20261026a'
 MODULE = 'docs/experiments/diagnostics/publication-162'
 PREFIX = 'bim-issue162-profile-20261026a'
@@ -69,7 +69,10 @@ def inspect(name):
     result = command(['docker', 'inspect', name], check=False)
     if result.returncode == 0:
         return json.loads(result.stdout)[0]
-    if 'No such object' in result.stderr or 'No such container' in result.stderr:
+    missing = (r'(?i:(?:error(?::| response from daemon:)[ \t]*)?'
+               r'no such (?:object|container):[ \t]*)' + re.escape(name))
+    if (result.returncode == 1 and result.stdout.strip() in ('', '[]')
+            and re.fullmatch(missing, result.stderr.strip())):
         return None
     raise RuntimeError(result.stderr)
 
