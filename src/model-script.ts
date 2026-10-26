@@ -317,7 +317,7 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
   'For scoped requests, await model.scope() returns {scope,graph}: immutable target/context/dependent/writable IDs and a live partial working graph. Context is never write authority. model.inspect and mutation results use this same context. It is not a standalone valid project. ' +
   'Call model.previewParameters({edits:[{definitionId,name,value}]}) to edit frozen targets with explicit typed units. All mutation tools enforce frozen write limits; query matches never expand during a proposal. Changed membership or dependencies require a fresh human review. ' +
-  'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base. ' +
+  'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base or the supplied prior proposal draft for a conversation continuation. ' +
   'placement.levels lists stable levels and world elevations; placement.selectedLevelId binds a selected Level, spatial reference or unambiguous selected-object owner. ' +
   'placement.entities supplies entityId, levelId and world floor-base elevation. placement.rooms supplies levelId and entityIds computed within that level. ' +
   'placement.assetFamilies maps reusable family IDs to instance IDs; placement.assetInstances resolves their room, level and floor elevation. Complete recipes and placements remain in model.entities. Family definitions are nonspatial read dependencies. ' +
