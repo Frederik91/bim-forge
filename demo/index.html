@@ -116,6 +116,7 @@
             <form id="proposal-form" class="proposal-form">
               <div class="proposal-connection"><div><span class="connection-dot" aria-hidden="true"></span><p><strong id="proposal-auth-copy">Connect ChatGPT to prepare this proposal</strong><small>Uses your eligible ChatGPT plan. No API key is required.</small></p></div><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
               <div><label for="request-text">What do you want the AI to achieve?</label><textarea id="request-text" maxlength="1000" rows="3" aria-describedby="proposal-help" required disabled></textarea></div>
+              <details class="model-scope-panel"><summary>Model scope · optional</summary><div id="model-scope-builder"></div></details>
               <fieldset class="request-sources">
                 <legend>Source files <span>optional</span></legend>
                 <label for="request-source-files">Attach a sketch or document</label>
@@ -151,6 +152,7 @@
         <header class="page-heading"><div><p class="eyebrow">CHANGE REQUEST ACTIVITY</p><h1 id="activity-heading">Agent activity</h1><p id="activity-instruction"></p></div><button id="activity-back" class="button outline" type="button">Back to backlog</button></header>
         <section class="activity-card">
           <header><span id="activity-state" class="pill teal"></span><p id="activity-binding"></p></header>
+          <pre id="activity-scope" class="scope-evidence" aria-label="Frozen request scope" hidden></pre>
           <section id="activity-sources" class="retained-sources" aria-label="Sources bound to this request" hidden></section>
           <p id="activity-connection" role="status" aria-live="polite">Connecting to request activity…</p>
           <p class="editor-help">Actual tool actions and validation outcomes. Private reasoning is not shown. Work continues on the server while you explore.</p>
@@ -175,6 +177,7 @@
               <ul id="review-assumptions"></ul>
             </section>
             <dl class="review-list"><div><dt>What changed</dt><dd id="review-summary"></dd></div><div><dt>Why this approach</dt><dd id="review-rationale"></dd></div><div><dt>Constraints respected</dt><dd id="review-constraints"></dd></div><div><dt>Uncertainty</dt><dd id="review-uncertainty"></dd></div><div class="review-binding"><dt>Bound evidence</dt><dd id="review-binding"></dd></div></dl>
+            <pre id="review-scope" class="scope-evidence" aria-label="Frozen target and dependency evidence" hidden></pre>
             <section id="review-sources" class="retained-sources" aria-label="Sources bound to this proposal" hidden></section>
             <p id="review-scale-note" class="source-scope-note" hidden>Check the AI’s levels, scale, dimensions, stair placement and roof assumptions against the attached sources. This is a concept model; the proposal still needs your acceptance.</p>
             <div id="ticket-history" class="ticket-history"></div>

@@ -25,6 +25,8 @@ import { parseIntentAssessment } from '../src/model-intent.ts';
 import type { IntentAssessment } from '../src/model-intent.ts';
 import { RequestSourcePicker, parseSourceContext, renderSourceContext } from './request-source-ui.ts';
 import type { RequestSourceContext } from './request-source-ui.ts';
+import { ModelScopeBuilder, renderScopeEvidence, requestScopeContext, reviewScopeContext } from './model-scope-client.ts';
+import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 
 type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
@@ -50,6 +52,7 @@ type AuthSession =
   | (AuthSessionBase & { status: 'pending'; connected: false; account: null; device: { verificationUrl: string; userCode: string; expiresAt: number } })
   | (AuthSessionBase & { status: 'connected'; connected: true; account: AuthAccount });
 interface ActiveReview extends RequestSourceContext {
+  scope?: FrozenModelScope;
   requestId: string;
   proposalName: string;
   baseRevisionId: string;
@@ -312,14 +315,17 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
 
 const sourcePicker = new RequestSourcePicker({ input: ui['request-source-files'], list: ui['request-source-list'],
   status: ui['request-source-status'], error: ui['request-source-error'] }, updateControls);
+const scopeBuilder = new ModelScopeBuilder({ host: generic('model-scope-builder'), changed: updateControls,
+  context: () => repo && preview ? { projectId: repo.projectId, baseRevisionId: selectedRevision, selectedIds: selectedObject ? [selectedObject] : [],
+    roomId: focusedRoomId, levelId: activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null } : null });
 ui['request-reconstruct'].addEventListener('change', updateControls);
 
 function clearRequestSources(): void {
-  ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear();
+  ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear(); scopeBuilder.reset();
 }
 
 function requestDirty(): boolean {
-  return dirty() || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
+  return dirty() || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
 async function discardRequest(message: string): Promise<boolean> {
@@ -631,12 +637,13 @@ function updateControls() {
   ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture);
   ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
   sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository));
+  scopeBuilder.setDisabled(!writable || !preview || Boolean(reviewRepository));
   ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
   ui['level-focus'].disabled = busy || dragging || !repo;
   ui['whole-building'].disabled = busy || dragging || !repo;
   ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
-  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready;
+  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready;
   ui['save-proposal'].textContent = sourcePicker.uploading ? 'Uploading sources…' : busy ? 'Submitting…' : revisionTicketId ? 'Submit revision →' : 'Send change request →';
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
@@ -841,7 +848,7 @@ function displayAccepted(next: RoomRepository): void {
   selectedBranch = 'main';
   selectedRevision = repo.head('main');
   resetEditor();
-  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); }
+  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); }
   try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
   serverConnection(true, `Server saved · accepted ${selectedRevision.slice(0, 10)} · request sketches are unsaved`);
   ui['project-name'].value = next.name;
@@ -1175,6 +1182,7 @@ function parseProposalResponse(value: unknown): ProposalResponse {
       uncertainty: requiredText(reviewValue, 'uncertainty'),
       ...(Object.hasOwn(reviewValue, 'intent') ? { intent: parseIntentAssessment(reviewValue.intent) } : {}),
       ...parseSourceContext(reviewValue),
+      ...reviewScopeContext(reviewValue),
       status: value.status,
       worker,
       validator: typeof reviewValue.validator === 'string' ? reviewValue.validator : undefined,
@@ -1193,6 +1201,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const instruction = ui['request-text'].value.trim();
     if (!instruction || instruction.length > 1000) throw new Error('Describe the outcome in 1 to 1000 characters.');
     const sources = sourcePicker.sources;
+    const scope = scopeBuilder.request();
     const contextLevelId = activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null;
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
@@ -1200,6 +1209,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
       selectedObjectIds: [...new Set([selectedObject, ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
+      ...(scope ? { scope } : {}),
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
     const fingerprint = JSON.stringify(content);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
@@ -1229,7 +1239,8 @@ async function proposalJson(response: Response): Promise<unknown> {
 
 interface BacklogItem {
   id: string; projectId: string; state: RequestState; createdAt: number; attempts: number; error: string | null;
-  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string } & RequestSourceContext;
+  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; scope?: ScopedRequest } & RequestSourceContext;
+  scope?: FrozenModelScope;
 }
 function parseBacklogItem(value: unknown): BacklogItem {
   if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
@@ -1238,7 +1249,8 @@ function parseBacklogItem(value: unknown): BacklogItem {
   if (state !== 'queued' && state !== 'working' && state !== 'needs-input' && state !== 'ready'
       && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
   return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, attempts: value.attempts, error: value.error,
-    request: { requestId: requiredText(value.request, 'requestId'), proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId: requiredText(value.request, 'baseRevisionId'), ...parseSourceContext(value.request) } };
+    ...reviewScopeContext(value),
+    request: { requestId: requiredText(value.request, 'requestId'), proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId: requiredText(value.request, 'baseRevisionId'), ...parseSourceContext(value.request), ...requestScopeContext(value.request) } };
 }
 const stateLabels: Record<RequestState, string> = { queued: 'Queued', working: 'Working', 'needs-input': 'Needs your input',
   ready: 'Ready for review', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed' };
@@ -1328,6 +1340,8 @@ function renderBacklog(): void {
     card.append(heading, element('p', item.request.instruction), element('small', `Base ${item.request.baseRevisionId.slice(0, 10)} · ${new Date(item.createdAt).toLocaleString()} · attempt ${item.attempts}`));
     const sources = element('section', undefined, 'retained-sources');
     renderSourceContext(sources, item.projectId, item.request); card.append(sources);
+    const scope = element('pre', undefined, 'scope-evidence'); renderScopeEvidence(scope, item.scope); card.append(scope);
+    if (item.request.scope && !item.scope) card.append(element('p', `Submitted scope query: ${JSON.stringify(item.request.scope.query)}`, 'scope-evidence'));
     if (item.error) card.append(element('p', item.error, 'ticket-error'));
     if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Prepared on an earlier revision. Acceptance will retain unrelated changes and validate the combined model.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
@@ -1367,6 +1381,7 @@ function renderActivity(value: Record<string, unknown>): void {
   generic('activity-state').textContent = stateLabels[ticket.state];
   generic('activity-binding').textContent = `Request ${ticket.request.requestId} · base ${ticket.request.baseRevisionId.slice(0, 10)} · attempt ${ticket.attempts} of 3`;
   renderSourceContext(generic('activity-sources'), ticket.projectId, ticket.request, true);
+  renderScopeEvidence(generic('activity-scope'), ticket.scope);
   generic('activity-error').hidden = !ticket.error; generic('activity-error').textContent = ticket.error ?? '';
   generic('activity-list').replaceChildren(...events.map((event) => {
     const row = element('li'); row.dataset.stage = event.stage;
@@ -1461,6 +1476,7 @@ async function reviseTicket(item: BacklogItem): Promise<void> {
   if (!isRecord(detail) || !isRecord(detail.ticket) || !isRecord(detail.ticket.request)) throw new Error('Missing original request context.');
   const originalRequest = detail.ticket.request;
   const originalSources = parseSourceContext(originalRequest);
+  const originalScope = requestScopeContext(originalRequest).scope;
   if (parseBacklogItem(detail.ticket).projectId !== next.projectId) throw new Error('Request project mismatch.');
   if (!Array.isArray(originalRequest.selectedObjectIds) || !originalRequest.selectedObjectIds.every(id => typeof id === 'string')) throw new Error('Invalid original request selection.');
   const snapshot = next.view(next.head('main')).snapshot;
@@ -1476,6 +1492,7 @@ async function reviseTicket(item: BacklogItem): Promise<void> {
   if (snapshot.version === 2 && !context.levelId) modelView = '3d';
   resetEditor();
   if (visual.kind === 'spatial-reference') visualDraft = visual.destination;
+  if (originalScope) scopeBuilder.restore(originalScope);
   ui['request-text'].value = item.request.instruction;
   ui['proposal-name'].value = '';
   render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
@@ -1503,6 +1520,7 @@ function renderReview() {
   const ticket = backlogItems.find((item) => item.id === activeTicketId);
   const sourceContext = { ...(ticket?.request.requestId === review.requestId ? parseSourceContext(ticket.request) : {}), ...parseSourceContext(review) };
   renderSourceContext(generic('review-sources'), repo?.projectId ?? '', sourceContext, true);
+  renderScopeEvidence(generic('review-scope'), review.scope);
   generic('review-scale-note').hidden = !sourceContext.authoringScope;
   ui['review-status'].textContent = ticket?.state === 'rejected' ? 'Rejected' : ticket?.state === 'needs-input' ? 'Needs your input' : state === 'accepted' ? 'Accepted version'
     : state === 'superseded' ? 'Earlier accepted version'
