@@ -12,7 +12,7 @@ import { MODEL_INTENT_GUIDANCE } from './model-intent.ts';
 import type { IntentAssessment } from './model-intent.ts';
 import { parseRequestSources, parseAuthoringScope } from './request-sources.ts';
 import type { RequestSource, AuthoringScope } from './request-sources.ts';
-import { parseScopedRequest } from './model-scope-contract.ts';
+import { parseScopedRequest, plainScopeData } from './model-scope-contract.ts';
 import type { FrozenModelScope, ScopedRequest } from './model-scope-contract.ts';
 import { freezeModelScope, assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
 import { isDeepStrictEqual } from 'node:util';
@@ -86,7 +86,8 @@ function text(value: unknown, name: string, maximum: number): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) fail(`${name} must contain readable text no longer than ${maximum} characters.`);
   return value.trim();
 }
-function request(input: unknown, repository: RoomRepository): BoundRequest {
+function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
+  const input = isRecord(rawInput) && Object.hasOwn(rawInput, 'scope') ? plainScopeData(rawInput) : rawInput;
   const extra = isRecord(input) ? ['sources', 'authoringScope', 'scope'].filter((key) => Object.hasOwn(input, key)) : [];
   fields(input, [...(isRecord(input) && Object.hasOwn(input, 'proposalName')
     ? ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']
@@ -165,6 +166,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   fields(worker.identity, ['provider', 'model']);
   const identity = { provider: text(worker.identity.provider, 'Worker provider', 80), model: text(worker.identity.model, 'Worker model', 100) };
   const bound = request(input, repository);
+  if (bound.scope) onActivity({ stage: 'inspecting', message: `Bound scope: ${bound.scope.targetIds.length} targets, ${bound.scope.contextIds.length} read-only context objects, ${bound.scope.dependentIds.length} dependents and ${bound.scope.writableIds.length} writable objects.` });
   if (options.scope) {
     if (!bound.scope || !isDeepStrictEqual(options.scope, bound.scope)) fail('Stored scope does not match the immutable request base and query.');
     assertModelScopeFresh({ base: bound.base.snapshot, current: bound.base.snapshot, binding: options.scope });

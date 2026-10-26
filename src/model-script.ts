@@ -18,7 +18,7 @@ import { FloorLayoutSchema, BuildingLayoutSchema } from './building-schema.ts';
 import { levels, entityLevel, entityElevation, levelView } from './building-levels.ts';
 import { AssetFamilySchema, AssetInstanceSchema, AssetEditSchema } from './asset-family.ts';
 import type { AuthoringScope } from './request-sources.ts';
-import { FrozenModelScopeSchema, ModelParametersSchema } from './model-scope-contract.ts';
+import { FrozenModelScopeSchema, ModelParametersSchema, ModelParameterSchema } from './model-scope-contract.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
 import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
@@ -71,7 +71,7 @@ const collectionChanges = Type.Object({ added: Type.Array(identifier), removed: 
 const changes = Type.Object({ entities: collectionChanges, relationships: collectionChanges });
 const inspection = Type.Object({
   revisionId: Type.String(), selectedObjectIds: Type.Array(identifier), model: snapshot,
-  parameters: Type.Array(Type.Object({ entityId: identifier, parameters: ModelParametersSchema }), { maxItems: 100 }),
+  parameters: Type.Array(Type.Object({ entityId: identifier, parameters: Type.Array(ModelParameterSchema, { maxItems: 32 }) }), { maxItems: 100 }),
   placement: Type.Object({
     levels: Type.Array(Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() })),
     selectedLevelId: Type.Union([identifier, Type.Null()]),
