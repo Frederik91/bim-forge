@@ -11,7 +11,7 @@ import type { ModelSnapshot } from '../src/room-model.ts';
 import { VersionedProjectStore } from './versioned-project-store.ts';
 import type { RepositoryReference } from './versioned-project-contract.ts';
 
-function count(db: DatabaseSync, table: 'bodies' | 'revisions' | 'documents' | 'projects' | 'publications'): number {
+function count(db: DatabaseSync, table: 'bodies' | 'revisions' | 'documents' | 'reviews' | 'projects' | 'publications'): number {
   const row = db.prepare(`SELECT count(*) AS count FROM versioned_${table}`).get();
   if (!row || typeof row.count !== 'number') throw new Error('Missing count.');
   return row.count;
@@ -49,6 +49,11 @@ test('one-object edit stores one body and one sparse version, retaining portable
   const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
   const root = await RoomRepository.create(); const original = initial(store, root);
   const before = { bodies: count(db, 'bodies'), revisions: count(db, 'revisions') };
+  db.exec(`CREATE TRIGGER known_body_must_be_reused BEFORE INSERT ON versioned_bodies
+    WHEN EXISTS(SELECT 1 FROM versioned_bodies WHERE hash = NEW.hash) BEGIN SELECT RAISE(ABORT, 'known body restaged'); END;
+    CREATE TRIGGER known_revision_must_be_reused BEFORE INSERT ON versioned_revisions
+    WHEN EXISTS(SELECT 1 FROM versioned_revisions WHERE project_id = NEW.project_id AND id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'known revision restaged'); END;`);
   const proposed = await wider(root); const reference = store.put(proposed);
   assert.equal(count(db, 'bodies'), before.bodies + 1); assert.equal(count(db, 'revisions'), before.revisions + 1);
   const row = db.prepare('SELECT delta FROM versioned_revisions WHERE project_id = ? AND id = ?').get(root.projectId, proposed.head('study'));
@@ -62,6 +67,8 @@ test('one-object edit stores one body and one sparse version, retaining portable
   assert.equal((await RoomRepository.restore(store.read(reference))).serialize(), proposed.serialize());
   assert.equal(store.read(original), root.serialize()); assert.deepEqual(store.current(root.projectId), original);
   assert.deepEqual(store.history({ projectId: root.projectId, before: null, limit: 50 }).entries.map((item) => item.revisionId), [root.root()]);
+  assert.deepEqual(store.put(proposed), reference);
+  assert.equal(count(db, 'bodies'), before.bodies + 1); assert.equal(count(db, 'revisions'), before.revisions + 1);
 });
 
 test('accepted branches, source/script evidence and imported timestamps survive reopen and paging', async (t) => {
@@ -134,7 +141,8 @@ test('CAS fences stale publication and shared connection outer rollback removes 
 
 test('corrupt bodies, deltas and manifests or missing bodies/parents fail closed', async (t) => {
   for (const corruption of ["UPDATE versioned_bodies SET body = '{}'", "UPDATE versioned_revisions SET delta = '{}'",
-    "UPDATE versioned_documents SET manifest = '{}'", 'DELETE FROM versioned_bodies', 'DELETE FROM versioned_revisions WHERE parent_id IS NULL']) {
+    "UPDATE versioned_documents SET manifest = '{}'", "UPDATE versioned_reviews SET body = '{}'", 'DELETE FROM versioned_reviews',
+    'DELETE FROM versioned_bodies', 'DELETE FROM versioned_revisions WHERE parent_id IS NULL']) {
     const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
     const proposed = await wider(await RoomRepository.create()); const reference = store.put(proposed); db.exec(corruption);
     assert.throws(() => store.read(reference), /corruption|missing/);
@@ -256,4 +264,27 @@ test('oversize state arrays are refused before writes without raising portable l
   assert.throws(() => store.put(root), /bounded collection/); persistence.mock.restore();
   assert.deepEqual(store.current(root.projectId), current); assert.equal(count(db, 'revisions'), 1);
   assert.equal(count(db, 'documents'), 1); assert.equal(store.read(current), root.serialize());
+});
+
+test('immutable review evidence is stored once across reference documents and acceptance', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); const proposed = await wider(root); const reference = store.put(proposed);
+  assert.equal(count(db, 'reviews'), 1);
+  db.exec(`CREATE TRIGGER known_review_must_be_reused BEFORE INSERT ON versioned_reviews
+    WHEN EXISTS(SELECT 1 FROM versioned_reviews WHERE project_id = NEW.project_id AND hash = NEW.hash)
+    BEGIN SELECT RAISE(ABORT, 'known review restaged'); END;`);
+  const alternate = await proposed.propose({ name: 'alternate', from: root.root(), doorWidthM: 1 });
+  const alternateReference = store.put(alternate); assert.equal(count(db, 'reviews'), 1);
+  assert.equal(store.read(alternateReference), alternate.serialize());
+  const accepted = alternate.accept('study', { decisionId: 'decision-study', actor: 'human' });
+  const acceptedReference = store.put(accepted); assert.equal(count(db, 'reviews'), 1);
+  assert.equal(store.read(acceptedReference), accepted.serialize()); assert.equal(store.read(reference), proposed.serialize());
+  assert.deepEqual((await RoomRepository.restore(store.read(acceptedReference))).reviews(), accepted.reviews());
+  for (const row of db.prepare('SELECT manifest FROM versioned_documents').all()) {
+    assert.equal(typeof row.manifest, 'string'); if (typeof row.manifest !== 'string') throw new Error('Missing manifest.');
+    assert.ok(!row.manifest.includes('scriptExecutions')); assert.ok(!row.manifest.includes('sourceSha256')); assert.ok(!row.manifest.includes('worker'));
+  }
+  const row = db.prepare('SELECT body FROM versioned_reviews').get(); assert.ok(row && typeof row.body === 'string');
+  assert.ok(row.body.includes('scriptExecutions')); assert.ok(!row.body.includes('"decision"'));
+  assert.deepEqual(store.put(accepted), acceptedReference); assert.equal(count(db, 'reviews'), 1);
 });
