@@ -5,7 +5,7 @@ Issue #161. Source baseline `8a1f3a955ecea90bceef574ff8b9eab4249669ce`.
 ## Swarm checklist
 
 - [x] Frame: inspect live source, pin baseline, define ownership and completion.
-- [ ] Fan out: disjoint persistence, request/server, browser and publication-investigation workers.
+- [x] Fan out: disjoint persistence, request/server, browser and publication-investigation workers.
 - [ ] Aggregate: coordinator reviews/integrates changes and runs server behavior/UI checks.
 - [ ] Report: draft PRs with source-bound evidence, limitations and model deltas.
 
