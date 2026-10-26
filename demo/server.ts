@@ -120,15 +120,15 @@ export function parseDemoServerConfig(environment: NodeJS.ProcessEnv = process.e
 
 export type DemoServer = http.Server & { closeModelWorkers(): Promise<void> };
 
-export function createDemoServer({
+export async function createDemoServer({
   modelWorker = null,
   codex = null,
   runtimeMode = 'local',
   publicOrigin = null,
   backlogFile = ':memory:',
-}: DemoServerOptions = {}): DemoServer {
+}: DemoServerOptions = {}): Promise<DemoServer> {
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
-  const backlog = new ChangeRequests(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
+  const backlog = await ChangeRequests.open(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
   let sourceUploads = 0;
   const server = http.createServer(async (request, response) => {
     const allowedHost = /^127\.0\.0\.1(?::[0-9]{1,5})?$|^localhost(?::[0-9]{1,5})?$/;
@@ -195,6 +195,42 @@ export function createDemoServer({
         send(response, 202, { ticket: await backlog.submit(payload.project, payload.request) });
       } catch (error) {
         send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Change request failed.' });
+      }
+      return;
+    }
+    let projectUrl: URL;
+    try { projectUrl = new URL(request.url ?? '/', 'http://localhost'); }
+    catch { send(response, 400, { error: 'Invalid request URL.' }); return; }
+    const savedProjectRoute = /^\/api\/projects\/([^/]+)(\/history)?$/.exec(projectUrl.pathname);
+    if (projectUrl.pathname === '/api/projects' || savedProjectRoute) {
+      try {
+        sameOriginRequest(request, publicOrigin);
+        if (!savedProjectRoute) {
+          if (projectUrl.search) throw new Error('The project collection does not accept query parameters.');
+          if (request.method === 'GET') send(response, 200, { projects: backlog.projects() });
+          else if (request.method === 'POST') {
+            const value = await readJson(request);
+            if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.project !== 'string') throw new Error('Project import requires exactly one portable project string.');
+            send(response, 200, { project: await backlog.importProject(value.project) });
+          } else send(response, 405, { error: 'Projects require GET or POST.' });
+        } else {
+          if (request.method !== 'GET') { send(response, 405, { error: 'Saved projects and history require GET.' }); return; }
+          const projectId = decodeURIComponent(savedProjectRoute[1] ?? '');
+          if (!backlog.project(projectId)) { send(response, 404, { error: 'Unknown project.' }); return; }
+          if (savedProjectRoute[2]) {
+            const query = projectUrl.searchParams;
+            if ([...query.keys()].some((key) => key !== 'before' && key !== 'limit') || query.getAll('before').length > 1
+                || query.getAll('limit').length > 1) throw new Error('Unsupported history query.');
+            const limitText = query.get('limit') ?? '20';
+            if (!/^[1-9][0-9]?$/.test(limitText)) throw new Error('History limit must be from 1 through 50.');
+            send(response, 200, backlog.history({ projectId, before: query.get('before'), limit: Number(limitText) }));
+          } else {
+            if (projectUrl.search) throw new Error('Saved projects do not accept query parameters.');
+            send(response, 200, { project: backlog.project(projectId) });
+          }
+        }
+      } catch (error) {
+        send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Project unavailable.' });
       }
       return;
     }
@@ -298,7 +334,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const codex = await CodexAccountConnection.open(connectionOptions);
   const backlogDirectory = config.codexHome ?? path.join(root, '.bim-preview');
   await fs.mkdir(backlogDirectory, { recursive: true, mode: 0o700 });
-  const server = createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin,
+  const server = await createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin,
     backlogFile: path.join(backlogDirectory, 'bim-change-requests.sqlite') });
   server.on('close', () => { void server.closeModelWorkers().finally(() => codex.close()).catch(() => {}); });
   server.on('error', () => { console.error('The BIM Forge preview runtime could not start.'); process.exitCode = 1; });

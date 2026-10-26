@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createDemoServer, parseDemoServerConfig } from './server.ts';
 import type { DemoServerOptions } from './server.ts';
-import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewRectangle } from '../src/room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
 
 interface TestResponse { status: number | undefined; headers: IncomingHttpHeaders; body: string }
@@ -29,9 +29,9 @@ async function listen(
   t: TestContext,
   modelWorker: ModelWorker | null = null,
   codex: TestCodex | null = null,
-  serverOptions: Pick<DemoServerOptions, 'runtimeMode' | 'publicOrigin'> = {},
+  serverOptions: Pick<DemoServerOptions, 'runtimeMode' | 'publicOrigin' | 'backlogFile'> = {},
 ): Promise<TestRequester> {
-  const server = createDemoServer({ modelWorker, codex, ...serverOptions });
+  const server = await createDemoServer({ modelWorker, codex, ...serverOptions });
   const directory = process.platform === 'linux' ? fs.mkdtempSync(path.join(os.tmpdir(), 'bim-room-http-')) : null;
   const socketPath = directory && path.join(directory, 'test.sock');
   await new Promise<void>((resolve) => {
@@ -78,6 +78,40 @@ test('local demo serves only explicit assets and exposes only the bounded propos
     assert.equal((await request(target)).status, 404);
   }
   assert.equal((await request('/', { headers: { Host: 'attacker.example' } })).status, 403);
+});
+
+test('server projects recover in a fresh session, imports preserve authority and history refuses invalid cursors', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-project-http-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const backlogFile = path.join(directory, 'projects.sqlite');
+  const request = await listen(t, null, null, { backlogFile });
+  const repo = await RoomRepository.create('Durable browser project');
+  const post = (project: string) => request('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project }) });
+  assert.equal((await post(repo.serialize())).status, 200);
+  assert.equal(jsonObject((await post(repo.serialize())).body).project, repo.serialize());
+  assert.equal(jsonObject((await request(`/api/projects/${repo.projectId}`)).body).project, repo.serialize());
+  const projects = jsonObject((await request('/api/projects')).body).projects;
+  assert.ok(Array.isArray(projects)); assert.equal(projects.length, 1);
+  const history = jsonObject((await request(`/api/projects/${repo.projectId}/history?limit=1`)).body);
+  assert.ok(Array.isArray(history.entries)); assert.equal(history.entries.length, 1); assert.equal(history.nextCursor, null);
+  for (const query of ['limit=0', 'limit=51', 'limit=1.5', 'limit=1&limit=2', `before=${'f'.repeat(64)}`, 'before=', 'other=x']) {
+    assert.equal((await request(`/api/projects/${repo.projectId}/history?${query}`)).status, 400, query);
+  }
+  assert.equal((await request(`/api/projects/${crypto.randomUUID()}`)).status, 404);
+  assert.equal((await request(`/api/projects/${crypto.randomUUID()}/history`)).status, 404);
+  assert.equal((await post('{bad project')).status, 400);
+  const layout = rectangleLayout(repo.view(repo.root()).snapshot); layout.door.widthMm = 1200;
+  const mismatch = await RoomRepository.createProject({ projectId: repo.projectId, name: repo.name, snapshot: previewRectangle(repo.view(repo.root()).snapshot, layout) });
+  assert.equal((await post(mismatch.serialize())).status, 409);
+  assert.equal(jsonObject((await request(`/api/projects/${repo.projectId}`)).body).project, repo.serialize());
+  const fresh = await listen(t, null, null, { backlogFile });
+  assert.equal(jsonObject((await fresh(`/api/projects/${repo.projectId}`)).body).project, repo.serialize());
+  assert.deepEqual(jsonObject((await fresh(`/api/projects/${repo.projectId}/history?limit=1`)).body), history);
+  for (const target of ['/api/projects', `/api/projects/${repo.projectId}`, `/api/projects/${repo.projectId}/history`]) {
+    assert.equal((await request(target, { headers: { Origin: 'https://attacker.example' } })).status, 400);
+    assert.equal((await request(target, { headers: { Host: 'attacker.example' } })).status, 403);
+  }
+  assert.equal((await request('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project: 'x'.repeat(384 * 1024) }) })).status, 400);
 });
 
 test('remote runtime starts device authorization without exposing credentials', async (t) => {

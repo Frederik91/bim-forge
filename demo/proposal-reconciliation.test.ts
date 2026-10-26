@@ -62,7 +62,7 @@ async function assertBothChanges(project: string): Promise<RoomRepository> {
 
 test('desk and bed requests from the same revision can both be accepted without revising either', async (t) => {
   const repo = await createResidentialProject('Independent desk and bed changes');
-  const queue = new ChangeRequests(':memory:', () => furnitureWorker(repo)); t.after(() => queue.close());
+  const queue = await ChangeRequests.open(':memory:', () => furnitureWorker(repo)); t.after(() => queue.close());
   await submitPair(queue, repo); await waitFor(queue, 'office-desk'); await waitFor(queue, 'main-bed');
   assert.equal(queue.get('office-desk').state, 'ready'); assert.equal(queue.get('main-bed').state, 'ready');
   const original = queue.get('main-bed').result; assert.ok(original);
@@ -91,11 +91,30 @@ test('a request finishing after an unrelated acceptance remains ready for review
     gate.release = resolve; signal.addEventListener('abort', () => resolve(), { once: true });
     if (signal.aborted) resolve();
   }));
-  const queue = new ChangeRequests(':memory:', () => worker); t.after(() => queue.close());
+  const queue = await ChangeRequests.open(':memory:', () => worker); t.after(() => queue.close());
   await submitPair(queue, repo); await waitFor(queue, 'office-desk');
   assert.equal(queue.get('main-bed').state, 'working');
   await accept(queue, 'office-desk'); gate.release(); await waitFor(queue, 'main-bed');
   await assertBothChanges((await accept(queue, 'main-bed')).project);
+});
+
+test('accepting the bed before the desk preserves both independent changes and exposes only accepted ancestry', async (t) => {
+  const repo = await createResidentialProject('Reverse independent acceptance');
+  const queue = await ChangeRequests.open(':memory:', () => furnitureWorker(repo)); t.after(() => queue.close());
+  await submitPair(queue, repo); await waitFor(queue, 'office-desk'); await waitFor(queue, 'main-bed');
+  assert.equal(queue.history({ projectId: repo.projectId, before: null, limit: 50 }).entries.length, 1);
+  await accept(queue, 'main-bed');
+  assert.equal(queue.get('office-desk').state, 'ready');
+  await assertBothChanges((await accept(queue, 'office-desk')).project);
+  const first = queue.history({ projectId: repo.projectId, before: null, limit: 1 });
+  assert.equal(first.entries.length, 1); assert.equal(first.entries[0]?.requestId, 'office-desk'); assert.ok(first.nextCursor);
+  const second = queue.history({ projectId: repo.projectId, before: first.nextCursor, limit: 1 });
+  assert.equal(second.entries[0]?.requestId, 'main-bed'); assert.ok(second.nextCursor);
+  const third = queue.history({ projectId: repo.projectId, before: second.nextCursor, limit: 1 });
+  assert.equal(third.entries[0]?.revisionId, repo.root()); assert.equal(third.nextCursor, null);
+  assert.throws(() => queue.history({ projectId: repo.projectId, before: 'f'.repeat(64), limit: 1 }), /cursor|revision/i);
+  assert.throws(() => queue.history({ projectId: repo.projectId, before: null, limit: 51 }), /limit/i);
+  assert.throws(() => queue.history({ projectId: crypto.randomUUID(), before: first.nextCursor, limit: 1 }), /project/i);
 });
 
 test('old needs-input tickets recover on opening without revising or rerunning the agent', async (t) => {
@@ -103,14 +122,14 @@ test('old needs-input tickets recover on opening without revising or rerunning t
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const file = path.join(directory, 'requests.sqlite');
   const repo = await createResidentialProject('Recover independent proposals');
-  const queue = new ChangeRequests(file, () => furnitureWorker(repo));
+  const queue = await ChangeRequests.open(file, () => furnitureWorker(repo));
   await submitPair(queue, repo); await waitFor(queue, 'office-desk'); await waitFor(queue, 'main-bed');
   await accept(queue, 'office-desk');
   const legacy = { ...queue.get('main-bed'), state: 'needs-input', error: 'The accepted model changed. Revise this request against the current model before accepting.' };
   await queue.close();
   const db = new DatabaseSync(file);
-  db.prepare('UPDATE requests SET state=?,body=? WHERE id=?').run(legacy.state, JSON.stringify(legacy), legacy.id); db.close();
-  const reopened = new ChangeRequests(file, () => null); t.after(() => reopened.close());
+  db.prepare('UPDATE requests SET state=?,body=json_set(body, ''$.state'', ?, ''$.error'', ?) WHERE id=?').run(legacy.state, legacy.state, legacy.error, legacy.id); db.close();
+  const reopened = await ChangeRequests.open(file, () => null); t.after(() => reopened.close());
   assert.equal((await reopened.refreshProposal('main-bed')).state, 'ready');
   await assertBothChanges((await accept(reopened, 'main-bed')).project);
   assert.equal(reopened.get('main-bed').attempts, 1); assert.equal(reopened.get('main-bed').history.length, 0);
@@ -118,7 +137,7 @@ test('old needs-input tickets recover on opening without revising or rerunning t
 
 test('simultaneous acceptance cannot overwrite work and a rejected race can retry the same decision', async (t) => {
   const repo = await createResidentialProject('Concurrent independent decisions');
-  const queue = new ChangeRequests(':memory:', () => furnitureWorker(repo)); t.after(() => queue.close());
+  const queue = await ChangeRequests.open(':memory:', () => furnitureWorker(repo)); t.after(() => queue.close());
   await submitPair(queue, repo); await waitFor(queue, 'office-desk'); await waitFor(queue, 'main-bed');
   const ids = ['office-desk', 'main-bed'];
   const results = await Promise.allSettled(ids.map((id) => accept(queue, id)));
