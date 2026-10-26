@@ -388,8 +388,18 @@ export class ChangeRequests {
     }
   }
   async refreshProject(projectId: string): Promise<void> {
-    for (const ticket of this.#all(identifier(projectId))) {
-      if ((ticket.state === 'ready' || ticket.state === 'needs-input') && ticket.result?.status === 'ready') await this.refreshProposal(ticket.id);
+    const id = identifier(projectId);
+    const maximum = this.#db.prepare('SELECT COALESCE(MAX(rowid),0) AS position FROM requests WHERE project_id=?').get(id)?.position;
+    if (typeof maximum !== 'number' || !Number.isSafeInteger(maximum)) throw new Error('Unreadable request store.');
+    let after = 0;
+    while (after < maximum) {
+      const rows = this.#db.prepare("SELECT rowid AS position,id FROM requests WHERE project_id=? AND rowid>? AND rowid<=? AND state IN ('ready','needs-input') ORDER BY rowid LIMIT 64").all(id, after, maximum);
+      if (!rows.length) return;
+      for (const row of rows) {
+        if (typeof row.id !== 'string' || typeof row.position !== 'number' || !Number.isSafeInteger(row.position)) throw new Error('Unreadable request store.');
+        after = row.position;
+        await this.#refreshProposal(row.id);
+      }
     }
   }
   executions(id: string): StoredExecution[] {
@@ -671,11 +681,12 @@ export class ChangeRequests {
     const accepted = await RoomRepository.restore(candidate.serialize());
     const acceptedText = accepted.serialize();
     const next: Ticket = recordActivity({ ...ticket, state: 'completed', decisionId, decisionAction: action }, { stage: 'completed', message: 'Proposal explicitly accepted and saved as the current model.' });
-    const assessments = await Promise.all(this.#all(ticket.projectId).filter((other) => other.id !== ticket.id
-      && (other.state === 'ready' || other.state === 'needs-input') && other.result?.status === 'ready').map(async (other) => {
-      const otherProposal = await RoomRepository.restore(other.result ? this.#projects.read(other.result.project) : null);
-      return { before: other, after: assessedTicket(other, proposalReadiness(accepted, otherProposal, other.request.proposalName)) };
-    }));
+    const assessments: { before: Ticket; after: Ticket }[] = [];
+    for (const other of this.#all(ticket.projectId)) {
+      if (other.id === ticket.id || (other.state !== 'ready' && other.state !== 'needs-input') || other.result?.status !== 'ready') continue;
+      const otherProposal = await RoomRepository.restore(this.#projects.read(other.result.project));
+      assessments.push({ before: other, after: assessedTicket(other, proposalReadiness(accepted, otherProposal, other.request.proposalName)) });
+    }
     this.#assertOpen();
     this.#transaction(() => {
       // Async validation above may have overlapped another decision.
