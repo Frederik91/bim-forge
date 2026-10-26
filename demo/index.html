@@ -7,6 +7,7 @@
     <meta name="theme-color" content="#102d35">
     <title>Room studies · BIM Forge</title>
     <link rel="stylesheet" href="./room.css">
+    <link rel="stylesheet" href="./request-chat.css">
     <script type="module" src="./room-app.mjs"></script>
   </head>
   <body>
@@ -113,6 +114,7 @@
               <p class="knowledge-readonly"><i aria-hidden="true">↗</i> Evidence inspection is read-only. It cannot change this revision.</p>
             </section>
             <p id="edit-feedback" class="editor-feedback" role="status" aria-live="polite">The markup communicates intent. It is never committed directly.</p>
+            <div id="request-chat-mount"></div>
             <form id="proposal-form" class="proposal-form">
               <div class="proposal-connection"><div><span class="connection-dot" aria-hidden="true"></span><p><strong id="proposal-auth-copy">Connect ChatGPT to prepare this proposal</strong><small>Uses your eligible ChatGPT plan. No API key is required.</small></p></div><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
               <div><label for="request-text">What do you want the AI to achieve?</label><textarea id="request-text" maxlength="1000" rows="3" aria-describedby="proposal-help" required disabled></textarea></div>

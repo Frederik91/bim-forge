@@ -19,12 +19,15 @@ import type { RepositoryReference, VersionedProjects } from './versioned-project
 import { parseScopedRequest, parseFrozenModelScope, parseModelScopeQuery } from '../src/model-scope-contract.ts';
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from '../src/model-scope.ts';
+import { CONVERSATION_LIMITS, parseConversationReply, parseConversationMessage, parseConversationVisual, parseRequestConversation } from '../src/request-conversation.ts';
+import type { RequestConversation, ConversationMessage } from '../src/request-conversation.ts';
 import { ModelScopeStore } from './model-scope-store.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
-type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
+type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope' | 'conversationVisual'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
 interface RequestTicket<Project> {
+  conversation?: RequestConversation;
   id: string;
   projectId: string;
   state: RequestState;
@@ -43,8 +46,8 @@ interface RequestTicket<Project> {
   activity: readonly RequestActivity[];
 }
 type Ticket = RequestTicket<RepositoryReference>;
-type TicketProjection = RequestTicket<string>;
-export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity'>;
+type TicketProjection = RequestTicket<string> & { conversation?: RequestConversation };
+export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity' | 'conversation'>;
 export class BacklogConflict extends Error {}
 
 type ProposalReadiness = { state: 'ready'; error: null } | { state: 'needs-input'; error: string };
@@ -120,16 +123,16 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   if (!object(value) || !object(value.request) || typeof value.id !== 'string'
       || typeof value.projectId !== 'string' || typeof value.createdAt !== 'number' || typeof value.updatedAt !== 'number'
       || typeof value.attempts !== 'number' || typeof value.fingerprint !== 'string'
-      || !Array.isArray(value.history) || value.history.length > 8 || !value.history.every((item) => typeof item === 'string')
+      || !Array.isArray(value.history) || value.history.length > 20 || !value.history.every((item) => typeof item === 'string')
       || (value.error !== null && typeof value.error !== 'string')
       || (value.decisionId !== null && typeof value.decisionId !== 'string') || (value.decisionAction !== null && typeof value.decisionAction !== 'string')
       || !['queued', 'working', 'needs-input', 'ready', 'completed', 'rejected', 'cancelled', 'failed'].includes(String(value.state))) {
     throw new Error('The stored change request is invalid.');
   }
   // The payload is parsed by the model request boundary again before every run.
-  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope']);
+  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation']);
   const r = value.request;
-  fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope']);
+  fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope', 'conversationVisual']);
   const scopedRequest = Object.hasOwn(r, 'scope') ? parseScopedRequest(r.scope) : undefined;
   const scope = Object.hasOwn(value, 'scope') ? parseFrozenModelScope(value.scope) : undefined;
   if (Boolean(scopedRequest) !== Boolean(scope) || (scope && (scope.baseRevisionId !== r.baseRevisionId || !isDeepStrictEqual(scope.query, scopedRequest?.query)))) {
@@ -162,11 +165,14 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   if ((state === 'ready' && result?.status !== 'ready')
       || (state === 'completed' && (result?.status !== 'ready' || value.decisionAction !== 'accept'))
       || (state === 'cancelled' && value.decisionAction !== 'cancel') || (state === 'rejected' && value.decisionAction !== 'reject')) throw new Error('Stored state and decision do not match.');
-  return { id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
+  const conversation = Object.hasOwn(value, 'conversation') ? parseRequestConversation(value.conversation) : undefined;
+  if (conversation && conversation.ticketId !== value.id) throw new Error('Conversation belongs to another ticket.');
+  return { ...(conversation ? { conversation } : {}), id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
     ...(scope ? { scope } : {}),
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history, activity,
     request: { requestId: r.requestId, proposalName: r.proposalName, baseRevisionId: r.baseRevisionId,
+      ...(Object.hasOwn(r, 'conversationVisual') ? { conversationVisual: parseConversationVisual(r.conversationVisual) } : {}),
       selectedObjectIds: r.selectedObjectIds, instruction: r.instruction, visualIntent: storedVisual(visual),
       ...(Object.hasOwn(r, 'sources') ? { sources: parseRequestSources(r.sources) } : {}),
       ...(scopedRequest ? { scope: scopedRequest } : {}),
@@ -229,6 +235,8 @@ export class ChangeRequests {
     this.#db.exec('CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), state TEXT NOT NULL, body TEXT NOT NULL); CREATE INDEX IF NOT EXISTS requests_project ON requests(project_id); CREATE INDEX IF NOT EXISTS requests_state ON requests(state);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES requests(id), fingerprint TEXT NOT NULL);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS request_executions (ticket_id TEXT NOT NULL REFERENCES requests(id), request_id TEXT NOT NULL, attempt INTEGER NOT NULL, execution_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(ticket_id, request_id, attempt, execution_id));');
+    this.#db.exec('CREATE TABLE IF NOT EXISTS request_messages (ticket_id TEXT NOT NULL REFERENCES requests(id), sequence INTEGER NOT NULL, id TEXT NOT NULL UNIQUE, body TEXT NOT NULL, PRIMARY KEY(ticket_id,sequence));');
+    this.#db.exec('CREATE TABLE IF NOT EXISTS request_continuations (request_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES requests(id));');
     this.#projects = new VersionedProjectStore(this.#db);
     this.#scopes = new ModelScopeStore(this.#db, this.#projects);
     this.#sources = new RequestSourceStore(this.#db);
@@ -242,6 +250,7 @@ export class ChangeRequests {
       validateSourceBytes(db);
       queue = new ChangeRequests(db, worker);
       await queue.#migrate();
+      for (const ticket of queue.#all()) queue.#seedConversation(ticket);
       for (const ticket of queue.#withState('working')) {
         queue.#put(recordActivity({ ...ticket, state: ticket.attempts < 3 ? 'queued' : 'failed',
         error: 'The server restarted during processing. The accepted model is unchanged.' },
@@ -381,7 +390,13 @@ export class ChangeRequests {
     return rows.map((row) => { if (typeof row.body !== 'string') throw new Error('Unreadable request store.'); return parseTicket(row.body, reference); });
   }
   #put(ticket: Ticket): void {
-    this.#db.prepare('INSERT INTO requests(id, project_id, state, body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, body=excluded.body').run(ticket.id, ticket.projectId, ticket.state, JSON.stringify(ticket));
+    const { conversation, ...stored } = ticket;
+    if (conversation) {
+      const existing = this.#messages(ticket.id);
+      if (existing.length && !isDeepStrictEqual(existing, conversation.messages)) throw new Error('Imported conversation differs from the immutable journal.');
+    }
+    this.#db.prepare('INSERT INTO requests(id, project_id, state, body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, body=excluded.body').run(ticket.id, ticket.projectId, ticket.state, JSON.stringify(stored));
+    if (conversation && !this.#messages(ticket.id).length) for (const message of conversation.messages) this.#appendMessage(ticket.id, message);
   }
   #withState(state: RequestState): Ticket[] {
     return this.#db.prepare('SELECT body FROM requests WHERE state=? ORDER BY rowid').all(state).map((row) => {
@@ -404,9 +419,59 @@ export class ChangeRequests {
   }
   #projection(ticket: Ticket, archived = false): TicketProjection {
     if (archived && ticket.history.length) throw new Error('Nested request archives are invalid.');
-    return { ...ticket, project: this.#projects.read(ticket.project),
+    return { ...ticket, ...(!archived ? { conversation: this.#conversation(ticket.id) } : {}), project: this.#projects.read(ticket.project),
       result: ticket.result ? { ...ticket.result, project: this.#projects.read(ticket.result.project) } : null,
       history: ticket.history.map((text) => JSON.stringify(this.#projection(parseTicket(text, reference), true))) };
+  }
+  #messages(id: string): ConversationMessage[] {
+    return this.#db.prepare('SELECT body FROM request_messages WHERE ticket_id=? ORDER BY sequence').all(id).map((row, index) => {
+      if (typeof row.body !== 'string') throw new Error('Unreadable conversation journal.');
+      const message = parseConversationMessage(JSON.parse(row.body));
+      if (message.sequence !== index + 1) throw new Error('Conversation journal sequence is invalid.');
+      return message;
+    });
+  }
+  #appendMessage(ticketId: string, message: ConversationMessage): void {
+    const parsed = parseConversationMessage(message);
+    if (parsed.sequence > CONVERSATION_LIMITS.messages) throw new Error('This conversation reached its message limit.');
+    this.#db.prepare('INSERT INTO request_messages(ticket_id,sequence,id,body) VALUES(?,?,?,?)').run(ticketId, parsed.sequence, parsed.id, JSON.stringify(parsed));
+  }
+  #seedConversation(ticket: Ticket): void {
+    if (this.#messages(ticket.id).length) return;
+    const versions = [...ticket.history.map(text => parseTicket(text, reference)), ticket];
+    for (const version of versions) {
+      const sequence = this.#messages(ticket.id).length + 1;
+      this.#appendMessage(ticket.id, { kind: 'user', id: version.request.requestId, sequence, at: version.createdAt,
+        requestId: version.request.requestId, baseRevisionId: version.request.baseRevisionId, text: version.request.instruction,
+        sources: version.request.sources ?? [], visual: version.request.conversationVisual ?? null });
+      if (version.result) this.#assistantMessage(version);
+      if (version.decisionId && version.decisionAction) this.#decisionMessage(version);
+    }
+  }
+  #conversation(id: string): RequestConversation {
+    const ticket = this.#get(id);
+    this.#seedConversation(ticket);
+    const messages = this.#messages(id);
+    return { version: 1, ticketId: id, sequence: messages.length, messages };
+  }
+  #assistantMessage(ticket: Ticket, clarification?: { question: string; options: string[] }): void {
+    if (!ticket.result) return;
+    const review = ticket.result.review;
+    if (!object(review)) throw new Error('Invalid assistant review.');
+    const messages = this.#messages(ticket.id);
+    const clean = (value: unknown, fallback: string) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 1000) || fallback : fallback;
+    const content: Extract<ConversationMessage, {kind: 'assistant'}>['content'] = clarification ? { kind: 'clarification', ...clarification }
+      : ticket.result.status === 'ready' && typeof review.proposalRevisionId === 'string'
+      ? { kind: 'proposal', text: clean(review.summary, 'Proposal ready for review.'), proposalName: ticket.request.proposalName, proposalRevisionId: review.proposalRevisionId }
+      : { kind: 'explanation', text: clean(review.rationale, 'The agent needs more information.') };
+    this.#appendMessage(ticket.id, { kind: 'assistant', id: `assistant:${createHash('sha256').update(ticket.request.requestId).digest('hex')}`, sequence: messages.length + 1, at: Date.now(),
+      requestId: ticket.request.requestId, baseRevisionId: ticket.request.baseRevisionId, replyTo: ticket.request.requestId, content });
+  }
+  #decisionMessage(ticket: Ticket): void {
+    const action = ticket.decisionAction;
+    if (!ticket.decisionId || (action !== 'accept' && action !== 'reject' && action !== 'cancel' && action !== 'retry')) return;
+    this.#appendMessage(ticket.id, { kind: 'decision', id: `decision:${createHash('sha256').update(ticket.id + ':' + ticket.decisionId).digest('hex')}`, sequence: this.#messages(ticket.id).length + 1,
+      at: ticket.updatedAt, requestId: ticket.request.requestId, baseRevisionId: ticket.request.baseRevisionId, action, decisionId: ticket.decisionId });
   }
   get(id: string): TicketProjection { return this.#projection(this.#get(id)); }
   async refreshProposal(id: string): Promise<TicketProjection> { return this.#projection(await this.#refreshProposal(id)); }
@@ -536,14 +601,14 @@ export class ChangeRequests {
     return this.#sources.get(identifier(projectId), identifier(id));
   }
   list(projectId: string): TicketSummary[] {
-    return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, ...summary }) => summary);
+    return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, conversation: _conversation, ...summary }) => summary);
   }
   async submit(project: unknown, input: unknown): Promise<TicketSummary> {
     this.#assertOpen();
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+    const request: RequestInput = { ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
       ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };
@@ -584,6 +649,7 @@ export class ChangeRequests {
         state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [], activity: [] }, { stage: 'queued', message: 'Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.' });
       if (request.sources) this.#sources.bind(repository.projectId, request.sources, request.requestId);
       this.#put(ticket);
+      this.#seedConversation(ticket);
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
     // Start after the acknowledgement can be sent; submission never awaits the worker.
@@ -598,7 +664,7 @@ export class ChangeRequests {
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+    const request: RequestInput = { ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
       ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };
@@ -619,6 +685,7 @@ export class ChangeRequests {
       throw new BacklogConflict('A revision must use the current accepted model in this project.');
     }
     if (this.#all(ticket.projectId).some((other) => other.id !== ticket.id && other.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket uses that proposal name.');
+    this.#seedConversation(ticket);
     const archived = JSON.stringify({ ...ticket, history: [] });
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
@@ -629,8 +696,75 @@ export class ChangeRequests {
       const next: Ticket = recordActivity({ ...previousTicket, ...(bound.scope ? { scope: bound.scope } : {}), project: this.#projects.put(repository), request, fingerprint, history: [...ticket.history, archived], activity: [],
         state: 'queued', attempts: 0, result: null, error: null, decisionId: null, decisionAction: null, updatedAt: Date.now() }, { stage: 'queued', message: 'New revision queued. Earlier attempts remain in request history.' });
       this.#put(next);
+      this.#appendMessage(id, { kind: 'user', id: request.requestId, sequence: this.#messages(id).length + 1, at: Date.now(), requestId: request.requestId, baseRevisionId: request.baseRevisionId, text: request.instruction, sources: request.sources ?? [], visual: request.conversationVisual ?? null });
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
+    setImmediate(() => this.#pump());
+    return this.get(id);
+  }
+  async appendMessage(id: string, input: unknown): Promise<TicketProjection> {
+    this.#assertOpen();
+    const reply = parseConversationReply(input);
+    const fingerprint = createHash('sha256').update(JSON.stringify({ ticketId: id, reply })).digest('hex');
+    const replay = this.#submission(reply.messageId, fingerprint);
+    if (replay) { if (replay.id !== id) throw new BacklogConflict('Message belongs to another ticket.'); return this.get(id); }
+    const ticket = this.#get(id);
+    const conversation = this.#conversation(id);
+    if (conversation.sequence !== reply.expectedSequence) throw new BacklogConflict('The conversation changed. Refresh before sending.');
+    if (conversation.messages.length > CONVERSATION_LIMITS.messages - ((ticket.state === 'working' || ticket.state === 'queued') ? 4 : 3) || conversation.messages.filter(message => message.kind === 'user').length >= CONVERSATION_LIMITS.userTurns) throw new Error('This conversation reached its preview limit. Export its history before starting another request.');
+    if (ticket.history.length >= 20) throw new Error('This ticket reached its twenty-turn history limit.');
+    const currentText = this.project(ticket.projectId);
+    if (!currentText) throw new Error('Missing accepted model.');
+    const repository = await RoomRepository.restore(currentText);
+    if (reply.baseRevisionId !== repository.head('main')) throw new BacklogConflict('The accepted model changed. Refresh before attaching or replying.');
+    if (ticket.scope && ticket.request.baseRevisionId !== reply.baseRevisionId) throw new BacklogConflict('The scoped base changed. Start a fresh scope review before continuing.');
+    if (reply.visual) {
+      let snapshot = repository.view(reply.baseRevisionId).snapshot;
+      if (reply.visual.snapshot.kind === 'proposal') {
+        const visual = reply.visual.snapshot;
+        const version = [...ticket.history.map(text => parseTicket(text, reference)), ticket].find(item => item.request.proposalName === visual.proposalName && object(item.result?.review) && item.result.review.proposalRevisionId === visual.revisionId);
+        if (!version?.result) throw new BacklogConflict('Visual evidence refers to an unknown proposal.');
+        const proposed = await RoomRepository.restore(this.#projects.read(version.result.project));
+        snapshot = proposed.view(visual.revisionId).snapshot;
+      } else if (reply.visual.snapshot.revisionId !== reply.baseRevisionId) throw new BacklogConflict('Accepted visual evidence is stale. Capture it again.');
+      if (reply.visual.levelId && !snapshot.entities.some(entity => entity.id === reply.visual?.levelId && entity.type === 'Level')) throw new Error('Visual level context must name a Level.');
+      if ([...reply.visual.selectedObjectIds, ...(reply.visual.levelId ? [reply.visual.levelId] : [])].some(id => !snapshot.entities.some(entity => entity.id === id))) throw new Error('Visual evidence references an unknown object.');
+    }
+    const earlierSources = conversation.messages.flatMap(message => message.kind === 'user' ? message.sources : []);
+    for (const source of reply.sources) {
+      const prior = earlierSources.find(item => item.id === source.id);
+      if (prior && !isDeepStrictEqual(prior, source)) throw new BacklogConflict('Earlier source evidence cannot be replaced.');
+    }
+    const sources = [...new Map([...conversation.messages.flatMap(message => message.kind === 'user' ? message.sources : []), ...reply.sources].map(source => [source.id, source])).values()];
+    if (sources.length) parseRequestSources(sources);
+    const selected = reply.visual?.snapshot.kind === 'accepted' && reply.visual.selectedObjectIds.length ? reply.visual.selectedObjectIds : ticket.request.selectedObjectIds;
+    const bound = validateModelProposalRequest(repository, { requestId: reply.messageId, baseRevisionId: reply.baseRevisionId,
+      selectedObjectIds: selected, instruction: reply.text, visualIntent: { kind: 'selection' }, ...(sources.length ? { sources } : {}),
+      ...(ticket.request.authoringScope ? { authoringScope: ticket.request.authoringScope } : {}), ...(ticket.request.scope ? { scope: ticket.request.scope } : {}) });
+    this.#assertOpen();
+    this.#transaction(() => {
+      if (this.#submission(reply.messageId, fingerprint)) return;
+      const latest = this.#get(id);
+      if (this.project(ticket.projectId) !== currentText || latest.request.requestId !== ticket.request.requestId || latest.fingerprint !== ticket.fingerprint || this.#messages(id).length !== reply.expectedSequence) throw new BacklogConflict('The model or conversation changed while sending. Refresh and retry.');
+      if (sources.length) this.#sources.bind(ticket.projectId, sources, reply.messageId);
+      const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+        selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
+        ...(sources.length ? { sources } : {}), ...(ticket.request.authoringScope ? { authoringScope: ticket.request.authoringScope } : {}), ...(ticket.request.scope ? { scope: ticket.request.scope } : {}) };
+      const next = recordActivity({ ...latest, request, project: this.#projects.put(repository), fingerprint,
+        history: [...latest.history, JSON.stringify({ ...latest, history: [] })], activity: [], state: 'queued', attempts: 0,
+        result: null, error: null, decisionId: null, decisionAction: null }, { stage: 'queued', message: 'Reply saved. Earlier messages and proposals remain in the conversation.' });
+      this.#put(next);
+      if (ticket.state === 'working' || ticket.state === 'queued') {
+        this.#appendMessage(id, { kind: 'assistant', id: `superseded:${createHash('sha256').update(ticket.request.requestId).digest('hex')}`, sequence: this.#messages(id).length + 1, at: Date.now(),
+          requestId: ticket.request.requestId, baseRevisionId: ticket.request.baseRevisionId, replyTo: ticket.request.requestId,
+          content: { kind: 'explanation', text: 'This turn was superseded by a later message. Its late result cannot change the conversation or accepted model.' } });
+      }
+      this.#appendMessage(id, { kind: 'user', id: reply.messageId, sequence: this.#messages(id).length + 1, at: Date.now(), requestId: reply.messageId,
+        baseRevisionId: reply.baseRevisionId, text: reply.text, sources: reply.sources, visual: reply.visual });
+      this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(reply.messageId, id, fingerprint);
+      this.#db.prepare('INSERT INTO request_continuations(request_id,ticket_id) VALUES(?,?)').run(reply.messageId, id);
+    });
+    this.#attempts.get(id)?.controller.abort();
     setImmediate(() => this.#pump());
     return this.get(id);
   }
@@ -675,9 +809,13 @@ export class ChangeRequests {
         prepared = await this.#sources.prepare(ticket.projectId, ticket.request.sources, signal);
         if (!this.#isWorking(ticket) || signal.aborted) return;
       }
+      const continuation = this.#db.prepare('SELECT request_id FROM request_continuations WHERE request_id=? AND ticket_id=?').get(ticket.request.requestId, ticket.id);
+      const prior = continuation ? [...ticket.history].reverse().map(text => parseTicket(text, reference)).find(item => item.result?.status === 'ready' && isDeepStrictEqual(item.scope, ticket.scope)) : undefined;
+      const priorRepository = prior?.result ? await RoomRepository.restore(this.#projects.read(prior.result.project)) : null;
+      const initialDraft = prior && priorRepository ? repository.proposalSnapshot(priorRepository, prior.request.proposalName) : undefined;
       const result = await prepareModelProposal(repository, ticket.request, trackedWorker, (event) => {
         if (this.#isWorking(ticket)) this.#put(recordActivity(this.#get(ticket.id), event));
-      }, { signal, scripts: this.#scripts, ...(ticket.scope ? { scope: ticket.scope } : {}), ...(prepared ? { sourceInput: prepared } : {}), onExecution: (record) => {
+      }, { signal, scripts: this.#scripts, conversation: this.#conversation(ticket.id), ...(initialDraft ? { initialDraft } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}), ...(prepared ? { sourceInput: prepared } : {}), onExecution: (record) => {
         try { this.#recordExecution(ticket, record); }
         catch (error) {
           evidenceError = error instanceof Error ? error : new Error('Execution evidence could not be saved.');
@@ -687,10 +825,13 @@ export class ChangeRequests {
       } });
       if (evidenceError) throw evidenceError;
       if (!this.#isWorking(ticket)) return;
+      this.#transaction(() => {
       this.#put(recordActivity({ ...this.#get(ticket.id), state: result.status === 'ready' ? 'ready' : 'needs-input',
         error: null, updatedAt: Date.now(),
         result: { status: result.status, project: this.#projects.put(result.repository), review: result.review } },
         { stage: result.status === 'ready' ? 'ready' : 'needs-input', message: result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.' }));
+      this.#assistantMessage(this.#get(ticket.id), result.status === 'declined' ? result.clarification : undefined);
+      });
       if (result.status === 'ready') await this.refreshProposal(ticket.id);
     } catch (error) {
       this.#attempts.get(ticket.id)?.controller.abort();
@@ -718,17 +859,18 @@ export class ChangeRequests {
       if (ticket.decisionAction !== action) throw new BacklogConflict('This decision identity was already used for another action.');
       return { ticket: this.#projection(ticket), project: text };
     }
+    if (this.#conversation(id).sequence >= CONVERSATION_LIMITS.messages) throw new Error('This conversation reached its message limit.');
     if (action === 'retry') {
       if (ticket.state !== 'failed' || ticket.attempts >= 3) throw new BacklogConflict('Only failed work with fewer than three attempts can be retried.');
       const next = recordActivity({ ...ticket, state: 'queued', error: null, decisionId, decisionAction: action }, { stage: 'queued', message: 'Retry queued. Earlier attempt activity is retained.' });
-      this.#put(next); setImmediate(() => this.#pump()); return { ticket: this.#projection(next), project: text };
+      this.#transaction(() => { this.#put(next); this.#decisionMessage(next); }); setImmediate(() => this.#pump()); return { ticket: this.#projection(next), project: text };
     }
     if (action === 'cancel' || action === 'reject') {
       const allowed = action === 'cancel' ? ticket.state === 'queued' || ticket.state === 'working'
         : ticket.state === 'ready' || ticket.state === 'needs-input' || ticket.state === 'failed';
       if (!allowed) throw new BacklogConflict('This request can no longer receive that decision.');
       const next: Ticket = recordActivity({ ...ticket, state: action === 'cancel' ? 'cancelled' : 'rejected', decisionId, decisionAction: action }, { stage: action === 'cancel' ? 'cancelled' : 'rejected', message: action === 'cancel' ? 'Request cancelled. Late worker activity and results will be ignored.' : 'Proposal rejected. The accepted model is unchanged.' });
-      this.#put(next);
+      this.#transaction(() => { this.#put(next); this.#decisionMessage(next); });
       const active = this.#attempts.get(id);
       if (action === 'cancel' && active?.requestId === ticket.request.requestId && active.attempt === ticket.attempts) active.controller.abort();
       return { ticket: this.#projection(next), project: text };
@@ -759,6 +901,7 @@ export class ChangeRequests {
       this.#projects.publish({ projectId: ticket.projectId, expectedDocumentId: expected.documentId,
         reference: this.#projects.put(accepted), origin: 'accepted', requestId: ticket.request.requestId, decisionId });
       this.#put(next);
+      this.#decisionMessage(next);
       for (const assessment of assessments) {
         if (assessment.after !== assessment.before && JSON.stringify(this.#get(assessment.before.id)) === JSON.stringify(assessment.before)) this.#put(assessment.after);
       }
