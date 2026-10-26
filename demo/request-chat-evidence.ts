@@ -25,8 +25,9 @@ export function conversationInspection(graph: ModelGraph, visual: ConversationVi
 } {
   if (visual.selectedObjectIds.some(id => !graph.entities.some(entity => entity.id === id))) throw new Error('The stored selection is absent from its bound snapshot.');
   const context = conversationSelection({ graph, selectedObjectIds: visual.selectedObjectIds, visual });
-  const levelId = visual.levelId ?? context.levelId;
-  if (levelId && !levels(graph).some(level => level.id === levelId)) throw new Error('The stored annotation level is absent from its bound snapshot.');
+  const level = visual.levelId ? levels(graph).find(candidate => candidate.id === visual.levelId) : null;
+  if (visual.levelId && !level) throw new Error('The stored annotation level is absent from its bound snapshot.');
+  const levelId = level?.id ?? context.levelId;
   const pin = visual.annotations.find(annotation => annotation.kind === 'pin');
   if (pin && graph.version === 2 && !levelId) throw new Error('The stored building pin has no bound storey.');
   const reference: SpatialReference | null = pin ? levelId
