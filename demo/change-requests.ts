@@ -810,9 +810,9 @@ export class ChangeRequests {
         if (!this.#isWorking(ticket) || signal.aborted) return;
       }
       const continuation = this.#db.prepare('SELECT request_id FROM request_continuations WHERE request_id=? AND ticket_id=?').get(ticket.request.requestId, ticket.id);
-      const prior = continuation ? [...ticket.history].reverse().map(text => parseTicket(text, reference)).find(item => item.result?.status === 'ready' && item.request.baseRevisionId === ticket.request.baseRevisionId && isDeepStrictEqual(item.scope, ticket.scope)) : undefined;
+      const prior = continuation ? [...ticket.history].reverse().map(text => parseTicket(text, reference)).find(item => item.result?.status === 'ready' && isDeepStrictEqual(item.scope, ticket.scope)) : undefined;
       const priorRepository = prior?.result ? await RoomRepository.restore(this.#projects.read(prior.result.project)) : null;
-      const initialDraft = prior && priorRepository ? priorRepository.view(priorRepository.head(prior.request.proposalName)).snapshot : undefined;
+      const initialDraft = prior && priorRepository ? repository.proposalSnapshot(priorRepository, prior.request.proposalName) : undefined;
       const result = await prepareModelProposal(repository, ticket.request, trackedWorker, (event) => {
         if (this.#isWorking(ticket)) this.#put(recordActivity(this.#get(ticket.id), event));
       }, { signal, scripts: this.#scripts, conversation: this.#conversation(ticket.id), ...(initialDraft ? { initialDraft } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}), ...(prepared ? { sourceInput: prepared } : {}), onExecution: (record) => {

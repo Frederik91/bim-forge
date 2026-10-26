@@ -152,3 +152,49 @@ test('continuation begins with the earlier private draft and retains its review 
   assert.ok(refined.conversation?.messages.some(message => message.kind === 'decision' && message.action === 'reject'));
   assert.equal(queue.project(repo.projectId), repo.serialize());
 });
+
+test('continuation rebases a private draft over unrelated acceptance and fails explicitly on a conflicting acceptance', async t => {
+  for (const mode of ['unrelated', 'conflicting']) await t.test(mode, async t => {
+    const worker: ModelWorker = { identity: { provider: 'test', model: 'conversation-rebase' }, async run(session) {
+      assert.ok(session.input && typeof session.input === 'object' && 'request' in session.input);
+      const input = session.input.request;
+      assert.ok(input && typeof input === 'object' && 'requestId' in input);
+      const other = input.requestId === 'other-change';
+      const continuing = input.requestId === 'continue-after-accept';
+      const result = await session.executeTool('run_model_script', { language: 'typescript', source: `
+        ${other && mode === 'unrelated' ? "await model.previewParameters({edits:[{definitionId:'inspection-interval',name:'Inspection interval',value:{kind:'duration',value:2,unit:'h'}}]});" : `
+          const inspected = await model.inspect(); const layout = inspected.placement.layout;
+          if (!layout) throw new Error('Missing layout');
+          ${continuing ? "if (layout.door.widthMm !== 1200) throw new Error('Earlier width lost after rebase');" : ''}
+          await model.previewRectangle({...layout,door:{...layout.door,${continuing ? 'offsetMm:2000' : `widthMm:${other ? 1100 : 1200}`}}});
+        `}
+        return {kind:'propose',review:{summary:'Bound test change.',rationale:'Explicit request.',constraints:'Preserve unrelated model.',uncertainty:'Concept only.',intent:{interpretation:'Apply requested test change.',assumptions:[],certainty:95,basis:'Deterministic fixture.'}}};
+      ` });
+      assert.equal(result.done, true, JSON.stringify(result));
+    } };
+    const repo = await RoomRepository.create();
+    const wall = repo.view(repo.head('main')).snapshot.entities.find(entity => entity.type === 'Wall'); assert.ok(wall);
+    const queue = await ChangeRequests.open(':memory:', () => worker); t.after(() => queue.close());
+    await queue.submit(repo.serialize(), initial(repo, 'first-draft')); await settled(queue, 'first-draft');
+    const earlier = queue.get('first-draft'); assert.equal(earlier.state, 'ready', earlier.error ?? '');
+    await queue.submit(repo.serialize(), { ...initial(repo, 'other-change'), ...(mode === 'unrelated' ? { selectedObjectIds: [wall.id], scope: { query: { version: 1, allOf: [{ kind: 'ids', ids: [wall.id] }], anyOf: [], excludeIds: [] } } } : {}) });
+    await settled(queue, 'other-change'); assert.equal(queue.get('other-change').state, 'ready', queue.get('other-change').error ?? '');
+    const accepted = await queue.decide('other-change', { action: 'accept', decisionId: 'accept-other', expectedRequestId: 'other-change' });
+    const current = await RoomRepository.restore(accepted.project);
+    await queue.appendMessage('first-draft', reply(queue, 'first-draft', 'continue-after-accept', 'Keep the prior width and shift its offset to 2000 mm.', current.head('main')));
+    await settled(queue, 'first-draft');
+    const continued = queue.get('first-draft');
+    assert.equal(queue.project(repo.projectId), accepted.project);
+    const archived: unknown = JSON.parse(continued.history[0] ?? 'null');
+    assert.ok(archived && typeof archived === 'object' && 'result' in archived); assert.deepEqual(archived.result, earlier.result);
+    if (mode === 'conflicting') {
+      assert.equal(continued.state, 'failed'); assert.match(continued.error ?? '', /conflict|changed|both/i);
+    } else {
+      assert.equal(continued.state, 'ready', continued.error ?? '');
+      const proposed = await RoomRepository.restore(continued.result?.project);
+      const snapshot = proposed.view(proposed.head(continued.request.proposalName)).snapshot;
+      const layout = rectangleLayout(snapshot); assert.equal(layout.door.widthMm, 1200); assert.equal(layout.door.offsetMm, 2000);
+      assert.deepEqual(snapshot.entities.find(entity => entity.id === wall.id), current.view(current.head('main')).snapshot.entities.find(entity => entity.id === wall.id));
+    }
+  });
+});
