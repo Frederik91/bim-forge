@@ -195,7 +195,7 @@ for (const finishesLate of [false, true]) test(`two independent chair proposals 
   assert.equal(queue.get('second-chair').state, 'ready', 'an unrelated accepted chair change must not require a request revision');
   const staleDatabase = new DatabaseSync(file);
   const stale = { ...queue.get('second-chair'), state: 'needs-input', error: 'The accepted model changed. Revise this request against the current model before accepting.' };
-  staleDatabase.prepare('UPDATE requests SET state=?, body=json_set(body, ''$.state'', ?, ''$.error'', ?) WHERE id=?').run(stale.state, stale.state, stale.error, stale.id);
+  staleDatabase.prepare("UPDATE requests SET state=?, body=json_set(body, '$.state', ?, '$.error', ?) WHERE id=?").run(stale.state, stale.state, stale.error, stale.id);
   staleDatabase.close();
   await queue.refreshProject(repo.projectId);
   assert.equal(queue.get('second-chair').state, 'ready', 'recover compatible tickets marked stale by older versions without rerunning the agent');
