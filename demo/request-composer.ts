@@ -98,7 +98,9 @@ export class RequestComposer {
     this.#show(matchingCommands(this.#query?.text ?? '').map(action => ({ id: action.id, label: this.#query ? `/${action.id}` : action.label,
       detail: action.description, choose: () => {
         if (action.id !== 'reference') return this.#actions.action(action.id);
-        const input = this.#ui.input; input.setRangeText('@', input.selectionStart, input.selectionEnd, 'end'); input.focus(); this.#suggest(); return true;
+        const input = this.#ui.input;
+        const prefix = input.selectionStart && !/\s/.test(input.value[input.selectionStart - 1] ?? '') ? ' @' : '@';
+        input.setRangeText(prefix, input.selectionStart, input.selectionEnd, 'end'); input.focus(); this.#suggest(); return true;
       },
     })), this.#query ? 'Chat shortcuts' : 'Add to this chat');
   }
