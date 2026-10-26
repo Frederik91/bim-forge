@@ -376,7 +376,9 @@ function captureChatDraft() {
   return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
-    invalid: invalidInput, reply: chatReply, scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
+    invalid: invalidInput, reply: chatReply, submission, review: activeReview, reviewTicketId: activeTicketId,
+    geometryValues: [ui['door-width'].value, ui['door-offset'].value, ui['wall-position'].value, ui['wall-length'].value],
+    scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
     reconstructionScope: ui['reconstruction-scope'].value, updatedAt: Date.now() };
 }
 function saveChatDraft(): void {
@@ -389,10 +391,13 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   repo = draft.model; reviewRepository = draft.reviewModel; selectedRevision = draft.revision; selectedBranch = draft.branch;
   selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
   preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
-  invalidInput = draft.invalid; chatReply = draft.reply; newDraftId = draft.draftId;
+  invalidInput = draft.invalid; chatReply = draft.reply; submission = draft.submission; newDraftId = draft.draftId;
+  activeReview = draft.review; activeTicketId = draft.reviewTicketId;
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
   ui['request-reconstruct'].checked = draft.reconstruction; ui['reconstruction-scope'].value = draft.reconstructionScope;
   scopeBuilder.restoreDraft(draft.scope); composer.setVisual(chatVisual); composer.refresh();
+  render();
+  for (const [index, control] of [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']].entries()) control.value = draft.geometryValues[index] ?? '';
 }
 
 let chatListSignature = '';
@@ -416,10 +421,10 @@ function renderChatSwitcher(): void {
       else {
         const draft = chatDrafts.get(entry.key); if (!draft) return;
         saveChatDraft(); closeChat(); chatTicketId = null; sourcePicker.switchDraft(entry.key); restoreChatDraft(draft);
-        activeReview = null; activeTicketId = null; render(); showPage('request'); showRequestPane('details');
+        showPage('request'); showRequestPane('details');
       }
-      closeChatSwitcher(); ui['request-text'].focus();
-    }); }); host.append(control);
+      closeChatSwitcher();
+    }).then(() => ui['request-text'].focus()); }); host.append(control);
   }
   if (!host.childElementCount) host.append(element('p', query ? 'No matching chats.' : 'Your chats will appear here. Start a new one at any time.', 'chat-list-empty'));
 }
@@ -432,7 +437,7 @@ input('chat-search').addEventListener('input', renderChatSwitcher);
 generic('chat-switcher').addEventListener('keydown', event => {
   if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeChatSwitcher(); button('chat-switcher-button').focus(); }
 });
-button('new-chat').addEventListener('click', () => { void perform(async () => { await beginRequest(); closeChatSwitcher(); showRequestPane('details'); ui['request-text'].focus(); }); });
+button('new-chat').addEventListener('click', () => { void perform(async () => { await beginRequest(); closeChatSwitcher(); showRequestPane('details'); }).then(() => ui['request-text'].focus()); });
 
 async function discardRequest(message: string): Promise<boolean> {
   if (!requestDirty()) return true;
@@ -1337,7 +1342,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: selectedRevision,
-      selectedObjectIds: [...new Set([...(selectedObject ? [selectedObject] : []), ...(chatVisual?.selectedObjectIds ?? []), ...(focusedRoomId ? [focusedRoomId] : []),
+      selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...(selectedObject ? [selectedObject] : []), ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
       ...(chatVisual ? { conversationVisual: checkedChatVisual() } : {}),
@@ -1364,7 +1369,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     await refreshConversation();
     status(`“${requestLabel(submittedName)}” started. Continue this conversation below while the agent works.`);
     showRequestPane('details');
-  });
+  }).then(() => ui['request-text'].focus());
 });
 
 async function proposalJson(response: Response): Promise<unknown> {
@@ -1428,8 +1433,8 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   ui['request-text'].value = ''; ui['proposal-name'].value = '';
   chatVisual = null; chatReply = null; composer.setVisual(null);
   showChatTicket(value.ticket);
-  if (draft) restoreChatDraft(draft);
-  render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus(); closeChatSwitcher();
+  if (draft) restoreChatDraft(draft); else render();
+  showPage('request'); showRequestPane('details'); ui['request-text'].focus(); closeChatSwitcher();
   status(draft ? 'Chat reopened with its unsent message and attachments. Drafts stay in this tab until sent.' : context.selectedId ? 'Conversation reference restored. Inspect a message to view its original snapshot and pins. A reply never approves a proposal.'
     : 'Conversation opened; its saved reference is absent from the current model. Choose an item or inspect its retained evidence.');
 }

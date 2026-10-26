@@ -103,6 +103,7 @@ export class RequestSourcePicker {
     ui.input.addEventListener('change', () => {
       const files = Array.from(ui.input.files ?? []); ui.input.value = '';
       this.addFiles(files);
+      if (files.length) ui.paste.focus();
     });
     ui.paste.addEventListener('paste', event => {
       const files = Array.from(event.clipboardData?.files ?? []);
