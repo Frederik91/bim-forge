@@ -2453,7 +2453,8 @@ function renderProjectOverview(): void {
 }
 
 function renderConflictChoices(): void {
-  const project = requireRepository();
+  if (!repo) return;
+  const project = repo;
   const alternatives = project.branches().filter((branch) => branch.name !== 'main');
   const choices: Array<[HTMLSelectElement, number]> = [[ui['conflict-left'], 0], [ui['conflict-right'], 1]];
   for (const [choice, defaultIndex] of choices) {
