@@ -552,6 +552,31 @@ test('a changed hosting constraint refuses acceptance and retains the original h
   assert.equal(queue.history({ projectId: repo.projectId, before: null, limit: 50 }).entries.filter((entry) => entry.origin === 'accepted').length, 1);
 });
 
+test('backlog summaries and compatible pending refresh do not hydrate archived project documents', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-summary-refs-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'requests.sqlite');
+  const queue = await ChangeRequests.open(file, () => worker); t.after(() => queue.close());
+  const repo = await RoomRepository.create(); const first = request(repo, 'summary-first', 'summary-first');
+  await queue.submit(repo.serialize(), first); await waitFor(queue, first.requestId);
+  await queue.revise(first.requestId, repo.serialize(), request(repo, 'summary-second', 'summary-second', 1100));
+  await waitFor(queue, first.requestId); const before = queue.list(repo.projectId);
+  const db = new DatabaseSync(file);
+  const row = db.prepare('SELECT body FROM requests WHERE id=?').get(first.requestId); assert.ok(row && typeof row.body === 'string');
+  const ticket: unknown = JSON.parse(row.body);
+  assert.ok(ticket && typeof ticket === 'object' && 'history' in ticket && Array.isArray(ticket.history));
+  const archived: unknown = JSON.parse(ticket.history[0]);
+  assert.ok(archived && typeof archived === 'object' && 'result' in archived && archived.result && typeof archived.result === 'object'
+    && 'project' in archived.result && archived.result.project && typeof archived.result.project === 'object'
+    && 'documentId' in archived.result.project && typeof archived.result.project.documentId === 'string');
+  db.prepare("UPDATE versioned_documents SET manifest='unreadable archived document' WHERE id=?").run(archived.result.project.documentId); db.close();
+  assert.deepEqual(queue.list(repo.projectId), before);
+  await queue.refreshProject(repo.projectId);
+  assert.deepEqual(queue.list(repo.projectId), before);
+  assert.equal(queue.projects().length, 1); assert.equal(queue.project(repo.projectId), repo.serialize());
+  assert.throws(() => queue.get(first.requestId), /corruption|JSON|manifest|document/i, 'An explicitly requested full review still fails closed on unreadable archive bytes.');
+});
+
 test('failed script executions remain auditable without producing a proposal', async (t) => {
   const queue = await ChangeRequests.open(':memory:', () => ({ identity: worker.identity, async run(session) {
     const output = await session.executeTool('run_model_script', { language: 'javascript', source: "throw new Error('Cannot complete this script.');" });
