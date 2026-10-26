@@ -34,4 +34,7 @@ test('missing objects, levels and unqualified building pins cannot silently beco
   assert.throws(() => captureConversationVisual({ ...input, selectedObjectIds: ['deleted'] }), /absent from this snapshot/);
   assert.throws(() => captureConversationVisual({ ...input, levelId: 'missing' }), /level is absent/);
   assert.throws(() => captureConversationVisual({ ...input, reference: { kind: 'floor-point', positionMm: [1000, 1000] } }), /storey/);
+  const wholeBuilding = captureConversationVisual({ ...input, view: '3d', reference: { kind: 'floor-point', levelId: 'level-attic', positionMm: [1000, 1000] } });
+  assert.equal(wholeBuilding.levelId, 'level-attic');
+  assert.throws(() => captureConversationVisual({ ...input, levelId: 'level-ground', reference: { kind: 'floor-point', levelId: 'level-attic', positionMm: [1000, 1000] } }), /another storey/);
 });

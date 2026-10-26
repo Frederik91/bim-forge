@@ -1,4 +1,4 @@
-import { entityElevation, levels } from '../src/building-levels.ts';
+import { entityElevation, entityLevel, levels } from '../src/building-levels.ts';
 import type { ModelGraph } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 import type { ConversationVisual } from '../src/request-conversation.ts';
@@ -15,21 +15,27 @@ export function captureConversationVisual(input: {
   const selectedObjectIds = [...new Set(input.selectedObjectIds)];
   if (selectedObjectIds.some(id => !graph.entities.some(entity => entity.id === id))) throw new Error('The selected object is absent from this snapshot. Select it again before attaching.');
   if (input.levelId && !levels(graph).some(level => level.id === input.levelId)) throw new Error('The selected level is absent from this snapshot.');
+  let levelId = input.levelId;
   const annotations: ConversationVisual['annotations'] = [];
   if (reference?.kind === 'floor-point') {
     const level = reference.levelId ? levels(graph).find(item => item.id === reference.levelId) : null;
     if (graph.version === 2 && !level) throw new Error('Choose the annotation storey before attaching a building pin.');
+    if (level && levelId && level.id !== levelId) throw new Error('The marker belongs to another storey. Mark a new location in the current view.');
+    levelId ??= level?.id ?? null;
     annotations.push({ kind: 'pin', position: [reference.positionMm[0] / 1000, reference.positionMm[1] / 1000, level?.elevation ?? 0], label: 'Marked floor location' });
   } else if (reference?.kind === 'wall-point') {
     const wall = graph.entities.find(item => item.id === reference.wallId);
     if (wall?.type !== 'Wall') throw new Error('The annotation wall is absent from this snapshot.');
+    const owner = entityLevel(graph, wall);
+    if (owner && levelId && owner.id !== levelId) throw new Error('The marker belongs to another storey. Mark a new location in the current view.');
+    levelId ??= owner?.id ?? null;
     const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
     const fraction = reference.alongWallMm / (length * 1000);
     if (fraction < 0 || fraction > 1 || !Number.isFinite(fraction)) throw new Error('The annotation lies outside its wall.');
     annotations.push({ kind: 'pin', position: [wall.start[0] + (wall.end[0] - wall.start[0]) * fraction,
       wall.start[1] + (wall.end[1] - wall.start[1]) * fraction, entityElevation(graph, wall)], label: `Marked wall location: ${wall.name}` });
   }
-  const visual: ConversationVisual = { snapshot: input.snapshot, view: input.view, levelId: input.levelId, selectedObjectIds, annotations };
+  const visual: ConversationVisual = { snapshot: input.snapshot, view: input.view, levelId, selectedObjectIds, annotations };
   return parseConversationReply({ messageId: 'capture', expectedSequence: 0, baseRevisionId: input.snapshot.revisionId, text: 'Visual evidence', sources: [], visual }).visual ?? visual;
 }
 
