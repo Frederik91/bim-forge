@@ -4,6 +4,11 @@ import { composerQuery, matchingCommands } from './request-composer.ts';
 import { admitSourceFiles } from './request-source-ui.ts';
 import { captureConversationVisual } from './request-chat-evidence.ts';
 import { modelScopeFixture } from '../src/model-scope-fixture.ts';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { ChangeRequests } from './change-requests.ts';
+import { RoomRepository } from '../src/room-model.ts';
 
 test('composer detects model mentions at the caret without interpreting emails, URLs or paths', () => {
   assert.deepEqual(composerQuery('Move @office to the wall', 12), { kind: 'mention', start: 5, end: 12, text: 'office' });
@@ -43,4 +48,21 @@ test('multiple model references retain exact stable IDs and snapshot without edi
   assert.equal(visual.snapshot.revisionId, 'a'.repeat(64));
   assert.equal(JSON.stringify(graph), before);
   assert.throws(() => captureConversationVisual({ graph, snapshot: visual.snapshot, view: '3d', selectedObjectIds: ['missing-desk'], levelId: null, reference: null }), /absent/);
+});
+
+test('chat switcher titles retain the first message after a reply and server restart', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'composer-chats-'));
+  const file = path.join(directory, 'queue.sqlite');
+  let queue = await ChangeRequests.open(file, () => null);
+  try {
+    const repo = await RoomRepository.create();
+    await queue.submit(repo.serialize(), { requestId: 'chat-one', proposalName: '', baseRevisionId: repo.head('main'),
+      selectedObjectIds: ['door-entry'], instruction: 'Improve the home office.', visualIntent: { kind: 'selection' } });
+    await queue.appendMessage('chat-one', { messageId: 'reply-one', expectedSequence: 1, baseRevisionId: repo.head('main'),
+      text: 'Keep the existing door.', sources: [], visual: null });
+    assert.equal(queue.list(repo.projectId)[0]?.title, 'Improve the home office.');
+    await queue.close(); queue = await ChangeRequests.open(file, () => null);
+    assert.equal(queue.list(repo.projectId)[0]?.title, 'Improve the home office.');
+    assert.equal(queue.project(repo.projectId), repo.serialize());
+  } finally { await queue.close(); await fs.rm(directory, { recursive: true, force: true }); }
 });

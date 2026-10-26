@@ -406,7 +406,7 @@ function renderChatSwitcher(): void {
   const drafts = [...chatDrafts].filter(([, draft]) => draft.projectId === projectId && !draft.ticketId).map(([key, draft]) => ({
     key, ticket: null, title: draft.text.trim().slice(0, 64) || 'New chat draft', state: 'Unsent draft', at: draft.updatedAt, draft: true,
   }));
-  const tickets = backlogItems.map(ticket => ({ key: `${projectId}:${ticket.id}`, ticket: ticket.id, title: requestLabel(ticket.request.proposalName),
+  const tickets = backlogItems.map(ticket => ({ key: `${projectId}:${ticket.id}`, ticket: ticket.id, title: ticket.title,
     state: stateLabels[ticket.state], at: ticket.updatedAt, draft: chatDrafts.has(`${projectId}:${ticket.id}`) || ticket.id === chatTicketId && requestDirty() }));
   const entries = [...drafts, ...tickets].sort((a, b) => b.at - a.at);
   generic('chat-count').textContent = String(entries.length);
@@ -1526,7 +1526,7 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
 }
 
 interface BacklogItem {
-  id: string; projectId: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
+  id: string; projectId: string; title: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
   request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
 }
@@ -1550,7 +1550,9 @@ function parseBacklogItem(value: unknown): BacklogItem {
   const cached = ticketScopes.get(requestId);
   const scope = cached?.projectId === value.projectId && cached.scope.baseRevisionId === baseRevisionId
     && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
-  return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
+  const first = typeof value.title === 'string' ? value.title : conversationFromTicket(value).messages.find(message => message.kind === 'user')?.text ?? '';
+  if (!first.trim() || first.length > 1000) throw new Error('Invalid chat title.');
+  return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
     request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId, selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
 }

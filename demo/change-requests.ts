@@ -47,7 +47,7 @@ interface RequestTicket<Project> {
 }
 type Ticket = RequestTicket<RepositoryReference>;
 type TicketProjection = RequestTicket<string> & { conversation?: RequestConversation };
-export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity' | 'conversation'>;
+export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity' | 'conversation'> & { title: string };
 export class BacklogConflict extends Error {}
 
 type ProposalReadiness = { state: 'ready'; error: null } | { state: 'needs-input'; error: string };
@@ -601,7 +601,12 @@ export class ChangeRequests {
     return this.#sources.get(identifier(projectId), identifier(id));
   }
   list(projectId: string): TicketSummary[] {
-    return this.#all(identifier(projectId)).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, conversation: _conversation, ...summary }) => summary);
+    const titles = new Map<string, string>();
+    for (const row of this.#db.prepare("SELECT m.ticket_id,json_extract(m.body,'$.text') AS title FROM request_messages m JOIN requests r ON r.id=m.ticket_id WHERE r.project_id=? AND m.sequence=1").all(identifier(projectId))) {
+      if (typeof row.ticket_id !== 'string' || typeof row.title !== 'string') throw new Error('Invalid first conversation message.');
+      titles.set(row.ticket_id, row.title.replace(/\s+/g, ' ').trim().slice(0, 80));
+    }
+    return this.#all(projectId).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, conversation: _conversation, ...summary }) => ({ ...summary, title: titles.get(summary.id) ?? summary.request.instruction.slice(0, 80) }));
   }
   async submit(project: unknown, input: unknown): Promise<TicketSummary> {
     this.#assertOpen();
