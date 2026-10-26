@@ -23,6 +23,7 @@ interface Manifest {
   reviews: unknown[];
 }
 let savepointSequence = 0;
+const MAX_BYTES = 256 * 1024;
 
 function fail(message: string): never { throw new Error(`Versioned project store: ${message}`); }
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -50,8 +51,28 @@ function canonical(value: unknown): string {
   return fail('invalid JSON value.');
 }
 function hash(text: string): string { return createHash('sha256').update(text).digest('hex'); }
+/** Count before serializing: preserve the portable depth, array and UTF-8 byte bounds. */
+function portableBytes(value: unknown, depth = 0): number {
+  if (depth > 16) fail('portable data exceeds the depth bound.');
+  let bytes: number;
+  if (Array.isArray(value)) {
+    const entries = array(value); bytes = 2 + Math.max(0, entries.length - 1);
+    for (const entry of entries) { bytes += portableBytes(entry, depth + 1); if (bytes > MAX_BYTES) fail('project exceeds the 256 KiB portable bound.'); }
+  } else if (isObject(value)) {
+    const entries = Object.entries(value); bytes = 2 + Math.max(0, entries.length - 1);
+    for (const [key, entry] of entries) {
+      bytes += portableBytes(key, depth + 1) + 1 + portableBytes(entry, depth + 1);
+      if (bytes > MAX_BYTES) fail('project exceeds the 256 KiB portable bound.');
+    }
+  } else {
+    if (typeof value === 'string' && value.length > MAX_BYTES) fail('project exceeds the 256 KiB portable bound.');
+    bytes = Buffer.byteLength(canonical(value));
+  }
+  if (bytes > MAX_BYTES) fail('project exceeds the 256 KiB portable bound.');
+  return bytes;
+}
 function parsed(text: string): unknown {
-  if (Buffer.byteLength(text) > 256 * 1024) fail('stored document exceeds the portable bound.');
+  if (Buffer.byteLength(text) > MAX_BYTES) fail('stored document exceeds the portable bound.');
   return JSON.parse(text);
 }
 function bounded(limit: number, maximum: number): void {
@@ -140,6 +161,11 @@ export class VersionedProjectStore implements VersionedProjects {
   put(repository: RoomRepository): RepositoryReference {
     if (!(repository instanceof RoomRepository)) fail('put requires a validated RoomRepository.');
     const state = repository.persistence();
+    portableBytes(state);
+    array(state.revisions, 32); array(state.branches, 32);
+    if (state.version === 2) array(state.reviews, 31);
+    const serialized = canonical(state);
+    if (Buffer.byteLength(serialized) > MAX_BYTES) fail('project exceeds the 256 KiB portable bound.');
     return this.#atomic(() => {
       const revisions = new Map(state.revisions.map((revision) => [revision.id, revision]));
       for (const revision of state.revisions) {
@@ -179,7 +205,7 @@ export class VersionedProjectStore implements VersionedProjects {
       this.#db.prepare('INSERT OR IGNORE INTO versioned_documents(project_id, id, manifest) VALUES (?, ?, ?)').run(state.projectId, documentId, text);
       const reference = { projectId: state.projectId, documentId };
       // Verify the persisted graph, including existing unchanged bodies, before committing a reference.
-      if (this.read(reference) !== repository.serialize()) fail('portable reconstruction mismatch.');
+      if (this.read(reference) !== serialized) fail('portable reconstruction mismatch.');
       return reference;
     });
   }
@@ -190,7 +216,7 @@ export class VersionedProjectStore implements VersionedProjects {
         || new Set(metadata.branches.map((branch) => branch.name)).size !== metadata.branches.length
         || !metadata.branches.some((branch) => branch.name === 'main')) fail('invalid repository references.');
     const cache = new Map<string, { graph: Graph; parentId: string | null }>(); const visiting = new Set<string>();
-    let hydratedBytes = 0;
+    let hydratedBytes = 0; let loadedBodyBytes = 0;
     const load = (id: string): { graph: Graph; parentId: string | null } => {
       const existing = cache.get(id); if (existing) return existing;
       if (!allowed.has(id) || visiting.has(id) || visiting.size >= 100) fail('missing or cyclic revision ancestry.');
@@ -203,6 +229,8 @@ export class VersionedProjectStore implements VersionedProjects {
           if (change.body === null) { if (!values.delete(change.id)) fail('missing deleted item.'); continue; }
           const row = this.#row('SELECT kind, body FROM versioned_bodies WHERE hash = ?', change.body);
           const text = string(row.body);
+          loadedBodyBytes += Buffer.byteLength(text);
+          if (loadedBodyBytes > MAX_BYTES) fail('hydrated bodies exceed the portable bound.');
           if (row.kind !== kind || hash(text) !== change.body) fail('body hash corruption.');
           const item = object(parsed(text)); if (item.id !== change.id) fail('body identity mismatch.');
           values.set(change.id, item);
@@ -226,7 +254,7 @@ export class VersionedProjectStore implements VersionedProjects {
       const validated = validateSnapshot(snapshot);
       const snapshotText = canonical(snapshot);
       hydratedBytes += Buffer.byteLength(snapshotText);
-      if (hydratedBytes > 256 * 1024) fail('reconstructed project exceeds the portable bound.');
+      if (hydratedBytes > MAX_BYTES) fail('reconstructed project exceeds the portable bound.');
       if (snapshotText !== canonical(validated) || hash(canonical({ version: 1, parentId: revision.parentId, snapshot })) !== id) fail('portable revision hash corruption.');
       const result = { graph, parentId: revision.parentId }; visiting.delete(id); cache.set(id, result); return result;
     };
@@ -247,7 +275,7 @@ export class VersionedProjectStore implements VersionedProjects {
     if (reachable.size !== allowed.size) fail('unreachable revision references.');
     const text = canonical({ version: metadata.version, projectId: metadata.projectId, name: metadata.name, revisions,
       branches: metadata.branches, ...(metadata.version === 2 ? { reviews: metadata.reviews } : {}) });
-    if (Buffer.byteLength(text) > 256 * 1024) fail('reconstructed project exceeds the portable bound.');
+    if (Buffer.byteLength(text) > MAX_BYTES) fail('reconstructed project exceeds the portable bound.');
     return text;
   }
 
