@@ -25,6 +25,7 @@ Artifacts live below `/ssd1/bim-forge-qualification/house-161`.
 | `9f41b26` (queue worker) | Root validation, demo build and migration/queue/HTTP tests | PASS; 33 tests, 0 skipped | `worker164-9f41b26/artifacts` |
 | `ace24fc` (browser worker) | Root validation, demo build and client tests | PASS; 16 tests, 0 skipped | `issue-165-20261026-overview-phone/artifacts` |
 | `742b559` (combined code) | Root and changed-path validation, demo build, queue/HTTP/client/integration tests | PASS; 51 tests, 0 skipped | `artifacts/final-code-742b559` |
+| `12892c6` (retained comparison follow-up) | Root and changed-path validation, demo build, client tests | PASS; 16 tests, 0 skipped | `artifacts/review-code-12892c6` |
 
 The full run includes the single maintainer-approved rerun of the corrected persistence fixtures. Its core source/test blobs match `eb5cfba`; all 15 persistence tests passed. The two skipped cases are the existing administrator-dispatch/symlink tests. This is not a pass for those platform-specific cases.
 
@@ -47,6 +48,12 @@ At `f2ed71b`, the browser reopened the eight-room house from the server. Two pro
 Review caught browser corrections: native `fetch` needed its browser receiver preserved; Overview and retained comparison choices needed the accepted repository rather than the historical review repository. A phone check also found 14 px of root overflow requiring a structural layout correction.
 
 At combined source `742b559`, a replacement container reopened the same database, including migration from the interim normalized sentinel column to `projects(id)`. A new browser tab reopened accepted head `2730340a2b`, two completed requests and the same three history entries. Opening the older desk request and then Overview still showed accepted revision `2730340a2b`. At a 390 × 844 viewport, document client/body/root widths were all 375 px (the scrollbar uses the remainder), with no horizontal root overflow. The temporary viewport override was reset.
+
+Final browser verification at `12892c6` reopened the same state again. With the historical desk request selected, both retained alternatives remained available. Comparing bed and desk reported no divergent whole-object changes and did not advance accepted head `2730340a2b`. The phone width check again returned 375/375/375 px. The browser fixture and authenticated tunnel were then stopped; database and raw artifacts were retained. The normal preview was unchanged.
+
+The [rotated 3D review](../evidence/house-161/rotated-review.jpg) was captured at `f2ed71b`. The [phone history](../evidence/house-161/phone-history.jpg) and recovered desktop history below were captured at `12892c6`. They show a disposable integration fixture, not a surveyed building or a signed-in ChatGPT inference session.
+
+![Two accepted changes retained after server replacement](../evidence/house-161/recovered-history.jpg)
 
 ## Boundaries and next qualification
 

@@ -6,7 +6,7 @@ Issue #161. Source baseline `8a1f3a955ecea90bceef574ff8b9eab4249669ce`.
 
 - [x] Frame: inspect live source, pin baseline, define ownership and completion.
 - [x] Fan out: disjoint persistence, request/server, browser and publication-investigation workers.
-- [ ] Aggregate: coordinator reviews/integrates changes and runs server behavior/UI checks.
+- [x] Aggregate: coordinator reviews/integrates changes and runs server behavior/UI checks.
 - [ ] Report: draft PRs with source-bound evidence, limitations and model deltas.
 
 Before this slice, the browser used IndexedDB and the server queue stored complete project/history strings. RoomRepository already validated bounded models, reconciled proposals and exposed 3D review. This implementation retains those semantics and replaces durable full-document copies with immutable references, per-item content versions and revision deltas. SQLite remains the existing local installation store for this bounded slice, with one atomic transaction for accepted head, request decision and retained review evidence. This does not select a hospital-scale storage engine or add a speculative database adapter. The PostgreSQL investigation separately examines the measured large-installation publication path.
@@ -51,3 +51,5 @@ accept   -> validate/reconcile -> transaction(pointer, ticket, receipt)
 An entity keeps its identity when its content changes; unchanged content reuses its body hash. Proposal branches retain their base and review evidence independently of the accepted pointer. A stale browser import returns the server's accepted state rather than publishing browser state. IndexedDB is retained only for reading/exporting recovery bytes.
 
 This is a bounded house integration. Runtime proposals and HTTP projections still hydrate a complete portable house document; this is not a level-streaming API. The existing 256 KiB document, 32 revision and 100-item array limits remain. No hospital-scale performance result, database-engine adoption, Rust speedup, disconnected synchronization or new geometry capability follows from these changes. Those require separate qualification.
+
+Source-bound checks, the inspectable two-furnishing model delta and desktop/phone screenshots are retained in the [integration evidence](../experiments/decisions/house-integration-161.md).
