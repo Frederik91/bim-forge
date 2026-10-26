@@ -59,7 +59,7 @@ export class RequestComposer {
   }
 
   refresh(): void {
-    const input = this.#ui.input; input.style.height = 'auto'; input.style.height = `${Math.min(160, Math.max(68, input.scrollHeight))}px`;
+    const input = this.#ui.input; input.style.height = 'auto'; input.style.height = `${Math.min(160, Math.max(48, input.scrollHeight))}px`;
   }
   setDisabled(disabled: boolean): void {
     this.#disabled = disabled; this.#ui.add.disabled = disabled;
