@@ -381,12 +381,13 @@ export class ModelScripts {
     if (this.#runtime) await (await this.#runtime).dispose();
   }
   async run(input: RunInput): Promise<ModelScriptResult> {
-    if (input.binding.scope) {
-      if (input.binding.scope.baseRevisionId !== input.binding.baseRevisionId) throw new Error('Scope and script base revisions differ.');
-      assertModelScopeFresh({ base: input.base, current: input.base, binding: input.binding.scope });
+    const binding = structuredClone(input.binding);
+    if (binding.scope) {
+      if (binding.scope.baseRevisionId !== binding.baseRevisionId) throw new Error('Scope and script base revisions differ.');
+      assertModelScopeFresh({ base: input.base, current: input.base, binding: binding.scope });
     }
     const runtime = await this.#get();
-    const draft: Draft = { base: input.base, snapshot: input.base, binding: input.binding, signal: input.signal, onActivity: input.onActivity };
+    const draft: Draft = { base: input.base, snapshot: input.base, binding, signal: input.signal, onActivity: input.onActivity };
     const session = runtime.createSession({ context: draft,
       capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
         ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
@@ -423,7 +424,7 @@ export class ModelScripts {
       if (result.kind === 'decline') return { kind: 'declined', reason: result.reason, uncertainty: result.uncertainty,
         ...(result.intent ? { intent: result.intent } : {}), evidence: evidence('declined', 'not-run', null) };
       const candidate = validateSnapshot(draft.snapshot);
-      if (input.binding.scope) assertModelScopeWrites({ before: input.base, after: candidate, binding: input.binding.scope });
+      if (binding.scope) assertModelScopeWrites({ before: input.base, after: candidate, binding: binding.scope });
       const delta = summarizeModelDelta(diffSnapshots(input.base, candidate));
       if (!Object.values(delta).some((collection) => Object.values(collection).some((ids) => ids.length))) throw new Error('The proposed model is identical to the bound revision.');
       input.signal.throwIfAborted();

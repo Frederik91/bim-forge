@@ -543,7 +543,6 @@ export class ChangeRequests {
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    this.#assertSavedScope(repository.projectId, bound.scopedRequest);
     const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
@@ -568,6 +567,9 @@ export class ChangeRequests {
     }
     if (current.root() !== repository.root()) throw new BacklogConflict('This project identity belongs to a different model.');
     if (current.head('main') !== repository.head('main')) throw new BacklogConflict('The accepted server model changed. Refresh the backlog and open its current model before submitting.');
+    if (bound.scope && !isDeepStrictEqual(current.view(bound.baseRevisionId).snapshot, bound.base.snapshot)) {
+      throw new BacklogConflict('The scoped request base is not the authoritative server revision.');
+    }
     if (this.#all(repository.projectId).some((ticket) => ticket.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket already uses this proposal name.');
     const pending = this.#db.prepare("SELECT COUNT(*) AS count FROM requests WHERE state IN ('queued','working')").get();
     if (pending && typeof pending.count === 'number' && pending.count >= 64) throw new Error('The pending request backlog is full. Finish or cancel existing work first.');
@@ -576,6 +578,7 @@ export class ChangeRequests {
       const latest = this.project(repository.projectId);
       if (latest !== currentText && latest !== body) throw new BacklogConflict('The accepted server model changed during submission. Refresh before submitting.');
       if (!latest) this.#register(repository);
+      this.#assertSavedScope(repository.projectId, bound.scopedRequest);
       const ticket: Ticket = recordActivity({ id: request.requestId, projectId: repository.projectId, request, project: this.#projects.put(repository), fingerprint,
         ...(bound.scope ? { scope: bound.scope } : {}),
         state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [], activity: [] }, { stage: 'queued', message: 'Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.' });
@@ -595,7 +598,6 @@ export class ChangeRequests {
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    this.#assertSavedScope(repository.projectId, bound.scopedRequest);
     const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
@@ -621,6 +623,7 @@ export class ChangeRequests {
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
       if (this.project(ticket.projectId) !== currentText || this.#get(id).fingerprint !== ticket.fingerprint) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
+      this.#assertSavedScope(ticket.projectId, bound.scopedRequest);
       if (request.sources) this.#sources.bind(ticket.projectId, request.sources, request.requestId);
       const { scope: previousScope, ...previousTicket } = ticket;
       const next: Ticket = recordActivity({ ...previousTicket, ...(bound.scope ? { scope: bound.scope } : {}), project: this.#projects.put(repository), request, fingerprint, history: [...ticket.history, archived], activity: [],

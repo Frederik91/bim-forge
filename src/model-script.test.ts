@@ -361,6 +361,12 @@ test('scoped request validation rejects guest write authority and mismatched fro
   const query: ModelScopeQuery = { version: 1, allOf: [{ kind: 'ids', ids: ['door-entry'] }], anyOf: [], excludeIds: [] };
   const input = { ...request(repo, 'scope-forgery'), scope: { query, writableIds: ['wall-south'] } };
   assert.throws(() => validateModelProposalRequest(repo, input), /scoped request/i);
+  const bound = validateModelProposalRequest(repo, { ...request(repo, 'scope-frozen-input'), scope: { query } });
+  assert.ok(bound.scope && Object.isFrozen(bound.scope) && Object.isFrozen(bound.scope.targetIds) && Object.isFrozen(bound.scope.query.allOf));
+  let reads = 0;
+  const accessor = Object.defineProperty({ ...request(repo, 'scope-accessor') }, 'scope', { enumerable: true,
+    get() { reads += 1; return { query }; } });
+  assert.throws(() => validateModelProposalRequest(repo, accessor), /accessor/i); assert.equal(reads, 0);
   const scripts = new ModelScripts();
   try {
     const scope = freezeModelScope({ graph: repo.view(repo.head('main')).snapshot, query, baseRevisionId: repo.head('main') });
