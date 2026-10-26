@@ -1,4 +1,4 @@
-import type { RoomRepository } from '../src/room-model.ts';
+import type { RoomRepository, ModelSnapshot, ModelGraph } from '../src/room-model.ts';
 
 export interface RepositoryReference {
   readonly projectId: string;
@@ -32,7 +32,13 @@ export interface ProjectHistoryPage {
 export interface VersionedProjects {
   put(repository: RoomRepository): RepositoryReference;
   read(reference: RepositoryReference): string;
+  /** One revision, with complete engineering validation; does not hydrate other histories. */
+  readGraph(input: { reference: RepositoryReference; revisionId: string }): ModelSnapshot;
+  /** Partial read view, never a complete engineering-valid project. */
+  readItems(input: { reference: RepositoryReference; revisionId: string; entityIds: readonly string[]; relationshipIds: readonly string[] }): ModelGraph;
+  graphSignature(input: { reference: RepositoryReference; revisionId: string }): string;
   current(projectId: string): RepositoryReference | null;
+  acceptedHead(projectId: string): string | null;
   publish(input: {
     projectId: string;
     expectedDocumentId: string | null;

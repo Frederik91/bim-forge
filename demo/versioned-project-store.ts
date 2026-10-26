@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import { RoomRepository, validateSnapshot } from '../src/room-model.ts';
+import { RoomRepository, validateSnapshot, parseModelEntity, parseModelRelationship } from '../src/room-model.ts';
+import type { ModelSnapshot, ModelGraph } from '../src/room-model.ts';
 import type { ProjectHistoryEntry, ProjectHistoryPage, ProjectSummary, RepositoryReference, VersionedProjects } from './versioned-project-contract.ts';
 
 type Kind = 'entity' | 'relationship';
@@ -311,6 +312,94 @@ export class VersionedProjectStore implements VersionedProjects {
   current(projectId: string): RepositoryReference | null {
     const row = this.#db.prepare('SELECT document_id FROM versioned_projects WHERE project_id = ?').get(projectId);
     return row ? { projectId, documentId: string(row.document_id) } : null;
+  }
+
+  acceptedHead(projectId: string): string | null {
+    const row = this.#db.prepare('SELECT head_revision_id FROM versioned_projects WHERE project_id=?').get(projectId);
+    return row ? string(row.head_revision_id) : null;
+  }
+
+  #bodyReferences(input: { reference: RepositoryReference; revisionId: string }): {
+    version: 2 | null; parentId: string | null; entities: Map<string, string>; relationships: Map<string, string>; signature: string;
+  } {
+    const metadata = this.#manifest(input.reference);
+    const allowed = new Set(metadata.revisions);
+    if (!allowed.has(input.revisionId) || allowed.size !== metadata.revisions.length) fail('revision is outside this project document.');
+    const ancestry: { id: string; parentId: string | null; delta: Delta }[] = [];
+    const seen = new Set<string>();
+    let id: string | null = input.revisionId;
+    while (id !== null) {
+      if (!allowed.has(id) || seen.has(id) || seen.size >= 32) fail('invalid bounded revision ancestry.');
+      seen.add(id);
+      const revision = this.#revision(input.reference.projectId, id);
+      ancestry.push({ id, ...revision }); id = revision.parentId;
+    }
+    let entities = new Map<string, string>(); let relationships = new Map<string, string>();
+    let version: 2 | null = null;
+    function apply(before: Map<string, string>, changes: Change[], moves: Move[]): Map<string, string> {
+      const values = new Map(before); const changed = new Set<string>();
+      for (const change of changes) {
+        if (changed.has(change.id)) fail('duplicate item delta.'); changed.add(change.id);
+        if (change.body === null) { if (!values.delete(change.id)) fail('missing deleted item.'); }
+        else values.set(change.id, change.body);
+      }
+      const order = [...before.keys()].filter(key => values.has(key));
+      for (const move of moves) {
+        if (!values.has(move.id) || move.after === move.id) fail('invalid item ordering.');
+        const previous = order.indexOf(move.id); if (previous !== -1) order.splice(previous, 1);
+        const index = move.after === null ? -1 : order.indexOf(move.after);
+        if (move.after !== null && index === -1) fail('missing ordering reference.');
+        order.splice(index + 1, 0, move.id);
+      }
+      if (values.size > 100 || order.length !== values.size) fail('invalid bounded item ordering.');
+      return new Map(order.map(key => {
+        const body = values.get(key); if (!body) fail('missing ordered body.'); return [key, body];
+      }));
+    }
+    for (const revision of [...ancestry].reverse()) {
+      version = revision.delta.version;
+      entities = apply(entities, revision.delta.entities, revision.delta.entityOrder);
+      relationships = apply(relationships, revision.delta.relationships, revision.delta.relationshipOrder);
+    }
+    const selected = ancestry[0]; if (!selected) fail('missing revision.');
+    return { version, parentId: selected.parentId, entities, relationships,
+      signature: hash(canonical({ projectId: input.reference.projectId, revisionId: input.revisionId, ancestry })) };
+  }
+
+  graphSignature(input: Parameters<VersionedProjects['graphSignature']>[0]): string {
+    return this.#bodyReferences(input).signature;
+  }
+
+  #body(kind: Kind, id: string, bodyHash: string): unknown {
+    const row = this.#row('SELECT kind, body FROM versioned_bodies WHERE hash = ?', bodyHash);
+    const text = string(row.body);
+    if (row.kind !== kind || hash(text) !== bodyHash) fail('body hash corruption.');
+    const item = object(parsed(text)); if (item.id !== id) fail('body identity mismatch.');
+    return item;
+  }
+
+  readGraph(input: Parameters<VersionedProjects['readGraph']>[0]): ModelSnapshot {
+    const refs = this.#bodyReferences(input);
+    const snapshot = validateSnapshot({ ...(refs.version === 2 ? { version: 2 } : {}), units: 'm',
+      entities: [...refs.entities].map(([id, body]) => this.#body('entity', id, body)),
+      relationships: [...refs.relationships].map(([id, body]) => this.#body('relationship', id, body)) });
+    if (hash(canonical({ version: 1, parentId: refs.parentId, snapshot })) !== input.revisionId) fail('portable revision hash corruption.');
+    return snapshot;
+  }
+
+  readItems(input: Parameters<VersionedProjects['readItems']>[0]): ModelGraph {
+    const refs = this.#bodyReferences(input);
+    const entityIds = new Set(input.entityIds); const relationshipIds = new Set(input.relationshipIds);
+    if (entityIds.size !== input.entityIds.length || relationshipIds.size !== input.relationshipIds.length
+        || entityIds.size > 100 || relationshipIds.size > 100) fail('invalid bounded working-set identities.');
+    for (const id of entityIds) if (!refs.entities.has(id)) fail('working-set entity is absent from the bound revision.');
+    for (const id of relationshipIds) if (!refs.relationships.has(id)) fail('working-set relationship is absent from the bound revision.');
+    const entities = [...refs.entities].filter(([id]) => entityIds.has(id))
+      .map(([id, body]) => parseModelEntity(this.#body('entity', id, body), refs.version === 2));
+    const relationships = [...refs.relationships].filter(([id]) => relationshipIds.has(id))
+      .map(([id, body]) => parseModelRelationship(this.#body('relationship', id, body)));
+    if (relationships.some(item => !entityIds.has(item.source) || !entityIds.has(item.target))) fail('working-set relationship endpoints must be included.');
+    return { ...(refs.version === 2 ? { version: 2 } : {}), units: 'm', entities, relationships };
   }
 
   publish(input: Parameters<VersionedProjects['publish']>[0]): void {

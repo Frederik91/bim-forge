@@ -5,7 +5,7 @@ Parent #171. Baseline `7ab61dc5666c58886722a683fbf5171dcb683f3d` includes the de
 ## Swarm checklist
 
 - [x] Frame: inspect deployed source, define selectors, ownership and acceptance evidence.
-- [ ] Fan out: independent domain, query, workflow and browser worktrees.
+- [x] Fan out: independent domain, query, workflow and browser worktrees.
 - [ ] Aggregate: coordinator persistence/projection work and combined server/UI checks.
 - [ ] Report: source-bound draft PRs, inspectable delta and explicit limitations.
 
