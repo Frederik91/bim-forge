@@ -68,7 +68,8 @@ test('saved scopes, conversational visual/file evidence and independent acceptan
   assert.equal((await call(server, '/api/change-requests/combined-desk/messages', { json: reply })).status, 202);
   await settled(server, 'combined-desk', 'ready');
   assert.equal((await call(server, '/api/change-requests', { json: { project: repository.serialize(), request: { requestId: 'combined-bed', baseRevisionId,
-    selectedObjectIds: ['main-bed'], instruction: 'Widen this bed by 0.2 m.', visualIntent: { kind: 'selection' } } } })).status, 202);
+    selectedObjectIds: ['main-bed'], instruction: 'Widen this bed by 0.2 m.', visualIntent: { kind: 'selection' },
+    scope: { query: { version: 1, allOf: [{ kind: 'ids', ids: ['main-bed'] }], anyOf: [], excludeIds: [] } } } } })).status, 202);
   await settled(server, 'combined-bed', 'ready');
   await stop(server); closed = true; server = await start(file, repository); closed = false;
   for (const id of ['combined-bed', 'combined-desk']) {
