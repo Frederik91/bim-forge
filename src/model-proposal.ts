@@ -86,6 +86,11 @@ function text(value: unknown, name: string, maximum: number): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) fail(`${name} must contain readable text no longer than ${maximum} characters.`);
   return value.trim();
 }
+function freezeScopeData(value: unknown): void {
+  if (value === null || typeof value !== 'object') return;
+  for (const child of Object.values(value)) freezeScopeData(child);
+  Object.freeze(value);
+}
 function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
   const input = isRecord(rawInput) && Object.hasOwn(rawInput, 'scope') ? plainScopeData(rawInput) : rawInput;
   const extra = isRecord(input) ? ['sources', 'authoringScope', 'scope'].filter((key) => Object.hasOwn(input, key)) : [];
@@ -117,6 +122,8 @@ function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
   const visualIntent = parseVisualRequest(base.snapshot, input.visualIntent);
   const scopedRequest = extra.includes('scope') ? parseScopedRequest(input.scope) : undefined;
   const scope = scopedRequest ? freezeModelScope({ graph: base.snapshot, query: scopedRequest.query, baseRevisionId: base.id }) : undefined;
+  if (scope) freezeScopeData(scope);
+  if (scopedRequest) freezeScopeData(scopedRequest);
   return Object.freeze({ requestId, proposalName, baseRevisionId: base.id, instruction, visualIntent: Object.freeze(visualIntent), base,
     ...(scope && scopedRequest ? { scope, scopedRequest } : {}),
     ...(extra.includes('sources') ? { sources: parseRequestSources(input.sources) } : {}),
