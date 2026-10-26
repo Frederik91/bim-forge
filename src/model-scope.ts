@@ -351,7 +351,16 @@ export function assertModelScopeWrites({ before, after, binding: input }: { befo
   const writable = new Set(binding.writableIds); const readable = new Set([...binding.contextIds, ...binding.writableIds]);
   if (before.version !== after.version || before.units !== after.units) throw new Error('Out-of-scope model format change.');
   for (const id of new Set([...before.entities, ...after.entities].map((entity) => entity.id))) {
-    if (!writable.has(id) && canonical(before.entities.find((entity) => entity.id === id)) !== canonical(after.entities.find((entity) => entity.id === id))) {
+    const previous = before.entities.find(entity => entity.id === id); const next = after.entities.find(entity => entity.id === id);
+    if (!previous && next?.type === 'AssetFamily') {
+      const instances = after.entities.filter(entity => entity.type === 'AssetInstance').filter(entity => entity.familyId === id);
+      const originals = instances.map(instance => before.entities.find(entity => entity.id === instance.id));
+      const originalFamilies = new Set(originals.flatMap(entity => entity?.type === 'AssetInstance' ? [entity.familyId] : []));
+      if (instances.length && instances.every(instance => writable.has(instance.id))
+          && originals.every(entity => entity?.type === 'AssetInstance') && originalFamilies.size === 1
+          && [...originalFamilies].every(familyId => readable.has(familyId))) continue;
+    }
+    if (!writable.has(id) && canonical(previous) !== canonical(next)) {
       throw new Error(`Out-of-scope entity write: ${id}.`);
     }
   }

@@ -183,6 +183,8 @@ export function modelWorkingGraph(graph: ModelGraph, scope?: FrozenModelScope): 
 } {
   if (!scope) return { ...graph, entities: [...graph.entities], relationships: [...graph.relationships] };
   const ids = new Set([...scope.targetIds, ...scope.contextIds, ...scope.dependentIds, ...scope.writableIds]);
+  // New variant definitions are derived resources of writable occurrences, never extra targets.
+  for (const entity of graph.entities) if (entity.type === 'AssetInstance' && scope.writableIds.includes(entity.id)) ids.add(entity.familyId);
   const links = new Set(scope.relationshipIds);
   return { ...(graph.version === 2 ? { version: 2 } : {}), units: graph.units,
     entities: graph.entities.filter(item => ids.has(item.id)),
