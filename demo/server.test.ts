@@ -100,7 +100,8 @@ test('scope HTTP previews and saved queries retain host, origin, shape, project 
   const saved = await request(endpoint + '/scopes', { ...post, body: JSON.stringify(save) });
   assert.equal(saved.status, 200, saved.body);
   const record = jsonObject(saved.body).scope; assert.ok(isRecord(record) && typeof record.version === 'string');
-  assert.equal((await request(endpoint + '/scopes', { ...post, body: JSON.stringify(save) })).status, 409);
+  assert.equal((await request(endpoint + '/scopes', { ...post, body: JSON.stringify(save) })).status, 200, 'An identical retry returns the existing saved query.');
+  assert.equal((await request(endpoint + '/scopes', { ...post, body: JSON.stringify({ ...save, name: 'Stale edit' }) })).status, 409);
   assert.equal((await request(endpoint + '/scopes', { ...post, body: JSON.stringify({ ...save, name: 'Renamed', expectedVersion: record.version }) })).status, 200);
   const listed = jsonObject((await request(endpoint + '/scopes', { headers: { Host: 'localhost' } })).body);
   assert.ok(Array.isArray(listed.scopes)); assert.equal(listed.scopes.length, 1);
