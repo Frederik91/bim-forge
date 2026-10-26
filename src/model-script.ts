@@ -235,11 +235,11 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
     } }),
   previewParameters: api.method({ summary: 'Stage typed parameter edits on exactly the frozen target IDs, retaining context and unrelated objects.',
     description: 'Requires a model scope. Supply edits with definitionId, name and typed value including units. Built-in geometry uses existing support, hosting, family and placement validators. This private draft never grants approval.',
-    effect: 'draft-write', params: { edits: ModelParametersSchema }, result: Type.Object({ model: snapshot, changes }),
-    handler: ({ edits }, call) => stage(call.context, () => {
+    effect: 'draft-write', params: { input: Type.Object({ edits: ModelParametersSchema }, { additionalProperties: false }) }, result: Type.Object({ model: snapshot, changes }),
+    handler: ({ input }, call) => stage(call.context, () => {
       const scope = call.context.binding.scope;
       if (!scope) throw new Error('Parameter editing requires a frozen model scope.');
-      return applyModelParameterEdits({ snapshot: call.context.snapshot, targetIds: scope.targetIds, edits });
+      return applyModelParameterEdits({ snapshot: call.context.snapshot, targetIds: scope.targetIds, edits: input.edits });
     }, () => call.throwIfRevoked()) }),
   inspect: api.method({ summary: 'Inspect the current draft, selected identities, room membership and placement constraints.', effect: 'read', result: inspection,
     handler: (_args, call) => {
@@ -258,7 +258,7 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
           assetInstances: current.entities.filter((item) => item.type === 'AssetInstance').map((item) => ({ entityId: item.id, familyId: item.familyId,
             roomId: entitySpace(current, item)?.id ?? null, levelId: entityLevel(current, item)?.id ?? null, elevation: entityElevation(current, item) })),
           layout: draft.binding.scope || spaces(current).length || current.version === 2 ? null : rectangleLayout(current),
-          floorBounds: boundPlan.entities.some(item => item.type === 'Wall') ? floorBounds(boundPlan) : null,
+          floorBounds: !draft.binding.scope && boundPlan.entities.some(item => item.type === 'Wall') ? floorBounds(boundPlan) : null,
           rooms: plans.flatMap((plan) => spaces(plan).map((room) => ({ ...room, clearBounds: clearSpaceBounds(plan, room),
             entityIds: plan.entities.filter((item) => entitySpace(plan, item)?.id === room.id).map((item) => item.id) }))),
           doorConnections: plans.flatMap((plan) => spaces(plan).length ? doorConnections(plan) : []),

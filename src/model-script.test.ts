@@ -287,7 +287,7 @@ test('a scoped room script inspects only frozen working context, fences old tool
     { kind: 'entity-type', entityType: 'Furniture' }], anyOf: [], excludeIds: [] };
   const input = { ...request(repo, 'scope-room'), selectedObjectIds: ['room-office'], scope: { query }, instruction: 'Move only the office chair 100 mm east.' };
   const living = base.entities.filter(item => item.type === 'Furniture' && item.id.startsWith('living-'))
-    .map(item => item.id === 'living-plant' ? { ...item, height: 1.1 } : item);
+    .map(item => { const { parameters, ...body } = item; return item.id === 'living-plant' ? { ...body, height: 1.1 } : body; });
   const activity: string[] = [];
   const result = await prepareModelProposal(repo, input, worker(async session => {
     const output = await session.executeTool('run_model_script', { language: 'typescript', source: `
