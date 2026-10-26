@@ -348,7 +348,7 @@ test('a real building-wide type script edits frozen plant dimensions in millimet
   const after = result.repository.view(reviewRecord.proposalRevisionId).snapshot;
   const modified = diffSnapshots(before, after).entities.modified;
   assert.equal(modified.length, 3);
-  for (const item of after.entities.filter(item => item.type === 'Furniture' && item.kind === 'plant')) {
+  for (const item of after.entities.filter(item => item.type === 'Furniture').filter(item => item.kind === 'plant')) {
     assert.equal(item.height, 1.2);
     assert.deepEqual(item.parameters, [{ definitionId: 'inspection-interval', name: 'Inspection interval', value: { kind: 'duration', value: 2, unit: 'h' } }]);
   }
