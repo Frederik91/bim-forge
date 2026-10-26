@@ -2419,7 +2419,8 @@ function renderComparison(): void {
 }
 
 function renderProjectOverview(): void {
-  const project = requireRepository();
+  if (!repo) return;
+  const project = repo;
   const revision = project.view(project.head('main'));
   ui['overview-revision'].textContent = revision.id.slice(0, 10);
   ui['overview-entity-count'].textContent = `${revision.snapshot.entities.length} model objects`;
