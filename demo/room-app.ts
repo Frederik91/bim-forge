@@ -1294,7 +1294,9 @@ function showChatTicket(value: unknown): void {
   const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
   chatTicketId = ticket.id;
-  requestChat.show({ conversation, projectId: ticket.projectId, title: requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state] });
+  const firstMessage = conversation.messages.find(message => message.kind === 'user');
+  requestChat.show({ conversation, projectId: ticket.projectId,
+    title: firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state] });
 }
 
 async function openConversation(id: string, keepProposal = false): Promise<void> {
