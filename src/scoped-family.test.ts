@@ -5,6 +5,7 @@ import { modelScopeFixture } from './model-scope-fixture.ts';
 import { previewAssetFamilyVariant } from './asset-family.ts';
 import { assertModelScopeWrites, freezeModelScope } from './model-scope.ts';
 import { prepareModelProposal } from './model-proposal.ts';
+import type { ModelWorkerSession } from './model-proposal.ts';
 import { modelWorkingGraph } from './model-script.ts';
 import type { ModelScopeQuery } from './model-scope-contract.ts';
 
@@ -37,7 +38,7 @@ test('a real scoped ScriptBox variant stays visible and accepts without changing
   const before=repo.view(repo.head('main')).snapshot;
   const result=await prepareModelProposal(repo,{requestId:'scoped-variant',proposalName:'scoped-variant',baseRevisionId:repo.head('main'),
     selectedObjectIds:['living-person'],instruction:'Create a variant of the selected person only.',visualIntent:{kind:'selection'},scope:{query}},
-  {identity:{provider:'integration-fixture',model:'scoped-family-variant'},async run(session){
+  {identity:{provider:'integration-fixture',model:'scoped-family-variant'},async run(session:ModelWorkerSession){
     const output=await session.executeTool('run_model_script',{language:'typescript',source:`
       const view=await model.inspect();
       const original=view.model.entities.find(entity=>entity.type==='AssetFamily');
