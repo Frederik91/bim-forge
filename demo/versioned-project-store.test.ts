@@ -251,10 +251,11 @@ test('oversize typed persistence is refused before writes and preserves the acce
   // Simulate a typed future repository mutator that omits a whole-document bound.
   const oversized = Object.freeze({ ...state, name: '界'.repeat(90_000) });
   assert.ok(Buffer.byteLength(canonical(oversized)) > 256 * 1024);
-  Object.defineProperty(root, 'persistence', { configurable: true, value: () => oversized });
+  const invalid = new Proxy(root, { get(target, key): unknown {
+    return key === 'persistence' ? () => oversized : Reflect.get(target, key);
+  } });
   db.exec("CREATE TRIGGER no_body_write BEFORE INSERT ON versioned_bodies BEGIN SELECT RAISE(ABORT, 'unexpected write'); END;");
-  assert.throws(() => store.put(root), /256 KiB/);
-  Reflect.deleteProperty(root, 'persistence');
+  assert.throws(() => store.put(invalid), /256 KiB/);
   assert.deepEqual(store.current(root.projectId), current); assert.equal(store.read(current), root.serialize());
   assert.deepEqual([count(db, 'bodies'), count(db, 'revisions'), count(db, 'documents'), count(db, 'publications')], before);
 });
@@ -263,8 +264,10 @@ test('oversize state arrays are refused before writes without raising portable l
   const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
   const root = await RoomRepository.create(); const current = initial(store, root); const state = root.persistence();
   const revisions = Array.from({ length: 101 }, () => state.revisions[0]);
-  Object.defineProperty(root, 'persistence', { configurable: true, value: () => Object.freeze({ ...state, revisions }) });
-  assert.throws(() => store.put(root), /bounded collection/); Reflect.deleteProperty(root, 'persistence');
+  const invalid = new Proxy(root, { get(target, key): unknown {
+    return key === 'persistence' ? () => Object.freeze({ ...state, revisions }) : Reflect.get(target, key);
+  } });
+  assert.throws(() => store.put(invalid), /bounded collection/);
   assert.deepEqual(store.current(root.projectId), current); assert.equal(count(db, 'revisions'), 1);
   assert.equal(count(db, 'documents'), 1); assert.equal(store.read(current), root.serialize());
 });
