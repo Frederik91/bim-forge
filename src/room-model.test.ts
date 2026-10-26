@@ -9,6 +9,18 @@ import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, MAX_SCRIPT_EVIDENCE_BYTES
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 import { createResidentialProject } from './residential-floor.ts';
 
+test('the persistence boundary exposes immutable validated state without an authoring escape', async () => {
+  const repository = await RoomRepository.create('Immutable storage boundary');
+  const before = repository.serialize();
+  const state = repository.persistence();
+  const first = state.revisions[0]?.snapshot.entities[0];
+  assert.ok(first);
+  assert.ok(Object.isFrozen(state) && Object.isFrozen(state.revisions) && Object.isFrozen(first));
+  assert.throws(() => Object.assign(first, { name: 'Unreviewed mutation' }), TypeError);
+  assert.equal(repository.serialize(), before);
+  assert.equal((await RoomRepository.restore(JSON.stringify(state))).serialize(), before);
+});
+
 interface DoorShape { id: string; type: 'Door'; name: string; width: number; height: number }
 interface WallShape { id: string; type: 'Wall'; name: string; start: Point; end: Point; thickness: number; height: number }
 type EntityShape = DoorShape | WallShape;

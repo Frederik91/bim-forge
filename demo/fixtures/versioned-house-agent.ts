@@ -10,7 +10,7 @@ export function houseFixtureWorker(repository: RoomRepository, wait: () => Promi
       const input = session.input;
       if (!input || typeof input !== 'object' || !('request' in input) || !input.request || typeof input.request !== 'object'
           || !('selectedObjectIds' in input.request) || !Array.isArray(input.request.selectedObjectIds)) throw new Error('Fixture requires a selected object.');
-      const id = input.request.selectedObjectIds[0];
+      const id: unknown = input.request.selectedObjectIds[0];
       if (id !== 'office-desk' && id !== 'main-bed') throw new Error('Fixture supports the two declared furnishing changes only.');
       await wait();
       if (session.signal.aborted) return;

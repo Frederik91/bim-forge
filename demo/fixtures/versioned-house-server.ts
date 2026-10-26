@@ -12,6 +12,7 @@ const directory = process.env.BIM_FORGE_FIXTURE_DIRECTORY;
 if (!directory || !/^\/work\/[A-Za-z0-9/_-]+$/.test(directory)) throw new Error('Fixture data must be inside its disposable /work mount.');
 const origin = process.env.BIM_FORGE_FIXTURE_ORIGIN;
 if (!origin || !/^https:\/\/192\.168\.1\.17:9491$/.test(origin)) throw new Error('Fixture uses its separate declared HTTPS origin.');
+const fixtureUrl = new URL(origin);
 await fs.mkdir(directory, { recursive: true });
 const seedFile = `${directory}/seed-project.json`;
 let repository: RoomRepository;
@@ -38,7 +39,7 @@ async function post(target: string, value: unknown): Promise<void> {
   const bytes = JSON.stringify(value);
   await new Promise<void>((resolve, reject) => {
     const request = http.request({ socketPath, path: target, method: 'POST', headers: {
-      Host: new URL(origin ?? '').host, Origin: origin ?? '', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bytes),
+      Host: fixtureUrl.host, Origin: fixtureUrl.origin, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bytes),
     } }, (response) => {
       response.resume(); response.once('end', () => {
         if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) resolve();

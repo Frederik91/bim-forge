@@ -117,7 +117,7 @@ for (const order of [['office-desk', 'main-bed'], ['main-bed', 'office-desk']]) 
       assert.equal(page.status, 200);
       assert.ok(object(page.value) && Array.isArray(page.value.entries));
       assert.equal(page.value.entries.length, 1);
-      const entry = page.value.entries[0]; assert.ok(object(entry) && typeof entry.revisionId === 'string');
+      const entry: unknown = page.value.entries[0]; assert.ok(object(entry) && typeof entry.revisionId === 'string');
       assert.ok(!seen.has(entry.revisionId)); seen.add(entry.revisionId);
       assert.ok(page.value.nextCursor === null || typeof page.value.nextCursor === 'string'); cursor = page.value.nextCursor;
     } while (cursor);
