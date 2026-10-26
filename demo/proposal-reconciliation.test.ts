@@ -211,10 +211,11 @@ test('portable history-limit refusal preserves accepted state and can recover by
       { id: 'main-bed', type: 'Furniture', name: 'Bed', kind: 'bed', position: [4.5, 2], width: 1.8, depth: 2, height: .5, rotationDeg: 0, supportId: null },
     ] }) });
   for (let index = 0; index < 29; index++) {
+    const name = `seed-${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + index % 26)}`;
     const snapshot = repo.view(repo.head('main')).snapshot;
-    repo = (await reviewed(repo, `seed-${index}`, { ...snapshot,
+    repo = (await reviewed(repo, name, { ...snapshot,
       entities: snapshot.entities.map((item) => item.id === 'door-entry' ? { ...item, name: `Entry ${index}` } : item) }))
-      .accept(`seed-${index}`, { decisionId: `seed-${index}`, actor: 'fixture-human' });
+      .accept(name, { decisionId: name, actor: 'fixture-human' });
   }
   repo = await RoomRepository.restore(repo.serialize());
   assert.equal(repo.persistence().revisions.length, 30);
