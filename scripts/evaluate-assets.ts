@@ -14,7 +14,7 @@ if (!output || !path.isAbsolute(output)) throw new Error('Set BIM_ASSET_EVIDENCE
 await mkdir(output, { recursive: true });
 const codex = await CodexAccountConnection.open();
 if (!codex.publicSession().connected) { codex.close(); throw new Error('Connect the existing server ChatGPT session before evaluating asset authoring.'); }
-const queue = new ChangeRequests(path.join(output, `assets-${randomUUID()}.sqlite`), () => codex.modelWorker());
+const queue = await ChangeRequests.open(path.join(output, `assets-${randomUUID()}.sqlite`), () => codex.modelWorker());
 try {
   const repository = await RoomRepository.create('Synthetic AI-authored asset evaluation');
   const original = repository.serialize();
