@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import { RoomRepository } from '../src/room-model.ts';
+import { RoomRepository, validateSnapshot } from '../src/room-model.ts';
 import type { ProjectHistoryEntry, ProjectHistoryPage, ProjectSummary, RepositoryReference, VersionedProjects } from './versioned-project-contract.ts';
 
 type Kind = 'entity' | 'relationship';
@@ -61,9 +61,9 @@ function manifest(text: string): Manifest {
   const value = object(parsed(text));
   if (value.version !== 1 && value.version !== 2) fail('invalid repository version.');
   return { version: value.version, projectId: string(value.projectId), name: string(value.name),
-    revisions: array(value.revisions).map(string), branches: array(value.branches).map((entry) => {
+    revisions: array(value.revisions, 32).map(string), branches: array(value.branches, 32).map((entry) => {
       const branch = object(entry); return { name: string(branch.name), revisionId: string(branch.revisionId) };
-    }), reviews: value.version === 2 ? array(value.reviews) : [] };
+    }), reviews: value.version === 2 ? array(value.reviews, 31) : [] };
 }
 function delta(text: string): Delta {
   const value = object(parsed(text));
@@ -186,7 +186,11 @@ export class VersionedProjectStore implements VersionedProjects {
 
   read(reference: RepositoryReference): string {
     const metadata = this.#manifest(reference); const allowed = new Set(metadata.revisions);
+    if (allowed.size === 0 || allowed.size !== metadata.revisions.length || metadata.branches.length === 0
+        || new Set(metadata.branches.map((branch) => branch.name)).size !== metadata.branches.length
+        || !metadata.branches.some((branch) => branch.name === 'main')) fail('invalid repository references.');
     const cache = new Map<string, { graph: Graph; parentId: string | null }>(); const visiting = new Set<string>();
+    let hydratedBytes = 0;
     const load = (id: string): { graph: Graph; parentId: string | null } => {
       const existing = cache.get(id); if (existing) return existing;
       if (!allowed.has(id) || visiting.has(id) || visiting.size >= 100) fail('missing or cyclic revision ancestry.');
@@ -211,14 +215,19 @@ export class VersionedProjectStore implements VersionedProjects {
           if (move.after !== null && index === -1) fail('missing ordering reference.');
           order.splice(index + 1, 0, move.id);
         }
-        if (order.length !== values.size) fail('incomplete item ordering.');
+        if (values.size > 100 || order.length !== values.size) fail('invalid bounded item ordering.');
         return new Map(order.map((key) => [key, values.get(key)]));
       };
       const graph: Graph = { version: revision.delta.version,
         entities: apply('entity', parent?.entities ?? new Map(), revision.delta.entities, revision.delta.entityOrder),
         relationships: apply('relationship', parent?.relationships ?? new Map(), revision.delta.relationships, revision.delta.relationshipOrder) };
       const snapshot = { ...(graph.version === 2 ? { version: 2 } : {}), units: 'm', entities: [...graph.entities.values()], relationships: [...graph.relationships.values()] };
-      if (hash(canonical({ version: 1, parentId: revision.parentId, snapshot })) !== id) fail('portable revision hash corruption.');
+      // Reuse the synchronous engineering boundary: hash-valid broken host/level references still fail closed.
+      const validated = validateSnapshot(snapshot);
+      const snapshotText = canonical(snapshot);
+      hydratedBytes += Buffer.byteLength(snapshotText);
+      if (hydratedBytes > 256 * 1024) fail('reconstructed project exceeds the portable bound.');
+      if (snapshotText !== canonical(validated) || hash(canonical({ version: 1, parentId: revision.parentId, snapshot })) !== id) fail('portable revision hash corruption.');
       const result = { graph, parentId: revision.parentId }; visiting.delete(id); cache.set(id, result); return result;
     };
     const revisions = metadata.revisions.map((id) => {
@@ -227,6 +236,15 @@ export class VersionedProjectStore implements VersionedProjects {
         entities: [...graph.entities.values()], relationships: [...graph.relationships.values()] } };
     });
     for (const branch of metadata.branches) if (!allowed.has(branch.revisionId)) fail('missing branch revision.');
+    const roots = [...cache].filter(([, revision]) => revision.parentId === null);
+    if (roots.length !== 1) fail('missing unique root revision.');
+    const reachable = new Set<string>();
+    for (const branch of metadata.branches) {
+      let id: string | null = branch.revisionId;
+      while (id !== null && !reachable.has(id)) { reachable.add(id); id = load(id).parentId; }
+      if (metadata.version === 1 && branch.name === 'main' && load(branch.revisionId).parentId !== null) fail('legacy main must retain root.');
+    }
+    if (reachable.size !== allowed.size) fail('unreachable revision references.');
     const text = canonical({ version: metadata.version, projectId: metadata.projectId, name: metadata.name, revisions,
       branches: metadata.branches, ...(metadata.version === 2 ? { reviews: metadata.reviews } : {}) });
     if (Buffer.byteLength(text) > 256 * 1024) fail('reconstructed project exceeds the portable bound.');
