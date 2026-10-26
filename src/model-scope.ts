@@ -298,8 +298,9 @@ export function resolveIndexedModelScope({ index, query: input }: { index: Model
       const sameRoom = entity.spaceIds.some((room) => other.spaceIds.includes(room));
       if (sameRoom || (entity.bounds && other.bounds && touches(entity.bounds, other.bounds))) relevant.add(other.id);
       // Adjacent rooms are read observations, not an implicit selection of their contents.
-      if (other.type === 'Space' && other.bounds && entity.spaceIds.some((roomId) => {
-        const room = requireEntity(index, roomId, 'Space'); return room.bounds && touches(room.bounds, other.bounds);
+      const otherBounds = other.bounds;
+      if (other.type === 'Space' && otherBounds && entity.spaceIds.some((roomId) => {
+        const room = requireEntity(index, roomId, 'Space'); return room.bounds && touches(room.bounds, otherBounds);
       })) relevant.add(other.id);
     }
   }
