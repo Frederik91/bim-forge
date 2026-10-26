@@ -16,7 +16,8 @@ import type {
 } from '../src/room-model.ts';
 import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pilot.ts';
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
-import { RoomStore, RoomStoreError, MAX_PROJECT_BYTES } from './room-store.ts';
+import { RoomStore, RoomStoreError, ProjectClient, ProjectServerError, MAX_PROJECT_BYTES } from './room-store.ts';
+import type { ProjectSummary, ProjectHistoryPage } from './versioned-project-contract.ts';
 import type { RequestState } from './change-requests.ts';
 import { groupRequests, REQUEST_TABS } from './request-tabs.ts';
 import type { RequestTab } from './request-tabs.ts';
@@ -169,6 +170,14 @@ const ui = {
   'import-file': input('import-file'),
   status: generic('status'), error: generic('error'),
   'recover-save': button('recover-save'),
+  'server-save-status': generic('server-save-status'), 'saved-projects': select('saved-projects'),
+  'open-saved-project': button('open-saved-project'), 'refresh-projects': button('refresh-projects'),
+  'import-server-project': button('import-server-project'),
+  'project-list-status': generic('project-list-status'), 'legacy-recovery': generic('legacy-recovery'),
+  'legacy-status': generic('legacy-status'), 'transfer-legacy': button('transfer-legacy'),
+  'retry-legacy': button('retry-legacy'), 'export-legacy': button('export-legacy'),
+  'server-history-list': generic('server-history-list'), 'server-history-status': generic('server-history-status'),
+  'history-older': button('history-older'), 'history-newest': button('history-newest'),
   'project-title': generic('project-title'), 'study-caption': generic('study-caption'),
   'project-overview': button('project-overview'), 'project-page': generic('project-page'), 'journey': generic('journey'),
   'open-room': button('open-room'), 'overview-revision': generic('overview-revision'),
@@ -234,15 +243,22 @@ const ui = {
   'auth-refresh-models': button('auth-refresh-models'), 'auth-signout': button('auth-signout'),
 };
 
-let store: RoomStore | null = null;
+const projects = new ProjectClient();
+let serverAvailable = false;
+let projectChoices: readonly ProjectSummary[] = [];
+let legacyProject: RoomRepository | null = null;
+let legacyText: string | null = null;
+let historyPage: ProjectHistoryPage | null = null;
+let historyProjectId: string | null = null;
+let historyLoading = false;
+let historyEpoch = 0;
+const LAST_PROJECT = 'bim-forge-last-server-project';
 let repo: RoomRepository | null = null;
-let generation = 0;
 let savedText: string | null = null;
 let recoveryText: string | null = null;
 let selectedRevision = '';
 let selectedBranch = 'main';
 let busy = true;
-let writesBlocked = false;
 let layout: RoomLayout | null = null;
 let preview: ModelSnapshot | null = null;
 let selectedObject = 'door-entry';
@@ -254,6 +270,7 @@ let activeTicketId: string | null = null;
 let revisionTicketId: string | null = null;
 let backlogItems: BacklogItem[] = [];
 let serverProjectText: string | null = null;
+let serverHeadRevisionId: string | null = null;
 let submission: { fingerprint: string; requestId: string } | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
@@ -423,14 +440,20 @@ function clearError() { ui.error.replaceChildren(); ui.error.hidden = true; }
 function report(error: unknown, prefix = ''): void {
   ui.error.textContent = `${prefix}${error instanceof Error ? error.message : 'An unexpected error occurred.'}`;
   ui.error.hidden = false;
-  if (error instanceof RoomStoreError && (error.code === 'stale' || error.code === 'corrupt')) writesBlocked = true;
   if (error instanceof RoomStoreError && typeof error.savedText === 'string') showRecovery(error.savedText);
+  if (error instanceof ProjectServerError) serverConnection(false, error.message);
   updateControls();
 }
 
 function showRecovery(text: string): void {
   recoveryText = text;
   ui['recover-save'].hidden = false;
+}
+
+function serverConnection(available: boolean, message: string): void {
+  serverAvailable = available;
+  ui['server-save-status'].textContent = message;
+  ui['server-save-status'].dataset.state = available ? 'saved' : 'disconnected';
 }
 
 function reviewState(review: ActiveReview | null): ReviewState | null {
@@ -596,8 +619,8 @@ function scheduleAuthPoll(): void {
 function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
-  const writable = Boolean(store) && !busy && !writesBlocked && !dragging;
-  const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project']];
+  const writable = serverAvailable && !busy && !dragging;
+  const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
   for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture);
@@ -619,7 +642,15 @@ function updateControls() {
   ui['proposal-auth-action'].disabled = authBusy;
   ui['discard-preview'].disabled = busy || !repo || !dirty() || dragging;
   ui['export-project'].disabled = busy || !repo || savedText === null || dragging;
-  ui['new-project'].disabled = !store || busy || writesBlocked || dragging;
+  ui['new-project'].disabled = busy || dragging;
+  ui['saved-projects'].disabled = busy || dragging || !projectChoices.length;
+  ui['open-saved-project'].disabled = busy || dragging || !ui['saved-projects'].value;
+  ui['refresh-projects'].disabled = busy || dragging;
+  ui['retry-legacy'].disabled = busy;
+  ui['transfer-legacy'].disabled = !writable || !legacyProject;
+  ui['export-legacy'].disabled = busy || legacyText === null;
+  ui['history-older'].disabled = busy || historyLoading || !historyPage?.nextCursor || historyProjectId !== repo?.projectId;
+  ui['history-newest'].disabled = busy || historyLoading || !repo;
   ui['project-overview'].disabled = busy || !repo || dragging;
   ui['view-original'].disabled = busy || !repo || dragging;
   ui['nav-request'].disabled = busy || !repo || dragging;
@@ -749,7 +780,7 @@ function acceptLayout(candidate: RoomLayout): void {
 }
 
 function editFields(event: Event): void {
-  if (!repo || busy || writesBlocked || !layout || !preview || gesture) return;
+  if (!repo || busy || !serverAvailable || !layout || !preview || gesture) return;
   const object = preview.entities.find((item) => item.id === selectedObject);
   if (!object || (object.type !== 'Door' && object.type !== 'Wall')) return;
   const fields = object.type === 'Door' ? [ui['door-width'], ui['door-offset']] : [ui['wall-position'], ui['wall-length']];
@@ -784,36 +815,41 @@ async function perform(action: () => void | Promise<void>): Promise<void> {
   clearError();
   updateControls();
   try { await action(); }
-  catch (error) { status('Action did not complete. The displayed project has not been replaced.'); report(error); }
+  catch (error) {
+    status('Action did not complete. Reopen the server model to check its current accepted state.');
+    if (ui['start-dialog'].open) ui['project-list-status'].textContent = error instanceof Error ? error.message : 'Action failed. Retry when the server is available.';
+    report(error);
+  }
   finally { busy = false; if (repo) renderComparison(); updateControls(); }
 }
 
-function writableStore(): RoomStore {
-  if (!store || writesBlocked) throw new Error('Saving is blocked. Download any recovery data or export your current project, then reload.');
-  return store;
-}
-
-// This is the only publication path for a new repository. Never assign repo before saveCAS resolves.
-async function persist(next: RoomRepository, branch = 'main'): Promise<void> {
-  const database = writableStore();
+// Display only repositories read from the server. Pending previews stay in reviewRepository.
+function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
-  const nextGeneration = await database.saveCAS(text, generation);
-  generation = nextGeneration;
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
-  if (projectChanged) { backlogItems = []; serverProjectText = null; revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; }
+  if (projectChanged) { backlogItems = []; revisionTicketId = null; submission = null; activeLevelId = null; focusedRoomId = null; }
+  serverProjectText = text;
+  serverHeadRevisionId = next.head('main');
+  historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
+  ui['server-history-list'].replaceChildren();
+  ui['server-history-status'].textContent = 'Open History to read the accepted server ancestry.';
   repo = next;
   reviewRepository = null;
+  activeReview = null;
   activeTicketId = null;
-  selectedBranch = branch;
-  selectedRevision = repo.head(branch);
+  selectedBranch = 'main';
+  selectedRevision = repo.head('main');
   resetEditor();
   if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); }
+  try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
+  serverConnection(true, `Server saved · accepted ${selectedRevision.slice(0, 10)} · request sketches are unsaved`);
+  ui['project-name'].value = next.name;
   render();
 }
 
 function confirmReplacement(): boolean {
-  return !repo || window.confirm('Replace the locally saved project and discard any unsaved request sketch? Export saved work first if you want to keep it.');
+  return !repo || !requestDirty() || window.confirm('Switch project and discard the unsent request sketch? Server projects and browser recovery bytes are retained.');
 }
 
 async function recognizeHousePilot(project: RoomRepository): Promise<void> {
@@ -822,7 +858,6 @@ async function recognizeHousePilot(project: RoomRepository): Promise<void> {
 }
 
 async function createProject(name: string): Promise<void> {
-  writableStore();
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
   const next = ui['project-template'].value === 'house' ? await createMultiStoreyProject(name)
@@ -830,22 +865,23 @@ async function createProject(name: string): Promise<void> {
   focusedRoomId = null;
   activeReview = null;
   housePilotFixture = null;
-  await persist(next);
+  displayAccepted(await projects.register(next));
+  await refreshProjectChoices();
   ui['project-name'].value = next.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
   showPage('project');
-  status('Original model saved locally. Open the floor overview, choose a room and describe a request to begin.');
+  status('Original model saved on the server. Choose a room and describe a request to begin.');
 }
 
 async function createHousePilot(): Promise<void> {
-  writableStore();
   if (!confirmReplacement()) { status('House Pilot opening cancelled. Your current project is unchanged.'); return; }
   status('Opening the House Pilot project…');
   const fixture = await createHousePilotFixture();
   activeReview = null;
   housePilotFixture = fixture;
-  await persist(fixture.repository);
+  displayAccepted(await projects.register(fixture.repository));
+  await refreshProjectChoices();
   ui['project-name'].value = fixture.repository.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
@@ -863,8 +899,111 @@ ui['load-sample'].addEventListener('click', () => { void perform(createHousePilo
 ui['new-project'].addEventListener('click', () => {
   ui['start-close'].hidden = !repo;
   openDialog(ui['start-dialog']);
+  void perform(refreshProjectChoices);
 });
 ui['start-close'].addEventListener('click', () => closeDialog(ui['start-dialog']));
+ui['refresh-projects'].addEventListener('click', () => { void perform(refreshProjectChoices); });
+ui['saved-projects'].addEventListener('change', updateControls);
+ui['open-saved-project'].addEventListener('click', () => { void perform(async () => {
+  if (confirmReplacement()) await openServerProject(ui['saved-projects'].value);
+}); });
+ui['retry-legacy'].addEventListener('click', () => { void perform(readLegacyRecovery); });
+ui['export-legacy'].addEventListener('click', () => {
+  if (legacyText !== null && !busy) download(legacyText, 'browser-project-recovery.json');
+});
+ui['transfer-legacy'].addEventListener('click', () => { void perform(async () => {
+  if (!legacyProject || !confirmReplacement()) return;
+  const accepted = await projects.register(legacyProject);
+  await recognizeHousePilot(accepted);
+  displayAccepted(accepted);
+  await refreshProjectChoices();
+  closeDialog(ui['start-dialog']); showPage('project');
+  status('Browser project registered. Existing server accepted state wins. Browser recovery bytes are retained unchanged; pending proposals still require human review.');
+}); });
+ui['history-newest'].addEventListener('click', () => { void loadServerHistory(); });
+ui['history-older'].addEventListener('click', () => {
+  if (historyPage?.nextCursor) void loadServerHistory(historyPage.nextCursor);
+});
+
+async function refreshProjectChoices(): Promise<void> {
+  try {
+    const selected = ui['saved-projects'].value || repo?.projectId;
+    projectChoices = await projects.list();
+    ui['saved-projects'].replaceChildren(...projectChoices.map(project => new Option(`${project.name} · ${project.headRevisionId.slice(0, 10)}`, project.projectId)));
+    if (selected && projectChoices.some(project => project.projectId === selected)) ui['saved-projects'].value = selected;
+    ui['project-list-status'].textContent = projectChoices.length
+      ? `${projectChoices.length} saved server projects (up to 32 shown). Open to read the latest accepted model.`
+      : 'Server connected. Create a project, import JSON, or transfer browser recovery data.';
+    serverConnection(true, repo ? `Server connected · displayed accepted ${repo.head('main').slice(0, 10)} · reopen to refresh` : 'Server connected · no project open');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Project list unavailable.';
+    ui['project-list-status'].textContent = message;
+    serverConnection(false, message);
+    throw error;
+  } finally { updateControls(); }
+}
+
+async function openServerProject(projectId: string): Promise<void> {
+  if (!projectId) return;
+  const next = await projects.read(projectId);
+  await recognizeHousePilot(next);
+  displayAccepted(next);
+  closeDialog(ui['start-dialog']); showPage('project');
+  await refreshBacklog();
+  status('Latest accepted model reopened from the server. Pending work remains in the backlog; unsent sketches are not saved.');
+}
+
+async function readLegacyRecovery(): Promise<void> {
+  let recoveryStore: RoomStore | null = null;
+  try {
+    recoveryStore = await RoomStore.open();
+    const record = await recoveryStore.load();
+    legacyText = record.text;
+    legacyProject = null;
+    if (record.text === null) {
+      ui['legacy-status'].textContent = 'No older browser project was found. Server projects do not require browser storage.';
+      return;
+    }
+    ui['legacy-recovery'].hidden = false;
+    showRecovery(record.text);
+    legacyProject = await RoomRepository.restore(record.text);
+    ui['legacy-status'].textContent = `Browser recovery: ${legacyProject.name}. Export these bytes or register them explicitly. Only a new server identity can be initialized; an existing server head wins. Browser bytes are never overwritten.`;
+  } catch (error) {
+    legacyProject = null;
+    ui['legacy-recovery'].hidden = false;
+    if (error instanceof RoomStoreError && error.savedText !== null) { legacyText = error.savedText; showRecovery(error.savedText); }
+    ui['legacy-status'].textContent = `${error instanceof Error ? error.message : 'Browser recovery could not be read.'} ${legacyText === null ? 'Bytes are unavailable for export; retry browser storage access. You can still open server projects.' : 'Export recovery bytes below. They remain untouched in the browser.'}`;
+  } finally { recoveryStore?.close(); updateControls(); }
+}
+
+async function loadServerHistory(before: string | null = null): Promise<void> {
+  if (!repo || historyLoading) return;
+  const projectId = repo.projectId;
+  const epoch = ++historyEpoch;
+  historyLoading = true;
+  ui['server-history-status'].textContent = 'Reading accepted server history…';
+  updateControls();
+  try {
+    const page = await projects.history(projectId, before);
+    if (repo?.projectId !== projectId || epoch !== historyEpoch) return;
+    historyPage = page; historyProjectId = projectId;
+    ui['server-history-list'].replaceChildren(...page.entries.map(entry => {
+      const row = element('li', undefined, 'server-history-entry');
+      row.append(element('strong', `${entry.origin === 'accepted' ? 'Accepted change' : entry.origin === 'imported' ? 'Imported history' : 'Project created'} · ${entry.revisionId.slice(0, 10)}`),
+        element('p', `Store recorded: ${new Date(entry.recordedAt).toLocaleString()}${entry.origin === 'imported' ? ' · original acceptance time is not asserted' : ''}`),
+        element('p', `Revision: ${entry.revisionId} · Parent: ${entry.parentRevisionId ?? 'none (original)'}`),
+        element('p', `Changed entities: ${entry.changedEntityIds.join(', ') || 'none'}`),
+        element('p', `Changed relationships: ${entry.changedRelationshipIds.join(', ') || 'none'}`),
+        element('p', `Request: ${entry.requestId ?? 'none'} · Decision: ${entry.decisionId ?? 'none'}`));
+      return row;
+    }));
+    ui['server-history-status'].textContent = `${page.entries.length} accepted ancestry entries · ${page.nextCursor ? 'older entries available' : 'end of history'}. Times are when this store recorded each entry.`;
+  } catch (error) {
+    if (repo?.projectId !== projectId || epoch !== historyEpoch) return;
+    ui['server-history-status'].textContent = `History unavailable · ${error instanceof Error ? error.message : 'retry'}. Previously displayed entries have not been refreshed.`;
+    if (error instanceof ProjectServerError) serverConnection(false, error.message);
+  } finally { if (epoch === historyEpoch) { historyLoading = false; updateControls(); } }
+}
 ui['view-original'].addEventListener('click', () => openDialog(ui['original-dialog']));
 ui['view-changes'].addEventListener('click', () => {
   changesTab = '3d'; openDialog(ui['changes-dialog']); renderComparison();
@@ -906,7 +1045,7 @@ for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventL
   showPage('backlog'); void refreshBacklog();
 });
 ui['nav-review'].addEventListener('click', () => showPage('review'));
-ui['nav-history'].addEventListener('click', () => showPage('history'));
+ui['nav-history'].addEventListener('click', () => { showPage('history'); void loadServerHistory(); });
 function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
   if (gesture) endGesture(true);
@@ -1047,7 +1186,7 @@ function parseProposalResponse(value: unknown): ProposalResponse {
 ui['proposal-form'].addEventListener('submit', (event) => {
   event.preventDefault();
   void perform(async () => {
-    writableStore();
+    if (!serverAvailable) throw new Error('Reconnect to the project server before submitting.');
     if (!repo || !preview || invalidInput) throw new Error('Open a project and fix the request input first.');
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
@@ -1113,13 +1252,25 @@ async function refreshBacklog(): Promise<void> {
     const value = await proposalJson(await fetch(`/api/projects/${encodeURIComponent(projectId)}/change-requests`));
     if (!isRecord(value) || !Array.isArray(value.tickets) || (value.project !== null && typeof value.project !== 'string')) throw new Error('Invalid project backlog.');
     const items = value.tickets.map(parseBacklogItem);
+    if (items.some(item => item.projectId !== projectId)) throw new Error('Backlog contains a different project.');
+    const accepted = typeof value.project === 'string' && value.project !== serverProjectText ? await RoomRepository.restore(value.project) : null;
     if (repo?.projectId !== projectId) return;
+    if (accepted && (accepted.projectId !== projectId || accepted.root() !== repo.root())) throw new Error('Accepted backlog model identity mismatch.');
     const changed = JSON.stringify(items) !== JSON.stringify(backlogItems);
     backlogItems = items; serverProjectText = value.project;
+    if (accepted) serverHeadRevisionId = accepted.head('main');
+    serverConnection(true, serverHeadRevisionId !== repo.head('main')
+      ? 'Server has a newer accepted model · open current model from Backlog · request sketch is unsaved'
+      : `Server saved · displayed accepted ${repo.head('main').slice(0, 10)} · request sketches are unsaved`);
     ui['backlog-connection'].textContent = 'Synced with server · work continues when this page is closed';
-    if (changed) { renderBacklog(); updateControls(); }
+    if (changed) renderBacklog();
+    updateControls();
   } catch (error) {
     ui['backlog-connection'].textContent = `Backlog offline · ${error instanceof Error ? error.message : 'retrying'} · server work is independent of this page`;
+    if (repo?.projectId === projectId) {
+      serverConnection(false, 'Server status unavailable · displayed model is the last accepted state read · no offline acceptance');
+      updateControls();
+    }
   } finally { backlogRefreshing = false; }
 }
 function requestLabel(name: string): string {
@@ -1294,8 +1445,9 @@ async function decideTicket(id: string, action: string, activityVersion: string 
   }));
   if (!isRecord(value) || typeof value.project !== 'string') throw new Error('Missing accepted server project.');
   if (action === 'accept') {
-    const next = await RoomRepository.restore(value.project);
-    await persist(next); activeReview = next.review(backlogItems.find((item) => item.id === id)?.request.proposalName ?? '');
+    if (!repo) throw new Error('Open the accepted project again to view the saved decision.');
+    const next = await projects.read(repo.projectId);
+    displayAccepted(next); activeReview = next.review(backlogItems.find((item) => item.id === id)?.request.proposalName ?? '');
     renderReview(); showPage('backlog'); status('Proposal accepted. The server model and decision were saved together.');
   } else { showPage('backlog'); status(`Request ${action === 'retry' ? 'queued for another attempt' : action === 'reject' ? 'rejected' : 'cancelled'}.`); }
   await refreshBacklog();
@@ -1304,7 +1456,8 @@ async function reviseTicket(item: BacklogItem): Promise<void> {
   if (!await discardRequest('Revise this ticket and discard the unsent request?')) return;
   await refreshBacklog();
   if (!serverProjectText) throw new Error('Refresh the server model before revising.');
-  const next = await RoomRepository.restore(serverProjectText);
+  if (!repo) throw new Error('Open a server project before revising.');
+  const next = await projects.read(repo.projectId);
   const detail = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
   if (!isRecord(detail) || !isRecord(detail.ticket) || !isRecord(detail.ticket.request)) throw new Error('Missing original request context.');
   const originalRequest = detail.ticket.request;
@@ -1314,7 +1467,7 @@ async function reviseTicket(item: BacklogItem): Promise<void> {
   const snapshot = next.view(next.head('main')).snapshot;
   const visual = parseVisualRequest(snapshot, originalRequest.visualIntent);
   const context = requestContext(snapshot, originalRequest.selectedObjectIds, visual);
-  await persist(next);
+  displayAccepted(next);
   activeReview = null; revisionTicketId = item.id;
   sourcePicker.restore(next.projectId, originalSources.sources ?? []);
   ui['request-reconstruct'].checked = Boolean(originalSources.authoringScope);
@@ -1334,7 +1487,8 @@ ui['open-current-model'].addEventListener('click', () => {
     await refreshBacklog();
     if (!serverProjectText) { await beginRequest(); return; }
     if (!await discardRequest('Open the server model and discard the unsent request?')) return;
-    await persist(await RoomRepository.restore(serverProjectText));
+    if (!repo) return;
+    displayAccepted(await projects.read(repo.projectId));
     clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
     activeReview = null; revisionTicketId = null; render(); showPage('request');
     status('Opened the current accepted server model.');
@@ -1408,17 +1562,18 @@ ui['recover-save'].addEventListener('click', () => {
   catch (error) { report(error, 'Recovery download failed: '); }
 });
 
-ui['import-project'].addEventListener('click', () => {
-  if (busy || !store || writesBlocked) return;
+function chooseProjectImport(): void {
+  if (busy || !serverAvailable) return;
   ui['import-file'].value = '';
   ui['import-file'].click();
-});
+}
+ui['import-project'].addEventListener('click', chooseProjectImport);
+ui['import-server-project'].addEventListener('click', chooseProjectImport);
 
 ui['import-file'].addEventListener('change', () => {
   const file = ui['import-file'].files?.[0];
   if (!file) return;
   void perform(async () => {
-    writableStore();
     if (file.size > MAX_PROJECT_BYTES) throw new Error('Import is too large. Choose a demo JSON file of at most 256 KiB.');
     status('Validating the imported project…');
     const text = await file.text();
@@ -1427,13 +1582,13 @@ ui['import-file'].addEventListener('change', () => {
     if (!confirmReplacement()) { status('Import cancelled. Your current project is unchanged.'); return; }
     activeReview = null;
     await recognizeHousePilot(next);
-    await persist(next);
-    ui['project-name'].value = next.name;
-    activeReview = next.reviewAt(selectedRevision)?.review ?? null;
+    displayAccepted(await projects.register(next));
+    await refreshProjectChoices();
+    activeReview = repo?.reviewAt(selectedRevision)?.review ?? null;
     renderReview();
     closeDialog(ui['start-dialog']);
     showPage('project');
-    status('Imported project validated and saved locally. Its original room is preserved.');
+    status('Import registered on the server. An existing accepted server head always wins; original browser/import bytes are unchanged.');
   });
 });
 
@@ -1803,7 +1958,7 @@ function referencePoint(reference: SpatialReference, snapshot: ModelGraph): Poin
 }
 function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (point: Point) => Point): void {
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
-  if (!selected || writesBlocked || busy) return;
+  if (!selected || !serverAvailable || busy) return;
   const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
   const centre = project(objectAnchor(selected, snapshot));
   if (visualDraft) {
@@ -1854,7 +2009,7 @@ function endVisualGesture(cancel: boolean): void {
 
 ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
   if (event.target instanceof Element && event.target.closest('[data-visual-handle]')) {
-    if (!repo || busy || gesture || visualGesture || writesBlocked || event.button !== 0 || !event.isPrimary) return;
+    if (!repo || busy || gesture || visualGesture || !serverAvailable || event.button !== 0 || !event.isPrimary) return;
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
     if (!root || !preview) return;
     event.preventDefault();
@@ -1874,7 +2029,7 @@ ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
     if (objectId) chooseObject(objectId);
     return;
   }
-  if (writesBlocked || !layout || !preview) return;
+  if (!serverAvailable || !layout || !preview) return;
   if (operation !== 'wall' && operation !== 'door-move' && operation !== 'door-width') return;
   if (invalidInput) { feedback('Fix or discard the invalid input before dragging.', true); return; }
   event.preventDefault();
@@ -2035,8 +2190,9 @@ function renderProperties(original: ModelSnapshot, selected: ModelSnapshot, delt
 
 async function selectRevision(branch: string, revisionId: string): Promise<void> {
   if (busy || gesture || !repo) return;
-  const project = requireRepository();
+  const project = repo;
   if (!await discardRequest('View this saved revision and discard the unsent request?')) return;
+  reviewRepository = null;
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; revisionTicketId = null;
   selectedBranch = branch;
   selectedRevision = revisionId;
@@ -2062,7 +2218,8 @@ function requireRepository(): RoomRepository {
 }
 
 function renderHistory(): void {
-  const project = requireRepository();
+  if (!repo) return;
+  const project = repo;
   const branches = project.branches();
   ui['branch-count'].textContent = `${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}`;
   ui['history-list'].replaceChildren(...branches.map((branch) => {
@@ -2187,14 +2344,14 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
     modelViewer ??= new ModelViewer({
       select: chooseObject,
       reference: (destination) => {
-        if (busy || writesBlocked || currentPage !== 'request') return;
+        if (busy || !serverAvailable || currentPage !== 'request') return;
         stageVisualReference(destination); renderComparison(); updateControls();
         feedback('Location marked. Describe what to create, move or copy here; no model objects have moved.');
       },
       keyboardReference: () => ui['visual-wall'].focus(),
     });
     modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
-      interactive: !comparison && currentPage === 'request' && !busy && !writesBlocked, reference: currentPage === 'request' ? visualDraft : null });
+      interactive: !comparison && currentPage === 'request' && !busy && serverAvailable, reference: currentPage === 'request' ? visualDraft : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
@@ -2367,42 +2524,23 @@ function render(): void {
 async function initialize() {
   let needsStart = false;
   renderAuth();
-  try {
-    authSession = await authRequest('/api/auth/session');
-    renderAuth();
-    if (authSession.status === 'pending') scheduleAuthPoll();
-  } catch (error) {
+  void authRequest('/api/auth/session').then(session => {
+    authSession = session; renderAuth(); if (session.status === 'pending') scheduleAuthPoll();
+  }).catch((error: unknown) => {
     ui['auth-error'].textContent = error instanceof Error ? error.message : 'ChatGPT connection status is unavailable.';
     ui['auth-error'].hidden = false;
-  }
+  });
+  void readLegacyRecovery();
   try {
-    store = await RoomStore.open();
-    const record = await store.load();
-    generation = record.generation;
-    if (record.text === null) { needsStart = true; status('Ready. Create a project or load the sample. Changes are saved only in this browser.'); return; }
-    let restored;
-    try { restored = await RoomRepository.restore(record.text); }
-    catch (error) {
-      writesBlocked = true;
-      showRecovery(record.text);
-      const message = error instanceof Error ? error.message : 'The saved data is invalid.';
-      throw new Error(`The saved project could not be validated: ${message} It has been left intact. Download it below; local writes are blocked to protect it.`);
-    }
-    await recognizeHousePilot(restored);
-    repo = restored;
-    savedText = record.text;
-    selectedBranch = 'main';
-    selectedRevision = repo.head('main');
-    sourcePicker.setProject(restored.projectId);
-    activeReview = repo.reviewAt(selectedRevision)?.review ?? null;
-    resetEditor();
-    ui['project-name'].value = repo.name;
-    render();
-    showPage('project');
-    status('Saved project restored. Open the reference room to continue from its current revision.');
+    await refreshProjectChoices();
+    let remembered: string | null = null;
+    try { remembered = localStorage.getItem(LAST_PROJECT); } catch { /* Optional selection memory. */ }
+    const projectId = remembered ?? projectChoices[0]?.projectId;
+    if (projectId) await openServerProject(projectId);
+    else { needsStart = true; status('Ready. Create or import a project to save it on this server.'); }
   } catch (error) {
-    writesBlocked = true;
-    status('Local storage is not ready. No saved data has been changed.');
+    needsStart = true;
+    status('Server project unavailable. Reconnect and retry. Browser recovery bytes remain untouched.');
     report(error);
   } finally {
     busy = false;
