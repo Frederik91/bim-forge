@@ -12,12 +12,12 @@
   <body>
     <a class="skip-link" href="#workbench">Skip to workbench</a>
     <header class="app-header">
-      <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Model workspace</small></span></a>
+      <a class="brand" href="./" aria-label="BIM Forge model workspace"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Model workspace</small></span></a>
       <div class="project-identity"><span class="workspace-label">SERVER PROJECT</span><strong id="project-title">No project open</strong><small id="server-save-status" role="status" aria-live="polite">Connecting to project server…</small></div>
       <div class="header-actions">
         <button id="open-backlog" class="button quiet" type="button" disabled>Change requests</button>
         <button id="project-overview" class="button quiet" type="button" disabled>Overview</button>
-        <button id="auth-menu" class="button connection-button" type="button"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
+        <button id="auth-menu" class="button connection-button" type="button" aria-label="ChatGPT connection settings"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
         <details class="workspace-file-menu"><summary>Project tools <span aria-hidden="true">⌄</span></summary><div>
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
         <button id="export-project" class="button quiet" type="button" disabled>Export</button>
@@ -39,7 +39,7 @@
         <i aria-hidden="true"></i>
         <button id="nav-history" type="button" aria-pressed="false" disabled><span>4</span><b>History</b><small>Trace every outcome</small></button>
       </nav>
-        <button id="workspace-context-toggle" class="button quiet" type="button" aria-controls="workspace-context" aria-expanded="true"><span aria-hidden="true">◧</span> <span id="workspace-context-toggle-label">Request</span></button>
+        <button id="workspace-context-toggle" class="button quiet" type="button" aria-label="Toggle context panel" aria-controls="workspace-context" aria-expanded="true"><span aria-hidden="true">◧</span> <span id="workspace-context-toggle-label">Request</span></button>
       </div>
       <div id="workspace-shell" class="workspace-shell" data-navigation-open="true" data-context-open="true">
         <aside id="workspace-navigation" class="workspace-navigation" aria-labelledby="workspace-navigation-heading">

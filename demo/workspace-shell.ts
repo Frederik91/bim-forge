@@ -13,6 +13,7 @@ export class WorkspaceShell {
   private readonly contextToggle: HTMLButtonElement;
   private readonly heading: HTMLElement;
   private readonly toggleLabel: HTMLElement;
+  private readonly content: HTMLElement;
   private readonly phone = window.matchMedia('(max-width: 900px)');
 
   constructor() {
@@ -33,6 +34,16 @@ export class WorkspaceShell {
     this.contextToggle = button('workspace-context-toggle');
     this.heading = required('workspace-context-heading');
     this.toggleLabel = required('workspace-context-toggle-label');
+    this.content = required('workspace-context-content');
+    const fileMenu = document.querySelector('.workspace-file-menu');
+    if (fileMenu instanceof HTMLDetailsElement) {
+      fileMenu.addEventListener('click', event => {
+        if (event.target instanceof Element && event.target.closest('button')) fileMenu.open = false;
+      });
+      fileMenu.addEventListener('keydown', event => {
+        if (event.key === 'Escape') fileMenu.open = false;
+      });
+    }
     this.navigationToggle.addEventListener('click', () => this.setPanel('navigation', this.navigation.hidden === true));
     this.contextToggle.addEventListener('click', () => this.setPanel('context', this.context.hidden === true));
     button('workspace-navigation-close').addEventListener('click', () => this.close('navigation'));
@@ -52,6 +63,7 @@ export class WorkspaceShell {
   }
 
   showContext(page: WorkspaceContext): void {
+    if (this.shell.dataset.context !== page) this.content.scrollTop = 0;
     this.heading.textContent = contextLabels[page];
     this.toggleLabel.textContent = page === 'request' ? 'Request' : contextLabels[page];
     this.shell.dataset.context = page;
