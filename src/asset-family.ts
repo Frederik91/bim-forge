@@ -1,8 +1,10 @@
 import { Type } from 'typebox';
 import type { Static } from 'typebox';
 import { Check } from 'typebox/value';
-import { identifier } from './room-model.ts';
-import type { Bounds, EntityId, ModelGraph, Point } from './room-model.ts';
+import { ModelParametersSchema } from './model-scope-contract.ts';
+import { parseCustomModelParameters, retainModelParameters } from './model-parameters.ts';
+import { identifier, validateSnapshot } from './room-model.ts';
+import type { Bounds, EntityId, ModelGraph, ModelSnapshot, Point } from './room-model.ts';
 
 const id = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -11,10 +13,10 @@ const vector = Type.Array(normalized, { minItems: 3, maxItems: 3 });
 const part = Type.Object({ id, kind: Type.Union([Type.Literal('box'), Type.Literal('ellipsoid'), Type.Literal('cylinder')], { title: 'AssetPrimitiveKind' }),
   min: vector, size: vector, color: Type.String({ pattern: '^#[0-9a-f]{6}$' }),
 }, { additionalProperties: false, title: 'AssetPart' });
-export const AssetFamilySchema = Type.Object({ id, type: Type.Literal('AssetFamily'), name,
+export const AssetFamilySchema = Type.Object({ id, type: Type.Literal('AssetFamily'), name, parameters: Type.Optional(ModelParametersSchema),
   description: Type.String({ minLength: 1, maxLength: 600 }), parts: Type.Array(part, { minItems: 1, maxItems: 16 }),
 }, { additionalProperties: false, title: 'AssetFamily' });
-export const AssetInstanceSchema = Type.Object({ id, type: Type.Literal('AssetInstance'), name, familyId: id,
+export const AssetInstanceSchema = Type.Object({ id, type: Type.Literal('AssetInstance'), name, familyId: id, parameters: Type.Optional(ModelParametersSchema),
   position: Type.Array(Type.Number({ minimum: -1000, maximum: 1000 }), { minItems: 2, maxItems: 2 }),
   rotationDeg: Type.Union([Type.Literal(0), Type.Literal(90), Type.Literal(180), Type.Literal(270)], { title: 'AssetRotation' }),
   size: Type.Object({ width: Type.Number({ minimum: .05, maximum: 5 }), depth: Type.Number({ minimum: .05, maximum: 5 }),
@@ -85,14 +87,14 @@ export function parseAssetFamily(input: unknown): AssetFamily {
       throw new Error('Positive family primitives must stay inside and attain all six unit-box extrema.');
     }
   }
-  return { ...value, id: identifier(value.id), name: readable(value.name), description: readable(value.description), parts };
+  return { ...value, ...(value.parameters === undefined ? {} : { parameters: parseCustomModelParameters(value.parameters) }), id: identifier(value.id), name: readable(value.name), description: readable(value.description), parts };
 }
 export function parseAssetInstance(input: unknown): AssetInstance {
   const value = plain(input);
   if (!Check(AssetInstanceSchema, value)) throw new Error('Asset instance requires exact fields, a bound placement and bounded dimensions.');
   const [x, y] = value.position;
   if (x === undefined || y === undefined) throw new Error('Asset position requires two coordinates.');
-  return { ...value, id: identifier(value.id), name: readable(value.name), familyId: identifier(value.familyId), position: [millimetres(x), millimetres(y)],
+  return { ...value, ...(value.parameters === undefined ? {} : { parameters: parseCustomModelParameters(value.parameters) }), id: identifier(value.id), name: readable(value.name), familyId: identifier(value.familyId), position: [millimetres(x), millimetres(y)],
     size: { width: millimetres(value.size.width), depth: millimetres(value.size.depth), height: millimetres(value.size.height) },
     placement: value.placement.kind === 'single-room' ? { kind: 'single-room' } : { kind: 'room', roomId: identifier(value.placement.roomId) } };
 }
@@ -161,4 +163,22 @@ export function assetGeometry(graph: ModelGraph, instance: AssetInstance): Asset
   }
   const footprint = assetFootprint(graph, instance);
   return { faces, bounds: { ...footprint, minZ: 0, maxZ: instance.size.height }, footprint, dimensions: { ...instance.size }, family };
+}
+
+/** Register a fresh immutable recipe and rebind only explicitly selected occurrences. */
+export function previewAssetFamilyVariant({ snapshot, familyId, variant, targetIds }: {
+  snapshot: ModelSnapshot; familyId: string; variant: unknown; targetIds: readonly string[];
+}): ModelSnapshot {
+  const base = validateSnapshot(snapshot);
+  const original = base.entities.find((item) => item.id === familyId && item.type === 'AssetFamily');
+  if (!original) throw new Error('Choose an existing immutable family.');
+  const definition = retainModelParameters(original, parseAssetFamily(variant));
+  if (base.entities.some((item) => item.id === definition.id)) throw new Error('A subset variant requires a new family identity.');
+  const targets = new Set(targetIds.map(identifier));
+  if (!targets.size || targets.size !== targetIds.length || targets.size > 32
+      || [...targets].some((id) => !base.entities.some((item) => item.id === id && item.type === 'AssetInstance' && item.familyId === familyId))) {
+    throw new Error('Subset variants require unique occurrences of the original family.');
+  }
+  return validateSnapshot({ ...base, entities: [...base.entities.map((item) => item.type === 'AssetInstance' && targets.has(item.id)
+    ? { ...item, familyId: definition.id } : item), definition] });
 }
