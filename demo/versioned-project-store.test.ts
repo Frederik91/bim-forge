@@ -232,3 +232,28 @@ test('a hash-valid but broken hosting graph is refused before read returns', asy
   db.prepare('INSERT INTO versioned_documents(project_id, id, manifest) VALUES (?, ?, ?)').run(root.projectId, documentId, metadata);
   assert.throws(() => store.read({ projectId: root.projectId, documentId }), /Hosting references/);
 });
+
+test('oversize typed persistence is refused before writes and preserves the accepted head', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); const current = initial(store, root); const state = root.persistence();
+  const before = [count(db, 'bodies'), count(db, 'revisions'), count(db, 'documents'), count(db, 'publications')];
+  // Simulate a typed future repository mutator that omits a whole-document bound.
+  const oversized = Object.freeze({ ...state, name: '界'.repeat(90_000) });
+  assert.ok(Buffer.byteLength(canonical(oversized)) > 256 * 1024);
+  const persistence = t.mock.method(root, 'persistence', () => oversized);
+  db.exec("CREATE TRIGGER no_body_write BEFORE INSERT ON versioned_bodies BEGIN SELECT RAISE(ABORT, 'unexpected write'); END;");
+  assert.throws(() => store.put(root), /256 KiB/);
+  persistence.mock.restore();
+  assert.deepEqual(store.current(root.projectId), current); assert.equal(store.read(current), root.serialize());
+  assert.deepEqual([count(db, 'bodies'), count(db, 'revisions'), count(db, 'documents'), count(db, 'publications')], before);
+});
+
+test('oversize state arrays are refused before writes without raising portable limits', async (t) => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const root = await RoomRepository.create(); const current = initial(store, root); const state = root.persistence();
+  const revisions = Array.from({ length: 101 }, () => state.revisions[0]);
+  const persistence = t.mock.method(root, 'persistence', () => Object.freeze({ ...state, revisions }));
+  assert.throws(() => store.put(root), /bounded collection/); persistence.mock.restore();
+  assert.deepEqual(store.current(root.projectId), current); assert.equal(count(db, 'revisions'), 1);
+  assert.equal(count(db, 'documents'), 1); assert.equal(store.read(current), root.serialize());
+});
