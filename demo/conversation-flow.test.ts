@@ -6,6 +6,7 @@ import { modelScopeFixture } from '../src/model-scope-fixture.ts';
 import { parseRequestConversation } from '../src/request-conversation.ts';
 import { conversationWorker } from './fixtures/conversation-agent.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
+import type { RequestSource } from '../src/request-sources.ts';
 
 async function settled(queue: ChangeRequests, id: string): Promise<void> {
   for (let index = 0; index < 6000; index++) {
@@ -54,4 +55,25 @@ test('a clarification reply keeps document and snapshot evidence on one scoped t
   await queue.decide('desk-chat', { action: 'accept', decisionId: 'desk-review', expectedRequestId: ready.request.requestId });
   assert.equal(queue.get('desk-chat').state, 'completed');
   assert.equal(queue.get('desk-chat').conversation?.messages.at(-1)?.kind, 'decision');
+});
+
+test('later evidence cannot replace earlier files or silently overflow the aggregate source limit', async t => {
+  const queue = await ChangeRequests.open(':memory:', () => null); t.after(() => queue.close());
+  const repo = await RoomRepository.create(); const baseRevisionId = repo.head('main');
+  await queue.submit(repo.serialize(), { requestId: 'files-chat', baseRevisionId, selectedObjectIds: ['door-entry'],
+    instruction: 'Retain every attached requirement.', visualIntent: { kind: 'selection' } });
+  const sources: RequestSource[] = [];
+  for (let index = 1; index <= 5; index++) sources.push(await queue.addSource({ projectId: repo.projectId,
+    id: `18100000-0000-4000-8000-${String(index).padStart(12, '0')}`, name: `notes-${index}.md`, mediaType: 'text/markdown',
+    bytes: Buffer.from(`Requirement ${index}.`), signal: new AbortController().signal }));
+  await queue.appendMessage('files-chat', { messageId: 'four-files', expectedSequence: 1, baseRevisionId,
+    text: 'Keep these four requirements.', sources: sources.slice(0, 4), visual: null });
+  const fifth = sources[4]; const first = sources[0]; assert.ok(fifth && first);
+  const next = { messageId: 'fifth-file', expectedSequence: queue.get('files-chat').conversation?.sequence ?? 0,
+    baseRevisionId, text: 'One more file.', sources: [fifth], visual: null };
+  await assert.rejects(() => queue.appendMessage('files-chat', next), /four|source/i);
+  await assert.rejects(() => queue.appendMessage('files-chat', { ...next, messageId: 'replacement-file',
+    sources: [{ ...first, sha256: 'f'.repeat(64) }] }), /replaced/i);
+  assert.equal(queue.get('files-chat').conversation?.sequence, next.expectedSequence);
+  assert.deepEqual(queue.get('files-chat').request.sources, sources.slice(0, 4));
 });
