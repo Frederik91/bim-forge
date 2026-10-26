@@ -667,7 +667,8 @@ export class ChangeRequests {
     this.#assertOpen();
     const readiness = proposalReadiness(current, proposed, ticket.request.proposalName);
     if (readiness.state === 'needs-input') throw new BacklogConflict(readiness.error);
-    const accepted = await current.acceptFrom(proposed, ticket.request.proposalName, { decisionId, actor: 'preview-human' });
+    const candidate = await current.acceptFrom(proposed, ticket.request.proposalName, { decisionId, actor: 'preview-human' });
+    const accepted = await RoomRepository.restore(candidate.serialize());
     const acceptedText = accepted.serialize();
     const next: Ticket = recordActivity({ ...ticket, state: 'completed', decisionId, decisionAction: action }, { stage: 'completed', message: 'Proposal explicitly accepted and saved as the current model.' });
     const assessments = await Promise.all(this.#all(ticket.projectId).filter((other) => other.id !== ticket.id
