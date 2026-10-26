@@ -57,7 +57,7 @@ export class RequestChat {
       const header = node('header'); header.append(node('h3', this.#title), node('span', this.#state, 'pill'), control('New request', this.#actions.close)); root.append(header);
       const transcript = node('ol', undefined, 'request-chat-transcript'); transcript.id = 'request-chat-transcript';
       for (const message of this.#conversation.messages) transcript.append(this.#message(message));
-      root.append(transcript, node('p', `${this.#conversation.messages.filter(message => message.kind === 'user').length}/${CONVERSATION_LIMITS.userTurns} messages sent · Every reply continues this request. Proposals need an explicit review decision.`, 'editor-help'));
+      root.append(transcript, node('p', `${this.#conversation.messages.filter(message => message.kind === 'user').length}/${CONVERSATION_LIMITS.userTurns} messages sent · Up to ${CONVERSATION_LIMITS.sourceFiles} source files and 12 MiB across this conversation. Every reply continues this request. Proposals need an explicit review decision.`, 'editor-help'));
     } else root.append(node('p', 'Start a request, then continue the conversation here.', 'editor-help'));
     const attachments = node('div', undefined, 'request-chat-attachments');
     attachments.append(control('Attach current selection / marker', this.#actions.attach));

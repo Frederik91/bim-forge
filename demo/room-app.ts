@@ -283,6 +283,7 @@ let chatTicketId: string | null = null;
 let chatVisual: ConversationVisual | null = null;
 let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
 let chatRefreshing = false;
+let inspectedChatSnapshot: ConversationVisual['snapshot'] | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = '3d';
@@ -868,6 +869,7 @@ function displayAccepted(next: RoomRepository): void {
   ui['server-history-list'].replaceChildren();
   ui['server-history-status'].textContent = 'Open History to read the accepted server ancestry.';
   repo = next;
+  inspectedChatSnapshot = null;
   reviewRepository = null;
   activeReview = null;
   activeTicketId = null;
@@ -1250,13 +1252,14 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (!isRecord(acknowledgement)) throw new Error('Invalid request acknowledgement.');
     const submittedTicket = parseBacklogItem(acknowledgement.ticket);
     const submittedName = submittedTicket.request.proposalName;
+    chatTicketId = submittedTicket.id;
     submission = null; revisionTicketId = null;
     clearRequestSources();
     chatVisual = null; requestChat.setVisual(null);
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
     resetEditor(); renderComparison();
     await refreshBacklog();
-    showChatTicket(acknowledgement.ticket);
+    await refreshConversation();
     status(`“${requestLabel(submittedName)}” started. Continue this conversation below while the agent works.`);
     showRequestPane('details');
   });
@@ -1270,11 +1273,12 @@ async function proposalJson(response: Response): Promise<unknown> {
 }
 
 function closeChat(): void {
-  chatTicketId = null; chatVisual = null; chatReply = null; requestChat.close();
+  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatSnapshot = null; requestChat.close();
 }
 
 function displayedChatSnapshot(): ConversationVisual['snapshot'] {
   if (!repo) throw new Error('Open a project before attaching model evidence.');
+  if (inspectedChatSnapshot?.revisionId === selectedRevision) return inspectedChatSnapshot;
   if (reviewRepository && activeReview?.proposalRevisionId === selectedRevision) return {
     kind: 'proposal', revisionId: selectedRevision, proposalName: activeReview.proposalName,
   };
@@ -1386,6 +1390,7 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
   const graph = model.view(visual.snapshot.revisionId).snapshot;
   if (visual.selectedObjectIds.some(id => !graph.entities.some(item => item.id === id))) throw new Error('The stored selection is absent from its bound snapshot.');
   reviewRepository = model; selectedRevision = visual.snapshot.revisionId;
+  inspectedChatSnapshot = visual.snapshot;
   selectedBranch = visual.snapshot.kind === 'proposal' ? visual.snapshot.proposalName : 'main';
   activeLevelId = visual.levelId; focusedRoomId = null; modelView = visual.view === '2d' ? 'plan' : '3d';
   selectedObject = visual.selectedObjectIds[0] ?? selectedObject; resetEditor();
@@ -1612,8 +1617,9 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   clearRequestSources(); ui['request-text'].value = '';
   reviewRepository = proposed; activeTicketId = id; activeReview = { ...parseSourceContext(ticket.request), ...result.review };
   reviewDelta = result.status === 'ready'; modelView = '3d';
-  if (ticket.state === 'completed') activeReview.decision = { status: 'accepted' };
-  if (ticket.state === 'rejected') activeReview.decision = { status: 'superseded' };
+  if (ticket.state === 'completed' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'accepted' };
+  if (ticket.state === 'rejected' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'superseded' };
+  inspectedChatSnapshot = null;
   selectedBranch = result.status === 'ready' ? result.review.proposalName : 'main';
   selectedRevision = proposed.head(selectedBranch);
   const context = requestContext(proposed.view(selectedRevision).snapshot, result.review.selectedObjectIds);
@@ -1647,38 +1653,6 @@ async function decideTicket(id: string, action: string, activityVersion: string 
     renderReview(); showPage('backlog'); status('Proposal accepted. The server model and decision were saved together.');
   } else { showPage('backlog'); status(`Request ${action === 'retry' ? 'queued for another attempt' : action === 'reject' ? 'rejected' : 'cancelled'}.`); }
   await refreshBacklog();
-}
-async function reviseTicket(item: BacklogItem): Promise<void> {
-  if (!await discardRequest('Revise this ticket and discard the unsent request?')) return;
-  await refreshBacklog();
-  if (!serverProjectText) throw new Error('Refresh the server model before revising.');
-  if (!repo) throw new Error('Open a server project before revising.');
-  const next = await projects.read(repo.projectId);
-  const detail = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
-  if (!isRecord(detail) || !isRecord(detail.ticket) || !isRecord(detail.ticket.request)) throw new Error('Missing original request context.');
-  const originalRequest = detail.ticket.request;
-  const originalSources = parseSourceContext(originalRequest);
-  const originalScope = requestScopeContext(originalRequest).scope;
-  if (parseBacklogItem(detail.ticket).projectId !== next.projectId) throw new Error('Request project mismatch.');
-  if (!Array.isArray(originalRequest.selectedObjectIds) || !originalRequest.selectedObjectIds.every(id => typeof id === 'string')) throw new Error('Invalid original request selection.');
-  const snapshot = next.view(next.head('main')).snapshot;
-  const visual = parseVisualRequest(snapshot, originalRequest.visualIntent);
-  const context = requestContext(snapshot, originalRequest.selectedObjectIds, visual);
-  displayAccepted(next);
-  activeReview = null; revisionTicketId = item.id;
-  sourcePicker.restore(next.projectId, originalSources.sources ?? []);
-  ui['request-reconstruct'].checked = Boolean(originalSources.authoringScope);
-  ui['reconstruction-scope'].value = originalSources.authoringScope ?? 'floor-plan-reconstruction';
-  activeLevelId = context.levelId; focusedRoomId = context.roomId;
-  selectedObject = context.selectedId ?? selectedObject;
-  if (snapshot.version === 2 && !context.levelId) modelView = '3d';
-  resetEditor();
-  if (visual.kind === 'spatial-reference') visualDraft = visual.destination;
-  if (originalScope) scopeBuilder.restore(originalScope);
-  ui['request-text'].value = item.request.instruction;
-  ui['proposal-name'].value = '';
-  render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
-  status('Revise this ticket against the current accepted model. Earlier attempts and proposals remain on the ticket.');
 }
 ui['open-current-model'].addEventListener('click', () => {
   void perform(async () => {
