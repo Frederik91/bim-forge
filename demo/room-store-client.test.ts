@@ -10,6 +10,22 @@ function choice(project: RoomRepository) {
   return { projectId: project.projectId, name: project.name, headRevisionId: project.head('main'), recordedAt: 1234 };
 }
 
+test('default client fetch preserves the browser global receiver', async t => {
+  const receivers: unknown[] = [];
+  const paths: string[] = [];
+  t.mock.method(globalThis, 'fetch', async function (this: unknown, ...args: Parameters<typeof fetch>) {
+    receivers.push(this);
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    paths.push(String(args[0]));
+    assert.equal(args[1]?.cache, 'no-store');
+    return json({ projects: [] });
+  });
+  assert.deepEqual(await new ProjectClient().list(), []);
+  assert.deepEqual(paths, ['/api/projects']);
+  assert.equal(receivers.length, 1);
+  assert.equal(receivers[0], globalThis);
+});
+
 test('startup falls back from a missing remembered server project to an available listed project', async () => {
   const available = await RoomRepository.create('Available server project');
   const choices = [choice(available)];
