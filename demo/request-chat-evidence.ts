@@ -3,8 +3,37 @@ import type { ModelGraph } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 import type { ConversationVisual } from '../src/request-conversation.ts';
 import { parseConversationReply } from '../src/request-conversation.ts';
+import type { FrozenModelScope } from '../src/model-scope-contract.ts';
+import { entitySpace } from '../src/floor-plan.ts';
+import { requestContext } from './request-context.ts';
 
 type SnapshotBinding = ConversationVisual['snapshot'];
+
+/** Opening a conversation restores identities against the displayed model, not the last browsing selection. */
+export function conversationSelection(input: { graph: ModelGraph; selectedObjectIds: readonly string[];
+  visual?: ConversationVisual; scope?: FrozenModelScope }) {
+  const context = requestContext(input.graph, input.selectedObjectIds, undefined, input.scope);
+  const selected = input.graph.entities.find(entity => entity.id === context.selectedId);
+  return { ...context, roomId: context.roomId ?? (selected ? entitySpace(input.graph, selected)?.id ?? null : null),
+    view: input.visual?.view ?? null };
+}
+
+/** A retained marker is an inspection overlay, never an authored request draft. */
+export function conversationInspection(graph: ModelGraph, visual: ConversationVisual): {
+  kind: 'inspection'; snapshot: SnapshotBinding; reference: SpatialReference | null;
+  context: ReturnType<typeof conversationSelection>;
+} {
+  if (visual.selectedObjectIds.some(id => !graph.entities.some(entity => entity.id === id))) throw new Error('The stored selection is absent from its bound snapshot.');
+  const context = conversationSelection({ graph, selectedObjectIds: visual.selectedObjectIds, visual });
+  const levelId = visual.levelId ?? context.levelId;
+  if (levelId && !levels(graph).some(level => level.id === levelId)) throw new Error('The stored annotation level is absent from its bound snapshot.');
+  const pin = visual.annotations.find(annotation => annotation.kind === 'pin');
+  if (pin && graph.version === 2 && !levelId) throw new Error('The stored building pin has no bound storey.');
+  const reference: SpatialReference | null = pin ? levelId
+    ? { kind: 'floor-point', levelId, positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] }
+    : { kind: 'floor-point', positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] } : null;
+  return { kind: 'inspection', snapshot: structuredClone(visual.snapshot), reference, context: { ...context, levelId } };
+}
 
 /** A visual attachment names the exact displayed snapshot; it never grants write access. */
 export function captureConversationVisual(input: {

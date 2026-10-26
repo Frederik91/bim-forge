@@ -1,9 +1,33 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
-import { captureConversationVisual, requireCurrentVisual, visualLabel } from './request-chat-evidence.ts';
+import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
+import { modelScopeFixture } from '../src/model-scope-fixture.ts';
 
 const revisionId = 'a'.repeat(64);
+
+test('reopening a conversation restores its actual object, room and level instead of the prior browsing default', () => {
+  const graph = modelScopeFixture(); const before = JSON.stringify(graph);
+  const visual = captureConversationVisual({ graph, snapshot: { kind: 'accepted', revisionId }, view: '3d', levelId: 'level-ground',
+    selectedObjectIds: ['office-desk'], reference: null });
+  const context = conversationSelection({ graph, selectedObjectIds: ['office-desk'], visual });
+  assert.deepEqual(context, { selectedId: 'office-desk', roomId: 'room-office', levelId: 'level-ground', view: '3d' });
+  assert.equal(conversationSelection({ graph, selectedObjectIds: ['deleted-desk'], visual }).selectedId, null);
+  assert.equal(JSON.stringify(graph), before);
+});
+
+test('inspecting retained pins produces a distinct read-only overlay with its exact snapshot and no model mutation', () => {
+  const graph = multiStoreySnapshot(); const before = JSON.stringify(graph);
+  const visual = captureConversationVisual({ graph, snapshot: { kind: 'proposal', revisionId, proposalName: 'attic-change' }, view: '2d',
+    levelId: 'level-attic', selectedObjectIds: ['level-attic-plant'],
+    reference: { kind: 'floor-point', levelId: 'level-attic', positionMm: [3500, 3000] } });
+  const evidence = JSON.stringify(visual); const inspection = conversationInspection(graph, visual);
+  assert.equal(inspection.kind, 'inspection'); assert.deepEqual(inspection.snapshot, visual.snapshot);
+  assert.deepEqual(inspection.reference, { kind: 'floor-point', levelId: 'level-attic', positionMm: [3500, 3000] });
+  assert.equal(inspection.context.selectedId, 'level-attic-plant'); assert.equal(inspection.context.levelId, 'level-attic');
+  assert.equal(JSON.stringify(graph), before); assert.equal(JSON.stringify(visual), evidence);
+  assert.throws(() => conversationInspection(graph, { ...visual, selectedObjectIds: ['proposal-only-missing'] }), /absent/);
+});
 
 test('a 3D attic pin retains selected stable IDs, model coordinates and immutable proposal binding', () => {
   const graph = multiStoreySnapshot(); const before = JSON.stringify(graph);

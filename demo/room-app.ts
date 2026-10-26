@@ -5,7 +5,7 @@ import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
-import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint, identifier } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
 import { WorkspaceShell } from './workspace-shell.ts';
 import { requestContext } from './request-context.ts';
@@ -29,7 +29,7 @@ import type { RequestSourceContext } from './request-source-ui.ts';
 import { ModelScopeBuilder, renderScopeEvidence, requestScopeContext, reviewScopeContext } from './model-scope-client.ts';
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 import { RequestChat, conversationFromTicket } from './request-chat.ts';
-import { captureConversationVisual, requireCurrentVisual, visualLabel } from './request-chat-evidence.ts';
+import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
 import { parseConversationReply } from '../src/request-conversation.ts';
 import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
 
@@ -284,7 +284,7 @@ let chatTicketId: string | null = null;
 let chatVisual: ConversationVisual | null = null;
 let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
 let chatRefreshing = false;
-let inspectedChatSnapshot: ConversationVisual['snapshot'] | null = null;
+let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = '3d';
@@ -339,7 +339,7 @@ const requestChat = new RequestChat(generic('request-chat-mount'), {
       const snapshot = displayedChatSnapshot();
       if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved snapshot before capturing a chat attachment. The unsent sketch is not a model revision.');
       chatVisual = captureConversationVisual({ graph: preview, snapshot, view: modelView === 'plan' ? '2d' : '3d',
-        levelId: activeLevelId, selectedObjectIds: selectedObject ? [selectedObject] : [], reference: visualDraft });
+        levelId: activeLevelId, selectedObjectIds: selectedObject ? [selectedObject] : [], reference: visibleReference() });
       requestChat.setVisual(chatVisual); status(`Attached ${visualLabel(chatVisual)}. The model is unchanged.`);
     } catch (error) { report(error); }
   },
@@ -723,12 +723,17 @@ function dirty(): boolean {
   return Boolean(visualDraft) || invalidInput || Boolean(repo && preview && JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot));
 }
 
+function visibleReference(): SpatialReference | null {
+  return visualDraft ?? inspectedChatView?.reference ?? null;
+}
+
 function feedback(message: string, invalid = false): void {
   ui['edit-feedback'].textContent = message;
   ui['edit-feedback'].dataset.invalid = String(invalid);
 }
 
 function resetEditor() {
+  inspectedChatView = null;
   visualDraft = null;
   invalidInput = false; layout = null; preview = null;
   if (!repo) return;
@@ -740,7 +745,8 @@ function resetEditor() {
   ui['selected-object'].replaceChildren(...objects.map((object) => {
     const option = element('option', object.name); option.value = object.id; return option;
   }));
-  if (!objects.some((object) => object.id === selectedObject)) selectedObject = objects[0]?.id ?? '';
+  if (!objects.some((object) => object.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
+  if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
   syncInspector();
 }
 
@@ -875,7 +881,7 @@ function displayAccepted(next: RoomRepository): void {
   ui['server-history-list'].replaceChildren();
   ui['server-history-status'].textContent = 'Open History to read the accepted server ancestry.';
   repo = next;
-  inspectedChatSnapshot = null;
+  inspectedChatView = null;
   reviewRepository = null;
   activeReview = null;
   activeTicketId = null;
@@ -1279,12 +1285,12 @@ async function proposalJson(response: Response): Promise<unknown> {
 }
 
 function closeChat(): void {
-  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatSnapshot = null; requestChat.close();
+  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close();
 }
 
 function displayedChatSnapshot(): ConversationVisual['snapshot'] {
   if (!repo) throw new Error('Open a project before attaching model evidence.');
-  if (inspectedChatSnapshot?.revisionId === selectedRevision) return inspectedChatSnapshot;
+  if (inspectedChatView?.snapshot.revisionId === selectedRevision) return inspectedChatView.snapshot;
   if (reviewRepository && activeReview?.proposalRevisionId === selectedRevision) return {
     kind: 'proposal', revisionId: selectedRevision, proposalName: activeReview.proposalName,
   };
@@ -1314,10 +1320,22 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   const ticket = parseBacklogItem(value.ticket);
   if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
   if (!keepProposal) displayAccepted(await projects.read(projectId));
+  const conversation = conversationFromTicket(value.ticket);
+  const latestUser = [...conversation.messages].reverse().find(message => message.kind === 'user');
+  const visual = latestUser?.kind === 'user' ? latestUser.visual : null;
+  const context = conversationSelection({ graph: requireRepository().view(selectedRevision).snapshot,
+    selectedObjectIds: ticket.request.selectedObjectIds, ...(visual ? { visual } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}) });
+  activeLevelId = context.levelId; focusedRoomId = context.roomId; selectedObject = context.selectedId ?? '';
+  if (context.view) modelView = context.view === '2d' ? 'plan' : '3d';
+  resetEditor();
+  if (!context.selectedId) {
+    selectedObject = ''; ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', '', true, true)); syncInspector();
+  }
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   chatVisual = null; chatReply = null; requestChat.setVisual(null);
   showChatTicket(value.ticket); render(); showPage('request'); showRequestPane('details'); ui['request-text'].focus();
-  status('Conversation opened. Add a reply or attach evidence from the displayed snapshot. A reply never approves a proposal.');
+  status(context.selectedId ? 'Conversation reference restored. Inspect a message to view its original snapshot and pins. A reply never approves a proposal.'
+    : 'Conversation opened; its saved reference is absent from the current model. Choose an item or inspect its retained evidence.');
 }
 
 async function refreshConversation(): Promise<void> {
@@ -1396,23 +1414,18 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
     }
   }
   const graph = model.view(visual.snapshot.revisionId).snapshot;
-  if (visual.selectedObjectIds.some(id => !graph.entities.some(item => item.id === id))) throw new Error('The stored selection is absent from its bound snapshot.');
+  const inspection = conversationInspection(graph, visual);
   reviewRepository = model; selectedRevision = visual.snapshot.revisionId;
-  inspectedChatSnapshot = visual.snapshot;
   selectedBranch = visual.snapshot.kind === 'proposal' ? visual.snapshot.proposalName : 'main';
-  activeLevelId = visual.levelId; focusedRoomId = null; modelView = visual.view === '2d' ? 'plan' : '3d';
-  selectedObject = visual.selectedObjectIds[0] ?? selectedObject; resetEditor();
-  const pin = visual.annotations.find(annotation => annotation.kind === 'pin');
-  if (pin?.kind === 'pin') visualDraft = graph.version === 2 && visual.levelId
-    ? { kind: 'floor-point', levelId: visual.levelId, positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] }
-    : { kind: 'floor-point', positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] };
+  activeLevelId = inspection.context.levelId; focusedRoomId = inspection.context.roomId; modelView = visual.view === '2d' ? 'plan' : '3d';
+  selectedObject = inspection.context.selectedId ?? ''; resetEditor(); inspectedChatView = inspection;
   chatVisual = null; requestChat.setVisual(null); clearRequestSources(); ui['request-text'].value = '';
   render(); showPage('request'); showRequestPane('canvas'); status(`Inspecting ${visualLabel(visual)}. Coordinates belong to this saved snapshot.`);
 }
 
 interface BacklogItem {
   id: string; projectId: string; state: RequestState; createdAt: number; attempts: number; error: string | null;
-  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; scope?: ScopedRequest } & RequestSourceContext;
+  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
 }
 const ticketScopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
@@ -1424,6 +1437,8 @@ function parseBacklogItem(value: unknown): BacklogItem {
       && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
   const requestId = requiredText(value.request, 'requestId');
   const baseRevisionId = requiredText(value.request, 'baseRevisionId');
+  if (!Array.isArray(value.request.selectedObjectIds) || value.request.selectedObjectIds.length > 100) throw new Error('Invalid saved request selection.');
+  const selectedObjectIds = value.request.selectedObjectIds.map(identifier);
   const requestScope = requestScopeContext(value.request);
   const frozen = reviewScopeContext(value).scope ?? (isRecord(value.result) && isRecord(value.result.review) ? reviewScopeContext(value.result.review).scope : undefined);
   if (frozen) {
@@ -1435,7 +1450,7 @@ function parseBacklogItem(value: unknown): BacklogItem {
     && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
   return { id: value.id, projectId: value.projectId, state, createdAt: value.createdAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
-    request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId, ...parseSourceContext(value.request), ...requestScope } };
+    request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId, selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
 }
 async function inspectTicketScope(item: BacklogItem): Promise<void> {
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
@@ -1627,7 +1642,7 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   reviewDelta = result.status === 'ready'; modelView = '3d';
   if (ticket.state === 'completed' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'accepted' };
   if (ticket.state === 'rejected' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'superseded' };
-  inspectedChatSnapshot = null;
+  inspectedChatView = null;
   selectedBranch = result.status === 'ready' ? result.review.proposalName : 'main';
   selectedRevision = proposed.head(selectedBranch);
   const context = requestContext(proposed.view(selectedRevision).snapshot, result.review.selectedObjectIds);
@@ -2073,23 +2088,24 @@ function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamer
 
 function renderVisualPanel(): void {
   const selected = preview?.entities.find((item) => item.id === selectedObject);
+  const reference = visibleReference();
   ui['visual-panel'].hidden = !selected;
   if (!selected || !preview) return;
   ui['visual-context'].textContent = `Reference: ${selected.name}. A location does not imply moving this object or its neighbours. Describe what to create, move or copy.`;
   const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
   ui['visual-wall'].replaceChildren(new Option('Optional wall reference', ''), ...view.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
-  ui['visual-wall'].value = visualDraft?.kind === 'wall-point' ? visualDraft.wallId : '';
+  ui['visual-wall'].value = reference?.kind === 'wall-point' ? reference.wallId : '';
   const locked = busy || Boolean(visualGesture);
   for (const control of [ui['visual-wall'], ui['visual-x'], ui['visual-y'], ui['mark-visual-point']]) control.disabled = locked;
   ui['mark-visual-point'].disabled ||= preview.version === 2 && !activeLevelId;
-  ui['clear-visual-reference'].disabled = locked || !visualDraft;
+  ui['clear-visual-reference'].disabled = locked || !reference;
   ui['describe-visual-reference'].disabled = locked || !visualDraft;
-  if (visualDraft?.kind === 'floor-point') {
-    ui['visual-x'].value = String(visualDraft.positionMm[0]); ui['visual-y'].value = String(visualDraft.positionMm[1]);
+  if (reference?.kind === 'floor-point') {
+    ui['visual-x'].value = String(reference.positionMm[0]); ui['visual-y'].value = String(reference.positionMm[1]);
   }
-  ui['visual-feedback'].textContent = visualDraft
-    ? visualDraft.kind === 'floor-point' ? `Floor reference: ${visualDraft.positionMm.join(', ')} mm. The model is unchanged.`
-      : `Wall reference: ${visualDraft.wallId}, ${visualDraft.alongWallMm} mm from its start. The model is unchanged.`
+  ui['visual-feedback'].textContent = reference
+    ? (visualDraft ? '' : 'Saved evidence · read-only. ') + (reference.kind === 'floor-point' ? `Floor reference: ${reference.positionMm.join(', ')} mm. The model is unchanged.`
+      : `Wall reference: ${reference.wallId}, ${reference.alongWallMm} mm from its start. The model is unchanged.`)
     : 'Drag the teal handle to a floor location or wall, or use the coordinates below. Escape cancels a drag.';
 }
 function stageVisualReference(destination: SpatialReference): void {
@@ -2114,7 +2130,10 @@ ui['mark-visual-point'].addEventListener('click', () => {
     renderComparison(); updateControls();
   } catch (error) { report(error); }
 });
-ui['clear-visual-reference'].addEventListener('click', () => { visualDraft = null; renderComparison(); updateControls(); });
+ui['clear-visual-reference'].addEventListener('click', () => {
+  visualDraft = null; if (inspectedChatView) inspectedChatView = { ...inspectedChatView, reference: null };
+  renderComparison(); updateControls();
+});
 ui['describe-visual-reference'].addEventListener('click', () => { showRequestPane('details'); ui['request-text'].focus(); });
 
 function objectAnchor(item: Entity, snapshot: ModelGraph): Point {
@@ -2143,10 +2162,11 @@ function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (p
   if (!selected || !serverAvailable || busy) return;
   const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
   const centre = project(objectAnchor(selected, snapshot));
-  if (visualDraft) {
-    const target = project(referencePoint(visualDraft, snapshot));
+  const reference = visibleReference();
+  if (reference) {
+    const target = project(referencePoint(reference, snapshot));
     svg.append(svgNode('line', { x1: centre[0], y1: centre[1], x2: target[0], y2: target[1], stroke: '#178b79', 'stroke-width': 2 * scale, 'stroke-dasharray': '5 4', class: 'visual-marker' }));
-    svg.append(svgNode('circle', { cx: target[0], cy: target[1], r: 10 * scale, fill: '#ffffffaa', stroke: '#178b79', 'stroke-width': 3 * scale, class: 'visual-marker', 'data-destination': visualDraft.kind }));
+    svg.append(svgNode('circle', { cx: target[0], cy: target[1], r: 10 * scale, fill: '#ffffffaa', stroke: '#178b79', 'stroke-width': 3 * scale, class: 'visual-marker', 'data-destination': reference.kind }));
     svg.append(svgNode('text', { x: target[0], y: target[1] - 18 * scale, fill: '#11594f', 'font-size': 11 * scale, 'text-anchor': 'middle', class: 'visual-marker', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3 * scale }, 'Reference location'));
   }
   const radius = 22 * scale;
@@ -2484,7 +2504,8 @@ function renderRoomNavigation(snapshot: ModelSnapshot): void {
     : 'Whole building in 3D. Pick a level to isolate its plan and contents.';
   const objects = view.entities.filter(item => item.type !== 'AssetFamily' && (!activeLevelId || item.type !== 'Level' || item.id === activeLevelId));
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
-  if (!objects.some(item => item.id === selectedObject)) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
+  if (!objects.some(item => item.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
+  if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
   ui['selected-object'].value = selectedObject;
   if (!rooms.some((room) => room.id === focusedRoomId)) focusedRoomId = null;
   generic('room-navigation').hidden = !rooms.length;
@@ -2532,7 +2553,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
     modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
-      interactive: !comparison && currentPage === 'request' && !busy && serverAvailable, reference: currentPage === 'request' ? visualDraft : null });
+      interactive: !comparison && currentPage === 'request' && !busy && serverAvailable, reference: currentPage === 'request' ? visibleReference() : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
