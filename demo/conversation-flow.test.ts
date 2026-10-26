@@ -49,8 +49,8 @@ test('a clarification reply keeps document and snapshot evidence on one scoped t
   assert.equal(queue.project(repo.projectId), original);
   const proposed = await RoomRepository.restore(ready.result.project);
   const delta = diffSnapshots(repo.view(baseRevisionId).snapshot, proposed.view(proposed.head(ready.request.proposalName)).snapshot);
-  assert.deepEqual(delta.changed.map(change => change.after.id), ['office-desk']);
-  assert.equal(delta.added.length, 0); assert.equal(delta.removed.length, 0);
+  assert.deepEqual(delta.entities.modified.map(change => change.id), ['office-desk']);
+  assert.equal(delta.entities.added.length, 0); assert.equal(delta.entities.removed.length, 0);
   await queue.decide('desk-chat', { action: 'accept', decisionId: 'desk-review', expectedRequestId: ready.request.requestId });
   assert.equal(queue.get('desk-chat').state, 'completed');
   assert.equal(queue.get('desk-chat').conversation?.messages.at(-1)?.kind, 'decision');
