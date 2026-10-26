@@ -21,6 +21,72 @@ control, budget, instrumentation = (module(name) for name in ('control', 'budget
 
 
 class Safety(unittest.TestCase):
+    def finalization_fixture(self, root, command):
+        before = {'bim-qvm-db': 'running', 'bim-qvm-r3-db': 'exited'}
+        def inspect(name):
+            return {'Name': '/' + name, 'Id': name + '-id', 'Config': {'Labels': {control.LABEL: 'mine'}},
+                    'State': {'Running': False}}
+        return (patch.object(control, 'RUN', root), patch.object(control, 'protected_states', return_value=before),
+                patch.object(control, 'inspect', side_effect=inspect), patch.object(control, 'command', side_effect=command))
+
+    def test_finalization_keeps_client_logs_and_writes_distinct_host_logs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / 'client.stdout.log').write_text('client evidence remains immutable')
+            def command(args, **kwargs):
+                return subprocess.CompletedProcess(args, 0 if args[1] == 'logs' else 1, 'host stdout', 'host stderr')
+            a, b, c, d = self.finalization_fixture(root, command)
+            with a, b, c, d, patch.object(control, 'stop_owned', return_value=[]):
+                control.finalize('mine', {'bim-qvm-db': 'running', 'bim-qvm-r3-db': 'exited'}, {'status': 'PASS'})
+            self.assertEqual((root / 'client.stdout.log').read_text(), 'client evidence remains immutable')
+            self.assertEqual((root / 'host-client.stdout.log').read_text(), 'host stdout')
+            self.assertEqual(json.loads((root / 'terminal.json').read_text())['status'], 'PASS')
+            self.assertTrue(json.loads((root / 'controller-done.json').read_text())['ownershipCleanupVerified'])
+
+    def test_finalization_log_permission_failure_preserves_terminal_and_work_result(self):
+        original_write = pathlib.Path.write_text
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            def command(args, **kwargs):
+                return subprocess.CompletedProcess(args, 0 if args[1] == 'logs' else 1, 'stdout', 'stderr')
+            def write(path, *args, **kwargs):
+                if path.name == 'host-client.stdout.log':
+                    raise PermissionError('injected log permission failure')
+                return original_write(path, *args, **kwargs)
+            a, b, c, d = self.finalization_fixture(root, command)
+            with a, b, c, d, patch.object(control, 'stop_owned', return_value=[]), patch.object(pathlib.Path, 'write_text', write):
+                control.finalize('mine', {'bim-qvm-db': 'running', 'bim-qvm-r3-db': 'exited'}, {'status': 'PASS'})
+            terminal = json.loads((root / 'terminal.json').read_text())
+            self.assertEqual(terminal['status'], 'ISSUES')
+            self.assertEqual(terminal['profileWorkStatus'], 'PASS')
+            self.assertTrue(terminal['ownershipCleanupVerified'])
+            self.assertTrue(any('permission failure' in row['error'] for row in terminal['collectionErrors']))
+            self.assertTrue((root / 'controller-done.json').exists())
+
+    def test_finalization_logging_timeout_keeps_terminal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            def command(args, **kwargs):
+                if args[1] == 'logs':
+                    raise subprocess.TimeoutExpired(args, 5)
+                return subprocess.CompletedProcess(args, 1, '', '')
+            a, b, c, d = self.finalization_fixture(root, command)
+            with a, b, c, d, patch.object(control, 'stop_owned', return_value=[]):
+                control.finalize('mine', {'bim-qvm-db': 'running', 'bim-qvm-r3-db': 'exited'}, {'status': 'PASS'})
+            terminal = json.loads((root / 'terminal.json').read_text())
+            self.assertEqual(terminal['status'], 'ISSUES')
+            self.assertEqual(len(terminal['collectionErrors']), 3)
+            self.assertTrue((root / 'controller-done.json').exists())
+
+    def test_unverified_cleanup_never_acknowledges_watchdog_completion(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            a, b, c, d = self.finalization_fixture(root, lambda args, **kwargs: subprocess.CompletedProcess(args, 1, '', ''))
+            with a, b, c, d, patch.object(control, 'stop_owned', return_value=[{'name': 'owned', 'running': True}]):
+                control.finalize('mine', {'bim-qvm-db': 'running', 'bim-qvm-r3-db': 'exited'}, {'status': 'PASS'})
+            self.assertFalse((root / 'controller-done.json').exists())
+            self.assertEqual(json.loads((root / 'terminal.json').read_text())['status'], 'ISSUES')
+
     def test_inspect_accepts_both_docker_capitalizations_for_exact_absence(self):
         name = control.NAMES['pg']
         for prefix in ('Error: No such object: ', 'error: no such object: ',

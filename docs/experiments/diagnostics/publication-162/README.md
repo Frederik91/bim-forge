@@ -1,6 +1,8 @@
 # Single reduced publication profile preparation
 
-This is preparation for issue #162, after review of immutable draft PR #166. It does not replace that report or record a diagnostic outcome. The only authorized future run is one reduced instrumented diagnostic. There is no locality comparison, full admission, retry, resume, or existing-database mode.
+This directory now contains the tested future finalization correction for issue #162. The one authorized reduced case already completed using sealed preparation c at commit `de4762f48d33365ea499e229dfb71c00031711fe`. Its client/oracles passed, but log collection failed after ownership cleanup. No rerun is authorized. This source is unsealed and has no execution command. It does not modify any prepared copy or replace the actual result review in PR #166.
+
+Future finalization writes host log captures to `host-*.stdout.log` and `host-*.stderr.log`, preserving client-created files. It records verified ownership cleanup and acknowledges the watchdog before optional artifact collection. Each collection failure is retained separately, and `terminal.json` is written in `finally` with the original profile-work status and an overall ISSUES verdict when collection fails. An unverified cleanup never writes the watchdog completion marker. Tests inject both permission failure and logging timeout; no database is used to test this correction.
 
 The new branch owns only this diagnostic directory. It changes no model entity, product source, package, registry, validator, persistence schema, or durability control. A separate diagnostic record/review is due only after actual terminal execution.
 
@@ -36,14 +38,6 @@ A separate watchdog process stops only owned containers if controller, budget, o
 
 Normal cleanup stops the client, allows PostgreSQL five seconds to stop, and stops the budget collector. Emergency cleanup kills only owned container IDs. Containers, the new data directory, network, raw evidence, and hashes are retained for review. No recursive deletion is needed. The final record must verify no owned process remains and that prior cluster states match. A failure never launches another case.
 
-## Ready command for the coordinator
+## Execution remains closed
 
-After `ready.json` exists and the coordinator grants start and expiry UTC timestamps, run this exact command on the server, substituting only those three lease values:
-
-```sh
-timeout --signal=TERM --kill-after=15s 885s python3 /ssd1/bim-forge-qualification/house-161/issue162-reduced-profile-prep-c-20261026a/control.py run --lease-id LEASE_ID --starts-at START_UTC --expires-at EXPIRY_UTC
-```
-
-For example, timestamps have the form `2026-10-26T08:00:00Z`. This is not a granted lease or a scheduled start. The launcher rejects a future start, expired lease, non-UTC timestamp, overlong lease, insufficient remaining time, changed prepared input, existing run root, or existing resource name. It never waits for permission internally.
-
-Expected scheduling cost is one slot of at most 15 minutes, including setup, one job, inspection, and cleanup. Current preparation is not evidence that live auto_explain capture or watchdog termination works; those are checked during the leased diagnostic, with any failure reported as a gap.
+The frozen preparation c command was used once. This future source points at `issue162-finalization-fix-unsealed`, which has no ready seal. The completed run root remains retained, so the single-use resource checks also reject another launch. There is no next case, comparison, or full run authorized here. The historical fifteen-minute/eight-minute bounds above describe the consumed lease. Root and guard tests for this fix run with no network at .25 CPU/1 GiB and start no database.

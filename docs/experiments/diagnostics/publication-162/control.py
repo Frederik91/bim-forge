@@ -20,7 +20,7 @@ SOURCE = '3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098'
 TOOLS = 'sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff'
 PG = 'sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc'
 HOUSE = pathlib.Path('/ssd1/bim-forge-qualification/house-161')
-PREP = HOUSE / 'issue162-reduced-profile-prep-c-20261026a'
+PREP = HOUSE / 'issue162-finalization-fix-unsealed'
 RUN = HOUSE / 'issue162-reduced-profile-20261026a'
 MODULE = 'docs/experiments/diagnostics/publication-162'
 PREFIX = 'bim-issue162-profile-20261026a'
@@ -202,6 +202,62 @@ def capture_samples(tick):
     put(RUN / 'observer-heartbeat.json', {'unix': time.time()})
 
 
+def finalize(nonce, before, terminal):
+    terminal['profileWorkStatus'] = terminal['status']
+    terminal['collectionErrors'] = []
+    terminal['cleanup'] = stop_owned(nonce, grace=True)
+    try:
+        terminal['oldClusterStatesAfter'] = protected_states()
+    except Exception as error:
+        terminal['oldClusterStatesAfter'] = {'inspectionError': str(error)}
+    cleanup_verified = (terminal['oldClusterStatesAfter'] == before
+        and all(not row.get('running') and 'error' not in row for row in terminal['cleanup']))
+    terminal['ownershipCleanupVerified'] = cleanup_verified
+    if cleanup_verified:
+        # Active-work guarding ends only after exact owned-resource cleanup.
+        # Artifact failures must not masquerade as a running database or stale collector.
+        put(RUN / 'controller-done.json', {'unix': time.time(), 'ownershipCleanupVerified': True})
+    else:
+        terminal['status'] = 'ISSUES'
+    try:
+        for kind in NAMES:
+            try:
+                record = inspect(NAMES[kind])
+                if record and owned(record, nonce):
+                    put(RUN / (kind + '-final.json'), record)
+                    logs = command(['docker', 'logs', record['Id']], timeout=5, check=False)
+                    if logs.returncode != 0:
+                        raise RuntimeError(logs.stderr)
+                    # These names never collide with client-created root-owned logs.
+                    (RUN / ('host-' + kind + '.stdout.log')).write_text(logs.stdout)
+                    (RUN / ('host-' + kind + '.stderr.log')).write_text(logs.stderr)
+            except Exception as error:
+                terminal['collectionErrors'].append({'resource': kind, 'error': str(error)})
+        try:
+            network = command(['docker', 'network', 'inspect', NETWORK], check=False)
+            if network.returncode == 0:
+                details = json.loads(network.stdout)[0]
+                if details.get('Labels', {}).get(LABEL) == nonce:
+                    put(RUN / 'retained-network.json', details)
+            hashes = {}
+            for child in RUN.iterdir():
+                if child.name == 'data' or 'heartbeat' in child.name or child.name.endswith('.next'):
+                    continue
+                paths = [child] if child.is_file() else child.rglob('*')
+                for path in paths:
+                    if path.is_file():
+                        hashes[str(path.relative_to(RUN))] = digest(path)
+            put(RUN / 'evidence-sha256.json', hashes)
+        except Exception as error:
+            terminal['collectionErrors'].append({'resource': 'evidence', 'error': str(error)})
+    finally:
+        if terminal['collectionErrors']:
+            terminal['status'] = 'ISSUES'
+        terminal['finished'] = time.time()
+        terminal['retention'] = 'Retain new data and resources; see ownershipCleanupVerified and exact cleanup results.'
+        put(RUN / 'terminal.json', terminal)
+
+
 def run(args):
     begin, expiry = lease_window(args.starts_at, args.expires_at, time.time())
     if expiry - time.time() < 780:
@@ -321,36 +377,12 @@ def run(args):
     except Exception as error:
         terminal['error'] = str(error)
     finally:
-        terminal['cleanup'] = stop_owned(nonce, grace=True)
         try:
-            terminal['oldClusterStatesAfter'] = protected_states()
-        except Exception as error:
-            terminal['oldClusterStatesAfter'] = {'inspectionError': str(error)}
-        if terminal['oldClusterStatesAfter'] != before or any(row.get('running') or 'error' in row for row in terminal['cleanup']):
-            terminal['status'] = 'ISSUES'
-        for kind in NAMES:
-            record = inspect(NAMES[kind])
-            if record and owned(record, nonce):
-                put(RUN / (kind + '-final.json'), record)
-                logs = command(['docker', 'logs', record['Id']], timeout=5, check=False)
-                (RUN / (kind + '.stdout.log')).write_text(logs.stdout)
-                (RUN / (kind + '.stderr.log')).write_text(logs.stderr)
-        network = command(['docker', 'network', 'inspect', NETWORK], check=False)
-        if network.returncode == 0:
-            details = json.loads(network.stdout)[0]
-            if details.get('Labels', {}).get(LABEL) == nonce:
-                # Stopped containers keep the network attached; preserve it with evidence.
-                put(RUN / 'retained-network.json', details)
-        terminal['finished'] = time.time()
-        terminal['retention'] = 'New containers stopped; new database and network retained. No historical resources changed.'
-        put(RUN / 'terminal.json', terminal)
-        put(RUN / 'controller-done.json', {'unix': time.time()})
-        done.set()
-        watch.wait(timeout=5)
-        watch_log.close()
-        hashes = {str(path.relative_to(RUN)): digest(path) for path in RUN.rglob('*')
-                  if path.is_file() and 'data' not in path.relative_to(RUN).parts}
-        put(RUN / 'evidence-sha256.json', hashes)
+            finalize(nonce, before, terminal)
+        finally:
+            done.set()
+            watch.wait(timeout=5)
+            watch_log.close()
     return 0 if terminal['status'] == 'PASS' else 1
 
 
