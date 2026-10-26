@@ -36,10 +36,10 @@ input[aria-invalid="true"] { border: 2px solid #a44932; }
 .brand small { display: block; color: #a7c2c5; font-size: 10px; font-weight: 450; letter-spacing: .03em; }
 .brand-mark { color: #7ec7b9; font-size: 32px; line-height: 1; }
 .project-identity { min-width: 0; padding-left: clamp(0px, 2vw, 28px); border-left: 1px solid #31505a; display: flex; align-items: center; gap: 14px; }
-.project-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.project-identity strong { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .workspace-label { color: #aac1c4; font-size: 9px; letter-spacing: .12em; white-space: nowrap; }
 .live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #7bc7b7; }
-.header-actions { display: flex; gap: 7px; }
+.header-actions { display: flex; gap: 7px; min-width: 0; max-width: 100%; }
 .connection-button { color: #dcecea; background: #1a3b43; border-color: #45636a; display: inline-flex; align-items: center; gap: 8px; }
 .connection-button:hover { background: #244a51; }
 .connection-button.connected { color: #0f302f; background: #a0dfd2; border-color: #a0dfd2; }
@@ -215,6 +215,7 @@ input[aria-invalid="true"] { border: 2px solid #a44932; }
 .review-panel > .full { width: calc(100% - 40px); margin: 16px 20px 0; }
 .review-actions { padding: 16px 20px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .history-list { padding: 8px 13px 15px; max-height: 540px; overflow-y: auto; }
+.history-panel, .conflict-panel { min-width: 0; }
 .history-item { margin-top: 6px; }
 .history-button { width: 100%; padding: 12px; display: flex; align-items: center; gap: 12px; color: #334b53; background: #f6f8f7; border: 1px solid transparent; border-radius: 9px; text-align: left; }
 .history-button:hover { background: #edf4ef; }
@@ -303,11 +304,11 @@ thead th, tbody th { font-weight: 600; }
 .skip-link:focus { position: fixed; z-index: 30; top: 12px; left: 12px; padding: 12px; color: var(--navy); background: white; }
 
 @media (max-width: 980px) {
-  .app-header { grid-template-columns: auto 1fr; height: auto; min-height: 74px; padding-top: 10px; padding-bottom: 10px; }
+  .app-header { grid-template-columns: auto minmax(0, 1fr); height: auto; min-height: 74px; padding-top: 10px; padding-bottom: 10px; }
   .project-identity { border: 0; padding: 0; }
   .header-actions { grid-column: 1 / -1; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
   .header-actions::-webkit-scrollbar { display: none; }
-  .request-layout, .review-layout, .history-layout, .overview-grid { grid-template-columns: 1fr; }
+  .request-layout, .review-layout, .history-layout, .overview-grid { grid-template-columns: minmax(0, 1fr); }
   .drawing-surface { min-height: 280px; }
 }
 @media (max-width: 650px) {
@@ -452,7 +453,7 @@ thead th, tbody th { font-weight: 600; }
 .project-picker-actions button, .server-history button { min-height: 44px; white-space: normal; }
 .server-history { margin-bottom: 24px; min-width: 0; }
 #server-history-status { margin: 14px 0; font-size: 13px; line-height: 1.6; }
-.server-history-list { list-style: none; padding: 0; display: grid; gap: 12px; margin: 16px 0; }
+.server-history-list { list-style: none; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 16px 0; }
 .server-history-entry { padding: 14px; background: #f5f9f7; border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; min-width: 0; }
 .server-history-entry p { margin-top: 7px; font-size: 12px; line-height: 1.5; }
 @media (max-width: 650px) {
@@ -460,7 +461,8 @@ thead th, tbody th { font-weight: 600; }
   .project-picker-actions button { width: 100%; }
   .server-history .panel-heading { flex-direction: column; align-items: flex-start; gap: 12px; }
   #server-save-status { max-width: 100%; }
-}.app-header { height: auto; min-height: 76px; padding-top: 10px; padding-bottom: 10px; }
-.project-identity { flex-direction: column; align-items: flex-start; gap: 2px; }
+}
+.app-header { height: auto; min-height: 76px; padding-top: 10px; padding-bottom: 10px; }
+.project-identity { flex-direction: column; align-items: stretch; gap: 2px; }
 #server-save-status { color: #b5e2d8; }
 #server-save-status[data-state="disconnected"] { color: #ffd6a4; }
