@@ -4,6 +4,7 @@ import { validateSnapshot } from './room-model.ts';
 import type { ModelSnapshot } from './room-model.ts';
 import { entityLevel, levels } from './building-levels.ts';
 import { FloorLayoutSchema } from './building-schema.ts';
+import { retainModelParameters } from './model-parameters.ts';
 import type { FloorLayout } from './building-schema.ts';
 export { FloorLayoutSchema } from './building-schema.ts';
 export type { FloorLayout } from './building-schema.ts';
@@ -86,19 +87,21 @@ function hostId(openingId: string): string {
 export function previewFloor(baseSnapshot: unknown, input: unknown): ModelSnapshot {
   const layout = parseFloorLayout(input);
   const base = validateSnapshot(baseSnapshot);
+  const retain = (result: ModelSnapshot): ModelSnapshot => validateSnapshot({ ...result,
+    entities: result.entities.map(item => retainModelParameters(base.entities.find(previous => previous.id === item.id && previous.type === item.type), item)) });
   if (base.version === 2) {
     const level = levels(base).find((item) => item.id === layout.level.id);
     if (!level) throw new Error('Level reconstruction requires an existing stable level identity.');
     const shell = compileFloorLayout(layout, { kind: 'building', elevation: level.elevation });
     const removed = new Set(base.entities.filter((item) => entityLevel(base, item)?.id === level.id
       && (item.type === 'Level' || item.type === 'Space' || item.type === 'Wall' || item.type === 'Door' || item.type === 'Window')).map((item) => item.id));
-    return validateSnapshot({ version: 2, units: 'm', entities: [...base.entities.filter((item) => !removed.has(item.id)), ...shell.entities],
-      relationships: [...base.relationships.filter((link) => !removed.has(link.source) && !removed.has(link.target)), ...shell.relationships] });
+    return retain(validateSnapshot({ version: 2, units: 'm', entities: [...base.entities.filter((item) => !removed.has(item.id)), ...shell.entities],
+      relationships: [...base.relationships.filter((link) => !removed.has(link.source) && !removed.has(link.target)), ...shell.relationships] }));
   }
   const shell = compileFloorLayout(layout, { kind: 'legacy' });
-  return validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment'
+  return retain(validateSnapshot({ units: 'm', entities: [...base.entities.filter((item) => item.type === 'Furniture' || item.type === 'Equipment'
     || item.type === 'AssetFamily' || item.type === 'AssetInstance'), ...shell.entities],
-    relationships: shell.relationships });
+    relationships: shell.relationships }));
 }
 
 /** Shared shell compiler; whole-building topology is validated after all floors and stairs exist. */

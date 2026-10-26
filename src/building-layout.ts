@@ -5,6 +5,7 @@ import type { BuildingLayout } from './building-schema.ts';
 import { compileFloorLayout, plainLayoutInput } from './floor-layout.ts';
 import { entityLevel } from './building-levels.ts';
 import { validateSnapshot } from './room-model.ts';
+import { retainModelParameters } from './model-parameters.ts';
 import type { Bounds, SnapshotV2 } from './room-model.ts';
 export { BuildingLayoutSchema } from './building-schema.ts';
 export type { BuildingLayout } from './building-schema.ts';
@@ -66,5 +67,8 @@ export function previewBuilding(baseSnapshot: unknown, input: unknown): Snapshot
     end: stair.endMm.map((n) => n / 1000), width: stair.widthMm / 1000, steps: stair.steps })));
   const result = validateSnapshot({ version: 2, units: 'm', entities, relationships });
   if (result.version !== 2) throw new Error('Building reconstruction requires version two.');
-  return result;
+  const retained = validateSnapshot({ ...result, entities: result.entities.map(item =>
+    retainModelParameters(base.entities.find(previous => previous.id === item.id && previous.type === item.type), item)) });
+  if (retained.version !== 2) throw new Error('Building reconstruction requires version two.');
+  return retained;
 }

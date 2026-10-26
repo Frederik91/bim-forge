@@ -9,6 +9,22 @@ import type { ModelSnapshot } from './room-model.ts';
 
 async function legacy(): Promise<ModelSnapshot> { const repo = await RoomRepository.create(); return repo.view(repo.head('main')).snapshot; }
 
+test('floor and building reconstruction retain typed parameters on stable shell identities', () => {
+  const base = multiStoreySnapshot();
+  const tagged = validateSnapshot({ ...base, entities: base.entities.map(item => ({ ...item,
+    parameters: [{ definitionId: 'maintainer', name: 'Maintainer', value: { kind: 'text', value: item.id } }] })) });
+  const recipe = multiStoreyLayout();
+  const floor = recipe.levels[0]; assert.ok(floor);
+  const rebuiltFloor = previewFloor(tagged, { level: { id: floor.level.id, name: 'Renamed basement' },
+    rooms: floor.rooms, openings: floor.openings, wallThicknessMm: floor.wallThicknessMm, heightMm: floor.heightMm });
+  const rebuiltBuilding = previewBuilding(tagged, recipe);
+  for (const after of [rebuiltFloor, rebuiltBuilding]) {
+    for (const entity of after.entities) assert.deepEqual(entity.parameters, tagged.entities.find(before => before.id === entity.id)?.parameters);
+    assert.deepEqual(diffSnapshots(tagged, after).entities.modified.map(item => item.id), after === rebuiltFloor ? [floor.level.id] : []);
+  }
+  assert.ok(tagged.entities.every(item => item.parameters?.length === 1));
+});
+
 test('whole-building authoring compiles three coincident floors with stairs and no false exterior doors', async () => {
   const before = await legacy(); const bytes = JSON.stringify(before);
   const building = previewBuilding(before, multiStoreyLayout());
