@@ -1,39 +1,44 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import { RoomRepository, ProposalConflict } from '../src/room-model.ts';
+import { isDeepStrictEqual } from 'node:util';
+import { RoomRepository, ProposalConflict, diffSnapshots } from '../src/room-model.ts';
 import type { Point } from '../src/room-model.ts';
 import { prepareModelProposal, validateModelProposalRequest } from '../src/model-proposal.ts';
 import { parseRequestActivity } from '../src/request-activity.ts';
 import type { RequestActivity, ActivityUpdate } from '../src/request-activity.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
-import { ModelScripts } from '../src/model-script.ts';
+import { ModelScripts, summarizeModelDelta } from '../src/model-script.ts';
 import { parseScriptExecutionEvidence } from '../src/script-evidence.ts';
 import type { ScriptExecutionEvidence } from '../src/script-evidence.ts';
 import { RequestSourceStore } from './request-source-store.ts';
 import { parseRequestSources, parseAuthoringScope } from '../src/request-sources.ts';
 import type { RequestSource } from '../src/request-sources.ts';
+import { parseIntentAssessment } from '../src/model-intent.ts';
+import { VersionedProjectStore } from './versioned-project-store.ts';
+import type { RepositoryReference, VersionedProjects } from './versioned-project-contract.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
 type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope'> & { selectedObjectIds: readonly string[] };
-type StoredResult = { status: 'ready' | 'declined'; project: string; review: unknown };
-interface Ticket {
+interface RequestTicket<Project> {
   id: string;
   projectId: string;
   state: RequestState;
   request: RequestInput;
-  project: string;
+  project: Project;
   fingerprint: string;
   createdAt: number;
   updatedAt: number;
   attempts: number;
   error: string | null;
-  result: StoredResult | null;
+  result: { status: 'ready' | 'declined'; project: Project; review: unknown } | null;
   decisionId: string | null;
   decisionAction: string | null;
   history: readonly string[];
   activity: readonly RequestActivity[];
 }
+type Ticket = RequestTicket<RepositoryReference>;
+type TicketProjection = RequestTicket<string>;
 export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 'decisionId' | 'decisionAction' | 'history' | 'activity'>;
 export class BacklogConflict extends Error {}
 
@@ -70,12 +75,34 @@ function identifier(value: unknown): string {
   if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error('Invalid request or project identity.');
   return value;
 }
-function parseStored(text: string): Ticket {
+function reference(value: unknown): RepositoryReference {
+  if (!object(value) || Object.keys(value).length !== 2) throw new Error('Invalid repository reference.');
+  return { projectId: identifier(value.projectId), documentId: identifier(value.documentId) };
+}
+function portable(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('Invalid legacy project.');
+  return value;
+}
+function validateSourceBytes(db: DatabaseSync): void {
+  if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='request_source_blobs'").get()) return;
+  for (const row of db.prepare('SELECT * FROM request_source_blobs').all()) {
+    const [source] = parseRequestSources([{ id: row.id, name: row.name, mediaType: row.media_type, byteLength: row.byte_length, sha256: row.sha256 }]);
+    if (!source || !(row.bytes instanceof Uint8Array) || row.bytes.byteLength !== source.byteLength
+        || createHash('sha256').update(row.bytes).digest('hex') !== source.sha256
+        || typeof row.project_id !== 'string' || typeof row.visual_count !== 'number' || !Number.isSafeInteger(row.visual_count)
+        || row.visual_count < 0 || row.visual_count > 4 || typeof row.text_bytes !== 'number' || !Number.isSafeInteger(row.text_bytes)
+        || row.text_bytes < 0 || row.text_bytes > 65536 || typeof row.created_at !== 'number' || !Number.isSafeInteger(row.created_at)) {
+      throw new Error('Invalid legacy source bytes or metadata.');
+    }
+    identifier(row.project_id);
+  }
+}
+function parseTicket<Project>(text: string, parseProject: (value: unknown) => Project): RequestTicket<Project> {
   const value: unknown = JSON.parse(text);
-  if (!object(value) || typeof value.project !== 'string' || !object(value.request) || typeof value.id !== 'string'
+  if (!object(value) || !object(value.request) || typeof value.id !== 'string'
       || typeof value.projectId !== 'string' || typeof value.createdAt !== 'number' || typeof value.updatedAt !== 'number'
       || typeof value.attempts !== 'number' || typeof value.fingerprint !== 'string'
-      || !Array.isArray(value.history) || !value.history.every((item) => typeof item === 'string')
+      || !Array.isArray(value.history) || value.history.length > 8 || !value.history.every((item) => typeof item === 'string')
       || (value.error !== null && typeof value.error !== 'string')
       || (value.decisionId !== null && typeof value.decisionId !== 'string') || (value.decisionAction !== null && typeof value.decisionAction !== 'string')
       || !['queued', 'working', 'needs-input', 'ready', 'completed', 'rejected', 'cancelled', 'failed'].includes(String(value.state))) {
@@ -95,12 +122,15 @@ function parseStored(text: string): Ticket {
   const visual = r.visualIntent;
   // Restore validates the complete input before exposing it; JSON has no executable data.
   if (!object(visual) || !('kind' in visual)) throw new Error('Invalid stored visual context.');
-  let result: StoredResult | null = null;
+  if (!Number.isSafeInteger(value.createdAt) || !Number.isSafeInteger(value.updatedAt) || value.createdAt < 0 || value.updatedAt < 0
+      || !Number.isSafeInteger(value.attempts) || value.attempts < 0 || value.attempts > 3
+      || !/^[a-f0-9]{64}$/.test(value.fingerprint)) throw new Error('Invalid stored request metadata.');
+  let result: RequestTicket<Project>['result'] = null;
   if (value.result !== null) {
-    if (!object(value.result) || (value.result.status !== 'ready' && value.result.status !== 'declined') || typeof value.result.project !== 'string') throw new Error('Invalid stored proposal result.');
-    result = { status: value.result.status, project: value.result.project, review: value.result.review };
+    if (!object(value.result) || (value.result.status !== 'ready' && value.result.status !== 'declined') || !object(value.result.review)) throw new Error('Invalid stored proposal result.');
+    result = { status: value.result.status, project: parseProject(value.result.project), review: value.result.review };
   }
-  return { id: value.id, projectId: value.projectId, state, project: value.project, fingerprint: value.fingerprint,
+  return { id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history, activity,
     request: { requestId: r.requestId, proposalName: r.proposalName, baseRevisionId: r.baseRevisionId,
@@ -124,8 +154,7 @@ function storedVisual(value: Record<string, unknown>): RequestInput['visualInten
       if (Object.hasOwn(d, 'levelId')) {
         if (typeof d.levelId !== 'string') throw new Error('Invalid stored floor level.');
         const positionMm: Point = [d.positionMm[0], d.positionMm[1]];
-        const destination = { kind: 'floor-point' as const, levelId: d.levelId, positionMm };
-        return { kind: 'spatial-reference', destination };
+        return { kind: 'spatial-reference', destination: { kind: 'floor-point', levelId: d.levelId, positionMm } };
       }
       return { kind: 'spatial-reference', destination: { kind: 'floor-point', positionMm: [d.positionMm[0], d.positionMm[1]] } };
     }
@@ -144,6 +173,7 @@ function storedVisual(value: Record<string, unknown>): RequestInput['visualInten
 
 export class ChangeRequests {
   readonly #db: DatabaseSync;
+  readonly #projects: VersionedProjects;
   readonly #sources: RequestSourceStore;
   readonly #uploads = new Map<AbortController, Promise<RequestSource>>();
   readonly #worker: () => ModelWorker | null;
@@ -151,23 +181,120 @@ export class ChangeRequests {
   readonly #attempts = new Map<string, ActiveAttempt>();
   #closing: Promise<void> | null = null;
   #closed = false;
-  readonly #timer: ReturnType<typeof setInterval>;
-  constructor(file: string, worker: () => ModelWorker | null) {
-    this.#db = new DatabaseSync(file);
+  #timer: ReturnType<typeof setInterval> | null = null;
+  private constructor(db: DatabaseSync, worker: () => ModelWorker | null) {
+    this.#db = db;
     this.#worker = worker;
-    this.#db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     this.#db.exec('CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), state TEXT NOT NULL, body TEXT NOT NULL); CREATE INDEX IF NOT EXISTS requests_project ON requests(project_id); CREATE INDEX IF NOT EXISTS requests_state ON requests(state);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES requests(id), fingerprint TEXT NOT NULL);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS request_executions (ticket_id TEXT NOT NULL REFERENCES requests(id), request_id TEXT NOT NULL, attempt INTEGER NOT NULL, execution_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(ticket_id, request_id, attempt, execution_id));');
+    this.#projects = new VersionedProjectStore(this.#db);
     this.#sources = new RequestSourceStore(this.#db);
-    for (const ticket of this.#withState('working')) {
-      this.#put(recordActivity({ ...ticket, state: ticket.attempts < 3 ? 'queued' : 'failed',
+  }
+  static async open(file: string, worker: () => ModelWorker | null): Promise<ChangeRequests> {
+    const db = new DatabaseSync(file);
+    db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
+    db.exec('BEGIN IMMEDIATE');
+    let queue: ChangeRequests;
+    try {
+      validateSourceBytes(db);
+      queue = new ChangeRequests(db, worker);
+      await queue.#migrate();
+      for (const ticket of queue.#withState('working')) {
+        queue.#put(recordActivity({ ...ticket, state: ticket.attempts < 3 ? 'queued' : 'failed',
         error: 'The server restarted during processing. The accepted model is unchanged.' },
         { stage: 'recovered', message: ticket.attempts < 3 ? 'Server restarted. Interrupted work is queued for another bounded attempt.' : 'Server restarted during the final attempt. Human input is required.' }));
+      }
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK'); db.close(); throw error;
     }
-    this.#timer = setInterval(() => this.#pump(), 1000);
-    this.#timer.unref();
-    this.#pump();
+    queue.#timer = setInterval(() => queue.#pump(), 1000);
+    queue.#timer.unref();
+    queue.#pump();
+    return queue;
+  }
+  async #migrate(): Promise<void> {
+    this.#db.exec('CREATE TABLE IF NOT EXISTS queue_storage_metadata (version INTEGER PRIMARY KEY CHECK(version=1));');
+    if (this.#db.prepare('SELECT version FROM queue_storage_metadata').get()) return;
+    const roots = new Map<string, string>();
+    for (const row of this.#db.prepare('SELECT id, body FROM projects ORDER BY rowid').all()) {
+      if (typeof row.id !== 'string' || typeof row.body !== 'string') throw new Error('Unreadable legacy project.');
+      const repository = await RoomRepository.restore(row.body);
+      if (repository.projectId !== row.id) throw new Error('Legacy project identity mismatch.');
+      roots.set(row.id, repository.root());
+      this.#projects.publish({ projectId: row.id, expectedDocumentId: null, reference: this.#projects.put(repository),
+        origin: 'imported', requestId: null, decisionId: null });
+    }
+    const submissions = new Map<string, { ticketId: string; fingerprint: string; projectId: string; sources: readonly RequestSource[] }>();
+    const convert = async (ticket: TicketProjection, archived: boolean): Promise<Ticket> => {
+      if (archived && ticket.history.length) throw new Error('Nested legacy archives are invalid.');
+      const repository = await RoomRepository.restore(ticket.project);
+      if (repository.projectId !== ticket.projectId || repository.root() !== roots.get(ticket.projectId)) throw new Error('Legacy request project/root mismatch.');
+      validateModelProposalRequest(repository, ticket.request);
+      const fingerprint = createHash('sha256').update(JSON.stringify({ project: repository.serialize(), request: ticket.request })).digest('hex');
+      if (fingerprint !== ticket.fingerprint) throw new Error('Legacy submission fingerprint mismatch.');
+      if (submissions.has(ticket.request.requestId)) throw new Error('Duplicate legacy request identity.');
+      submissions.set(ticket.request.requestId, { ticketId: ticket.id, fingerprint, projectId: ticket.projectId, sources: ticket.request.sources ?? [] });
+      let result: Ticket['result'] = null;
+      if (ticket.result) {
+        const proposed = await RoomRepository.restore(ticket.result.project);
+        if (proposed.projectId !== ticket.projectId || proposed.root() !== repository.root()) throw new Error('Legacy result project/root mismatch.');
+        const review = ticket.result.review;
+        if (!object(review) || review.requestId !== ticket.request.requestId || review.proposalName !== ticket.request.proposalName
+            || review.baseRevisionId !== ticket.request.baseRevisionId || review.instruction !== ticket.request.instruction
+            || JSON.stringify(review.selectedObjectIds) !== JSON.stringify(ticket.request.selectedObjectIds)) throw new Error('Legacy result review binding mismatch.');
+        if (ticket.result.status === 'ready') {
+          const record = proposed.review(ticket.request.proposalName);
+          const expected = { ...record, changes: summarizeModelDelta(diffSnapshots(proposed.view(record.baseRevisionId).snapshot, proposed.view(record.proposalRevisionId).snapshot)) };
+          if (!isDeepStrictEqual(expected, review)) throw new Error('Legacy result review evidence mismatch.');
+        } else if (review.proposalRevisionId !== null || review.changes !== null
+            || !['summary', 'rationale', 'constraints', 'uncertainty'].every((key) => typeof review[key] === 'string' && review[key].length > 0 && review[key].length <= 4000)
+            || proposed.serialize() !== repository.serialize()) throw new Error('Invalid legacy declined result.');
+        if (Object.hasOwn(review, 'intent')) parseIntentAssessment(review.intent);
+        result = { ...ticket.result, project: this.#projects.put(proposed) };
+      }
+      const history: string[] = [];
+      for (const text of ticket.history) {
+        const previous = parseTicket(text, portable);
+        if (previous.id !== ticket.id || previous.projectId !== ticket.projectId) throw new Error('Legacy archive identity mismatch.');
+        history.push(JSON.stringify(await convert(previous, true)));
+      }
+      return { ...ticket, project: this.#projects.put(repository), result, history };
+    };
+    for (const row of this.#db.prepare('SELECT id, project_id, state, body FROM requests ORDER BY rowid').all()) {
+      if (typeof row.body !== 'string') throw new Error('Unreadable legacy request.');
+      const ticket = parseTicket(row.body, portable);
+      if (ticket.id !== row.id || ticket.projectId !== row.project_id || ticket.state !== row.state) throw new Error('Legacy request row identity mismatch.');
+      this.#put(await convert(ticket, false));
+    }
+    for (const row of this.#db.prepare('SELECT id, ticket_id, fingerprint FROM submissions').all()) {
+      const bound = typeof row.id === 'string' ? submissions.get(row.id) : undefined;
+      if (!bound || row.ticket_id !== bound.ticketId || row.fingerprint !== bound.fingerprint) throw new Error('Legacy submission replay mismatch.');
+    }
+    if (this.#db.prepare('SELECT COUNT(*) AS count FROM submissions').get()?.count !== submissions.size) throw new Error('Legacy submission replay is incomplete.');
+    for (const row of this.#db.prepare('SELECT ticket_id, request_id, attempt, execution_id, body FROM request_executions').all()) {
+      const bound = typeof row.request_id === 'string' ? submissions.get(row.request_id) : undefined;
+      if (!bound || bound.ticketId !== row.ticket_id || typeof row.attempt !== 'number' || !Number.isInteger(row.attempt)
+          || row.attempt < 1 || row.attempt > 3 || typeof row.body !== 'string') throw new Error('Invalid legacy execution binding.');
+      const evidence = parseScriptExecutionEvidence(JSON.parse(row.body));
+      if (evidence.executionId !== row.execution_id) throw new Error('Legacy execution identity mismatch.');
+    }
+    for (const row of this.#db.prepare('SELECT request_id, project_id, manifest FROM request_source_bindings').all()) {
+      const bound = typeof row.request_id === 'string' ? submissions.get(row.request_id) : undefined;
+      if (!bound || bound.projectId !== row.project_id || JSON.stringify(bound.sources) !== row.manifest) throw new Error('Legacy source binding mismatch.');
+      this.#sources.assert(bound.projectId, bound.sources);
+      const members = this.#db.prepare('SELECT source_id FROM request_source_memberships WHERE request_id=? ORDER BY source_id').all(identifier(row.request_id));
+      if (JSON.stringify(members.map((item) => item.source_id)) !== JSON.stringify(bound.sources.map((item) => item.id).sort())) throw new Error('Legacy source membership mismatch.');
+    }
+    for (const row of this.#db.prepare('SELECT id, project_id, manifest FROM request_source_identities').all()) {
+      if (typeof row.manifest !== 'string' || typeof row.project_id !== 'string') throw new Error('Invalid legacy source identity.');
+      const [source] = parseRequestSources([JSON.parse(row.manifest)]);
+      if (!source || source.id !== row.id) throw new Error('Legacy source identity mismatch.');
+      identifier(row.project_id);
+    }
+    if (this.#db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Legacy database relationships are invalid.');
+    this.#db.exec("UPDATE projects SET body='versioned'; INSERT INTO queue_storage_metadata(version) VALUES(1);");
   }
   #transaction<T>(operation: () => T): T {
     this.#db.exec('BEGIN IMMEDIATE');
@@ -177,7 +304,7 @@ export class ChangeRequests {
   #all(projectId?: string): Ticket[] {
     const rows = projectId === undefined ? this.#db.prepare('SELECT body FROM requests ORDER BY rowid').all()
       : this.#db.prepare('SELECT body FROM requests WHERE project_id = ? ORDER BY rowid').all(projectId);
-    return rows.map((row) => { if (typeof row.body !== 'string') throw new Error('Unreadable request store.'); return parseStored(row.body); });
+    return rows.map((row) => { if (typeof row.body !== 'string') throw new Error('Unreadable request store.'); return parseTicket(row.body, reference); });
   }
   #put(ticket: Ticket): void {
     this.#db.prepare('INSERT INTO requests(id, project_id, state, body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, body=excluded.body').run(ticket.id, ticket.projectId, ticket.state, JSON.stringify(ticket));
@@ -185,29 +312,39 @@ export class ChangeRequests {
   #withState(state: RequestState): Ticket[] {
     return this.#db.prepare('SELECT body FROM requests WHERE state=? ORDER BY rowid').all(state).map((row) => {
       if (typeof row.body !== 'string') throw new Error('Unreadable request store.');
-      return parseStored(row.body);
+      return parseTicket(row.body, reference);
     });
   }
   #submission(id: string, fingerprint: string): Ticket | null {
     const row = this.#db.prepare('SELECT ticket_id, fingerprint FROM submissions WHERE id=?').get(id);
     if (!row) return null;
     if (row.fingerprint !== fingerprint || typeof row.ticket_id !== 'string') throw new BacklogConflict('This request identity is already bound to different input.');
-    return this.get(row.ticket_id);
+    return this.#get(row.ticket_id);
   }
-  get(id: string): Ticket {
+  #get(id: string): Ticket {
     const row = this.#db.prepare('SELECT body FROM requests WHERE id=?').get(identifier(id));
     if (!row || typeof row.body !== 'string') throw new Error('Unknown change request.');
-    return parseStored(row.body);
+    const ticket = parseTicket(row.body, reference);
+    if (ticket.project.projectId !== ticket.projectId || (ticket.result && ticket.result.project.projectId !== ticket.projectId)) throw new Error('Stored request reference belongs to another project.');
+    return ticket;
   }
-  async refreshProposal(id: string): Promise<Ticket> {
+  #projection(ticket: Ticket, archived = false): TicketProjection {
+    if (archived && ticket.history.length) throw new Error('Nested request archives are invalid.');
+    return { ...ticket, project: this.#projects.read(ticket.project),
+      result: ticket.result ? { ...ticket.result, project: this.#projects.read(ticket.result.project) } : null,
+      history: ticket.history.map((text) => JSON.stringify(this.#projection(parseTicket(text, reference), true))) };
+  }
+  get(id: string): TicketProjection { return this.#projection(this.#get(id)); }
+  async refreshProposal(id: string): Promise<TicketProjection> { return this.#projection(await this.#refreshProposal(id)); }
+  async #refreshProposal(id: string): Promise<Ticket> {
     for (;;) {
       this.#assertOpen();
-      const ticket = this.get(id);
+      const ticket = this.#get(id);
       if ((ticket.state !== 'ready' && ticket.state !== 'needs-input') || ticket.result?.status !== 'ready') return ticket;
       const text = this.project(ticket.projectId);
-      const [current, proposed] = await Promise.all([RoomRepository.restore(text), RoomRepository.restore(ticket.result.project)]);
+      const [current, proposed] = await Promise.all([RoomRepository.restore(text), RoomRepository.restore(this.#projects.read(ticket.result.project))]);
       this.#assertOpen();
-      if (this.project(ticket.projectId) !== text || JSON.stringify(this.get(id)) !== JSON.stringify(ticket)) continue;
+      if (this.project(ticket.projectId) !== text || JSON.stringify(this.#get(id)) !== JSON.stringify(ticket)) continue;
       const next = assessedTicket(ticket, proposalReadiness(current, proposed, ticket.request.proposalName));
       if (next !== ticket) this.#put(next);
       return next;
@@ -219,7 +356,7 @@ export class ChangeRequests {
     }
   }
   executions(id: string): StoredExecution[] {
-    this.get(id);
+    this.#get(id);
     return this.#db.prepare('SELECT request_id, attempt, execution_id, body FROM request_executions WHERE ticket_id=? ORDER BY rowid').all(id).map((row) => {
       if (typeof row.request_id !== 'string' || typeof row.attempt !== 'number' || !Number.isInteger(row.attempt)
           || row.attempt < 1 || row.attempt > 3 || typeof row.body !== 'string') throw new Error('Unreadable execution journal.');
@@ -247,8 +384,41 @@ export class ChangeRequests {
     this.#db.prepare('INSERT INTO request_executions(ticket_id,request_id,attempt,execution_id,body) VALUES(?,?,?,?,?)').run(...key, body);
   }
   project(id: string): string | null {
-    const row = this.#db.prepare('SELECT body FROM projects WHERE id=?').get(identifier(id));
-    return row && typeof row.body === 'string' ? row.body : null;
+    const current = this.#projects.current(identifier(id));
+    return current ? this.#projects.read(current) : null;
+  }
+  projects(): ReturnType<VersionedProjects['list']> { this.#assertOpen(); return this.#projects.list({ limit: 32 }); }
+  history(input: Parameters<VersionedProjects['history']>[0]): ReturnType<VersionedProjects['history']> {
+    this.#assertOpen(); identifier(input.projectId);
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 50) throw new Error('History limit must be from 1 through 50.');
+    return this.#projects.history(input);
+  }
+  #register(repository: RoomRepository): void {
+    this.#db.prepare("INSERT INTO projects(id,body) VALUES(?,'versioned')").run(repository.projectId);
+    this.#projects.publish({ projectId: repository.projectId, expectedDocumentId: null, reference: this.#projects.put(repository),
+      origin: 'imported', requestId: null, decisionId: null });
+  }
+  async importProject(text: unknown): Promise<string> {
+    this.#assertOpen();
+    const repository = await RoomRepository.restore(text);
+    for (;;) {
+      this.#assertOpen();
+      const current = this.#projects.current(repository.projectId);
+      if (current) {
+        const authoritative = this.#projects.read(current);
+        const existing = await RoomRepository.restore(authoritative);
+        this.#assertOpen();
+        if (this.#projects.current(repository.projectId)?.documentId !== current.documentId) continue;
+        if (existing.root() !== repository.root()) throw new BacklogConflict('This project identity belongs to a different model.');
+        return authoritative;
+      }
+      return this.#transaction(() => { this.#register(repository); return this.#projects.read(this.#requiredCurrent(repository.projectId)); });
+    }
+  }
+  #requiredCurrent(projectId: string): RepositoryReference {
+    const current = this.#projects.current(projectId);
+    if (!current) throw new Error('Missing current project.');
+    return current;
   }
   async addSource(input: Parameters<RequestSourceStore['add']>[0]): Promise<RequestSource> {
     this.#assertOpen();
@@ -299,26 +469,26 @@ export class ChangeRequests {
     if (this.#all(repository.projectId).some((ticket) => ticket.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket already uses this proposal name.');
     const pending = this.#db.prepare("SELECT COUNT(*) AS count FROM requests WHERE state IN ('queued','working')").get();
     if (pending && typeof pending.count === 'number' && pending.count >= 64) throw new Error('The pending request backlog is full. Finish or cancel existing work first.');
-    const ticket: Ticket = recordActivity({ id: request.requestId, projectId: repository.projectId, request, project: body, fingerprint,
-      state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [], activity: [] }, { stage: 'queued', message: 'Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.' });
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
       const latest = this.project(repository.projectId);
       if (latest !== currentText && latest !== body) throw new BacklogConflict('The accepted server model changed during submission. Refresh before submitting.');
-      if (!latest) this.#db.prepare('INSERT INTO projects(id,body) VALUES(?,?)').run(repository.projectId, body);
+      if (!latest) this.#register(repository);
+      const ticket: Ticket = recordActivity({ id: request.requestId, projectId: repository.projectId, request, project: this.#projects.put(repository), fingerprint,
+        state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [], activity: [] }, { stage: 'queued', message: 'Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.' });
       if (request.sources) this.#sources.bind(repository.projectId, request.sources, request.requestId);
       this.#put(ticket);
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
     // Start after the acknowledgement can be sent; submission never awaits the worker.
     setImmediate(() => this.#pump());
-    const summary = this.list(ticket.projectId).find((item) => item.id === ticket.id);
+    const summary = this.list(repository.projectId).find((item) => item.id === request.requestId);
     if (!summary) throw new Error('Missing request summary.');
     return summary;
   }
-  async revise(id: string, project: unknown, input: unknown): Promise<Ticket> {
+  async revise(id: string, project: unknown, input: unknown): Promise<TicketProjection> {
     this.#assertOpen();
-    const ticket = this.get(id);
+    const ticket = this.#get(id);
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
@@ -330,7 +500,7 @@ export class ChangeRequests {
     const previous = this.#submission(request.requestId, fingerprint);
     if (previous) {
       if (previous.id !== ticket.id) throw new BacklogConflict('This request identity belongs to another ticket.');
-      return previous;
+      return this.#projection(previous);
     }
     if (!['ready', 'needs-input', 'failed'].includes(ticket.state)) throw new BacklogConflict('Only finished, unaccepted work can be revised.');
     if (ticket.history.length >= 8) throw new Error('This ticket has reached the eight-revision preview limit.');
@@ -343,12 +513,12 @@ export class ChangeRequests {
     }
     if (this.#all(ticket.projectId).some((other) => other.id !== ticket.id && other.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket uses that proposal name.');
     const archived = JSON.stringify({ ...ticket, history: [] });
-    const next: Ticket = recordActivity({ ...ticket, project: body, request, fingerprint, history: [...ticket.history, archived], activity: [],
-      state: 'queued', attempts: 0, result: null, error: null, decisionId: null, decisionAction: null, updatedAt: Date.now() }, { stage: 'queued', message: 'New revision queued. Earlier attempts remain in request history.' });
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
-      if (this.project(ticket.projectId) !== currentText || this.get(id).fingerprint !== ticket.fingerprint) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
+      if (this.project(ticket.projectId) !== currentText || this.#get(id).fingerprint !== ticket.fingerprint) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
       if (request.sources) this.#sources.bind(ticket.projectId, request.sources, request.requestId);
+      const next: Ticket = recordActivity({ ...ticket, project: this.#projects.put(repository), request, fingerprint, history: [...ticket.history, archived], activity: [],
+        state: 'queued', attempts: 0, result: null, error: null, decisionId: null, decisionAction: null, updatedAt: Date.now() }, { stage: 'queued', message: 'New revision queued. Earlier attempts remain in request history.' });
       this.#put(next);
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
@@ -377,7 +547,7 @@ export class ChangeRequests {
   }
   #isWorking(ticket: Ticket): boolean {
     if (this.#closed) return false;
-    const current = this.get(ticket.id);
+    const current = this.#get(ticket.id);
     return current.state === 'working' && current.request.requestId === ticket.request.requestId && current.attempts === ticket.attempts;
   }
   async #run(ticket: Ticket, worker: ModelWorker, signal: AbortSignal): Promise<void> {
@@ -389,15 +559,15 @@ export class ChangeRequests {
       return work.task;
     } };
     try {
-      const repository = await RoomRepository.restore(ticket.project);
+      const repository = await RoomRepository.restore(this.#projects.read(ticket.project));
       if (!this.#isWorking(ticket) || signal.aborted) return;
       if (ticket.request.sources) {
-        this.#put(recordActivity(this.get(ticket.id), { stage: 'inspecting', message: 'Preparing the attached reference files for the agent.' }));
+        this.#put(recordActivity(this.#get(ticket.id), { stage: 'inspecting', message: 'Preparing the attached reference files for the agent.' }));
         prepared = await this.#sources.prepare(ticket.projectId, ticket.request.sources, signal);
         if (!this.#isWorking(ticket) || signal.aborted) return;
       }
       const result = await prepareModelProposal(repository, ticket.request, trackedWorker, (event) => {
-        if (this.#isWorking(ticket)) this.#put(recordActivity(this.get(ticket.id), event));
+        if (this.#isWorking(ticket)) this.#put(recordActivity(this.#get(ticket.id), event));
       }, { signal, scripts: this.#scripts, ...(prepared ? { sourceInput: prepared } : {}), onExecution: (record) => {
         try { this.#recordExecution(ticket, record); }
         catch (error) {
@@ -408,40 +578,41 @@ export class ChangeRequests {
       } });
       if (evidenceError) throw evidenceError;
       if (!this.#isWorking(ticket)) return;
-      this.#put(recordActivity({ ...this.get(ticket.id), state: result.status === 'ready' ? 'ready' : 'needs-input',
+      this.#put(recordActivity({ ...this.#get(ticket.id), state: result.status === 'ready' ? 'ready' : 'needs-input',
         error: null, updatedAt: Date.now(),
-        result: { status: result.status, project: result.repository.serialize(), review: result.review } },
+        result: { status: result.status, project: this.#projects.put(result.repository), review: result.review } },
         { stage: result.status === 'ready' ? 'ready' : 'needs-input', message: result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.' }));
       if (result.status === 'ready') await this.refreshProposal(ticket.id);
     } catch (error) {
       this.#attempts.get(ticket.id)?.controller.abort();
       if (!this.#isWorking(ticket)) return;
       const failure = evidenceError ?? error;
-      this.#put(recordActivity({ ...this.get(ticket.id), state: 'failed', error: failure instanceof Error ? failure.message.slice(0, 1000) : 'The agent could not finish this request.' }, { stage: 'failed', message: 'The agent could not complete this attempt. The accepted model is unchanged.' }));
+      this.#put(recordActivity({ ...this.#get(ticket.id), state: 'failed', error: failure instanceof Error ? failure.message.slice(0, 1000) : 'The agent could not finish this request.' }, { stage: 'failed', message: 'The agent could not complete this attempt. The accepted model is unchanged.' }));
     } finally {
       // Core drains script calls; retain the slot until provider cleanup also ends.
       if (work.task) await work.task.catch(() => {});
       await prepared?.dispose();
     }
   }
-  async decide(id: string, input: unknown): Promise<{ ticket: Ticket; project: string }> {
+  async decide(id: string, input: unknown): Promise<{ ticket: TicketProjection; project: string }> {
     this.#assertOpen();
     if (!object(input) || Object.keys(input).length !== 3 || typeof input.action !== 'string') throw new Error('A decision requires action, decisionId and expectedRequestId.');
     const decisionId = identifier(input.decisionId);
     const expectedRequestId = identifier(input.expectedRequestId);
     const action = input.action;
-    const ticket = this.get(id);
+    const ticket = this.#get(id);
     if (ticket.request.requestId !== expectedRequestId) throw new BacklogConflict('This ticket has a newer revision than the one you reviewed. Reopen it before deciding.');
+    const expected = this.#requiredCurrent(ticket.projectId);
     const text = this.project(ticket.projectId);
     if (!text) throw new Error('The request project is missing.');
     if (ticket.decisionId === decisionId) {
       if (ticket.decisionAction !== action) throw new BacklogConflict('This decision identity was already used for another action.');
-      return { ticket, project: text };
+      return { ticket: this.#projection(ticket), project: text };
     }
     if (action === 'retry') {
       if (ticket.state !== 'failed' || ticket.attempts >= 3) throw new BacklogConflict('Only failed work with fewer than three attempts can be retried.');
       const next = recordActivity({ ...ticket, state: 'queued', error: null, decisionId, decisionAction: action }, { stage: 'queued', message: 'Retry queued. Earlier attempt activity is retained.' });
-      this.#put(next); setImmediate(() => this.#pump()); return { ticket: next, project: text };
+      this.#put(next); setImmediate(() => this.#pump()); return { ticket: this.#projection(next), project: text };
     }
     if (action === 'cancel' || action === 'reject') {
       const allowed = action === 'cancel' ? ticket.state === 'queued' || ticket.state === 'working'
@@ -451,11 +622,11 @@ export class ChangeRequests {
       this.#put(next);
       const active = this.#attempts.get(id);
       if (action === 'cancel' && active?.requestId === ticket.request.requestId && active.attempt === ticket.attempts) active.controller.abort();
-      return { ticket: next, project: text };
+      return { ticket: this.#projection(next), project: text };
     }
     if (action !== 'accept' || (ticket.state !== 'ready' && ticket.state !== 'needs-input') || ticket.result?.status !== 'ready') throw new BacklogConflict('Only a ready proposal can be accepted.');
     const current = await RoomRepository.restore(text);
-    const proposed = await RoomRepository.restore(ticket.result.project);
+    const proposed = await RoomRepository.restore(this.#projects.read(ticket.result.project));
     this.#assertOpen();
     const readiness = proposalReadiness(current, proposed, ticket.request.proposalName);
     if (readiness.state === 'needs-input') throw new BacklogConflict(readiness.error);
@@ -464,19 +635,20 @@ export class ChangeRequests {
     const next: Ticket = recordActivity({ ...ticket, state: 'completed', decisionId, decisionAction: action }, { stage: 'completed', message: 'Proposal explicitly accepted and saved as the current model.' });
     const assessments = await Promise.all(this.#all(ticket.projectId).filter((other) => other.id !== ticket.id
       && (other.state === 'ready' || other.state === 'needs-input') && other.result?.status === 'ready').map(async (other) => {
-      const otherProposal = await RoomRepository.restore(other.result?.project);
+      const otherProposal = await RoomRepository.restore(other.result ? this.#projects.read(other.result.project) : null);
       return { before: other, after: assessedTicket(other, proposalReadiness(accepted, otherProposal, other.request.proposalName)) };
     }));
     this.#assertOpen();
     this.#transaction(() => {
       // Async validation above may have overlapped another decision.
-      const latest = this.get(id);
+      const latest = this.#get(id);
       if (latest.decisionId === decisionId && latest.decisionAction === action) return;
-      if (this.project(ticket.projectId) !== text || JSON.stringify(latest) !== JSON.stringify(ticket)) throw new BacklogConflict('The model or ticket changed while reviewing. Refresh before deciding.');
-      this.#db.prepare('UPDATE projects SET body=? WHERE id=?').run(acceptedText, ticket.projectId);
+      if (this.#requiredCurrent(ticket.projectId).documentId !== expected.documentId || JSON.stringify(latest) !== JSON.stringify(ticket)) throw new BacklogConflict('The model or ticket changed while reviewing. Refresh before deciding.');
+      this.#projects.publish({ projectId: ticket.projectId, expectedDocumentId: expected.documentId,
+        reference: this.#projects.put(accepted), origin: 'accepted', requestId: ticket.request.requestId, decisionId });
       this.#put(next);
       for (const assessment of assessments) {
-        if (assessment.after !== assessment.before && JSON.stringify(this.get(assessment.before.id)) === JSON.stringify(assessment.before)) this.#put(assessment.after);
+        if (assessment.after !== assessment.before && JSON.stringify(this.#get(assessment.before.id)) === JSON.stringify(assessment.before)) this.#put(assessment.after);
       }
     });
     return { ticket: this.get(id), project: this.project(ticket.projectId) ?? acceptedText };
@@ -485,7 +657,7 @@ export class ChangeRequests {
   close(): Promise<void> {
     if (this.#closing) return this.#closing;
     this.#closed = true;
-    clearInterval(this.#timer);
+    if (this.#timer) clearInterval(this.#timer);
     for (const active of this.#attempts.values()) active.controller.abort();
     for (const controller of this.#uploads.keys()) controller.abort();
     this.#closing = (async () => {

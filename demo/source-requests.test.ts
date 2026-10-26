@@ -35,7 +35,7 @@ test('real PNG/PDF/text survive queued restart, reach the worker, bind the revie
   const directory = await mkdtemp(path.join(tmpdir(), 'bim-source-queue-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const database = path.join(directory, 'queue.sqlite');
   const repository = await RoomRepository.create('Source reconstruction'); const original = repository.serialize();
-  let queue = new ChangeRequests(database, () => null);
+  let queue = await ChangeRequests.open(database, () => null);
   const files: { name: string; mediaType: SourceMediaType; bytes: Buffer }[] = [
     { name: 'reference.png', mediaType: 'image/png', bytes: await sourceFloorImage() },
     { name: 'reference.pdf', mediaType: 'application/pdf', bytes: sourceFloorPdf() },
@@ -59,7 +59,7 @@ test('real PNG/PDF/text survive queued restart, reach the worker, bind the revie
     const result = await session.executeTool('run_model_script', { language: 'typescript', source: script });
     assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.done, true);
   } };
-  queue = new ChangeRequests(database, () => worker); t.after(() => queue.close());
+  queue = await ChangeRequests.open(database, () => worker); t.after(() => queue.close());
   await finished(queue, input.requestId);
   const ticket = queue.get(input.requestId); assert.equal(ticket.state, 'ready', ticket.error ?? '');
   assert.deepEqual(ticket.request.sources, sources);
@@ -82,14 +82,14 @@ test('real PNG/PDF/text survive queued restart, reach the worker, bind the revie
   assert.ok(revised.history[0]?.includes(sources[0]?.sha256 ?? 'missing'));
   await queue.close();
   for (const file of imagePaths) await assert.rejects(access(file), 'attempt files are removed after provider cleanup');
-  queue = new ChangeRequests(database, () => null);
+  queue = await ChangeRequests.open(database, () => null);
   assert.equal(queue.source(repository.projectId, sources[1]?.id ?? '').source.sha256, createHash('sha256').update(sourceFloorPdf()).digest('hex'));
   await queue.decide(input.requestId, { action: 'accept', decisionId: 'accept-reference', expectedRequestId: revisedInput.requestId });
   assert.notEqual((await RoomRepository.restore(queue.project(repository.projectId))).head('main'), repository.head('main'));
 });
 
 test('binary source route checks origin, actual type, immutable identity and project membership', async t => {
-  const server = createDemoServer();
+  const server = await createDemoServer();
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers(); });
   const address = server.address(); assert.ok(address && typeof address === 'object');
