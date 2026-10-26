@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-26T00:05:12.970439+00:00",
+  "reason": "The failing du scan reported a PostgreSQL temporary path disappearing. The monitor exited; independent guard stopped its owned client. This is not a capacity threshold breach or six-hour timeout.",
+  "sourceRun": "r3-hospital-full-20261025a",
+  "originalMonitorRetained": true,
+  "fullAdmissionRetryAuthorized": false,
+  "artifacts": [
+    {
+      "path": "BUDGET-MONITOR-FAILED",
+      "bytes": 45,
+      "sha256": "2e60f7876068191f278e990d123855095190016373f74aa8aecd4ea49a17ffd3"
+    },
+    {
+      "path": "budget.sh",
+      "bytes": 867,
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f"
+    },
+    {
+      "path": "last-budget.json",
+      "bytes": 166,
+      "sha256": "f309dd4d12be271d4dfd1a108830f81999ff2429960f9625b3e78e532c9875eb"
+    },
+    {
+      "path": "monitor-stderr.log",
+      "bytes": 112,
+      "sha256": "e3fcab3f810cb2784b24b68443d95e1c89554328254d60270e1745399a0fbc55"
+    },
+    {
+      "path": "monitor-stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "publication-observation-2231.json",
+      "bytes": 274,
+      "sha256": "fe39317c21c6e77f1c75e56abc6ee313d96da2317d8e7144d79aefc31975d398"
+    },
+    {
+      "path": "publication-observation-2348.json",
+      "bytes": 274,
+      "sha256": "ebe9bc813d615c499105e23aaeb680c67548b5aee52ae5df082370788faff505"
+    }
+  ]
+}
