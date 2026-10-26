@@ -2412,7 +2412,7 @@ function renderComparison(): void {
   const reviewedRevision = project.reviewAt(selectedRevision);
   const review = reviewedRevision?.review;
   const comparison = reviewedRevision ? project.view(reviewedRevision.comparisonBaseRevisionId).snapshot : original;
-  const comparisonLabel = ui['review-page'].querySelector('.comparison-toolbar span');
+  const comparisonLabel = generic('workspace-review-canvas').querySelector('.comparison-toolbar span');
   if (comparisonLabel) comparisonLabel.textContent = reviewedRevision && reviewedRevision.comparisonBaseRevisionId !== review?.baseRevisionId
     ? 'Applied changes compared with the preceding accepted revision' : 'Compare with this proposal’s bound base';
   const isOriginal = selectedRevision === originalId;
