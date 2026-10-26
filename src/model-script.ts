@@ -1,6 +1,5 @@
 import { createApiKit, createRuntime, DocsTree, ScriptApiError, Type } from '@frederik91/scriptbox';
 import type { ExecutionEvent, ExecutionLimits, ExecutionOutcome, JsonValue, ScriptBoxRuntime } from '@frederik91/scriptbox';
-import type { Static } from 'typebox';
 import { spaces, floorBounds, clearSpaceBounds, doorConnections, entitySpace } from './floor-plan.ts';
 import {
   diffSnapshots, FURNITURE_KINDS, previewFurnishings, previewRectangle, previewRoomFurnishings,
@@ -179,7 +178,9 @@ function jsonValue(value: unknown): JsonValue {
 }
 
 /** A live read projection; never validated or persisted as a complete project. */
-export function modelWorkingGraph(graph: ModelGraph, scope?: FrozenModelScope): Static<typeof snapshot> {
+export function modelWorkingGraph(graph: ModelGraph, scope?: FrozenModelScope): Omit<ModelGraph, 'entities' | 'relationships'> & {
+  entities: ModelGraph['entities'][number][]; relationships: ModelGraph['relationships'][number][];
+} {
   if (!scope) return { ...graph, entities: [...graph.entities], relationships: [...graph.relationships] };
   const ids = new Set([...scope.targetIds, ...scope.contextIds, ...scope.dependentIds, ...scope.writableIds]);
   const links = new Set(scope.relationshipIds);
