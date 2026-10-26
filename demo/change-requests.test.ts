@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
-import { RoomRepository, rectangleLayout, previewFurnishings } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewFurnishings, previewRectangle } from '../src/room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { parseRequestActivity } from '../src/request-activity.ts';
@@ -466,6 +466,27 @@ test('legacy projects, archived results, source bindings, replay and execution e
   const accepted = await queue.decide(first.requestId, { action: 'accept', decisionId: 'legacy-accept', expectedRequestId: second.requestId });
   const ticket = queue.get(first.requestId); const executions = queue.executions(first.requestId);
   await queue.close(); legacyCopy(file, legacy, accepted.project, [ticket]);
+  for (const problem of ['source-bytes', 'execution', 'review', 'root']) {
+    const invalidFile = path.join(directory, `${problem}.sqlite`);
+    legacyCopy(file, invalidFile, accepted.project, [ticket]);
+    const damaged = new DatabaseSync(invalidFile);
+    if (problem === 'source-bytes') damaged.prepare('UPDATE request_source_blobs SET bytes=? WHERE id=?').run(Buffer.alloc(source.byteLength, 65), source.id);
+    else if (problem === 'execution') damaged.exec('DELETE FROM request_executions');
+    else if (problem === 'review') damaged.prepare("UPDATE requests SET body=json_set(body, '$.result.review.rationale', 'Forged review text')").run();
+    else {
+      const layout = structuredClone(rectangleLayout(repo.view(repo.root()).snapshot)); layout.door.widthMm = 1300;
+      const mismatch = await RoomRepository.createProject({ projectId: repo.projectId, name: repo.name, snapshot: previewRectangle(repo.view(repo.root()).snapshot, layout) });
+      damaged.prepare('UPDATE projects SET body=?').run(mismatch.serialize());
+    }
+    const originalProject = damaged.prepare('SELECT body FROM projects').get()?.body;
+    const originalTicket = damaged.prepare('SELECT body FROM requests').get()?.body; damaged.close();
+    await assert.rejects(() => ChangeRequests.open(invalidFile, () => null), /legacy|Legacy|mismatch/);
+    const unchanged = new DatabaseSync(invalidFile, { readOnly: true });
+    assert.equal(unchanged.prepare('SELECT body FROM projects').get()?.body, originalProject);
+    assert.equal(unchanged.prepare('SELECT body FROM requests').get()?.body, originalTicket);
+    assert.equal(unchanged.prepare("SELECT name FROM sqlite_master WHERE name='queue_storage_metadata'").get(), undefined);
+    unchanged.close();
+  }
   queue = await ChangeRequests.open(legacy, () => null); t.after(() => queue.close());
   assert.equal(queue.project(repo.projectId), accepted.project); assert.deepEqual(queue.get(first.requestId), ticket);
   assert.deepEqual(queue.executions(first.requestId), executions);
@@ -477,11 +498,19 @@ test('legacy projects, archived results, source bindings, replay and execution e
   assert.equal(stored.body.includes('\\"revisions\\"'), false); assert.equal(stored.body.includes(repo.serialize()), false);
   const value: unknown = JSON.parse(stored.body); assert.ok(value && typeof value === 'object' && 'project' in value);
   assert.equal(typeof value.project, 'object');
+  assert.ok('history' in value && Array.isArray(value.history));
+  for (const archived of value.history) {
+    assert.equal(typeof archived, 'string');
+    const record: unknown = JSON.parse(archived);
+    assert.ok(record && typeof record === 'object' && 'project' in record && typeof record.project === 'object');
+    assert.ok('result' in record && record.result && typeof record.result === 'object' && 'project' in record.result && typeof record.result.project === 'object');
+  }
   assert.equal(db.prepare('SELECT body FROM projects').get()?.body, 'versioned'); db.close();
   const history = queue.history({ projectId: repo.projectId, before: null, limit: 50 });
   assert.ok(history.entries.every((entry) => entry.origin === 'imported'));
   await queue.close(); queue = await ChangeRequests.open(legacy, () => null);
   assert.deepEqual(queue.get(first.requestId), ticket); assert.deepEqual(queue.history({ projectId: repo.projectId, before: null, limit: 50 }), history);
+  assert.equal(await queue.importProject(repo.serialize()), accepted.project, 'Browser state cannot rewind accepted work.');
 });
 
 test('invalid bytes in a legacy archive roll back every migration write and leave original bytes available', async (t) => {

@@ -130,12 +130,18 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   if (!Number.isSafeInteger(value.createdAt) || !Number.isSafeInteger(value.updatedAt) || value.createdAt < 0 || value.updatedAt < 0
       || !Number.isSafeInteger(value.attempts) || value.attempts < 0 || value.attempts > 3
       || !/^[a-f0-9]{64}$/.test(value.fingerprint)) throw new Error('Invalid stored request metadata.');
+  if ((value.decisionId === null) !== (value.decisionAction === null)
+      || (value.decisionAction !== null && !['accept', 'reject', 'cancel', 'retry'].includes(value.decisionAction))) throw new Error('Invalid stored decision.');
+  if (value.decisionId !== null) identifier(value.decisionId);
   let result: RequestTicket<Project>['result'] = null;
   if (value.result !== null) {
     if (!object(value.result) || (value.result.status !== 'ready' && value.result.status !== 'declined') || !object(value.result.review)) throw new Error('Invalid stored proposal result.');
     fields(value.result, ['status', 'project', 'review']);
     result = { status: value.result.status, project: parseProject(value.result.project), review: value.result.review };
   }
+  if ((state === 'ready' && result?.status !== 'ready')
+      || (state === 'completed' && (result?.status !== 'ready' || value.decisionAction !== 'accept'))
+      || (state === 'cancelled' && value.decisionAction !== 'cancel') || (state === 'rejected' && value.decisionAction !== 'reject')) throw new Error('Stored state and decision do not match.');
   return { id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history, activity,
@@ -229,12 +235,12 @@ export class ChangeRequests {
   async #migrate(): Promise<void> {
     this.#db.exec('CREATE TABLE IF NOT EXISTS queue_storage_metadata (version INTEGER PRIMARY KEY CHECK(version=1));');
     if (this.#db.prepare('SELECT version FROM queue_storage_metadata').get()) return;
-    const roots = new Map<string, string>();
+    const projects = new Map<string, RoomRepository>();
     for (const row of this.#db.prepare('SELECT id, body FROM projects ORDER BY rowid').all()) {
       if (typeof row.id !== 'string' || typeof row.body !== 'string') throw new Error('Unreadable legacy project.');
       const repository = await RoomRepository.restore(row.body);
       if (repository.projectId !== row.id) throw new Error('Legacy project identity mismatch.');
-      roots.set(row.id, repository.root());
+      projects.set(row.id, repository);
       this.#projects.publish({ projectId: row.id, expectedDocumentId: null, reference: this.#projects.put(repository),
         origin: 'imported', requestId: null, decisionId: null });
     }
@@ -243,7 +249,12 @@ export class ChangeRequests {
     const convert = async (ticket: TicketProjection, archived: boolean): Promise<Ticket> => {
       if (archived && ticket.history.length) throw new Error('Nested legacy archives are invalid.');
       const repository = await RoomRepository.restore(ticket.project);
-      if (repository.projectId !== ticket.projectId || repository.root() !== roots.get(ticket.projectId)) throw new Error('Legacy request project/root mismatch.');
+      const accepted = projects.get(ticket.projectId);
+      if (!accepted || repository.projectId !== ticket.projectId || repository.root() !== accepted.root()) throw new Error('Legacy request project/root mismatch.');
+      if (ticket.state === 'completed') {
+        const decision = accepted.review(ticket.request.proposalName).decision;
+        if (decision.status === 'pending' || decision.decisionId !== ticket.decisionId) throw new Error('Legacy accepted ticket decision does not match project evidence.');
+      }
       validateModelProposalRequest(repository, ticket.request);
       const fingerprint = createHash('sha256').update(JSON.stringify({ project: repository.serialize(), request: ticket.request })).digest('hex');
       if (fingerprint !== ticket.fingerprint) throw new Error('Legacy submission fingerprint mismatch.');
