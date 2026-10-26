@@ -412,8 +412,14 @@ function legacyCopy(sourceFile: string, legacyFile: string, project: string, tic
   try {
     for (const table of ['projects', 'requests', 'submissions', 'request_executions', 'request_source_blobs', 'request_source_identities', 'request_source_bindings', 'request_source_memberships']) {
       const definition = source.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table);
-      assert.ok(definition && typeof definition.sql === 'string'); legacy.exec(definition.sql);
+      assert.ok(definition && typeof definition.sql === 'string');
+      legacy.exec(table === 'projects' ? 'CREATE TABLE projects (id TEXT PRIMARY KEY, body TEXT NOT NULL)' : definition.sql);
       for (const row of source.prepare(`SELECT * FROM ${table}`).all()) {
+        if (table === 'projects') {
+          assert.equal(typeof row.id, 'string');
+          legacy.prepare('INSERT INTO projects(id,body) VALUES(?,?)').run(row.id, project);
+          continue;
+        }
         const columns = Object.keys(row);
         legacy.prepare(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`).run(...Object.values(row));
       }
@@ -424,6 +430,96 @@ function legacyCopy(sourceFile: string, legacyFile: string, project: string, tic
     for (const ticket of tickets) legacy.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify(ticket), ticket.id);
   } finally { legacy.close(); source.close(); }
 }
+
+test('fresh project namespaces contain only IDs and register new projects after reopening', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-project-namespace-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'requests.sqlite');
+  const first = await RoomRepository.create('First namespace'); const second = await RoomRepository.create('Second namespace');
+  let queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  await queue.importProject(first.serialize()); await queue.submit(first.serialize(), request(first, 'namespace-first', 'namespace-first'));
+  await queue.close();
+  const initial = new DatabaseSync(file, { readOnly: true });
+  assert.deepEqual(initial.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']);
+  assert.deepEqual(initial.prepare('PRAGMA foreign_key_check').all(), []); initial.close();
+  queue = await ChangeRequests.open(file, () => null);
+  await queue.importProject(second.serialize()); await queue.submit(second.serialize(), request(second, 'namespace-second', 'namespace-second'));
+  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  assert.equal(queue.project(first.projectId), first.serialize()); assert.equal(queue.project(second.projectId), second.serialize());
+  assert.equal(queue.get('namespace-first').state, 'queued'); assert.equal(queue.get('namespace-second').state, 'queued');
+});
+
+test('normalized V1 sentinel cleanup is atomic, refuses unexpected bodies and supports registration after cleanup', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-normalized-namespace-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'requests.sqlite'); const repo = await RoomRepository.create('Normalized namespace');
+  let queue = await ChangeRequests.open(file, () => null);
+  await queue.submit(repo.serialize(), request(repo, 'normalized-ticket', 'normalized-ticket')); const ticket = queue.get('normalized-ticket');
+  await queue.close();
+  const db = new DatabaseSync(file);
+  db.exec("ALTER TABLE projects ADD COLUMN body TEXT NOT NULL DEFAULT 'versioned'");
+  const stored = db.prepare('SELECT body FROM requests WHERE id=?').get(ticket.id); assert.ok(stored && typeof stored.body === 'string');
+  db.prepare("UPDATE requests SET state='working',body='invalid working ticket'").run();
+  const head = db.prepare('SELECT document_id FROM versioned_projects WHERE project_id=?').get(repo.projectId)?.document_id;
+  db.close();
+  let workerChecks = 0;
+  await assert.rejects(() => ChangeRequests.open(file, () => { workerChecks++; return null; }), /JSON/);
+  assert.equal(workerChecks, 0, 'Startup failure cannot start the pump.');
+  const rolledBack = new DatabaseSync(file);
+  assert.deepEqual(rolledBack.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id', 'body']);
+  assert.equal(rolledBack.prepare('SELECT body FROM projects').get()?.body, 'versioned');
+  assert.equal(rolledBack.prepare('SELECT document_id FROM versioned_projects WHERE project_id=?').get(repo.projectId)?.document_id, head);
+  rolledBack.prepare("UPDATE requests SET state='queued',body=? WHERE id=?").run(stored.body, ticket.id); rolledBack.close();
+  for (const body of [' versioned', repo.serialize()]) {
+    const unexpected = new DatabaseSync(file); unexpected.prepare('UPDATE projects SET body=?').run(body); unexpected.close();
+    await assert.rejects(() => ChangeRequests.open(file, () => { workerChecks++; return null; }), /Unexpected normalized project marker/);
+    const retained = new DatabaseSync(file, { readOnly: true });
+    assert.equal(retained.prepare('SELECT body FROM projects').get()?.body, body);
+    assert.equal(retained.prepare('SELECT body FROM requests WHERE id=?').get(ticket.id)?.body, stored.body); retained.close();
+    assert.equal(workerChecks, 0);
+  }
+  const repaired = new DatabaseSync(file); repaired.exec("UPDATE projects SET body='versioned'"); repaired.close();
+  queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  assert.deepEqual(queue.get(ticket.id), ticket); assert.equal(queue.project(repo.projectId), repo.serialize());
+  const cleaned = new DatabaseSync(file, { readOnly: true });
+  assert.deepEqual(cleaned.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']);
+  assert.deepEqual(cleaned.prepare('PRAGMA foreign_key_check').all(), []); cleaned.close();
+  const next = await RoomRepository.create('After normalized cleanup');
+  await queue.importProject(next.serialize()); await queue.submit(next.serialize(), request(next, 'after-cleanup', 'after-cleanup'));
+  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  assert.equal(queue.project(next.projectId), next.serialize()); assert.equal(queue.get('after-cleanup').state, 'queued');
+});
+
+test('failure after dropping legacy project bodies restores original bytes and schema until migration can finish', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-namespace-rollback-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const sourceFile = path.join(directory, 'source.sqlite'); const file = path.join(directory, 'legacy.sqlite');
+  const repo = await RoomRepository.create('Legacy namespace rollback');
+  const source = await ChangeRequests.open(sourceFile, () => null);
+  await source.submit(repo.serialize(), request(repo, 'legacy-namespace', 'legacy-namespace')); const ticket = source.get('legacy-namespace');
+  await source.close(); legacyCopy(sourceFile, file, repo.serialize(), [ticket]);
+  const db = new DatabaseSync(file);
+  db.exec("CREATE TABLE queue_storage_metadata (version INTEGER PRIMARY KEY CHECK(version=1)); CREATE TRIGGER refuse_migration_seal BEFORE INSERT ON queue_storage_metadata BEGIN SELECT RAISE(FAIL, 'migration seal unavailable'); END;"); db.close();
+  let workerChecks = 0;
+  await assert.rejects(() => ChangeRequests.open(file, () => { workerChecks++; return null; }), /migration seal unavailable/);
+  assert.equal(workerChecks, 0);
+  const rolledBack = new DatabaseSync(file);
+  assert.deepEqual(rolledBack.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id', 'body']);
+  assert.equal(rolledBack.prepare('SELECT body FROM projects').get()?.body, repo.serialize());
+  assert.equal(rolledBack.prepare('SELECT body FROM requests WHERE id=?').get(ticket.id)?.body, JSON.stringify(ticket));
+  assert.equal(rolledBack.prepare('SELECT COUNT(*) AS count FROM queue_storage_metadata').get()?.count, 0);
+  assert.equal(rolledBack.prepare("SELECT name FROM sqlite_master WHERE name='versioned_projects'").get(), undefined);
+  rolledBack.exec('DROP TRIGGER refuse_migration_seal'); rolledBack.close();
+  let queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  assert.deepEqual(queue.get(ticket.id), ticket);
+  const next = await RoomRepository.create('After legacy migration');
+  await queue.importProject(next.serialize()); await queue.submit(next.serialize(), request(next, 'after-migration', 'after-migration'));
+  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  assert.equal(queue.project(repo.projectId), repo.serialize()); assert.equal(queue.project(next.projectId), next.serialize());
+  const migrated = new DatabaseSync(file, { readOnly: true });
+  assert.deepEqual(migrated.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']);
+  assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(), []); migrated.close();
+});
 
 test('a ticket publication failure rolls back accepted head, history and decision and can retry after reopening', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-publication-atomic-'));
@@ -505,7 +601,7 @@ test('legacy projects, archived results, source bindings, replay and execution e
     assert.ok(record && typeof record === 'object' && 'project' in record && typeof record.project === 'object');
     assert.ok('result' in record && record.result && typeof record.result === 'object' && 'project' in record.result && typeof record.result.project === 'object');
   }
-  assert.equal(db.prepare('SELECT body FROM projects').get()?.body, 'versioned'); db.close();
+  assert.deepEqual(db.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']); db.close();
   const history = queue.history({ projectId: repo.projectId, before: null, limit: 50 });
   assert.ok(history.entries.every((entry) => entry.origin === 'imported'));
   await queue.close(); queue = await ChangeRequests.open(legacy, () => null);
@@ -528,6 +624,7 @@ test('invalid bytes in a legacy archive roll back every migration write and leav
   await assert.rejects(() => ChangeRequests.open(legacy, () => null), /not valid bounded JSON/);
   const db = new DatabaseSync(legacy);
   assert.equal(db.prepare('SELECT body FROM projects').get()?.body, repo.serialize());
+  assert.deepEqual(db.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id', 'body']);
   assert.equal(db.prepare('SELECT body FROM requests').get()?.body, JSON.stringify(invalid));
   assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='queue_storage_metadata'").get(), undefined);
   db.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify(ticket), ticket.id); db.close();

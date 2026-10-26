@@ -203,7 +203,7 @@ export class ChangeRequests {
   private constructor(db: DatabaseSync, worker: () => ModelWorker | null) {
     this.#db = db;
     this.#worker = worker;
-    this.#db.exec('CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), state TEXT NOT NULL, body TEXT NOT NULL); CREATE INDEX IF NOT EXISTS requests_project ON requests(project_id); CREATE INDEX IF NOT EXISTS requests_state ON requests(state);');
+    this.#db.exec('CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), state TEXT NOT NULL, body TEXT NOT NULL); CREATE INDEX IF NOT EXISTS requests_project ON requests(project_id); CREATE INDEX IF NOT EXISTS requests_state ON requests(state);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES requests(id), fingerprint TEXT NOT NULL);');
     this.#db.exec('CREATE TABLE IF NOT EXISTS request_executions (ticket_id TEXT NOT NULL REFERENCES requests(id), request_id TEXT NOT NULL, attempt INTEGER NOT NULL, execution_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(ticket_id, request_id, attempt, execution_id));');
     this.#projects = new VersionedProjectStore(this.#db);
@@ -234,9 +234,21 @@ export class ChangeRequests {
   }
   async #migrate(): Promise<void> {
     this.#db.exec('CREATE TABLE IF NOT EXISTS queue_storage_metadata (version INTEGER PRIMARY KEY CHECK(version=1));');
-    if (this.#db.prepare('SELECT version FROM queue_storage_metadata').get()) return;
+    const hasLegacyBody = this.#db.prepare('PRAGMA table_info(projects)').all().some((column) => column.name === 'body');
+    if (this.#db.prepare('SELECT version FROM queue_storage_metadata').get()) {
+      if (hasLegacyBody) {
+        for (const row of this.#db.prepare('SELECT id,body FROM projects').all()) {
+          if (typeof row.id !== 'string' || row.body !== 'versioned' || !this.#projects.current(identifier(row.id))) throw new Error('Unexpected normalized project marker.');
+        }
+        if (this.#db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Normalized database relationships are invalid.');
+        this.#db.exec('ALTER TABLE projects DROP COLUMN body');
+      }
+      return;
+    }
     const projects = new Map<string, RoomRepository>();
-    for (const row of this.#db.prepare('SELECT id, body FROM projects ORDER BY rowid').all()) {
+    if (!hasLegacyBody && this.#db.prepare('SELECT id FROM projects LIMIT 1').get()) throw new Error('Project migration metadata is missing.');
+    const legacyProjects = hasLegacyBody ? this.#db.prepare('SELECT id, body FROM projects ORDER BY rowid').all() : [];
+    for (const row of legacyProjects) {
       if (typeof row.id !== 'string' || typeof row.body !== 'string') throw new Error('Unreadable legacy project.');
       const repository = await RoomRepository.restore(row.body);
       if (repository.projectId !== row.id) throw new Error('Legacy project identity mismatch.');
@@ -331,7 +343,8 @@ export class ChangeRequests {
       if (bound.sources.length && !this.#db.prepare('SELECT request_id FROM request_source_bindings WHERE request_id=?').get(requestId)) throw new Error('Legacy request source binding is missing.');
     }
     if (this.#db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Legacy database relationships are invalid.');
-    this.#db.exec("UPDATE projects SET body='versioned'; INSERT INTO queue_storage_metadata(version) VALUES(1);");
+    if (hasLegacyBody) this.#db.exec('ALTER TABLE projects DROP COLUMN body');
+    this.#db.exec('INSERT INTO queue_storage_metadata(version) VALUES(1)');
   }
   #transaction<T>(operation: () => T): T {
     this.#db.exec('BEGIN IMMEDIATE');
@@ -441,7 +454,7 @@ export class ChangeRequests {
     return this.#projects.history(input);
   }
   #register(repository: RoomRepository): void {
-    this.#db.prepare("INSERT INTO projects(id,body) VALUES(?,'versioned')").run(repository.projectId);
+    this.#db.prepare('INSERT INTO projects(id) VALUES(?)').run(repository.projectId);
     this.#projects.publish({ projectId: repository.projectId, expectedDocumentId: null, reference: this.#projects.put(repository),
       origin: 'imported', requestId: null, decisionId: null });
   }
