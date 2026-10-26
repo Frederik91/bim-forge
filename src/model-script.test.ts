@@ -303,7 +303,7 @@ test('a scoped room script inspects only frozen working context, fences old tool
       if (!refused) throw new Error('Old room tool escaped write fence.');
       const room = view.placement.rooms.find(item => item.id === 'room-office');
       if (!room) throw new Error('Missing room context.');
-      const furnishings = view.model.entities.filter(item => item.type === 'Furniture' && room.entityIds.includes(item.id))
+      const furnishings = view.model.entities.filter(item => item.type === 'Furniture').filter(item => room.entityIds.includes(item.id))
         .map(item => ({id:item.id,type:item.type,name:item.name,kind:item.kind,position:item.id === 'office-chair' ? [item.position[0]+.1,item.position[1]] : item.position,
           width:item.width,depth:item.depth,height:item.height,rotationDeg:item.rotationDeg,supportId:item.supportId}));
       await model.previewRoomFurnishings({roomId:room.id,furnishings});
