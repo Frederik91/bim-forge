@@ -12,11 +12,11 @@ same-origin, no-store, JSON, error and private-source boundaries.
 | Route | Input | Response / existing queue call |
 | --- | --- | --- |
 | `GET /project-sources` | Optional single `after=<source UUID>` | `{sources,next}` from `listProjectSources(projectId, after)`; fixed 20-item pages |
-| `POST /project-sources` | One existing uploaded `RequestSource` manifest, without an envelope | `{source}` from `retainProjectSource(projectId, input)` |
+| `POST /project-sources` | Exactly `{source:RequestSource}` with an existing uploaded manifest | `{source}` from `retainProjectSource(projectId, input.source)` |
 | `GET /evidence` | Optional single `after=<nonnegative safe integer>` | `{entries:[{entry,pin}],next}` from `listEvidence(projectId, after)`; fixed 20-item pages |
 | `POST /evidence` | `{commandId,entry}` | `{pin}` from `recordEvidence(projectId,input)` |
-| `POST /baselines` | `{commandId,name,from:FrozenDesignTarget}` | `{project,target}` from `designCommand(projectId,'baseline',input)`, mapping its `created` field to `target` |
-| `POST /alternatives` | `{commandId,name,baselineId}` | `{project,target}` from `designCommand(projectId,'alternative',input)`, mapping `created` to `target` |
+| `POST /baselines` | `{commandId,name,from:FrozenDesignTarget}` | `{project,created}` returned unchanged from `designCommand(projectId,'baseline',input)` |
+| `POST /alternatives` | `{commandId,name,baselineId}` | `{project,created}` returned unchanged from `designCommand(projectId,'alternative',input)` |
 | `GET /history` | Existing `before` and `limit`, plus optional `target=main` or `target=alternative&targetId=<id>` | Existing history page from `history({projectId,before,limit,target})` |
 
 All successful new routes return 200, including idempotent command replay.
@@ -26,7 +26,9 @@ rejected. Evidence cursors use canonical decimal integers. Source cursor project
 membership remains queue-owned. POST routes accept no queries. History rejects
 duplicate/unknown fields, a missing alternative ID, a main target with an ID,
 an ID without an explicit alternative target, and baseline/unknown target kinds.
-Omitted target retains legacy main history behavior.
+Omitted target retains legacy main history behavior. Frozen exact query names
+are `target` and `targetId`, case-sensitive. Baseline clients may show local
+pinned ancestry or omit accepted history; they never substitute an alternative.
 
 Body caps: source manifest 2 KiB, evidence command 32 KiB, design command 4 KiB.
 Queue/domain parsers retain exact shapes, source verification, native anchors,
@@ -62,6 +64,7 @@ instead of patched in unowned files. No merge, deployment or live data access.
 | Attempt | Source / gates | Result and action |
 | --- | --- | --- |
 | 1 | Archive `8177af054f9a17b83e03015c06fbcb9b5521215787fbaedc74ff5cdabc7f7195` in `serverapi-a1` | Demo build PASS; 14/14 real-server tests PASS, zero skips/failures; changed-path policy PASS for all 3 owned files. Root validation: strict TS lint PASS, typecheck blocked by the two unowned integration errors below. No retry or validator changes. |
+| 2 | Archive `06f3cb6239329a6e6c98a3f9e2f3454f00f07e0a4e55910ae26904d7bbedcc0e` in `serverapi-a2` | Corrected frozen wire contract; strict TS lint, changed-path policy and 14/14 real-server tests PASS. Root compile deferred; no build rerun. |
 
 Commands run inside the container:
 
@@ -92,8 +95,9 @@ Server evidence remains in
 `status.tsv`, `source-sha256.txt`, and initial/final container inspection JSON.
 The container exited 1 because of root validation, without an OOM kill.
 Inspection confirms one CPU, 2 GiB memory/swap maximum, network none and a
-read-only root. The final note was completed after the test snapshot; these
-TypeScript files match that snapshot byte-for-byte:
+read-only root. At original commit `d18decc`, the following TypeScript files
+matched that snapshot byte-for-byte. The follow-up below corrects the wire
+contract and has separate qualification evidence:
 
 | File | SHA-256 |
 | --- | --- |
@@ -112,5 +116,32 @@ not live preview or combined UI/workflow qualification.
 
 Handoff: integrate this three-file commit onto the parent, reconcile the two
 target-aware evidence dependency errors, and rerun root validation plus the
-existing server test entry point. One of ten qualification attempts was used.
+existing server test entry point. The original handoff used one of ten attempts;
+the wire correction below brings the total to two.
 No package registration, push, PR, merge or deployment belongs to this handoff.
+
+## Wire-contract correction after d18decc
+
+The frozen #211 client sends exactly `{source:RequestSource}`. The HTTP boundary
+rejects a raw manifest, a missing source, and extra envelope fields before source
+retention. Design metadata responses preserve the queue's `{project,created}`
+object unchanged. No client changes are required. The earlier raw-manifest input
+and `target` response rename were server integration mistakes.
+
+Tests exercise the corrected envelope, atomic malformed-envelope rejection,
+foreign-project source validation through the correct envelope, exact metadata
+response keys, command replay and unchanged history query names. Root compile
+remains deferred pending combined evidence dependencies, as requested.
+
+Attempt 2 used the same one-CPU/2-GiB/network-none/read-only constraints and a
+clean SSD source snapshot. It reused attempt 1's unchanged UI build as a
+read-only static-asset mount. Commands were strict TS lint, the same three-path
+policy check, and the same real-server test command with a 120-second outer
+timeout. All passed; zero tests were skipped, and the container exited zero
+without an OOM kill. Logs and source hashes remain in `serverapi-a2/evidence/`.
+Qualified follow-up source hashes:
+
+```text
+b422c32a21e478b77ed187f52e8e9501765083e9531657afe26419a9d83d8d5d demo/server.ts
+e1eea6b58de4b0e8f9ad69408781603deb5477cf6ed0299e460d6abe8f1f458f demo/server.test.ts
+```

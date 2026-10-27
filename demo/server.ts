@@ -225,11 +225,14 @@ export async function createDemoServer({
           }
         } else if (request.method === 'POST') {
           if (projectUrl.search) throw new Error('Project commands do not accept query parameters.');
-          if (resource === 'project-sources') send(response, 200, { source: backlog.retainProjectSource(projectId, await readJson(request, 2048)) });
+          if (resource === 'project-sources') {
+            const value = await readJson(request, 2048);
+            if (!isRecord(value) || Object.keys(value).length !== 1 || !Object.hasOwn(value, 'source')) throw new Error('Project source retention requires exactly source.');
+            send(response, 200, { source: backlog.retainProjectSource(projectId, value.source) });
+          }
           else if (resource === 'evidence') send(response, 200, { pin: await backlog.recordEvidence(projectId, await readJson(request, 32 * 1024)) });
           else {
-            const result = await backlog.designCommand(projectId, resource === 'baselines' ? 'baseline' : 'alternative', await readJson(request, 4096));
-            send(response, 200, { project: result.project, target: result.created });
+            send(response, 200, await backlog.designCommand(projectId, resource === 'baselines' ? 'baseline' : 'alternative', await readJson(request, 4096)));
           }
         } else send(response, 405, { error: resource === 'baselines' || resource === 'alternatives' ? 'Design commands require POST.' : 'Project collections require GET or POST.' });
       } catch (error) {

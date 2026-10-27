@@ -88,9 +88,15 @@ test('project source HTTP retention pages metadata and reuses private byte retri
     const uploaded = await request(`${endpoint}/sources/${id}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'text/plain', 'X-Source-Name': `measurement-${index}.txt` }, body: bytes });
     assert.equal(uploaded.status, 201, uploaded.body);
     const manifest = jsonObject(uploaded.body).source;
-    assert.equal((await post(`${endpoint}/project-sources`, manifest)).status, 200);
     if (index === 0) {
-      const retained = await post(`${endpoint}/project-sources`, manifest);
+      for (const invalid of [manifest, {}, { source: manifest, extra: true }, { wrong: manifest }, { source: null }]) {
+        assert.equal((await post(`${endpoint}/project-sources`, invalid)).status, 400);
+      }
+      assert.deepEqual(jsonObject((await request(`${endpoint}/project-sources`, { headers })).body), { sources: [], next: null });
+    }
+    assert.equal((await post(`${endpoint}/project-sources`, { source: manifest })).status, 200);
+    if (index === 0) {
+      const retained = await post(`${endpoint}/project-sources`, { source: manifest });
       assert.deepEqual(jsonObject(retained.body).source, manifest);
     }
   }
@@ -107,7 +113,7 @@ test('project source HTTP retention pages metadata and reuses private byte retri
   const other = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Other project', snapshot: repository.view(repository.root()).snapshot });
   assert.equal((await post('/api/projects', { project: other.serialize() })).status, 200);
   assert.equal((await request(`/api/projects/${other.projectId}/sources/${firstManifest.id}`, { headers })).status, 404);
-  assert.equal((await post(`/api/projects/${other.projectId}/project-sources`, firstManifest)).status, 400);
+  assert.equal((await post(`/api/projects/${other.projectId}/project-sources`, { source: firstManifest })).status, 400);
   assert.equal((await request(`/api/projects/${other.projectId}/project-sources?after=${firstManifest.id}`, { headers })).status, 400);
   const fresh = await listen(t, null, null, { backlogFile });
   assert.deepEqual(jsonObject((await fresh(`${endpoint}/project-sources`, { headers })).body), page);
@@ -122,7 +128,7 @@ test('project evidence HTTP appends immutable bounded pages with replay and priv
   assert.equal(upload.status, 201); const manifest = jsonObject(upload.body).source;
   assert.ok(isRecord(manifest) && typeof manifest.sha256 === 'string');
   const sourceHash = manifest.sha256;
-  assert.equal((await post(`${endpoint}/project-sources`, manifest)).status, 200);
+  assert.equal((await post(`${endpoint}/project-sources`, { source: manifest })).status, 200);
   const anchor = evidenceAnchor(repository, repository.head('main'), fixture.sources.measurements[0].objectId);
   const entry = (index: number): EvidenceEntry => ({ id: `http-claim-${index}`, anchor, property: { definitionId: 'geometry-thickness', valueKind: 'length' }, predecessor: null,
     assertion: { kind: 'measured', value: { kind: 'length', value: .15, unit: 'm' }, citations: [{ sourceId, sha256: sourceHash, locator: 'Synthetic wall note, not a survey.' }] } });
@@ -153,15 +159,16 @@ test('baseline and alternative HTTP commands replay metadata with explicit targe
   const { request, repository, post, headers, endpoint, backlogFile } = await projectApi(t);
   const command = { commandId: 'capture-as-is', name: 'As-is', from: repository.freezeDesignTarget({ kind: 'main' }) };
   const response = await post(`${endpoint}/baselines`, command); assert.equal(response.status, 200, response.body);
-  const captured = jsonObject(response.body); const baseline = parseDesignTarget(captured.target);
+  const captured = jsonObject(response.body); const baseline = parseDesignTarget(captured.created);
   assert.ok(baseline.kind === 'baseline' && typeof captured.project === 'string');
-  assert.equal(Object.hasOwn(captured, 'created'), false);
+  assert.deepEqual(Object.keys(captured).sort(), ['created', 'project']);
   assert.deepEqual(jsonObject((await post(`${endpoint}/baselines`, command)).body), captured);
   assert.equal((await post(`${endpoint}/baselines`, { ...command, name: 'Different name' })).status, 409);
   const alternativeCommand = { commandId: 'fork-kitchen', name: 'Wider kitchen', baselineId: baseline.id };
   const fork = await post(`${endpoint}/alternatives`, alternativeCommand); assert.equal(fork.status, 200, fork.body);
-  const forked = jsonObject(fork.body); const alternative = parseDesignTarget(forked.target);
+  const forked = jsonObject(fork.body); const alternative = parseDesignTarget(forked.created);
   assert.ok(alternative.kind === 'alternative' && typeof forked.project === 'string');
+  assert.deepEqual(Object.keys(forked).sort(), ['created', 'project']);
   assert.deepEqual(jsonObject((await post(`${endpoint}/alternatives`, alternativeCommand)).body), forked);
   assert.equal((await post(`${endpoint}/alternatives`, { ...alternativeCommand, name: 'Conflict' })).status, 409);
   const restored = await RoomRepository.restore(forked.project);
