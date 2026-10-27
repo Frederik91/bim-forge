@@ -9,7 +9,7 @@ type ProposalContent = Extract<Extract<ConversationMessage, { kind: 'assistant' 
 /** A parent-validated view of the exact proposal explicitly inspected in the viewer. */
 export interface RequestChatProposalReview extends Pick<ConversationMessage, 'requestId'>,
   Pick<ProposalContent, 'proposalRevisionId'>,
-  Pick<ProposalReview, 'summary' | 'rationale' | 'constraints' | 'uncertainty'> {
+  Pick<ProposalReview, 'summary' | 'rationale' | 'constraints' | 'uncertainty' | 'target' | 'evidenceUses'> {
   messageId: ConversationMessage['id'];
   status: string;
   canAccept: boolean;
