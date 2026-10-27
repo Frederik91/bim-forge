@@ -16,7 +16,7 @@ import type { RequestSource } from '../src/request-sources.ts';
 import { parseIntentAssessment } from '../src/model-intent.ts';
 import { VersionedProjectStore } from './versioned-project-store.ts';
 import type { RepositoryReference, VersionedProjects } from './versioned-project-contract.ts';
-import { parseScopedRequest, parseFrozenModelScope, parseModelScopeQuery } from '../src/model-scope-contract.ts';
+import { parseScopedRequest, parseFrozenModelScope, parseModelScopeQuery, plainScopeData } from '../src/model-scope-contract.ts';
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from '../src/model-scope.ts';
 import { CONVERSATION_LIMITS, parseConversationReply, parseConversationMessage, parseConversationVisual, parseRequestConversation } from '../src/request-conversation.ts';
@@ -26,7 +26,7 @@ import type { RequestDraft } from '../src/request-draft.ts';
 import { parseDesignTarget, parseFrozenDesignTarget, sameDesignTarget } from '../src/design-targets.ts';
 import type { DesignTarget, FrozenDesignTarget, WritableDesignTarget } from '../src/design-targets.ts';
 import { ProjectEvidenceStore } from './project-evidence-store.ts';
-import { MAX_EVIDENCE_PINS, parseEvidencePin, parseEvidenceReadSet } from '../src/model-evidence.ts';
+import { MAX_EVIDENCE_PINS, parseEvidenceEntry, parseEvidencePin, parseEvidenceReadSet } from '../src/model-evidence.ts';
 import type { EvidencePin, EvidenceReadSet } from '../src/model-evidence.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
@@ -661,7 +661,7 @@ export class ChangeRequests {
     const commandId = identifier(value.commandId);
     const repository = await RoomRepository.restore(this.#projects.read(this.#requiredCurrent(projectId)));
     this.#assertOpen();
-    return this.#evidence.append({ repository, commandId, actor: 'preview-human', entry: value.entry });
+    return this.#evidence.append({ repository, commandId, actor: 'preview-human', entry: parseEvidenceEntry(value.entry) });
   }
   #freezeEvidence(repository: RoomRepository, request: RequestInput): EvidenceReadSet | undefined {
     return request.evidencePins?.length ? this.#evidence.freezeReadSet({ repository,
