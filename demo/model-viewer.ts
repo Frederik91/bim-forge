@@ -23,10 +23,44 @@ export interface ViewerState {
 type ActiveViewerState = ViewerState & { levelId: string | null; roofVisible: boolean };
 interface ViewerActions {
   select: (id: string) => void;
+  inspect: (id: string, snapshot: ModelSnapshot) => void;
   reference: (reference: SpatialReference) => void;
   keyboardReference: () => void;
 }
 interface MarkerDrag { id: number; origin: Point; target: SpatialReference | null; moved: boolean }
+
+type ViewerPointer = Pick<PointerEvent, 'pointerId' | 'clientX' | 'clientY' | 'button' | 'buttons' | 'isPrimary'>;
+
+/** A click must stay within five CSS pixels for the entire single-pointer gesture. */
+export class ViewerPointerInteraction {
+  private readonly active = new Set<number>();
+  private click: { id: number; origin: Point } | null = null;
+
+  get canHover(): boolean { return this.active.size === 0; }
+
+  down(event: ViewerPointer): void {
+    this.click = this.active.size === 0 && event.button === 0 && event.isPrimary
+      ? { id: event.pointerId, origin: [event.clientX, event.clientY] } : null;
+    this.active.add(event.pointerId);
+  }
+
+  move(event: ViewerPointer): void {
+    if (this.click?.id === event.pointerId && (event.buttons !== 1
+      || Math.hypot(event.clientX - this.click.origin[0], event.clientY - this.click.origin[1]) > 5)) this.cancelClick();
+  }
+
+  up(event: ViewerPointer): boolean {
+    const click = this.click;
+    const accepted = this.active.size === 1 && this.active.has(event.pointerId) && click?.id === event.pointerId
+      && event.button === 0 && event.isPrimary && Math.hypot(event.clientX - click.origin[0], event.clientY - click.origin[1]) <= 5;
+    this.active.delete(event.pointerId); this.cancelClick();
+    return accepted;
+  }
+
+  cancel(id: number): void { this.active.delete(id); this.cancelClick(); }
+  cancelClick(): void { this.click = null; }
+  reset(): void { this.active.clear(); this.cancelClick(); }
+}
 
 /** One canvas for the visible workflow page. Camera and GPU resources survive UI refreshes. */
 export class ModelViewer {
@@ -42,7 +76,8 @@ export class ModelViewer {
   private readonly observer: ResizeObserver;
   private state: ActiveViewerState | null = null;
   private drag: MarkerDrag | null = null;
-  private pointer: { id: number; origin: Point } | null = null;
+  private readonly pointer = new ViewerPointerInteraction();
+  private hoveredId: string | null = null;
   private frames = 2;
   private cameraSignature = '';
   private active = false;
@@ -65,7 +100,8 @@ export class ModelViewer {
     this.actions = actions;
     this.root.className = 'babylon-viewer'; this.root.dataset.renderer = 'babylon';
     this.canvas.className = 'model-canvas'; this.canvas.tabIndex = 0;
-    this.canvas.setAttribute('aria-label', '3D room model. Drag to orbit, right-drag to pan, scroll or pinch to zoom. Use Select 3D object for keyboard selection.');
+    this.canvas.style.cursor = 'grab';
+    this.canvas.setAttribute('aria-label', '3D model. Click an item to select and inspect it. Drag to orbit, right-drag to pan, scroll or pinch to zoom.');
     this.canvas.setAttribute('role', 'img');
     this.handle.type = 'button'; this.handle.className = 'model-reference-handle'; this.handle.textContent = '+';
     this.caption.className = 'model-selection-caption'; this.caption.setAttribute('aria-live', 'polite');
@@ -76,26 +112,37 @@ export class ModelViewer {
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 1.5));
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
+    this.model.scene.skipPointerMovePicking = true;
     this.model.camera.attachControl(this.canvas, false);
     this.model.scene.executeWhenReady(() => { this.frames = 3; });
     this.observer = new ResizeObserver(() => { this.engine.resize(); this.frames = 3; });
     this.observer.observe(this.root);
     this.canvas.addEventListener('pointerdown', (event) => {
-      if (event.button === 0 && event.isPrimary) this.pointer = { id: event.pointerId, origin: [event.clientX, event.clientY] };
+      this.hover(null);
+      this.pointer.down(event);
       this.frames = 3;
     });
     this.canvas.addEventListener('pointerup', (event) => {
-      const start = this.pointer; this.pointer = null;
-      if (!start || start.id !== event.pointerId || Math.hypot(event.clientX - start.origin[0], event.clientY - start.origin[1]) > 5) return;
+      if (!this.pointer.up(event)) return;
       const [x, y] = this.local(event); const id = this.model.objectAt(x, y);
       if (id) this.select(id);
     });
-    this.canvas.addEventListener('pointercancel', () => { this.pointer = null; });
+    for (const type of ['pointercancel', 'pointerleave', 'lostpointercapture']) this.canvas.addEventListener(type, event => {
+      if (event instanceof PointerEvent) this.pointer.cancel(event.pointerId);
+      this.hover(null);
+    });
+    this.canvas.addEventListener('pointermove', event => {
+      this.pointer.move(event);
+      if (event.buttons || !this.pointer.canHover || this.drag || !['mouse', 'pen'].includes(event.pointerType)) { this.hover(null); return; }
+      const [x, y] = this.local(event); this.hover(this.model.objectAt(x, y));
+    });
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     for (const type of ['wheel', 'pointermove', 'keydown']) this.canvas.addEventListener(type, () => { this.frames = 3; });
+    for (const type of ['wheel', 'keydown']) this.canvas.addEventListener(type, () => { this.pointer.cancelClick(); this.hover(null); });
     this.handle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || !event.isPrimary || !this.state?.interactive) return;
       event.preventDefault(); event.stopPropagation();
+      this.pointer.cancelClick(); this.hover(null);
       this.drag = { id: event.pointerId, origin: [event.clientX, event.clientY], target: null, moved: false };
       this.model.camera.detachControl(); this.handle.setPointerCapture(event.pointerId);
       this.root.dataset.marking = 'true';
@@ -126,13 +173,21 @@ export class ModelViewer {
   }
 
   private readonly visibility = (): void => {
-    if (document.hidden) this.engine.stopRenderLoop(this.renderFrame);
+    if (document.hidden) { this.pointer.reset(); this.hover(null); this.endDrag(false); this.engine.stopRenderLoop(this.renderFrame); }
     else if (this.active) { this.frames = 3; this.engine.runRenderLoop(this.renderFrame); }
   };
 
   private local(event: PointerEvent): Point {
     const rect = this.canvas.getBoundingClientRect();
     return [event.clientX - rect.left, event.clientY - rect.top];
+  }
+
+  private hover(id: string | null): void {
+    this.model.hover(id);
+    if (id !== this.hoveredId) this.frames = 2;
+    this.hoveredId = id;
+    this.canvas.style.cursor = id ? 'pointer' : 'grab';
+    this.root.dataset.hoveredId = id ?? '';
   }
 
   private endDrag(commit: boolean): void {
@@ -149,6 +204,8 @@ export class ModelViewer {
     this.comparisonSelection = id;
     this.state = { ...this.state, selectedId: id };
     this.selection.value = id; this.model.select(id); this.updateCaption(); this.frames = 3;
+    const source = this.state.snapshot.entities.some(item => item.id === id) ? this.state.snapshot : this.state.comparison;
+    if (source) this.actions.inspect(id, source);
   }
 
   private updateCaption(): void {
@@ -168,7 +225,7 @@ export class ModelViewer {
     if (!this.active || this.root.clientWidth === 0 || this.root.clientHeight === 0) return;
     const camera = this.model.camera; camera.update();
     const signature = `${camera.alpha}:${camera.beta}:${camera.radius}:${camera.target.toString()}`;
-    if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; }
+    if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; this.hover(null); }
     if (this.frames <= 0 && this.model.scene.isReady()) return;
     this.model.scene.render(false); this.frames -= 1;
     this.root.dataset.sceneReady = String(this.model.scene.isReady());
@@ -200,6 +257,10 @@ export class ModelViewer {
     }
     const focusChanged = this.state?.focusId !== state.focusId;
     const levelChanged = this.state?.levelId !== next.levelId;
+    const viewChanged = !this.active || this.root.parentElement !== host || focusChanged || levelChanged
+      || this.state?.mode !== next.mode || this.state?.cutaway !== next.cutaway || this.state?.roofVisible !== next.roofVisible
+      || JSON.stringify([this.state?.snapshot, this.state?.comparison]) !== JSON.stringify([next.snapshot, next.comparison]);
+    if (viewChanged) { this.pointer.cancelClick(); this.hover(null); }
     this.state = next;
     const objectSignature = JSON.stringify(objects.map((item) => [item.id, item.name, changes.get(item.id)]));
     if (objectSignature !== this.objectSignature) {
@@ -217,8 +278,8 @@ export class ModelViewer {
     this.active = true; if (!document.hidden) this.engine.runRenderLoop(this.renderFrame);
   }
 
-  hide(): void { this.endDrag(false); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
-  frame(): void { this.model.frame(); this.frames = 3; }
+  hide(): void { this.endDrag(false); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
+  frame(): void { this.pointer.cancelClick(); this.hover(null); this.model.frame(); this.frames = 3; }
   dispose(): void {
     this.hide(); this.observer.disconnect(); document.removeEventListener('visibilitychange', this.visibility);
     this.model.dispose(); this.engine.dispose();

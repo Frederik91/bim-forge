@@ -312,7 +312,7 @@ export async function createDemoServer({
       return;
     }
     const projectRoute = /^\/api\/projects\/([^/]+)\/change-requests$/.exec(request.url ?? '');
-    const ticketRoute = /^\/api\/change-requests\/([^/]+)(\/decision|\/revision|\/messages)?$/.exec(request.url ?? '');
+    const ticketRoute = /^\/api\/change-requests\/([^/]+)(\/decision|\/revision|\/messages|\/draft)?$/.exec(request.url ?? '');
     if (projectRoute || ticketRoute) {
       try {
         sameOriginRequest(request, publicOrigin);
@@ -323,7 +323,10 @@ export async function createDemoServer({
           send(response, 200, { tickets: backlog.list(id), project: backlog.project(id) });
         } else if (ticketRoute) {
           const id = decodeURIComponent(ticketRoute[1] ?? '');
-          if (ticketRoute[2] === '/messages') {
+          if (ticketRoute[2] === '/draft') {
+            if (request.method !== 'GET') { send(response, 405, { error: 'A draft preview requires GET.' }); return; }
+            send(response, 200, { draft: backlog.draft(id) });
+          } else if (ticketRoute[2] === '/messages') {
             if (request.method !== 'POST') { send(response, 405, { error: 'Sending a message requires POST.' }); return; }
             send(response, 202, { ticket: await backlog.appendMessage(id, await readJson(request, 64 * 1024)) });
           } else if (ticketRoute[2] === '/revision') {

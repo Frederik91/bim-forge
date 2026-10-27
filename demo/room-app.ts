@@ -8,6 +8,8 @@ import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.t
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint, identifier } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
 import { WorkspaceShell } from './workspace-shell.ts';
+import { ModelExplorer, renderElementProperties } from './model-explorer.ts';
+import type { ModelNode } from './model-explorer.ts';
 import { requestContext } from './request-context.ts';
 import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
@@ -33,6 +35,8 @@ import { RequestComposer } from './request-composer.ts';
 import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
 import { parseConversationReply } from '../src/request-conversation.ts';
 import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
+import { parseRequestDraft } from '../src/request-draft.ts';
+import type { RequestDraft } from '../src/request-draft.ts';
 
 type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
 type RequestPane = 'canvas' | 'details';
@@ -163,8 +167,8 @@ const ui = {
   'project-name': input('project-name'),
   'create-project': button('create-project'),
   'load-sample': button('load-sample'),
-  'project-template': select('project-template'), 'room-focus': select('room-focus'),
-  'level-focus': select('level-focus'), 'show-roof': input('show-roof'), 'whole-building': button('whole-building'),
+  'project-template': select('project-template'),
+  'show-roof': input('show-roof'),
   'reconstruction-scope': select('reconstruction-scope'),
   'proposal-form': requiredElement('proposal-form', HTMLFormElement),
   'door-width': input('door-width'),
@@ -254,6 +258,8 @@ const ui = {
 
 const projects = new ProjectClient();
 const workspace = new WorkspaceShell();
+const explorer = new ModelExplorer(generic('model-explorer'), navigateModel);
+let inspectedComparison: { graph: ModelSnapshot; id: string } | null = null;
 let serverAvailable = false;
 let projectChoices: readonly ProjectSummary[] = [];
 let legacyProject: RoomRepository | null = null;
@@ -282,11 +288,16 @@ let serverProjectText: string | null = null;
 let serverHeadRevisionId: string | null = null;
 let submission: { fingerprint: string; requestId: string } | null = null;
 let chatTicketId: string | null = null;
+let activeChatProposalMessageId: string | null = null;
+let liveChatPreview: RequestDraft | null = null;
+let livePreviewSelection: string | null = null;
+const pausedChatPreviews = new Set<string>();
 let chatVisual: ConversationVisual | null = null;
 let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
 let chatRefreshing = false;
 let newDraftId = 'new';
 const chatDrafts = new Map<string, ReturnType<typeof captureChatDraft>>();
+const chatInspectionOrigins = new Map<string, ReturnType<typeof captureChatDraft>>();
 let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
@@ -334,6 +345,8 @@ const scopeBuilder = new ModelScopeBuilder({ host: generic('model-scope-builder'
 const requestChat = new RequestChat(generic('request-chat-mount'), {
   answer: text => { ui['request-text'].value = text; ui['request-text'].focus(); composer.refresh(); updateControls(); },
   proposal: message => { void perform(() => openChatProposal(message)); },
+  decision: (action, messageId) => { void perform(() => decideChatProposal(action, messageId)); },
+  delta: messageId => { assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
   inspect: visual => { void perform(() => inspectChatVisual(visual)); },
 });
 const composer = new RequestComposer({ root: generic('request-composer'), form: ui['proposal-form'], input: ui['request-text'],
@@ -376,7 +389,7 @@ function captureChatDraft() {
   return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
-    invalid: invalidInput, reply: chatReply, submission, review: activeReview, reviewTicketId: activeTicketId,
+    invalid: invalidInput, reply: chatReply, submission, review: activeReview, reviewTicketId: activeTicketId, proposalMessageId: activeChatProposalMessageId,
     geometryValues: [ui['door-width'].value, ui['door-offset'].value, ui['wall-position'].value, ui['wall-length'].value],
     scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
     reconstructionScope: ui['reconstruction-scope'].value, updatedAt: Date.now() };
@@ -388,15 +401,16 @@ function saveChatDraft(): void {
 }
 function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   if (!draft.model) return;
+  liveChatPreview = null; livePreviewSelection = null;
   repo = draft.model; reviewRepository = draft.reviewModel; selectedRevision = draft.revision; selectedBranch = draft.branch;
   selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
   preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
   invalidInput = draft.invalid; chatReply = draft.reply; submission = draft.submission; newDraftId = draft.draftId;
-  activeReview = draft.review; activeTicketId = draft.reviewTicketId;
+  activeReview = draft.review; activeTicketId = draft.reviewTicketId; activeChatProposalMessageId = draft.proposalMessageId;
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
   ui['request-reconstruct'].checked = draft.reconstruction; ui['reconstruction-scope'].value = draft.reconstructionScope;
   scopeBuilder.restoreDraft(draft.scope); composer.setVisual(chatVisual); composer.refresh();
-  render();
+  inspectedComparison = null; syncInspector(); render();
   for (const [index, control] of [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']].entries()) control.value = draft.geometryValues[index] ?? '';
 }
 
@@ -579,6 +593,7 @@ function reviewState(review: ActiveReview | null): ReviewState | null {
 }
 
 function showPage(name: PageName): void {
+  if (name !== 'request') { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; }
   if (name === 'review' && !activeReview) return;
   if ((name === 'project' || name === 'history') && !repo) return;
   currentPage = name;
@@ -742,13 +757,12 @@ function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
   const writable = serverAvailable && !busy && !dragging;
+  explorer.setDisabled(busy || dragging || !repo);
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
   for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture) || Boolean(chatTicketId);
   ui['project-template'].disabled = !writable;
-  ui['room-focus'].disabled = busy || dragging || !repo;
-  button('whole-floor').disabled = busy || dragging || !repo;
   ui['selected-object'].disabled = busy || !preview || dragging;
   ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture) || Boolean(chatTicketId);
   ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
@@ -756,9 +770,7 @@ function updateControls() {
   scopeBuilder.setDisabled(!writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
   ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
-  ui['level-focus'].disabled = busy || dragging || !repo;
-  ui['whole-building'].disabled = busy || dragging || !repo;
-  ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
+  ui['show-roof'].disabled = !(liveChatPreview?.snapshot ?? preview)?.entities.some(item => item.type === 'Roof');
   ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready || !ui['request-text'].value.trim();
   ui['save-proposal'].textContent = sourcePicker.uploading || busy ? '…' : '↑';
   ui['save-proposal'].setAttribute('aria-label', sourcePicker.uploading ? 'Uploading attachments' : busy ? 'Sending message' : 'Send message');
@@ -787,7 +799,7 @@ function updateControls() {
   ui['nav-backlog'].disabled = busy || !repo || dragging;
   ui['open-backlog'].disabled = busy || !repo || dragging;
   ui['nav-review'].disabled = busy || !activeReview || dragging;
-  ui['view-changes'].disabled = busy || !activeReview || activeReview.proposalRevisionId === null;
+  ui['view-changes'].disabled = busy || Boolean(liveChatPreview) || !activeReview || activeReview.proposalRevisionId === null;
   const alternatives = repo ? repo.branches().filter((branch) => branch.name !== 'main') : [];
   const canCompare = !busy && alternatives.length >= 2;
   ui['conflict-left'].disabled = !canCompare;
@@ -798,9 +810,10 @@ function updateControls() {
     || (repo !== null && requireRepository().reviewAt(selectedRevision)?.review.requestId === activeReview?.requestId);
   const ticket = backlogItems.find((item) => item.id === activeTicketId);
   ui['accept-proposal'].disabled = !writable || !activeTicketId || ticket?.state !== 'ready' || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || reviewState(activeReview) !== 'pending';
-  ui['reject-proposal'].disabled = !writable || !ticket || !['ready', 'needs-input', 'failed'].includes(ticket.state);
+  ui['reject-proposal'].disabled = !writable || !ticket || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || !['ready', 'needs-input', 'failed'].includes(ticket.state);
   const state = reviewState(activeReview);
   ui['request-revision'].disabled = !writable || !reviewMatches || (state !== 'pending' && state !== 'declined');
+  updateChatProposalCard();
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
   for (const historyButton of ui['history-list'].querySelectorAll('button')) historyButton.disabled = busy || dragging;
@@ -851,6 +864,8 @@ function syncInspector() {
   const dimensionInputs = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
   for (const dimensionInput of dimensionInputs) dimensionInput.removeAttribute('aria-invalid');
   const object = preview?.entities.find((item) => item.id === selectedObject);
+  if (preview) renderElementProperties(generic('element-properties'), inspectedComparison?.graph ?? liveChatPreview?.snapshot ?? preview,
+    inspectedComparison?.id ?? livePreviewSelection ?? selectedObject, liveChatPreview ? 'Live draft · tentative, awaiting proposal' : `${selectedBranch} · ${selectedRevision.slice(0, 7)}`);
   const isDoor = object?.type === 'Door';
   const isWall = object?.type === 'Wall';
   ui['door-fields'].hidden = !isDoor || !layout;
@@ -892,13 +907,14 @@ function syncInspector() {
 
 function chooseObject(id: string): void {
   if (!repo || busy || gesture || visualGesture) return;
+  if (liveChatPreview) { inspectLiveObject(id, liveChatPreview.snapshot); return; }
   if (visualDraft && id !== selectedObject) visualDraft = null;
   if (invalidInput && !window.confirm('Discard the incomplete or invalid input and select another object?')) return;
-  invalidInput = false; clearError(); selectedObject = id;
+  invalidInput = false; clearError(); selectedObject = id; inspectedComparison = null;
   const item = preview?.entities.find((entity) => entity.id === id);
   if (item?.type === 'Space') focusedRoomId = item.id;
   else if (preview && focusedRoomId && item) focusedRoomId = entitySpace(preview, item)?.id ?? focusedRoomId;
-  syncInspector(); renderComparison(); updateControls();
+  syncInspector(); renderComparison(); updateControls(); workspace.showInspector();
 }
 
 ui['selected-object'].addEventListener('change', () => {
@@ -960,6 +976,7 @@ async function perform(action: () => void | Promise<void>): Promise<void> {
 
 // Display only repositories read from the server. Pending previews stay in reviewRepository.
 function displayAccepted(next: RoomRepository): void {
+  liveChatPreview = null; livePreviewSelection = null;
   const text = next.serialize();
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
@@ -975,7 +992,7 @@ function displayAccepted(next: RoomRepository): void {
   activeReview = null;
   activeTicketId = null;
   selectedBranch = 'main';
-  selectedRevision = repo.head('main');
+  selectedRevision = repo.head('main'); inspectedComparison = null;
   resetEditor();
   if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); }
   try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
@@ -1148,6 +1165,23 @@ for (const tab of ['3d', 'properties'] satisfies ChangesTab[]) button(`changes-$
   changesTab = tab; renderComparison();
 });
 button('review-delta').addEventListener('click', () => { reviewDelta = !reviewDelta; modelView = '3d'; renderComparison(); });
+button('chat-proposal-delta').addEventListener('click', () => {
+  if (busy || !liveChatPreview && !activeChatProposalMessageId) return;
+  if (!liveChatPreview && activeChatProposalMessageId) assertChatProposal(activeChatProposalMessageId);
+  reviewDelta = !reviewDelta; renderComparison(); updateControls();
+});
+button('chat-proposal-follow').addEventListener('click', () => {
+  pausedChatPreviews.delete(currentChatKey()); void refreshConversation();
+});
+button('chat-proposal-return').addEventListener('click', () => { void perform(async () => {
+  pausedChatPreviews.add(currentChatKey()); liveChatPreview = null; livePreviewSelection = null;
+  const origin = chatInspectionOrigins.get(currentChatKey());
+  const current = captureChatDraft();
+  if (origin) restoreChatDraft({ ...origin, text: current.text, name: current.name, visual: current.visual, reply: current.reply });
+  else if (repo) displayAccepted(await projects.read(repo.projectId));
+  activeChatProposalMessageId = null; inspectedComparison = null; render();
+  status('Request model restored. Your message and attachments are retained.');
+}); });
 ui['project-overview'].addEventListener('click', () => showPage('project'));
 button('explore-floor').addEventListener('click', () => openRoomRequest(null));
 ui['open-room'].addEventListener('click', () => {
@@ -1184,7 +1218,10 @@ ui['nav-request'].addEventListener('click', () => { showPage('request'); showReq
 for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
   showPage('backlog'); void refreshBacklog();
 });
-ui['nav-review'].addEventListener('click', () => showPage('review'));
+ui['nav-review'].addEventListener('click', () => {
+  const ticketId = activeTicketId ?? backlogItems.find(item => item.request.requestId === activeReview?.requestId)?.id;
+  if (ticketId) void perform(() => openTicket(ticketId)); else showPage('review');
+});
 ui['nav-history'].addEventListener('click', () => { showPage('history'); void loadServerHistory(); });
 function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
@@ -1380,11 +1417,13 @@ async function proposalJson(response: Response): Promise<unknown> {
 }
 
 function closeChat(): void {
-  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
+  liveChatPreview = null; livePreviewSelection = null;
+  chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
 }
 
 function displayedChatSnapshot(): ConversationVisual['snapshot'] {
   if (!repo) throw new Error('Open a project before attaching model evidence.');
+  if (liveChatPreview) throw new Error('This is an in-progress draft. Show the accepted model to attach a view, or wait for the validated proposal.');
   if (inspectedChatView?.snapshot.revisionId === selectedRevision) return inspectedChatView.snapshot;
   if (reviewRepository && activeReview?.proposalRevisionId === selectedRevision) return {
     kind: 'proposal', revisionId: selectedRevision, proposalName: activeReview.proposalName,
@@ -1398,13 +1437,102 @@ function checkedChatVisual(): ConversationVisual | null {
   return chatVisual;
 }
 
+function chatActivity(value: unknown) {
+  if (!isRecord(value)) throw new Error('Missing chat activity.');
+  const events = new Map<string, ReturnType<typeof parseRequestActivity>[number]>();
+  for (const ticket of archivedTickets(value)) for (const event of parseRequestActivity(ticket.activity)) {
+    const key = `${event.requestId}:${event.attempt}:${event.sequence}`;
+    const existing = events.get(key);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(event)) throw new Error('Conflicting chat activity identity.');
+    events.set(key, event);
+  }
+  return [...events.values()].sort((a, b) => a.at - b.at || a.sequence - b.sequence);
+}
+
+async function refreshChatModel(value: unknown): Promise<void> {
+  if (!repo || !chatTicketId || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  const ticket = parseBacklogItem(value); const projectId = repo.projectId;
+  if (ticket.id !== chatTicketId || ticket.projectId !== projectId) return;
+  if (ticket.state === 'ready') {
+    const message = requestChat.conversation?.messages.findLast(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === ticket.request.requestId);
+    if (message && (liveChatPreview || activeChatProposalMessageId !== message.id || activeTicketId !== ticket.id)) await openTicket(ticket.id, message, true);
+    return;
+  }
+  if (ticket.state !== 'working') {
+    if (liveChatPreview) { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; renderComparison(); syncInspector(); updateControls(); }
+    return;
+  }
+  const response = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(ticket.id)}/draft`));
+  if (!repo || repo.projectId !== projectId || chatTicketId !== ticket.id || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  const latest = requestChat.conversation?.messages.findLast(item => item.kind === 'user');
+  if (latest?.requestId !== ticket.request.requestId) return;
+  if (!isRecord(response) || !Object.hasOwn(response, 'draft')) throw new Error('Invalid live draft response.');
+  const draft = parseRequestDraft(response.draft);
+  if (!draft) {
+    if (liveChatPreview) { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; renderComparison(); syncInspector(); updateControls(); }
+    return;
+  }
+  if (draft.ticketId !== ticket.id || draft.requestId !== ticket.request.requestId || draft.baseRevisionId !== ticket.request.baseRevisionId || draft.attempt !== ticket.attempts) return;
+  if (liveChatPreview?.requestId === draft.requestId && liveChatPreview.attempt === draft.attempt && liveChatPreview.sequence >= draft.sequence) return;
+  repo.view(draft.baseRevisionId);
+  const first = !liveChatPreview;
+  if (first && !chatInspectionOrigins.has(currentChatKey())) chatInspectionOrigins.set(currentChatKey(), captureChatDraft());
+  liveChatPreview = draft; inspectedComparison = null;
+  if (first) {
+    const changedIds = modelChanges(repo.view(draft.baseRevisionId).snapshot, draft.snapshot).map(item => item.id);
+    const context = requestContext(draft.snapshot, changedIds);
+    modelView = '3d'; activeLevelId = context.levelId; focusedRoomId = context.roomId; reviewDelta = true;
+  }
+  if (!draft.snapshot.entities.some(item => item.id === livePreviewSelection)) livePreviewSelection = modelChanges(repo.view(draft.baseRevisionId).snapshot, draft.snapshot).find(item => item.status !== 'removed')?.id ?? null;
+  renderComparison(); syncInspector(); updateControls();
+}
+
+function inspectLiveObject(id: string, graph: ModelSnapshot): void {
+  if (!liveChatPreview || !graph.entities.some(item => item.id === id)) return;
+  livePreviewSelection = id; inspectedComparison = { id, graph };
+  renderComparison(); syncInspector(); updateControls(); workspace.showInspector();
+}
+
+function assertChatProposal(messageId: string): void {
+  const message = requestChat.conversation?.messages.find(item => item.id === messageId);
+  if (messageId !== activeChatProposalMessageId || chatTicketId !== activeTicketId || !activeReview
+    || message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== activeReview.requestId
+    || message.content.proposalRevisionId !== activeReview.proposalRevisionId) throw new Error('Inspect this exact proposal before deciding or comparing it.');
+}
+
+function updateChatProposalCard(): void {
+  if (liveChatPreview) { requestChat.setProposalReview(null); return; }
+  const review = activeReview; const messageId = activeChatProposalMessageId;
+  if (!review?.proposalRevisionId || !messageId || chatTicketId !== activeTicketId) { requestChat.setProposalReview(null); return; }
+  const message = requestChat.conversation?.messages.find(item => item.id === messageId);
+  if (message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== review.requestId
+    || message.content.proposalRevisionId !== review.proposalRevisionId) { requestChat.setProposalReview(null); return; }
+  requestChat.setProposalReview({ messageId, requestId: review.requestId, proposalRevisionId: review.proposalRevisionId,
+    summary: review.summary, rationale: review.rationale, constraints: review.constraints, uncertainty: review.uncertainty,
+    status: generic('review-status').textContent ?? 'Proposal', canAccept: !ui['accept-proposal'].disabled,
+    canReject: !ui['reject-proposal'].disabled, canRevise: !ui['request-revision'].disabled, delta: reviewDelta });
+}
+
+async function decideChatProposal(action: 'accept' | 'reject' | 'revise', messageId: string): Promise<void> {
+  assertChatProposal(messageId);
+  if (action === 'revise') { ui['request-text'].focus(); status('Describe the refinement here. Your reply continues this conversation.'); return; }
+  const ticket = backlogItems.find(item => item.id === activeTicketId);
+  if (!ticket || !activeReview || ticket.request.requestId !== activeReview.requestId
+    || (action === 'accept' ? ticket.state !== 'ready' || reviewState(activeReview) !== 'pending' : !['ready', 'needs-input', 'failed'].includes(ticket.state))) throw new Error('This proposal is no longer eligible for that decision.');
+  await decideTicket(ticket.id, action, activeReview.requestId);
+}
+
 function showChatTicket(value: unknown): void {
   const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
-  chatTicketId = ticket.id;
+  if (liveChatPreview && (liveChatPreview.ticketId !== ticket.id || liveChatPreview.requestId !== ticket.request.requestId)) {
+    liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null;
+    renderComparison(); syncInspector();
+  }
+  chatTicketId = ticket.id; requestChat.setOffline(false);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
-    title: firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state] });
+    title: firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
 }
 
 async function openConversation(id: string, keepProposal = false): Promise<void> {
@@ -1437,6 +1565,7 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   showPage('request'); showRequestPane('details'); ui['request-text'].focus(); closeChatSwitcher();
   status(draft ? 'Chat reopened with its unsent message and attachments. Drafts stay in this tab until sent.' : context.selectedId ? 'Conversation reference restored. Inspect a message to view its original snapshot and pins. A reply never approves a proposal.'
     : 'Conversation opened; its saved reference is absent from the current model. Choose an item or inspect its retained evidence.');
+  await refreshChatModel(value.ticket);
 }
 
 async function refreshConversation(): Promise<void> {
@@ -1448,8 +1577,9 @@ async function refreshConversation(): Promise<void> {
     if (chatTicketId !== id || repo?.projectId !== projectId) return;
     if (!isRecord(value)) throw new Error('Missing conversation.');
     showChatTicket(value.ticket);
+    await refreshChatModel(value.ticket);
   } catch (error) {
-    if (chatTicketId === id) status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`);
+    if (chatTicketId === id) { requestChat.setOffline(true); status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`); }
   } finally { chatRefreshing = false; }
 }
 
@@ -1465,8 +1595,9 @@ async function sendChatReply(): Promise<void> {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatReply.body),
   });
   if (response.status === 409) {
+    const conflict: unknown = await response.json();
     chatReply = null; await refreshConversation();
-    throw new Error('The conversation changed while this reply was being sent. Review the latest messages and send again. Your draft and attachments are retained.');
+    throw new Error(`${isRecord(conflict) && typeof conflict.error === 'string' ? conflict.error : 'The conversation changed. Refresh before sending.'} Your draft and attachments are retained.`);
   }
   const value = await proposalJson(response);
   if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
@@ -1550,7 +1681,7 @@ function parseBacklogItem(value: unknown): BacklogItem {
   const cached = ticketScopes.get(requestId);
   const scope = cached?.projectId === value.projectId && cached.scope.baseRevisionId === baseRevisionId
     && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
-  const first = typeof value.title === 'string' ? value.title : conversationFromTicket(value).messages.find(message => message.kind === 'user')?.text ?? '';
+  const first = typeof value.title === 'string' ? value.title : Object.hasOwn(value, 'conversation') ? conversationFromTicket(value).messages.find(message => message.kind === 'user')?.text ?? '' : requiredText(value.request, 'instruction');
   if (!first.trim() || first.length > 1000) throw new Error('Invalid chat title.');
   return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
@@ -1727,9 +1858,12 @@ for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventL
   if (activityTicketId) void perform(async () => { await decideTicket(activityTicketId ?? '', action, activityRequestId); });
 });
 
-async function openTicket(id: string, message?: ConversationMessage): Promise<void> {
-  if (!await discardRequest('Open this saved request and discard the unsent request?')) return;
+async function openTicket(id: string, message?: ConversationMessage, automatic = false): Promise<void> {
+  const cameraContext = { level: activeLevelId, room: focusedRoomId, view: modelView };
+  if (chatTicketId !== id) await openConversation(id); else saveChatDraft();
+  if (!reviewRepository && !liveChatPreview && !chatInspectionOrigins.has(currentChatKey())) chatInspectionOrigins.set(currentChatKey(), captureChatDraft());
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+  if (automatic && (chatTicketId !== id || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey()))) return;
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = parseBacklogItem(value.ticket);
   if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
@@ -1741,7 +1875,7 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   } });
   const proposed = await RoomRepository.restore(result.project);
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
-  clearRequestSources(); ui['request-text'].value = '';
+  liveChatPreview = null; livePreviewSelection = null;
   reviewRepository = proposed; activeTicketId = id; activeReview = { ...parseSourceContext(ticket.request), ...result.review };
   reviewDelta = result.status === 'ready'; modelView = '3d';
   if (ticket.state === 'completed' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'accepted' };
@@ -1752,7 +1886,11 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   const context = requestContext(proposed.view(selectedRevision).snapshot, result.review.selectedObjectIds);
   activeLevelId = context.levelId; focusedRoomId = context.roomId;
   selectedObject = context.selectedId ?? selectedObject;
-  resetEditor(); render(); showPage('review');
+  showChatTicket(value.ticket);
+  const proposalMessage = message ?? requestChat.conversation?.messages.find(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === activeReview?.requestId && item.content.proposalRevisionId === activeReview?.proposalRevisionId);
+  activeChatProposalMessageId = proposalMessage?.id ?? null;
+  if (automatic) { activeLevelId = cameraContext.level; focusedRoomId = cameraContext.room; modelView = cameraContext.view; }
+  resetEditor(); render(); showPage('request');
   ui['ticket-history'].replaceChildren();
   if (Array.isArray(value.ticket.history)) for (const [index, archived] of value.ticket.history.entries()) {
     if (typeof archived !== 'string') throw new Error('Invalid request history.');
@@ -1767,6 +1905,7 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   }
 }
 async function decideTicket(id: string, action: string, activityVersion: string | null = null): Promise<void> {
+  const keepChat = currentPage === 'request' && chatTicketId === id;
   const expectedRequestId = activityVersion ?? (activeTicketId === id && activeReview ? activeReview.requestId : backlogItems.find((item) => item.id === id)?.request.requestId);
   if (!expectedRequestId) throw new Error('Refresh the ticket before deciding.');
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}/decision`, {
@@ -1780,6 +1919,7 @@ async function decideTicket(id: string, action: string, activityVersion: string 
     renderReview(); showPage('backlog'); status('Proposal accepted. The server model and decision were saved together.');
   } else { showPage('backlog'); status(`Request ${action === 'retry' ? 'queued for another attempt' : action === 'reject' ? 'rejected' : 'cancelled'}.`); }
   await refreshBacklog();
+  if (keepChat) { await refreshConversation(); showPage('request'); status(action === 'accept' ? 'Proposal accepted. The model and decision are saved in this conversation.' : `Proposal ${action}. Continue this conversation below.`); }
 }
 ui['open-current-model'].addEventListener('click', () => {
   void perform(async () => {
@@ -1917,6 +2057,7 @@ function svgNode<K extends keyof SVGElementTagNameMap>(tag: K, attributes: SvgAt
 }
 
 function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, identifier: string, label: string): SVGSVGElement {
+  const displayedSelection = livePreviewSelection ?? selectedObject;
   const available = levels(fullSnapshot);
   const chosen = available.find(item => item.id === activeLevelId) ?? available.find(item => item.elevation === 0) ?? available[0];
   const snapshot = chosen ? levelView(fullSnapshot, chosen.id) : fullSnapshot;
@@ -1925,7 +2066,7 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     : !chosen || chosen.elevation === 0 && levels(fullReference).length <= 1 ? fullReference
     : { units: 'm', entities: [], relationships: [] } satisfies ModelGraph;
   const interactive = identifier === 'selected';
-  const editable = interactive && Boolean(layout) && !spaces(snapshot).length;
+  const editable = interactive && !liveChatPreview && Boolean(layout) && !spaces(snapshot).length;
   const svg = svgNode('svg', { viewBox: '0 0 600 400', role: interactive ? 'group' : 'img', 'aria-labelledby': `${identifier}-title ${identifier}-desc` });
   if (chosen) svg.dataset.levelId = chosen.id;
   const door = entry(snapshot);
@@ -1999,7 +2140,7 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
         svg.append(line(jamb, jambEdge, style));
       }
       if (!ghost && interactive && spaces(snapshot).length) svg.append(line(hinge, jamb, {
-        stroke: item.id === selectedObject ? '#e1a12e' : 'transparent', 'stroke-width': Math.max(12, wall.thickness * scale + 3),
+        stroke: item.id === displayedSelection ? '#e1a12e' : 'transparent', 'stroke-width': Math.max(12, wall.thickness * scale + 3),
         'data-object': item.id, role: 'button', tabindex: 0, 'aria-label': `Select ${item.name}`, class: 'edit-target',
       }));
       svg.append(line(hinge, leaf, style));
@@ -2035,14 +2176,14 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     const start: Point = [host.wall.start[0] + ux * host.link.offset, host.wall.start[1] + uy * host.link.offset];
     const end: Point = [start[0] + ux * opening.width, start[1] + uy * opening.width];
     svg.append(line(start, end, {
-      stroke: opening.id === selectedObject ? '#e1a12e' : '#318aa0', 'stroke-width': Math.max(5, host.wall.thickness * scale),
+      stroke: opening.id === displayedSelection ? '#e1a12e' : '#318aa0', 'stroke-width': Math.max(5, host.wall.thickness * scale),
       class: interactive ? 'edit-target' : '', 'data-object': opening.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${opening.name}`, 'aria-pressed': String(opening.id === selectedObject),
+      'aria-label': `Select ${opening.name}`, 'aria-pressed': String(opening.id === displayedSelection),
     }));
   }
   for (const equipment of snapshot.entities.filter(isEquipment)) {
     const [x, y] = transform(equipment.position);
-    const selected = equipment.id === selectedObject;
+    const selected = equipment.id === displayedSelection;
     svg.append(svgNode('rect', {
       x: x - equipment.width * scale / 2, y: y - equipment.depth * scale / 2,
       width: equipment.width * scale, height: Math.max(equipment.depth * scale, 8), rx: 3,
@@ -2065,7 +2206,7 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
   for (const item of snapshot.entities.filter((entity) => entity.type === 'Furniture').sort((a, b) => Number(a.supportId !== null) - Number(b.supportId !== null))) {
     const footprint = furnitureFootprint(item);
     const [x, y] = transform([footprint.minX, footprint.maxY]);
-    const selected = item.id === selectedObject;
+    const selected = item.id === displayedSelection;
     const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
       'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
     group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
@@ -2079,7 +2220,7 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     const geometry = assetGeometry(snapshot, item);
     const footprint = geometry.footprint;
     const [x, y] = transform([footprint.minX, footprint.maxY]);
-    const selected = item.id === selectedObject;
+    const selected = item.id === displayedSelection;
     const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
       'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
     group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
@@ -2103,7 +2244,7 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     const group = svgNode('g', { 'data-object': stair.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
       'aria-label': `Select ${stair.name}`, class: interactive ? 'edit-target' : '' });
     group.append(svgNode('rect', { x, y, width: (b.maxX - b.minX) * scale, height: (b.maxY - b.minY) * scale,
-      fill: '#e2efec', stroke: stair.id === selectedObject ? '#e1a12e' : '#487e75', 'stroke-width': 1.5 }));
+      fill: '#e2efec', stroke: stair.id === displayedSelection ? '#e1a12e' : '#487e75', 'stroke-width': 1.5 }));
     const horizontal = stair.start[0] !== stair.end[0];
     for (let step = 1; step < stair.steps; step++) {
       const t = step / stair.steps;
@@ -2131,9 +2272,9 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     const cssScale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
     const targetWidth = 44 * cssScale;
     for (const wall of walls) {
-      if (wall.id === selectedObject) svg.append(line(wall.start, wall.end, { stroke: '#e1a12e', 'stroke-width': 5, class: 'selection-outline' }));
+      if (wall.id === displayedSelection) svg.append(line(wall.start, wall.end, { stroke: '#e1a12e', 'stroke-width': 5, class: 'selection-outline' }));
       svg.append(line(wall.start, wall.end, { stroke: 'transparent', 'stroke-width': targetWidth, class: 'edit-target',
-        'data-object': wall.id, role: 'button', tabindex: 0, 'aria-label': `Select ${wall.name}`, 'aria-pressed': String(wall.id === selectedObject) }));
+        'data-object': wall.id, role: 'button', tabindex: 0, 'aria-label': `Select ${wall.name}`, 'aria-pressed': String(wall.id === displayedSelection) }));
     }
     if (spaces(snapshot).length) { drawVisualOverlay(svg, snapshot, transform); return svg; }
     const doorHost = hostFor(snapshot, door);
@@ -2144,13 +2285,13 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     const hinge: Point = [wall.start[0] + unit[0] * link.offset, wall.start[1] + unit[1] * link.offset];
     const jamb: Point = [hinge[0] + unit[0] * door.width, hinge[1] + unit[1] * door.width];
     const centre: Point = [hinge[0] + unit[0] * door.width / 2, hinge[1] + unit[1] * door.width / 2];
-    svg.append(line(hinge, jamb, { stroke: selectedObject === door.id ? '#e1a12e' : 'transparent', 'stroke-opacity': .25, 'stroke-width': targetWidth,
-      class: 'edit-target', 'data-object': door.id, role: 'button', tabindex: 0, 'aria-label': 'Select Entry door', 'aria-pressed': String(selectedObject === door.id) }));
+    svg.append(line(hinge, jamb, { stroke: displayedSelection === door.id ? '#e1a12e' : 'transparent', 'stroke-opacity': .25, 'stroke-width': targetWidth,
+      class: 'edit-target', 'data-object': door.id, role: 'button', tabindex: 0, 'aria-label': 'Select Entry door', 'aria-pressed': String(displayedSelection === door.id) }));
     if (!editable) return svg;
-    const selected = snapshot.entities.find((item) => item.id === selectedObject);
+    const selected = snapshot.entities.find((item) => item.id === displayedSelection);
     const handle = (location: Point, operation: GestureOperation, caption: string, square = false): void => {
       const [x, y] = transform(location);
-      const group = svgNode('g', { class: 'edit-handle', 'data-handle': operation, 'data-object': selectedObject, 'aria-label': caption, role: 'button', tabindex: 0 });
+      const group = svgNode('g', { class: 'edit-handle', 'data-handle': operation, 'data-object': displayedSelection, 'aria-label': caption, role: 'button', tabindex: 0 });
       group.append(svgNode('circle', { cx: x, cy: y, r: targetWidth / 2, fill: '#167d78', 'fill-opacity': .06 }));
       group.append(square ? svgNode('rect', { x: x - 6, y: y - 6, width: 12, height: 12, rx: 2, fill: '#167d78', stroke: 'white', 'stroke-width': 2 })
         : svgNode('circle', { cx: x, cy: y, r: 7, fill: '#167d78', stroke: 'white', 'stroke-width': 2 }));
@@ -2213,6 +2354,7 @@ function renderVisualPanel(): void {
     : 'Drag the teal handle to a floor location or wall, or use the coordinates below. Escape cancels a drag.';
 }
 function stageVisualReference(destination: SpatialReference): void {
+  if (liveChatPreview) throw new Error('Return to the request model before marking a location, or wait for the validated proposal.');
   if (!preview) return;
   const parsed = parseVisualRequest(preview, { kind: 'spatial-reference', destination });
   if (parsed.kind === 'spatial-reference') visualDraft = parsed.destination;
@@ -2262,6 +2404,7 @@ function referencePoint(reference: SpatialReference, snapshot: ModelGraph): Poin
   return [wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t];
 }
 function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (point: Point) => Point): void {
+  if (liveChatPreview) return;
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
   if (!selected || !serverAvailable || busy) return;
   const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
@@ -2407,6 +2550,7 @@ ui['proposal-drawing'].addEventListener('keydown', (event) => {
     const objectId = target.dataset.object;
     if (!objectId) return;
     event.preventDefault(); chooseObject(objectId);
+    if (liveChatPreview) return;
     const selected = preview?.entities.find((entity) => entity.id === selectedObject);
     const control = selected?.type === 'Door' ? ui['door-width'] : selected?.type === 'Wall' ? ui['wall-position'] : null;
     if (control && !control.disabled) control.focus();
@@ -2593,55 +2737,55 @@ function focusRoom(id: string | null): void {
   syncInspector(); renderComparison(); updateControls();
 }
 function renderRoomNavigation(snapshot: ModelSnapshot): void {
+  if (liveChatPreview) {
+    explorer.show({ graph: snapshot, projectId: requireRepository().projectId, name: requireRepository().name, selectedId: livePreviewSelection ?? '' });
+    ui['show-roof'].checked = roofVisible; return;
+  }
   const storeys = levels(snapshot);
-  const needsPlan = modelView === 'plan';
   if (activeLevelId && !storeys.some(level => level.id === activeLevelId)) activeLevelId = null;
-  if (!activeLevelId && needsPlan && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
+  if (!activeLevelId && modelView === 'plan' && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
   const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
-  const rooms = spaces(view);
-  generic('level-navigation').hidden = !storeys.length;
-  const all = new Option('All storeys · 3D', ''); all.disabled = needsPlan;
-  ui['level-focus'].replaceChildren(all, ...storeys.map(level => new Option(`${level.name} · ${number.format(level.elevation)} m`, level.id)));
-  ui['level-focus'].value = activeLevelId ?? '';
-  ui['show-roof'].checked = roofVisible;
-  generic('level-context').textContent = activeLevelId ? `Viewing ${storeys.find(level => level.id === activeLevelId)?.name ?? 'level'}. Requests keep this level as context.`
-    : 'Whole building in 3D. Pick a level to isolate its plan and contents.';
-  const objects = view.entities.filter(item => item.type !== 'AssetFamily' && (!activeLevelId || item.type !== 'Level' || item.id === activeLevelId));
+  const objects = view.entities.filter(item => item.type !== 'AssetFamily');
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
-  if (!objects.some(item => item.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
+  if (!snapshot.entities.some(item => item.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
   if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
-  ui['selected-object'].value = selectedObject;
-  if (!rooms.some((room) => room.id === focusedRoomId)) focusedRoomId = null;
-  generic('room-navigation').hidden = !rooms.length;
-  ui['room-focus'].replaceChildren(new Option(activeLevelId ? 'Whole level' : 'Whole building', ''), ...rooms.map((room) => new Option(
-    activeLevelId ? room.name : `${entityLevel(snapshot, room)?.name ?? ''} · ${room.name}`, room.id)));
-  ui['room-focus'].value = focusedRoomId ?? '';
-  generic('room-context').textContent = focusedRoomId
-    ? 'Room focus frames the camera and accompanies your request. Adjacent rooms remain part of the shared model.'
-    : 'Shared model · rooms stay tied to their level · room areas use wall centre lines.';
+  ui['selected-object'].value = selectedObject; ui['show-roof'].checked = roofVisible;
+  explorer.show({ graph: snapshot, projectId: requireRepository().projectId, name: requireRepository().name, selectedId: selectedObject });
 }
-
-ui['level-focus'].addEventListener('change', () => {
+function navigateModel(node: ModelNode): void {
   if (!preview || busy || gesture || visualGesture) return;
-  if (visualDraft) { status('Clear the current location marker before changing level context.'); ui['level-focus'].value = activeLevelId ?? ''; return; }
-  activeLevelId = ui['level-focus'].value || null; focusedRoomId = null;
-  if (!activeLevelId) modelView = '3d';
-  else selectedObject = activeLevelId;
-  renderComparison(); if (currentPage === 'project') renderProjectOverview(); syncInspector(); updateControls();
-});
-ui['whole-building'].addEventListener('click', () => {
-  if (!repo || busy || gesture || visualGesture) return;
-  if (visualDraft) { status('Clear the current location marker before changing level context.'); return; }
-  activeLevelId = null; focusedRoomId = null; modelView = '3d'; showPage('request'); updateControls();
-});
+  if (visualDraft) { status('Attach or clear the current location marker before changing view context.'); return; }
+  inspectedComparison = null;
+  if (liveChatPreview) {
+    const graph = liveChatPreview.snapshot;
+    if (node.kind === 'project') { activeLevelId = null; focusedRoomId = null; modelView = '3d'; }
+    else {
+      const item = graph.entities.find(entity => entity.id === node.id); if (!item) return;
+      activeLevelId = item.type === 'Level' ? item.id : entityLevel(graph, item)?.id ?? null;
+      focusedRoomId = item.type === 'Space' ? item.id : entitySpace(graph, item)?.id ?? null;
+      inspectLiveObject(item.id, graph);
+    }
+    renderComparison(); return;
+  }
+  if (node.kind === 'project') { activeLevelId = null; focusedRoomId = null; modelView = '3d'; }
+  else if (node.kind === 'level') { activeLevelId = node.id; focusedRoomId = null; selectedObject = node.id; }
+  else if (node.kind === 'room') { focusRoom(node.id); workspace.showInspector(); return; }
+  else if (node.kind === 'element') {
+    const entity = preview.entities.find(item => item.id === node.id); if (!entity) return;
+    activeLevelId = entityLevel(preview, entity)?.id ?? null;
+    focusedRoomId = entitySpace(preview, entity)?.id ?? null;
+    if (!activeLevelId) modelView = '3d';
+    chooseObject(node.id); return;
+  } else return;
+  renderComparison(); syncInspector(); updateControls(); workspace.showInspector();
+  status(`Viewing ${node.name}. Inspection leaves the model and chat drafts unchanged.`);
+}
 ui['show-roof'].addEventListener('change', () => { roofVisible = ui['show-roof'].checked; if (roofVisible) cutaway = false; if (repo) renderComparison(); });
-ui['room-focus'].addEventListener('change', () => focusRoom(ui['room-focus'].value || null));
-button('whole-floor').addEventListener('click', () => focusRoom(null));
 
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
   const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
-  const comparison = inDeltaDialog || currentPage === 'review' && reviewDelta ? baseline : null;
+  const comparison = inDeltaDialog || (Boolean(liveChatPreview) || currentPage === 'review' || currentPage === 'request' && Boolean(reviewRepository) && Boolean(activeChatProposalMessageId)) && reviewDelta ? baseline : null;
   try {
     if (viewerFailed) {
       host.replaceChildren(element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty'));
@@ -2649,6 +2793,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
     }
     modelViewer ??= new ModelViewer({
       select: chooseObject,
+      inspect: (id, graph) => { if (liveChatPreview) inspectLiveObject(id, graph); else { inspectedComparison = { id, graph }; renderElementProperties(generic('element-properties'), graph, id, 'Comparison snapshot'); workspace.showInspector(); } },
       reference: (destination) => {
         if (busy || !serverAvailable || currentPage !== 'request') return;
         stageVisualReference(destination); renderComparison(); updateControls();
@@ -2656,8 +2801,8 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
-    modelViewer.show(host, { snapshot, comparison, selectedId: selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
-      interactive: !comparison && currentPage === 'request' && !busy && serverAvailable, reference: currentPage === 'request' ? visibleReference() : null });
+    modelViewer.show(host, { snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
+      interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
@@ -2669,14 +2814,27 @@ function renderComparison(): void {
   const project = requireRepository();
   const originalId = project.root();
   const original = project.view(originalId).snapshot;
-  const selected = preview ?? project.view(selectedRevision).snapshot;
-  const reviewedRevision = project.reviewAt(selectedRevision);
+  const selected = liveChatPreview?.snapshot ?? preview ?? project.view(selectedRevision).snapshot;
+  const reviewedRevision = liveChatPreview ? null : project.reviewAt(selectedRevision);
   const review = reviewedRevision?.review;
-  const comparison = reviewedRevision ? project.view(reviewedRevision.comparisonBaseRevisionId).snapshot : original;
+  const comparison = liveChatPreview ? repo?.view(liveChatPreview.baseRevisionId).snapshot ?? original : reviewedRevision ? project.view(reviewedRevision.comparisonBaseRevisionId).snapshot : original;
   const comparisonLabel = generic('workspace-review-canvas').querySelector('.comparison-toolbar span');
   if (comparisonLabel) comparisonLabel.textContent = reviewedRevision && reviewedRevision.comparisonBaseRevisionId !== review?.baseRevisionId
     ? 'Applied changes compared with the preceding accepted revision' : 'Compare with this proposal’s bound base';
   const isOriginal = selectedRevision === originalId;
+  const chatProposal = currentPage === 'request' && Boolean(reviewRepository) && Boolean(activeChatProposalMessageId);
+  generic('workspace-shell').dataset.chatModel = liveChatPreview ? 'live' : chatProposal ? 'proposal' : 'accepted';
+  const paused = pausedChatPreviews.has(currentChatKey());
+  generic('chat-proposal-tools').hidden = currentPage !== 'request' || !liveChatPreview && !chatProposal && !(chatTicketId && paused);
+  generic('chat-proposal-state').textContent = liveChatPreview ? 'Live draft · tentative' : chatProposal ? 'Proposal preview' : 'Showing request model';
+  generic('chat-proposal-state').title = liveChatPreview ? 'Changes may still be discarded. Nothing is accepted while the agent works.' : 'Acceptance requires your explicit decision in chat.';
+  const chatChanges = liveChatPreview || chatProposal ? modelChanges(comparison, selected) : [];
+  generic('chat-proposal-changes').textContent = chatChanges.length ? `${chatChanges.filter(item => item.status === 'added').length} added · ${chatChanges.filter(item => item.status === 'modified').length} changed · ${chatChanges.filter(item => item.status === 'removed').length} removed` : '';
+  button('chat-proposal-follow').hidden = !paused;
+  button('chat-proposal-return').hidden = !liveChatPreview && !chatProposal;
+  button('chat-proposal-delta').hidden = !liveChatPreview && !chatProposal;
+  button('chat-proposal-delta').setAttribute('aria-pressed', String(reviewDelta));
+  button('chat-proposal-delta').textContent = reviewDelta ? 'Hide changes' : 'Show changes';
   renderRoomNavigation(selected);
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
   if (modelView === 'plan' && !(ui['changes-dialog'].open && changesTab === '3d')) {
@@ -2698,7 +2856,7 @@ function renderComparison(): void {
   ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
   ui['model-3d-controls'].hidden = modelView !== '3d';
   ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES' : '3D · CAMERA ONLY';
-  ui['model-revision'].textContent = `Revision ${selectedRevision.slice(0, 10)} · ${selected.entities.length} objects`;
+  ui['model-revision'].textContent = liveChatPreview ? `Live draft · update ${liveChatPreview.sequence} · base ${liveChatPreview.baseRevisionId.slice(0, 10)} · ${selected.entities.length} objects` : `Revision ${selectedRevision.slice(0, 10)} · ${selected.entities.length} objects`;
   ui['review-drawing'].dataset.modelView = modelView;
   if (modelView === 'plan') ui['review-drawing'].replaceChildren(drawPlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`));
   generic('review-model-3d-controls').hidden = modelView !== '3d';
@@ -2719,7 +2877,7 @@ function renderComparison(): void {
   button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
   renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
   ui['selected-title'].textContent = spaces(selected).length ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
-  ui['selected-badge'].textContent = dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
+  ui['selected-badge'].textContent = liveChatPreview ? 'Live agent draft' : dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = spaces(selected).length ? 'Choose a storey for its plan, or explore the whole building in 3D. Select an object and describe a change for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), reviewedRevision
     ? `${reviewedRevision.comparisonBaseRevisionId === review?.baseRevisionId ? 'Proposal base' : 'Accepted predecessor'} ${reviewedRevision.comparisonBaseRevisionId.slice(0, 10)}` : 'Original');

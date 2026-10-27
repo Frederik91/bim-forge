@@ -77,6 +77,7 @@ export interface ModelProposalOptions {
   signal?: AbortSignal;
   scripts?: ModelScripts;
   onExecution?: (evidence: ScriptExecutionEvidence) => void;
+  onPreview?: (snapshot: ModelSnapshot | null) => void;
   sourceInput?: { images: readonly { path: string }[]; documents: readonly { sourceId: string; text: string }[] };
 }
 export class ModelWorkerError extends Error {
@@ -214,21 +215,23 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   const dispatchTool = async (name: string, argumentsValue: unknown): Promise<Record<string, unknown>> => {
     signal.throwIfAborted();
     calls += 1;
-    if (calls > MAX_TOOL_CALLS) { fatal = true; fail('The model worker exceeded the bounded tool-call budget.'); }
+    if (calls > MAX_TOOL_CALLS) { fatal = true; options.onPreview?.(null); fail('The model worker exceeded the bounded tool-call budget.'); }
     if (finished || terminal.value || fatal) return { ok: false, error: 'This proposal attempt has finished or lost execution authority.' };
-    if (running) { fatal = true; return { ok: false, error: 'Concurrent model script calls are not allowed.' }; }
+    if (running) { fatal = true; options.onPreview?.(null); return { ok: false, error: 'Concurrent model script calls are not allowed.' }; }
     if (name !== 'run_model_script') {
       toolCalls.push({ name: 'unsupported_tool', status: 'rejected', error: 'Unsupported model tool.' });
       return { ok: false, error: 'Unsupported model tool. Use run_model_script.' };
     }
-    if (executions.length >= MAX_SCRIPT_EXECUTIONS || hostCalls >= MAX_SCRIPT_HOST_CALLS) { fatal = true; fail('The model worker exceeded the aggregate script budget.'); }
+    if (executions.length >= MAX_SCRIPT_EXECUTIONS || hostCalls >= MAX_SCRIPT_HOST_CALLS) { fatal = true; options.onPreview?.(null); fail('The model worker exceeded the aggregate script budget.'); }
     running = true;
     try {
       fields(argumentsValue, ['language', 'source']);
       if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
       if (typeof argumentsValue.source !== 'string' || !argumentsValue.source.trim()) fail('A script source body is required.');
       const result = await scripts.run({ base: bound.base.snapshot, ...(options.initialDraft ? { initialDraft: options.initialDraft } : {}), binding: bound, language: argumentsValue.language, source: argumentsValue.source,
-        remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity });
+        remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity, onPreview: snapshot => {
+          if (snapshot === null || (!signal.aborted && !finished && !fatal)) options.onPreview?.(snapshot);
+        } });
       options.onExecution?.(result.evidence);
       parseScriptExecutions([...executions, result.evidence]);
       executions.push(result.evidence); hostCalls += result.evidence.calls.length;
@@ -249,6 +252,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         ...(result.kind === 'proposal' ? { changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } : {}), execution: result.evidence };
     } catch (error) {
       fatal = true;
+      options.onPreview?.(null);
       const message = (error instanceof Error ? error.message : 'Model script execution failed.').replace(/[\u0000-\u001f]/g, ' ').slice(0, 240);
       toolCalls.push({ name: 'run_model_script', status: 'rejected', error: message || 'Model script execution failed.' });
       return { ok: false, error: message };
@@ -297,7 +301,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     return { status: 'ready', repository: next, review: { ...next.review(bound.proposalName), changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } };
   } catch (error) { throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error }); }
   finally {
-    finished = true; controller.abort();
+    finished = true; controller.abort(); options.onPreview?.(null);
     await Promise.allSettled([...activeTools]);
     options.signal?.removeEventListener('abort', forwardAbort);
     if (!options.scripts) await scripts.dispose();

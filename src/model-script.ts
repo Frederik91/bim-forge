@@ -115,6 +115,7 @@ interface Draft {
   binding: ModelScriptBinding;
   signal: AbortSignal;
   onActivity: (event: ActivityUpdate) => void;
+  onPreview?: (snapshot: ModelSnapshot | null) => void;
 }
 interface RunInput {
   base: ModelSnapshot;
@@ -125,6 +126,7 @@ interface RunInput {
   signal: AbortSignal;
   remainingHostCalls: number;
   onActivity: (event: ActivityUpdate) => void;
+  onPreview?: (snapshot: ModelSnapshot | null) => void;
 }
 
 export function summarizeModelDelta(delta: ModelDelta) {
@@ -203,7 +205,7 @@ function stage(draft: Draft, operation: () => ModelSnapshot, revoked: () => void
   draft.onActivity({ stage: 'validating', message: 'Testing a scripted model change against the model and placement validators.' });
   let candidate: ModelSnapshot;
   try {
-    candidate = operation();
+    candidate = validateSnapshot(operation());
     if (draft.binding.scope) assertModelScopeWrites({ before: draft.base, after: candidate, binding: draft.binding.scope });
   }
   catch (error) {
@@ -213,6 +215,8 @@ function stage(draft: Draft, operation: () => ModelSnapshot, revoked: () => void
   revoked(); draft.signal.throwIfAborted();
   draft.snapshot = candidate;
   draft.onActivity({ stage: 'validated', message: 'Scripted change passed deterministic validation. Accepted model remains unchanged.' });
+  revoked(); draft.signal.throwIfAborted();
+  draft.onPreview?.(candidate);
   return { model: modelWorkingGraph(candidate, draft.binding.scope), changes: summarizeModelDelta(diffSnapshots(draft.base, candidate)) };
 }
 
@@ -393,55 +397,62 @@ export class ModelScripts {
     if (this.#runtime) await (await this.#runtime).dispose();
   }
   async run(input: RunInput): Promise<ModelScriptResult> {
-    const binding = structuredClone(input.binding);
-    if (binding.scope) {
-      if (binding.scope.baseRevisionId !== binding.baseRevisionId) throw new Error('Scope and script base revisions differ.');
-      assertModelScopeFresh({ base: input.base, current: input.base, binding: binding.scope });
-    }
-    const runtime = await this.#get();
-    const draft: Draft = { base: input.base, snapshot: input.initialDraft ?? input.base, binding, signal: input.signal, onActivity: input.onActivity };
-    const session = runtime.createSession({ context: draft,
-      capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
-        ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
-        ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
-      limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },
-      // Awaited audit callbacks fail closed. Never forward guest logs or raw handler errors to product activity.
-      audit: (event: ExecutionEvent) => {
-        if (event.type === 'limit-reached') input.onActivity({ stage: 'validation-failed', message: 'The script reached an execution limit. Its proposed changes will be discarded.' });
-      },
-    });
-    let outcome: ExecutionOutcome;
-    try { outcome = await session.execute({ language: input.language, source: input.source, signal: input.signal }); }
-    finally { await session.dispose(); }
-    const evidence = (disposition: ScriptExecutionEvidence['disposition'], validation: ScriptExecutionEvidence['validation'], diagnostic: ScriptDiagnostic | null) => parseScriptExecutionEvidence({
-      version: 1, executionId: outcome.evidence.executionId, language: input.language, sourceSha256: outcome.evidence.source.sha256,
-      status: outcome.status, disposition, validation, contractSha256: outcome.evidence.contract.sha256,
-      policyVersion: outcome.evidence.policyVersion, runtime: { packageVersion: outcome.evidence.runtime.packageVersion,
-        guestAbi: outcome.evidence.runtime.guestAbi, bootstrapVersion: outcome.evidence.runtime.bootstrapVersion, artifactSha256: outcome.evidence.runtime.artifactSha256 },
-      calls: outcome.evidence.calls.map((call) => ({ sequence: call.seq, method: auditMethod(call.method), disposition: call.disposition })), diagnostic,
-    });
-    const failed = (diagnostic: ScriptDiagnostic, validation: ScriptExecutionEvidence['validation'] = 'not-run'): ModelScriptResult => ({
-      kind: 'failed', diagnostic, evidence: evidence('discarded', validation, diagnostic),
-    });
-    const integrityFailure = outcome.evidence.calls.find((call) => call.disposition !== 'completed'
-      && !(call.disposition === 'app-error' && call.errorName === 'ModelValidationError'));
-    if (integrityFailure) return failed({ code: 'execution-integrity', message: publicMessage(`Host call ${auditMethod(integrityFailure.method)} ended as ${integrityFailure.disposition}. Staged changes discarded.`), line: null, column: null });
-    if (outcome.status !== 'completed') return failed({ code: outcome.status === 'failed' ? outcome.error.code : outcome.status,
-      message: publicMessage(outcome.status === 'failed' ? outcome.error.message : `Script ${outcome.status}. Staged changes discarded.`),
-      line: outcome.status === 'failed' ? outcome.error.line : null, column: outcome.status === 'failed' ? outcome.error.column : null });
-    if (input.signal.aborted) return failed({ code: 'cancelled', message: 'Script authority was revoked. Staged changes discarded.', line: null, column: null });
+    input.onPreview?.(null);
+    let retainPreview = false;
     try {
-      const result = decision(outcome.value);
-      if (result.kind === 'observe') return { kind: 'observation', observation: result.observation, evidence: evidence('observation', 'not-run', null) };
-      if (result.kind === 'clarify') return { kind: 'declined', reason: result.clarification.question, uncertainty: 'Awaiting user clarification.', clarification: result.clarification, evidence: evidence('declined', 'not-run', null) };
-      if (result.kind === 'decline') return { kind: 'declined', reason: result.reason, uncertainty: result.uncertainty,
-        ...(result.intent ? { intent: result.intent } : {}), evidence: evidence('declined', 'not-run', null) };
-      const candidate = validateSnapshot(draft.snapshot);
-      if (binding.scope) assertModelScopeWrites({ before: input.base, after: candidate, binding: binding.scope });
-      const delta = summarizeModelDelta(diffSnapshots(input.base, candidate));
-      if (!Object.values(delta).some((collection) => Object.values(collection).some((ids) => ids.length))) throw new Error('The proposed model is identical to the bound revision.');
-      input.signal.throwIfAborted();
-      return { kind: 'proposal', snapshot: candidate, review: result.review, evidence: evidence('proposal', 'passed', null) };
-    } catch (error) { return failed({ code: 'invalid-proposal', message: publicMessage(error instanceof Error ? error.message : 'Invalid script proposal.'), line: null, column: null }, 'failed'); }
+      const binding = structuredClone(input.binding);
+      if (binding.scope) {
+        if (binding.scope.baseRevisionId !== binding.baseRevisionId) throw new Error('Scope and script base revisions differ.');
+        assertModelScopeFresh({ base: input.base, current: input.base, binding: binding.scope });
+      }
+      const runtime = await this.#get();
+      const draft: Draft = { base: input.base, snapshot: input.initialDraft ?? input.base, binding, signal: input.signal,
+        onActivity: input.onActivity, ...(input.onPreview ? { onPreview: input.onPreview } : {}) };
+      const session = runtime.createSession({ context: draft,
+        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+          ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
+          ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
+        limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },
+        // Awaited audit callbacks fail closed. Never forward guest logs or raw handler errors to product activity.
+        audit: (event: ExecutionEvent) => {
+          if (event.type === 'limit-reached') input.onActivity({ stage: 'validation-failed', message: 'The script reached an execution limit. Its proposed changes will be discarded.' });
+        },
+      });
+      let outcome: ExecutionOutcome;
+      try { outcome = await session.execute({ language: input.language, source: input.source, signal: input.signal }); }
+      finally { await session.dispose(); }
+      const evidence = (disposition: ScriptExecutionEvidence['disposition'], validation: ScriptExecutionEvidence['validation'], diagnostic: ScriptDiagnostic | null) => parseScriptExecutionEvidence({
+        version: 1, executionId: outcome.evidence.executionId, language: input.language, sourceSha256: outcome.evidence.source.sha256,
+        status: outcome.status, disposition, validation, contractSha256: outcome.evidence.contract.sha256,
+        policyVersion: outcome.evidence.policyVersion, runtime: { packageVersion: outcome.evidence.runtime.packageVersion,
+          guestAbi: outcome.evidence.runtime.guestAbi, bootstrapVersion: outcome.evidence.runtime.bootstrapVersion, artifactSha256: outcome.evidence.runtime.artifactSha256 },
+        calls: outcome.evidence.calls.map((call) => ({ sequence: call.seq, method: auditMethod(call.method), disposition: call.disposition })), diagnostic,
+      });
+      const failed = (diagnostic: ScriptDiagnostic, validation: ScriptExecutionEvidence['validation'] = 'not-run'): ModelScriptResult => ({
+        kind: 'failed', diagnostic, evidence: evidence('discarded', validation, diagnostic),
+      });
+      const integrityFailure = outcome.evidence.calls.find((call) => call.disposition !== 'completed'
+        && !(call.disposition === 'app-error' && call.errorName === 'ModelValidationError'));
+      if (integrityFailure) return failed({ code: 'execution-integrity', message: publicMessage(`Host call ${auditMethod(integrityFailure.method)} ended as ${integrityFailure.disposition}. Staged changes discarded.`), line: null, column: null });
+      if (outcome.status !== 'completed') return failed({ code: outcome.status === 'failed' ? outcome.error.code : outcome.status,
+        message: publicMessage(outcome.status === 'failed' ? outcome.error.message : `Script ${outcome.status}. Staged changes discarded.`),
+        line: outcome.status === 'failed' ? outcome.error.line : null, column: outcome.status === 'failed' ? outcome.error.column : null });
+      if (input.signal.aborted) return failed({ code: 'cancelled', message: 'Script authority was revoked. Staged changes discarded.', line: null, column: null });
+      try {
+        const result = decision(outcome.value);
+        if (result.kind === 'observe') return { kind: 'observation', observation: result.observation, evidence: evidence('observation', 'not-run', null) };
+        if (result.kind === 'clarify') return { kind: 'declined', reason: result.clarification.question, uncertainty: 'Awaiting user clarification.', clarification: result.clarification, evidence: evidence('declined', 'not-run', null) };
+        if (result.kind === 'decline') return { kind: 'declined', reason: result.reason, uncertainty: result.uncertainty,
+          ...(result.intent ? { intent: result.intent } : {}), evidence: evidence('declined', 'not-run', null) };
+        const candidate = validateSnapshot(draft.snapshot);
+        if (binding.scope) assertModelScopeWrites({ before: input.base, after: candidate, binding: binding.scope });
+        const delta = summarizeModelDelta(diffSnapshots(input.base, candidate));
+        if (!Object.values(delta).some((collection) => Object.values(collection).some((ids) => ids.length))) throw new Error('The proposed model is identical to the bound revision.');
+        input.signal.throwIfAborted();
+        const proposal: ModelScriptResult = { kind: 'proposal', snapshot: candidate, review: result.review, evidence: evidence('proposal', 'passed', null) };
+        retainPreview = true;
+        return proposal;
+      } catch (error) { return failed({ code: 'invalid-proposal', message: publicMessage(error instanceof Error ? error.message : 'Invalid script proposal.'), line: null, column: null }, 'failed'); }
+    } finally { if (!retainPreview) input.onPreview?.(null); }
   }
 }

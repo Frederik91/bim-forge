@@ -525,6 +525,32 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
 .workspace-panel-heading h2 { font-size: 14px; }
 .workspace-panel-heading .icon-button { flex: 0 0 30px; width: 30px; height: 30px; font-size: 19px; border-radius: 7px; }
 .workspace-context-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.workspace-navigation { display: flex; flex-direction: column; overflow: hidden; }
+.model-explorer-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #dce5df; }
+.model-explorer-toolbar small { color: #6d8176; font-size: 9px; }
+.model-explorer-toolbar .roof-toggle { font-size: 10px; margin: 0; }
+.model-explorer { flex: 1 1 0; min-height: 70px; overflow: auto; padding: 8px 5px; }
+.model-tree, .model-tree ul { margin: 0; padding: 0; list-style: none; }
+.model-tree ul { margin-left: 10px; border-left: 1px solid #dfE7e1; padding-left: 3px; }
+.model-tree [role="treeitem"] { outline-offset: -2px; }
+.model-tree-row { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 3px 5px; border-radius: 6px; cursor: pointer; color: #355b4b; }
+.model-tree-row:hover { background: #edf1fb; }
+[aria-selected="true"] > .model-tree-row { background: #e0ecff; color: #1856a6; box-shadow: inset 3px 0 #1267d6; }
+.model-tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.model-tree-row small { font-size: 8px; color: #829289; max-width: 60px; overflow: hidden; }
+.model-tree-row button, .tree-leaf { flex: 0 0 22px; display: grid; place-items: center; width: 22px; height: 26px; border: 0; background: transparent; color: inherit; font-size: 16px; }
+.model-tree [data-kind="project"] > .model-tree-row .model-tree-name, .model-tree [data-kind="level"] > .model-tree-row .model-tree-name { font-weight: 650; }
+.element-inspector { flex: 0 0 auto; max-height: 45%; overflow: auto; border-top: 1px solid #c7d8ce; padding: 10px 12px; background: #fff; }
+.element-inspector > summary { cursor: pointer; font-size: 11px; font-weight: 650; color: #466955; }
+#element-properties { margin-top: 10px; }
+#element-properties h3 { font-size: 13px; overflow-wrap: anywhere; }
+.inspector-note { font-size: 9px; color: #7c8c80; margin-top: 5px; }
+#element-properties dl { margin: 10px 0 0; }
+#element-properties dl > div { padding: 6px 0; border-top: 1px solid #edf1ee; }
+#element-properties dt { font-size: 9px; color: #7a8a80; }
+#element-properties dd { margin: 3px 0 0; font-size: 11px; color: #294a3a; overflow-wrap: anywhere; white-space: pre-wrap; }
+.model-canvas { cursor: grab; }
+.model-canvas:active { cursor: grabbing; }
 .workspace-navigation .level-navigation, .workspace-navigation .room-navigation { display: flex; align-items: stretch; flex-direction: column; gap: 12px; padding: 16px; margin: 0; border: 0; border-bottom: 1px solid #dce5df; border-radius: 0; background: transparent; }
 .workspace-navigation .level-navigation > div, .workspace-navigation .room-navigation > div, .workspace-navigation .level-navigation p, .workspace-navigation .room-navigation p { flex: none; max-width: none; width: 100%; }
 .workspace-navigation label { font-size: 11px; }
@@ -633,6 +659,12 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
   .workspace-stage .model-selection-caption { bottom: 8px; left: 8px; padding: 5px 8px; font-size: 10px; }
   .workspace-stage .drawing-card footer > span { display: none; }
   .workspace-stage .comparison-toolbar { padding: 5px 10px; font-size: 10px; }
+  .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="live"],
+  .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="proposal"] { grid-template-rows: minmax(180px, 1.3fr) minmax(0, 1.7fr); }
+  #chat-proposal-tools { flex-wrap: wrap; gap: 4px 8px; }
+  #chat-proposal-tools strong { flex: 1 1 140px; font-size: 10px; }
+  #chat-proposal-tools small { font-size: 8px; }
+  #chat-proposal-tools .button { min-height: 28px; padding: 4px 8px; font-size: 9px; }
   .workspace-stage .comparison-toolbar span { display: none; }
   .workspace-stage .delta-summary { max-height: 55px; padding: 6px 10px; }
   .workspace-status { min-height: 26px; padding: 5px 10px; }
