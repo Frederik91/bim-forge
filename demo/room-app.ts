@@ -1478,7 +1478,11 @@ async function refreshChatModel(value: unknown): Promise<void> {
   const first = !liveChatPreview;
   if (first && !chatInspectionOrigins.has(currentChatKey())) chatInspectionOrigins.set(currentChatKey(), captureChatDraft());
   liveChatPreview = draft; inspectedComparison = null;
-  if (first) { modelView = '3d'; activeLevelId = null; focusedRoomId = null; reviewDelta = true; }
+  if (first) {
+    const changedIds = modelChanges(repo.view(draft.baseRevisionId).snapshot, draft.snapshot).map(item => item.id);
+    const context = requestContext(draft.snapshot, changedIds);
+    modelView = '3d'; activeLevelId = context.levelId; focusedRoomId = context.roomId; reviewDelta = true;
+  }
   if (!draft.snapshot.entities.some(item => item.id === livePreviewSelection)) livePreviewSelection = modelChanges(repo.view(draft.baseRevisionId).snapshot, draft.snapshot).find(item => item.status !== 'removed')?.id ?? null;
   renderComparison(); syncInspector(); updateControls();
 }
