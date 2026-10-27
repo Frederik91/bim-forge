@@ -1,0 +1,43 @@
+Collecting ifcopenshell==0.9.0.post1
+  Using cached ifcopenshell-0.9.0.post1-py311-none-manylinux_2_31_x86_64.whl (54.9 MB)
+Collecting numpy==2.2.6
+  Using cached numpy-2.2.6-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+Collecting shapely==2.1.1
+  Using cached shapely-2.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.1 MB)
+Collecting isodate==0.7.2
+  Using cached isodate-0.7.2-py3-none-any.whl (22 kB)
+Collecting python-dateutil==2.9.0.post0
+  Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Collecting six==1.17.0
+  Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+Collecting lark==1.2.2
+  Using cached lark-1.2.2-py3-none-any.whl (111 kB)
+Collecting pyparsing==3.2.3
+  Using cached pyparsing-3.2.3-py3-none-any.whl (111 kB)
+Collecting typing_extensions==4.14.1
+  Using cached typing_extensions-4.14.1-py3-none-any.whl (43 kB)
+Collecting jsonschema==4.24.0
+  Using cached jsonschema-4.24.0-py3-none-any.whl (88 kB)
+Collecting attrs==25.3.0
+  Using cached attrs-25.3.0-py3-none-any.whl (63 kB)
+Collecting jsonschema-specifications==2025.4.1
+  Using cached jsonschema_specifications-2025.4.1-py3-none-any.whl (18 kB)
+Collecting referencing==0.36.2
+  Using cached referencing-0.36.2-py3-none-any.whl (26 kB)
+Collecting rpds-py==0.25.1
+  Using cached rpds_py-0.25.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (386 kB)
+Collecting pytest==8.4.0
+  Downloading pytest-8.4.0-py3-none-any.whl (363 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 363.8/363.8 kB 5.5 MB/s eta 0:00:00
+Collecting iniconfig==2.1.0
+  Downloading iniconfig-2.1.0-py3-none-any.whl (6.0 kB)
+Collecting packaging==25.0
+  Downloading packaging-25.0-py3-none-any.whl (66 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 66.5/66.5 kB 4.5 MB/s eta 0:00:00
+Collecting pluggy==1.6.0
+  Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Collecting pygments==2.19.2
+  Downloading pygments-2.19.2-py3-none-any.whl (1.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 12.3 MB/s eta 0:00:00
+Installing collected packages: typing_extensions, six, rpds-py, pyparsing, pygments, pluggy, packaging, numpy, lark, isodate, iniconfig, attrs, shapely, referencing, python-dateutil, pytest, jsonschema-specifications, ifcopenshell, jsonschema
+Successfully installed attrs-25.3.0 ifcopenshell-0.9.0.post1 iniconfig-2.1.0 isodate-0.7.2 jsonschema-4.24.0 jsonschema-specifications-2025.4.1 lark-1.2.2 numpy-2.2.6 packaging-25.0 pluggy-1.6.0 pygments-2.19.2 pyparsing-3.2.3 pytest-8.4.0 python-dateutil-2.9.0.post0 referencing-0.36.2 rpds-py-0.25.1 shapely-2.1.1 six-1.17.0 typing_extensions-4.14.1

@@ -1,0 +1,1346 @@
+[
+  {
+    "caseId": "native-authoring/m-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/m-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/m-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/m-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/m-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/m-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/m-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/m-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/m/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/mm-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/mm-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/mm-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/mm-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/mm-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/mm-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/mm-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/mm-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/mm/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-m-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-m/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-mm-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/rotated-mm/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/m-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/m-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/m-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/m-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/m-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/m-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/m-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/m-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/m/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/mm-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/mm-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/mm-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/mm-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/mm-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/mm-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/mm-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/mm-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/mm/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-m-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-m/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r1/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r1/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r1/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r1/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r2/released-schema",
+    "expected": "No released IFC4 attribute/inverse/EXPRESS errors",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 292, in <lambda>\n    observations.check(\"EX-02\", f\"{case}/released-schema\", \"No released IFC4 attribute/inverse/EXPRESS errors\", lambda: schema_check(path, directory / f\"{tag}.validation.json\"))\n                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r2/semantic-contract",
+    "expected": "IDs/classes, scalar/list properties, type instances, opening, space boundary and spatial graph retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r2/coordinates",
+    "expected": "Metre/mm raw dimensions, nested local rotation and survey corners within declared tolerances",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-mm-r2/real-kernel",
+    "expected": "Real IfcOpenShell evaluated wall opening subtraction, solid volumes and world bounds",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "ifc-native/rotated-mm/successive-exports",
+    "expected": "Two actual exports retain all GlobalIds and change only wall-a dimensions",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Paired fixture supports EX-01 generated-source cases only; no source ID churn guarantees for vendors."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "m-r1/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "m-r2/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "mm-r1/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "mm-r2/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "rotated-m-r1/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "rotated-m-r2/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "rotated-mm-r1/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "rotated-mm-r2/candidate-parity",
+    "expected": "Independent reader sees identical narrow logical models for both candidates",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-authoring/m-vs-mm",
+    "expected": "Different exact canonical hashes, equivalent physical corners without viewer-origin rewriting",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 329, in compare_units\n    if canonical_hash(metres) == canonical_hash(millimetres):\n       ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 49, in canonical_hash\n    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode()).hexdigest()\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/__init__.py\", line 238, in dumps\n    **kw).encode(obj)\n          ^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 200, in encode\n    chunks = self.iterencode(o, _one_shot=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 258, in iterencode\n    return _iterencode(o, 0)\n           ^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 180, in default\n    raise TypeError(f'Object of type {o.__class__.__name__} '\nTypeError: Object of type Atom is not JSON serializable\n",
+    "passed": false
+  },
+  {
+    "caseId": "native-authoring/rotated-m-vs-mm",
+    "expected": "Different exact canonical hashes, equivalent physical corners without viewer-origin rewriting",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 329, in compare_units\n    if canonical_hash(metres) == canonical_hash(millimetres):\n       ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 49, in canonical_hash\n    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode()).hexdigest()\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/__init__.py\", line 238, in dumps\n    **kw).encode(obj)\n          ^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 200, in encode\n    chunks = self.iterencode(o, _one_shot=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 258, in iterencode\n    return _iterencode(o, 0)\n           ^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 180, in default\n    raise TypeError(f'Object of type {o.__class__.__name__} '\nTypeError: Object of type Atom is not JSON serializable\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/m-vs-mm",
+    "expected": "Different exact canonical hashes, equivalent physical corners without viewer-origin rewriting",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 329, in compare_units\n    if canonical_hash(metres) == canonical_hash(millimetres):\n       ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 49, in canonical_hash\n    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode()).hexdigest()\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/__init__.py\", line 238, in dumps\n    **kw).encode(obj)\n          ^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 200, in encode\n    chunks = self.iterencode(o, _one_shot=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 258, in iterencode\n    return _iterencode(o, 0)\n           ^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 180, in default\n    raise TypeError(f'Object of type {o.__class__.__name__} '\nTypeError: Object of type Atom is not JSON serializable\n",
+    "passed": false
+  },
+  {
+    "caseId": "ifc-native/rotated-m-vs-mm",
+    "expected": "Different exact canonical hashes, equivalent physical corners without viewer-origin rewriting",
+    "experimentId": "EX-08",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 329, in compare_units\n    if canonical_hash(metres) == canonical_hash(millimetres):\n       ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 49, in canonical_hash\n    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode()).hexdigest()\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/__init__.py\", line 238, in dumps\n    **kw).encode(obj)\n          ^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 200, in encode\n    chunks = self.iterencode(o, _one_shot=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 258, in iterencode\n    return _iterencode(o, 0)\n           ^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 180, in default\n    raise TypeError(f'Object of type {o.__class__.__name__} '\nTypeError: Object of type Atom is not JSON serializable\n",
+    "passed": false
+  },
+  {
+    "caseId": "unfamiliar-bounded/detected",
+    "expected": "Unfamiliar bounded property is explicit in loss inventory with original source bytes retained",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "checks satisfied",
+    "passed": true
+  },
+  {
+    "caseId": "native-roundtrip/scalar-list-roundtrip",
+    "expected": "Real IFC import via independent inventory -> TypeBox TS overlay -> IFC preserves declared slice",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 384, in check_import\n    errors += schema_check(target, directory / f\"{name}.validation.json\")\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "bounded-native-roundtrip/scalar-list-roundtrip",
+    "expected": "Real IFC import via independent inventory -> TypeBox TS overlay -> IFC preserves declared slice",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 384, in check_import\n    errors += schema_check(target, directory / f\"{name}.validation.json\")\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  },
+  {
+    "caseId": "bounded-native-roundtrip/full-unfamiliar-preservation",
+    "expected": "Every unfamiliar property survives in the re-exported IFC, including bounded values",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval.",
+      "Expected capability limit: native property union currently maps scalar/list only; preserve this failed case."
+    ],
+    "observed": "UnfamiliarRange lost from native IFC re-export; explicitly reported in bounded-loss-report.json; original source bytes retained",
+    "passed": false
+  },
+  {
+    "caseId": "bounded-ifc-native-roundtrip/full-unfamiliar-preservation",
+    "expected": "Direct IFC-native reserialization preserves unfamiliar bounded value entity and typed attributes",
+    "experimentId": "EX-02",
+    "limitations": [
+      "Controlled generated IFC4 ADD2 TC1 fixture, not independent vendor exports; Revit not tested.",
+      "Both candidates share IfcOpenShell serialization and geometry; stdlib STEP reader is independent but narrow.",
+      "One partial space boundary, not a closed room shell, MVD qualification or thermal boundary calculation.",
+      "Scalar/list property import retains authored geometry sidecar; no generic IFC-to-parametric-authoring reconstruction.",
+      "Synthetic EPSG:25832 map transform, not certified survey/geodetic accuracy or a viewer test.",
+      "Standalone observations require W0 validation and independent review; no engineering approval."
+    ],
+    "observed": "Traceback (most recent call last):\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 213, in check\n    errors = action()\n             ^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 403, in direct_bounded_roundtrip\n    return ([] if original_snapshot == roundtrip_snapshot else [\"IFC-native bounded property roundtrip differs\"]) + schema_check(target, directory / \"bounded-ifc-native-roundtrip.validation.json\")\n                                                                                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/qualification/sources/w2-debug/experiments/ifc/run.py\", line 226, in schema_check\n    ifcopenshell.validate.validate(model, logger, express_rules=True)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/validate.py\", line 629, in validate\n    ifcopenshell.express.rule_executor.run(f, logger)\n  File \"/qualification/w2-runs/w2-debug-378c0ad-attempt2/python-deps/ifcopenshell/express/rule_executor.py\", line 73, in run\n    from _pytest import assertion\nModuleNotFoundError: No module named '_pytest'\n",
+    "passed": false
+  }
+]

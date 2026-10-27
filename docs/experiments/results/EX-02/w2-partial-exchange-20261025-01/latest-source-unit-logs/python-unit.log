@@ -1,0 +1,13 @@
+test_actual_ts_json_boundary_accepts_valid_3d_input_and_rejects_malformed_coordinates (test_checks.ReaderChecks.test_actual_ts_json_boundary_accepts_valid_3d_input_and_rejects_malformed_coordinates) ... ok
+test_corrupt_step_and_unreleased_schemas_do_not_get_skipped (test_checks.ReaderChecks.test_corrupt_step_and_unreleased_schemas_do_not_get_skipped) ... ok
+test_duplicate_guids_are_rejected_before_comparison (test_checks.ReaderChecks.test_duplicate_guids_are_rejected_before_comparison) ... ok
+test_exact_snapshot_hashes_accept_unnamed_roots_and_remain_distinct_from_physical_equivalence (test_checks.ReaderChecks.test_exact_snapshot_hashes_accept_unnamed_roots_and_remain_distinct_from_physical_equivalence) ... ok
+test_independent_checks_detect_real_serialized_unit_map_and_property_corruption (test_checks.ReaderChecks.test_independent_checks_detect_real_serialized_unit_map_and_property_corruption) ... ok
+test_released_fixture_semantics_and_coordinates (test_checks.ReaderChecks.test_released_fixture_semantics_and_coordinates) ... ok
+test_successive_exports_have_stable_ids_and_one_changed_occurrence (test_checks.ReaderChecks.test_successive_exports_have_stable_ids_and_one_changed_occurrence) ... ok
+test_unfamiliar_bounded_value_is_loss_reported_with_typed_raw_values (test_checks.ReaderChecks.test_unfamiliar_bounded_value_is_loss_reported_with_typed_raw_values) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 1.200s
+
+OK
