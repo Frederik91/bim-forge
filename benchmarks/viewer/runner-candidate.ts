@@ -26,6 +26,9 @@ try {
   await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
   const page = await context.newPage(); page.setDefaultTimeout(timeout);
   page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'info' && message.text().startsWith('[viewer-benchmark]')) process.stdout.write(message.text() + '\n');
+  });
   await page.goto(url); await page.waitForFunction(() => !!window.viewerBenchmark);
   phase('replay');
   const raw: unknown = await page.evaluate(({ candidate, cycles }) => window.viewerBenchmark.run(candidate, cycles), { candidate, cycles });

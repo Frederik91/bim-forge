@@ -164,12 +164,17 @@ export class FragmentsAdapter implements Adapter {
   async readback(): Promise<Readback[]> {
     const result: Readback[] = [];
     for (const model of this.fragments.models.list.values()) {
-      const transforms = await model.getGlobalTransforms(); const records = await model.getItems();
-      for (const transform of transforms.values()) {
+      const transforms = [...(await model.getGlobalTransforms()).values()]; const records = await model.getItems();
+      const ids = transforms.map(transform => {
         if (typeof transform.itemId !== 'number') throw new Error('Unresolved Fragments item ID');
-        const box = await model.getMergedBox([transform.itemId]);
+        return transform.itemId;
+      });
+      const boxes = await model.getBoxes(ids);
+      if (boxes.length !== transforms.length) throw new Error('Fragments bounds batch lost item identities');
+      for (let index = 0; index < transforms.length; index++) {
+        const transform = transforms[index]; const box = boxes[index];
         if (box.isEmpty()) continue;
-        const record = records.get(transform.itemId); const id = record?.data.benchmarkId?.value;
+        const record = records.get(ids[index]); const id = record?.data.benchmarkId?.value;
         if (typeof id !== 'string' || transform.position.length !== 3) throw new Error('Fragments identity/transform readback failed');
         result.push({ id, position: [transform.position[0], transform.position[1], transform.position[2]],
           min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] });

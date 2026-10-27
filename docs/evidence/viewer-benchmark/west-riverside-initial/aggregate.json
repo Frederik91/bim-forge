@@ -1,0 +1,3878 @@
+{
+  "version": 1,
+  "issue": 192,
+  "verdict": "inconclusive",
+  "qualified": false,
+  "grossFloorAreaM2": null,
+  "sourceManifest": {
+    "sourceRevision": "9ba471a3e38b353a81a1dc9ecb4aa56d2ce0a7fa",
+    "listingURL": "https://huggingface.co/api/datasets/sylvainHellin/ifc-bench/tree/9ba471a3e38b353a81a1dc9ecb4aa56d2ce0a7fa/projects/west_riverside_hospital",
+    "files": [
+      {
+        "id": "architecture",
+        "file": "arc_ifc4.ifc",
+        "bytes": 80937122,
+        "sha256": "230afa4d72a59c9ce18cdd9a7bc7c5c3e409a46078de6e14b19741b4cf92cf09"
+      },
+      {
+        "id": "structure",
+        "file": "str_ifc4.ifc",
+        "bytes": 6484576,
+        "sha256": "7eed88eb21dafdc5a5950d9b1ee18df3fd00fcd376a14fd1bae80658e371975e"
+      },
+      {
+        "id": "mechanical",
+        "file": "mech_ifc4.ifc",
+        "bytes": 73047260,
+        "sha256": "04a29bc312fe0b026634ad86390e8b72c1d1c1765255351f787503d3d8ce1c13"
+      },
+      {
+        "id": "electrical",
+        "file": "elec_ifc4.ifc",
+        "bytes": 4435308,
+        "sha256": "8e404c4e4c9085338383a89ae57a3a31ebe96ee406214392a1bf69a6775dcecc"
+      },
+      {
+        "id": "plumbing",
+        "file": "plumb_ifc4.ifc",
+        "bytes": 23762808,
+        "sha256": "bb53f0eb8f7295e91e0fb6ec6b79a30022a2e0e248714aab6bb1a8930c4793dd"
+      },
+      {
+        "id": "fire-alarm",
+        "file": "fire_ifc4.ifc",
+        "bytes": 905021,
+        "sha256": "f04e6fb62ad10cd78177d1d390758e912e3ad65881a184cca8ea1da07c59ae23"
+      },
+      {
+        "id": "sprinklers",
+        "file": "sprinkle_ifc4.ifc",
+        "bytes": 33990094,
+        "sha256": "0e30c25a77ebcd75b2fc3a6cb87dc3891bd476f60a269e36eb5e0149bcc06ea7"
+      }
+    ],
+    "totalBytes": 223562189,
+    "usage": "Human-authorized local-only initial evaluation",
+    "license": "Publisher declares CC BY 3.0; upstream rights history unresolved; not cleared for redistribution",
+    "grossFloorAreaM2": null,
+    "qualified": false
+  },
+  "conversion": {
+    "sourceRevision": "9ba471a3e38b353a81a1dc9ecb4aa56d2ce0a7fa",
+    "qualified": false,
+    "grossFloorAreaM2": null,
+    "origin": [
+      38.622955223800936,
+      114.48559555008902,
+      -52.98424242268466
+    ],
+    "sourceBounds": {
+      "min": [
+        -12.464959279098037,
+        25.202390842076998,
+        -163.38156685351905
+      ],
+      "max": [
+        89.71086972669991,
+        203.76880025810104,
+        57.413082008149736
+      ]
+    },
+    "elements": 97590,
+    "geometries": 53329,
+    "renderedTriangles": 15334885,
+    "jsonBytes": 460267095,
+    "jsonSha256": "99ca530d28d01f8a906af7b2ebb3cfa020af62226968c937fa3fcd4dbdd96a30",
+    "conversionMs": 48192.2834,
+    "inventories": [
+      {
+        "id": "architecture",
+        "file": "arc_ifc4.ifc",
+        "sha256": "230afa4d72a59c9ce18cdd9a7bc7c5c3e409a46078de6e14b19741b4cf92cf09",
+        "bytes": 80937122,
+        "schema": "IFC4",
+        "products": 15316,
+        "spaces": 0,
+        "storeys": 8,
+        "renderedProducts": 14409,
+        "meshParts": 31036,
+        "triangles": 4917234,
+        "transparentPartsMadeOpaque": 2006,
+        "categoryCounts": {
+          "IfcSlab": 24,
+          "IfcWallStandardCase": 1282,
+          "IfcColumn": 349,
+          "IfcWall": 158,
+          "IfcStair": 30,
+          "IfcRailing": 89,
+          "IfcFurniture": 201,
+          "IfcPlate": 2211,
+          "IfcWindow": 131,
+          "IfcCovering": 602,
+          "IfcBuildingElementProxy": 1770,
+          "IfcDoor": 440,
+          "IfcMember": 7122
+        },
+        "omissions": {
+          "empty-geometry-part": 345
+        },
+        "conversionMs": 5209.1001
+      },
+      {
+        "id": "structure",
+        "file": "str_ifc4.ifc",
+        "sha256": "7eed88eb21dafdc5a5950d9b1ee18df3fd00fcd376a14fd1bae80658e371975e",
+        "bytes": 6484576,
+        "schema": "IFC4",
+        "products": 2915,
+        "spaces": 0,
+        "storeys": 15,
+        "renderedProducts": 2827,
+        "meshParts": 2925,
+        "triangles": 207747,
+        "transparentPartsMadeOpaque": 0,
+        "categoryCounts": {
+          "IfcSlab": 11,
+          "IfcWallStandardCase": 28,
+          "IfcColumn": 255,
+          "IfcStairFlight": 1,
+          "IfcFooting": 553,
+          "IfcRailing": 4,
+          "IfcBeam": 1970,
+          "IfcMember": 5
+        },
+        "omissions": {
+          "empty-geometry-part": 8
+        },
+        "conversionMs": 356.46240000000034
+      },
+      {
+        "id": "mechanical",
+        "file": "mech_ifc4.ifc",
+        "sha256": "04a29bc312fe0b026634ad86390e8b72c1d1c1765255351f787503d3d8ce1c13",
+        "bytes": 73047260,
+        "schema": "IFC4",
+        "products": 59215,
+        "spaces": 0,
+        "storeys": 11,
+        "renderedProducts": 19670,
+        "meshParts": 23690,
+        "triangles": 2921119,
+        "transparentPartsMadeOpaque": 0,
+        "categoryCounts": {
+          "IfcDuctSegment": 4816,
+          "IfcDuctFitting": 4740,
+          "IfcValve": 462,
+          "IfcPipeFitting": 3490,
+          "IfcPipeSegment": 3916,
+          "IfcBuildingElementProxy": 2246
+        },
+        "omissions": {},
+        "conversionMs": 2885.138
+      },
+      {
+        "id": "electrical",
+        "file": "elec_ifc4.ifc",
+        "sha256": "8e404c4e4c9085338383a89ae57a3a31ebe96ee406214392a1bf69a6775dcecc",
+        "bytes": 4435308,
+        "schema": "IFC4",
+        "products": 6305,
+        "spaces": 0,
+        "storeys": 7,
+        "renderedProducts": 2798,
+        "meshParts": 5313,
+        "triangles": 148966,
+        "transparentPartsMadeOpaque": 64,
+        "categoryCounts": {
+          "IfcCableCarrierFitting": 66,
+          "IfcElectricAppliance": 138,
+          "IfcLightFixture": 1272,
+          "IfcSwitchingDevice": 113,
+          "IfcBuildingElementProxy": 1125,
+          "IfcCableCarrierSegment": 84
+        },
+        "omissions": {},
+        "conversionMs": 220.39439999999922
+      },
+      {
+        "id": "plumbing",
+        "file": "plumb_ifc4.ifc",
+        "sha256": "bb53f0eb8f7295e91e0fb6ec6b79a30022a2e0e248714aab6bb1a8930c4793dd",
+        "bytes": 23762808,
+        "schema": "IFC4",
+        "products": 26942,
+        "spaces": 0,
+        "storeys": 5,
+        "renderedProducts": 9121,
+        "meshParts": 12541,
+        "triangles": 4525772,
+        "transparentPartsMadeOpaque": 0,
+        "categoryCounts": {
+          "IfcPipeFitting": 4231,
+          "IfcPipeSegment": 4308,
+          "IfcBuildingElementProxy": 582
+        },
+        "omissions": {},
+        "conversionMs": 3561.3731000000007
+      },
+      {
+        "id": "fire-alarm",
+        "file": "fire_ifc4.ifc",
+        "sha256": "f04e6fb62ad10cd78177d1d390758e912e3ad65881a184cca8ea1da07c59ae23",
+        "bytes": 905021,
+        "schema": "IFC4",
+        "products": 874,
+        "spaces": 0,
+        "storeys": 5,
+        "renderedProducts": 867,
+        "meshParts": 1021,
+        "triangles": 398698,
+        "transparentPartsMadeOpaque": 0,
+        "categoryCounts": {
+          "IfcDistributionControlElement": 861,
+          "IfcBuildingElementProxy": 6
+        },
+        "omissions": {},
+        "conversionMs": 284.2340000000004
+      },
+      {
+        "id": "sprinklers",
+        "file": "sprinkle_ifc4.ifc",
+        "sha256": "0e30c25a77ebcd75b2fc3a6cb87dc3891bd476f60a269e36eb5e0149bcc06ea7",
+        "bytes": 33990094,
+        "schema": "IFC4",
+        "products": 38255,
+        "spaces": 0,
+        "storeys": 5,
+        "renderedProducts": 13490,
+        "meshParts": 21064,
+        "triangles": 2215349,
+        "transparentPartsMadeOpaque": 0,
+        "categoryCounts": {
+          "IfcValve": 8,
+          "IfcPipeFitting": 5900,
+          "IfcFireSuppressionTerminal": 1354,
+          "IfcPipeSegment": 6228
+        },
+        "omissions": {},
+        "conversionMs": 2143.8009
+      }
+    ]
+  },
+  "nativeConversionErrorMessages": 32,
+  "preparedAnalysis": {
+    "materialRGBCount": 55,
+    "disciplineBounds": {
+      "architecture": {
+        "min": [
+          -50.89542854646507,
+          50.11505270047438,
+          -103.23185972882078
+        ],
+        "max": [
+          51.087914502898975,
+          89.28320470801204,
+          53.449884094072964
+        ]
+      },
+      "structure": {
+        "min": [
+          -51.087914502898975,
+          44.02360444991101,
+          -110.3973244308344
+        ],
+        "max": [
+          50.60428576103166,
+          85.32560444991101,
+          8.458530629132412
+        ]
+      },
+      "mechanical": {
+        "min": [
+          -49.11504096231611,
+          52.152203267710995,
+          -85.5595329250797
+        ],
+        "max": [
+          46.7935705237446,
+          86.68870326771102,
+          3.1199251402267367
+        ]
+      },
+      "electrical": {
+        "min": [
+          -48.61289843067223,
+          -89.28320470801202,
+          -41.04699955246966
+        ],
+        "max": [
+          40.74048228830278,
+          65.252203267711,
+          105.9608334606631
+        ]
+      },
+      "plumbing": {
+        "min": [
+          -40.92676817326906,
+          -75.78605187306832,
+          -47.45938254389302
+        ],
+        "max": [
+          32.78090607763927,
+          51.72209107901586,
+          108.16799125195239
+        ]
+      },
+      "fire-alarm": {
+        "min": [
+          -46.96868569805709,
+          -87.876175485797,
+          32.31123508189095
+        ],
+        "max": [
+          35.325609490322,
+          -1.7672938237619942,
+          107.2164913031122
+        ]
+      },
+      "sprinklers": {
+        "min": [
+          -48.390048483544994,
+          -88.96932532841797,
+          -12.568721085443418
+        ],
+        "max": [
+          40.433130025169085,
+          75.05003996163211,
+          110.3973244308344
+        ]
+      }
+    },
+    "coordinateInterpretation": "Bounds of converted geometry only; intended coordination transforms remain unverified"
+  },
+  "runs": [
+    {
+      "directory": "smoke-001",
+      "manifest": {
+        "version": 1,
+        "issue": 192,
+        "purpose": "setup-smoke",
+        "qualified": false,
+        "source": "f59687e976d7b165f7df10d0d77a2fc42879e67a",
+        "dirty": true,
+        "sourceFiles": [
+          {
+            "path": "benchmarks/viewer/west-riverside.md",
+            "sha256": "8ca2a29d0a99af21626e2aaa2da59c0e6fb77a3590fdf011975ca98c2f43c888"
+          },
+          {
+            "path": "benchmarks/viewer/west-riverside.test.ts",
+            "sha256": "e37b0693721b00b563a11397fc9dffd3dab96a6eaa5ea1bc14704db7c4c2ea0f"
+          },
+          {
+            "path": "benchmarks/viewer/west-riverside.ts",
+            "sha256": "c7658cd253c687eeb86b5561e714c704c2118093984cfcf13122f8bd7804c6e8"
+          },
+          {
+            "path": "benchmarks/viewer/README.md",
+            "sha256": "82598e1a059b05456b3cc0fe11958e6d3f4510dfdf33338828ea6d1623f8a0c0"
+          },
+          {
+            "path": "benchmarks/viewer/adapters/babylon.ts",
+            "sha256": "534345e9b6ba911efba9254fe2f9ddd3526e25ecb179d4ae596ccd5b09751a6b"
+          },
+          {
+            "path": "benchmarks/viewer/adapters/fragments.ts",
+            "sha256": "ac3e6c06530127abccddbc2d02251d2b13127457e388e23bf0a718a17bb3de8a"
+          },
+          {
+            "path": "benchmarks/viewer/babylon-lifecycle.test.ts",
+            "sha256": "af5e2f065999917bba91989f14bdf9082d98cb120adcc000f68ae29535d31319"
+          },
+          {
+            "path": "benchmarks/viewer/browser.ts",
+            "sha256": "d4a14b6099ef885d22c1e799d0802f12e4b85e261c05c2e0505ea593bc1796ed"
+          },
+          {
+            "path": "benchmarks/viewer/contract.test.ts",
+            "sha256": "a8cfb2b11f0b83ff29e7297eeaa6a6b43d5132894e7642939f85a3db7ec94b3c"
+          },
+          {
+            "path": "benchmarks/viewer/contract.ts",
+            "sha256": "84e79de672717c36e8f3783f4e4d152428e68b238893aabce4bf7b0968467f7b"
+          },
+          {
+            "path": "benchmarks/viewer/dataset-requirements.md",
+            "sha256": "79f993edeaccfe2ca3f19a2acb4cecafd1216f1eae4331c3b61b29f22a529362"
+          },
+          {
+            "path": "benchmarks/viewer/fixtures.ts",
+            "sha256": "e0a8111017015c612ed1ef7a6c451c2a3cac94857d80c2e76b7531140bba90b5"
+          },
+          {
+            "path": "benchmarks/viewer/metrics.ts",
+            "sha256": "7f27d7be4af01fe16bd0fb19da1fde39d1f9f2d876ed92580541102c091bce91"
+          },
+          {
+            "path": "benchmarks/viewer/profile.json",
+            "sha256": "32bd711b5d0a978519cc5d41210d1c27470aa60664bcae9de1d4b1ec389ac33e"
+          },
+          {
+            "path": "benchmarks/viewer/runner-candidate.ts",
+            "sha256": "12f3965caa0f56ce75af80f8019558491011ec767d8d59323983b6bb3cb18e34"
+          },
+          {
+            "path": "benchmarks/viewer/runner-limits.test.ts",
+            "sha256": "6ad5782a3700e508c52a171893d56c163dac2430989c88b0b0510a5119b19b27"
+          },
+          {
+            "path": "benchmarks/viewer/runner-limits.ts",
+            "sha256": "fd143ab37c8465ce7510bb8d0c0a248fc53f5bdfcd29d89baff6194af4abe7dd"
+          },
+          {
+            "path": "benchmarks/viewer/runner.ts",
+            "sha256": "2085cdcdd9d8c143558ebb6a857213bddec6ec04cb1d011a0a9bb8c6e55ae557"
+          },
+          {
+            "path": "package-lock.json",
+            "sha256": "a2afdfe83301de34d8a39177695ac5d6a36cda1b7c420bb36f846f78d5987452"
+          },
+          {
+            "path": "package.json",
+            "sha256": "12d4986b4a133ba7f43352ec423d5c39f2541aad43fc78786967c9955c708477"
+          },
+          {
+            "path": "scripts/validate-typescript.ts",
+            "sha256": "e741cdce33c9c8c0335d8a49d48ef3bbc5c7b6c03ef6b1cf81865d2bb6e109bb"
+          },
+          {
+            "path": "tsconfig.json",
+            "sha256": "0d37e2036572fa7a3d9132ce83a0825eb30bfcce6793039e0b9f1ec5371204e9"
+          }
+        ],
+        "dataset": {
+          "id": "viewer-smoke-192",
+          "sha256": "bca0ac31fe67841d6753f4d318fac0e7fe081d65c37c5e40942f13e3e709b662",
+          "elements": 24,
+          "triangles": 12,
+          "admission": {
+            "qualified": false,
+            "reasons": [
+              "Synthetic fixture cannot qualify a realistic project",
+              "Gross floor area is below 200,000 m²",
+              "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification"
+            ]
+          },
+          "grossFloorAreaM2": 150,
+          "provenance": {
+            "kind": "synthetic",
+            "seed": 192
+          },
+          "disciplines": {
+            "architecture": 5,
+            "structure": 5,
+            "mechanical": 5,
+            "electrical": 5,
+            "plumbing": 4
+          }
+        },
+        "profile": {
+          "id": "viewer-192-v1",
+          "status": "setup-only",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1
+          },
+          "materialProfile": "basic-double-sided-opaque-unqualified-fidelity",
+          "coordinateSystem": "right-handed-y-up-metres",
+          "coldOpens": 5,
+          "warmSessions": 10,
+          "interactionSamples": 100,
+          "proposalSizes": [
+            1,
+            10,
+            100,
+            1000
+          ],
+          "stressProposalSize": 10000,
+          "reviewCycles": 100,
+          "network": {
+            "bandwidthMbit": 50,
+            "rttMs": 30
+          },
+          "targets": {
+            "usefulFrameMs": 5000,
+            "overviewMs": 30000,
+            "p95FrameMs": 33.3,
+            "p95PickMs": 100,
+            "p95PropertiesMs": 200,
+            "p95ComparisonMs": 1000
+          },
+          "dataset": {
+            "status": "missing-real-project",
+            "minimumGrossFloorAreaM2": 200000,
+            "requiredDisciplines": [
+              "architecture",
+              "structure",
+              "mechanical",
+              "electrical",
+              "plumbing"
+            ]
+          }
+        },
+        "candidates": [
+          "babylon",
+          "fragments"
+        ],
+        "cycles": 1,
+        "timeout": 120000,
+        "node": "v24.18.0",
+        "os": {
+          "platform": "win32",
+          "release": "10.0.26300",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 7700X 8-Core Processor             ",
+          "totalMemoryBytes": 67756871680
+        },
+        "network": "loopback, unshaped",
+        "memory": "not-measured",
+        "status": "started"
+      },
+      "candidates": {
+        "babylon": {
+          "outcome": "completed",
+          "data": {
+            "result": {
+              "version": 1,
+              "candidate": "babylon",
+              "profile": "viewer-192-v1",
+              "purpose": "setup-smoke",
+              "status": "completed",
+              "qualified": false,
+              "reviewCycles": 1,
+              "samples": [
+                {
+                  "operation": "load",
+                  "durationMs": 235.29999995231628,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "validation-readback",
+                  "durationMs": 0.5,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "select",
+                  "durationMs": 5.299999952316284,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "properties",
+                  "durationMs": 0.09999990463256836,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "pick",
+                  "durationMs": 2,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "filter",
+                  "durationMs": 9.599999904632568,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "section",
+                  "durationMs": 114.70000004768372,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "proposal",
+                  "durationMs": 7.5,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "comparison",
+                  "durationMs": 4.799999952316284,
+                  "drawCalls": 26,
+                  "triangles": 312
+                },
+                {
+                  "operation": "comparison-exit",
+                  "durationMs": 5.800000190734863,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "discard",
+                  "durationMs": 5.900000095367432,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "proposal-1",
+                  "durationMs": 5.299999952316284,
+                  "drawCalls": 24,
+                  "triangles": 288
+                },
+                {
+                  "operation": "proposal-10",
+                  "durationMs": 6,
+                  "drawCalls": 24,
+                  "triangles": 288
+                }
+              ],
+              "checks": [
+                "load",
+                "validation-readback",
+                "renderer-readback",
+                "select",
+                "properties",
+                "pick",
+                "filter",
+                "section",
+                "proposal",
+                "accepted-immutable",
+                "comparison",
+                "accepted-immutable",
+                "comparison-exit",
+                "accepted-immutable",
+                "discard",
+                "accepted-immutable",
+                "stale-rejected",
+                "proposal-1",
+                "proposal-10"
+              ],
+              "frameIntervalsMs": [
+                5.900000095367432,
+                6.099999904632568,
+                6.1000001430511475,
+                6,
+                6,
+                6.099999904632568,
+                6.1000001430511475,
+                6,
+                6.3999998569488525,
+                5.700000047683716,
+                6.5,
+                5.700000047683716,
+                6,
+                6.099999904632568,
+                6.1000001430511475,
+                6,
+                6.099999904632568,
+                6.099999904632568,
+                6.1000001430511475,
+                5.8999998569488525,
+                6.1000001430511475,
+                6.099999904632568,
+                6,
+                6,
+                6.200000047683716,
+                6,
+                6.099999904632568,
+                6.1000001430511475,
+                6,
+                6
+              ],
+              "error": null,
+              "limitations": [
+                "Setup replay, not a scored engine comparison. No full-project or hardware qualification.",
+                "No current production Babylon baseline, native IFC conversion, streaming, instancing tuning, or automated memory qualification yet.",
+                "Renderer completion is followed by requestAnimationFrame; GPU presentation timing requires external tracing.",
+                "CPU, process/GPU memory, transfer shaping, long tasks, conversion equivalence, and shader fidelity need scored-run instrumentation.",
+                "Neutral diff/readback scans the input. Timings include those checks and must not be called isolated renderer performance.",
+                "Synthetic fixture cannot qualify a realistic project",
+                "Gross floor area is below 200,000 m²",
+                "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification",
+                "Proposal size 100 not run: insufficient fixture elements",
+                "Proposal size 1000 not run: insufficient fixture elements"
+              ],
+              "environment": {
+                "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+                "hardwareConcurrency": 16,
+                "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                "viewport": [
+                  1280,
+                  800
+                ],
+                "devicePixelRatio": 1
+              }
+            },
+            "errors": [],
+            "browserVersion": "155.0.8059.80",
+            "summaries": {
+              "load": {
+                "count": 1,
+                "median": 235.29999995231628,
+                "p95": null,
+                "maximum": 235.29999995231628
+              },
+              "validation-readback": {
+                "count": 1,
+                "median": 0.5,
+                "p95": null,
+                "maximum": 0.5
+              },
+              "select": {
+                "count": 1,
+                "median": 5.299999952316284,
+                "p95": null,
+                "maximum": 5.299999952316284
+              },
+              "properties": {
+                "count": 1,
+                "median": 0.09999990463256836,
+                "p95": null,
+                "maximum": 0.09999990463256836
+              },
+              "pick": {
+                "count": 1,
+                "median": 2,
+                "p95": null,
+                "maximum": 2
+              },
+              "filter": {
+                "count": 1,
+                "median": 9.599999904632568,
+                "p95": null,
+                "maximum": 9.599999904632568
+              },
+              "section": {
+                "count": 1,
+                "median": 114.70000004768372,
+                "p95": null,
+                "maximum": 114.70000004768372
+              },
+              "proposal": {
+                "count": 1,
+                "median": 7.5,
+                "p95": null,
+                "maximum": 7.5
+              },
+              "comparison": {
+                "count": 1,
+                "median": 4.799999952316284,
+                "p95": null,
+                "maximum": 4.799999952316284
+              },
+              "comparison-exit": {
+                "count": 1,
+                "median": 5.800000190734863,
+                "p95": null,
+                "maximum": 5.800000190734863
+              },
+              "discard": {
+                "count": 1,
+                "median": 5.900000095367432,
+                "p95": null,
+                "maximum": 5.900000095367432
+              },
+              "proposal-1": {
+                "count": 1,
+                "median": 5.299999952316284,
+                "p95": null,
+                "maximum": 5.299999952316284
+              },
+              "proposal-10": {
+                "count": 1,
+                "median": 6,
+                "p95": null,
+                "maximum": 6
+              }
+            },
+            "frameSummary": {
+              "count": 30,
+              "median": 6.099999904632568,
+              "p95": null,
+              "maximum": 6.5
+            }
+          },
+          "failure": null,
+          "cancellation": null,
+          "console": "[viewer-benchmark] start load\n[viewer-benchmark] end load 235.3 ms\n[viewer-benchmark] start validation-readback\n[viewer-benchmark] end validation-readback 0.5 ms\n[viewer-benchmark] start select\n[viewer-benchmark] end select 5.3 ms\n[viewer-benchmark] start properties\n[viewer-benchmark] end properties 0.1 ms\n[viewer-benchmark] start pick\n[viewer-benchmark] end pick 2.0 ms\n[viewer-benchmark] start filter\n[viewer-benchmark] end filter 9.6 ms\n[viewer-benchmark] start section\n[viewer-benchmark] end section 114.7 ms\n[viewer-benchmark] start proposal\n[viewer-benchmark] end proposal 7.5 ms\n[viewer-benchmark] start comparison\n[viewer-benchmark] end comparison 4.8 ms\n[viewer-benchmark] start comparison-exit\n[viewer-benchmark] end comparison-exit 5.8 ms\n[viewer-benchmark] start discard\n[viewer-benchmark] end discard 5.9 ms\n[viewer-benchmark] start proposal-1\n[viewer-benchmark] end proposal-1 5.3 ms\n[viewer-benchmark] start proposal-10\n[viewer-benchmark] end proposal-10 6.0 ms\n",
+          "reviewSummary": {
+            "comparison": true,
+            "renderedRecords": 26,
+            "ghostRecords": 2,
+            "upsertedRecords": 2,
+            "removedRecords": 1,
+            "acceptedRevision": "baseline-1",
+            "proposedRevision": "baseline-1-proposal",
+            "overviewImagesEqual": false
+          }
+        },
+        "fragments": {
+          "outcome": "completed",
+          "data": {
+            "result": {
+              "version": 1,
+              "candidate": "fragments",
+              "profile": "viewer-192-v1",
+              "purpose": "setup-smoke",
+              "status": "completed",
+              "qualified": false,
+              "reviewCycles": 1,
+              "samples": [
+                {
+                  "operation": "load",
+                  "durationMs": 604.7999999523163,
+                  "drawCalls": 3,
+                  "triangles": 240
+                },
+                {
+                  "operation": "validation-readback",
+                  "durationMs": 2.5,
+                  "drawCalls": 3,
+                  "triangles": 240
+                },
+                {
+                  "operation": "select",
+                  "durationMs": 62.200000047683716,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "properties",
+                  "durationMs": 0.9000000953674316,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "pick",
+                  "durationMs": 3,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "filter",
+                  "durationMs": 202.20000004768372,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "section",
+                  "durationMs": 247.70000004768372,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "proposal",
+                  "durationMs": 371.19999980926514,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "comparison",
+                  "durationMs": 461.90000009536743,
+                  "drawCalls": 8,
+                  "triangles": 260
+                },
+                {
+                  "operation": "comparison-exit",
+                  "durationMs": 355.7999999523163,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "discard",
+                  "durationMs": 352.40000009536743,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "proposal-1",
+                  "durationMs": 473.59999990463257,
+                  "drawCalls": 4,
+                  "triangles": 240
+                },
+                {
+                  "operation": "proposal-10",
+                  "durationMs": 324.39999985694885,
+                  "drawCalls": 5,
+                  "triangles": 240
+                }
+              ],
+              "checks": [
+                "load",
+                "validation-readback",
+                "renderer-readback",
+                "select",
+                "properties",
+                "pick",
+                "filter",
+                "section",
+                "proposal",
+                "accepted-immutable",
+                "comparison",
+                "accepted-immutable",
+                "comparison-exit",
+                "accepted-immutable",
+                "discard",
+                "accepted-immutable",
+                "stale-rejected",
+                "proposal-1",
+                "proposal-10"
+              ],
+              "frameIntervalsMs": [
+                95.09999990463257,
+                127.90000009536743,
+                111.79999995231628,
+                96.60000014305115,
+                103.39999985694885,
+                104,
+                96.70000004768372,
+                87.79999995231628,
+                111.90000009536743,
+                119.39999985694885,
+                104.30000019073486,
+                104.5,
+                79.39999985694885,
+                96.10000014305115,
+                96.29999995231628,
+                128.5,
+                95.70000004768372,
+                103.39999985694885,
+                97.40000009536743,
+                95.20000004768372,
+                94.89999985694885,
+                128.60000014305115,
+                95.69999980926514,
+                88.80000019073486,
+                102.89999985694885,
+                111.40000009536743,
+                97.29999995231628,
+                79.90000009536743,
+                112.59999990463257,
+                96
+              ],
+              "error": null,
+              "limitations": [
+                "Setup replay, not a scored engine comparison. No full-project or hardware qualification.",
+                "No current production Babylon baseline, native IFC conversion, streaming, instancing tuning, or automated memory qualification yet.",
+                "Renderer completion is followed by requestAnimationFrame; GPU presentation timing requires external tracing.",
+                "CPU, process/GPU memory, transfer shaping, long tasks, conversion equivalence, and shader fidelity need scored-run instrumentation.",
+                "Neutral diff/readback scans the input. Timings include those checks and must not be called isolated renderer performance.",
+                "Synthetic fixture cannot qualify a realistic project",
+                "Gross floor area is below 200,000 m²",
+                "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification",
+                "Proposal size 100 not run: insufficient fixture elements",
+                "Proposal size 1000 not run: insufficient fixture elements"
+              ],
+              "environment": {
+                "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+                "hardwareConcurrency": 16,
+                "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                "viewport": [
+                  1280,
+                  800
+                ],
+                "devicePixelRatio": 1
+              }
+            },
+            "errors": [],
+            "browserVersion": "155.0.8059.80",
+            "summaries": {
+              "load": {
+                "count": 1,
+                "median": 604.7999999523163,
+                "p95": null,
+                "maximum": 604.7999999523163
+              },
+              "validation-readback": {
+                "count": 1,
+                "median": 2.5,
+                "p95": null,
+                "maximum": 2.5
+              },
+              "select": {
+                "count": 1,
+                "median": 62.200000047683716,
+                "p95": null,
+                "maximum": 62.200000047683716
+              },
+              "properties": {
+                "count": 1,
+                "median": 0.9000000953674316,
+                "p95": null,
+                "maximum": 0.9000000953674316
+              },
+              "pick": {
+                "count": 1,
+                "median": 3,
+                "p95": null,
+                "maximum": 3
+              },
+              "filter": {
+                "count": 1,
+                "median": 202.20000004768372,
+                "p95": null,
+                "maximum": 202.20000004768372
+              },
+              "section": {
+                "count": 1,
+                "median": 247.70000004768372,
+                "p95": null,
+                "maximum": 247.70000004768372
+              },
+              "proposal": {
+                "count": 1,
+                "median": 371.19999980926514,
+                "p95": null,
+                "maximum": 371.19999980926514
+              },
+              "comparison": {
+                "count": 1,
+                "median": 461.90000009536743,
+                "p95": null,
+                "maximum": 461.90000009536743
+              },
+              "comparison-exit": {
+                "count": 1,
+                "median": 355.7999999523163,
+                "p95": null,
+                "maximum": 355.7999999523163
+              },
+              "discard": {
+                "count": 1,
+                "median": 352.40000009536743,
+                "p95": null,
+                "maximum": 352.40000009536743
+              },
+              "proposal-1": {
+                "count": 1,
+                "median": 473.59999990463257,
+                "p95": null,
+                "maximum": 473.59999990463257
+              },
+              "proposal-10": {
+                "count": 1,
+                "median": 324.39999985694885,
+                "p95": null,
+                "maximum": 324.39999985694885
+              }
+            },
+            "frameSummary": {
+              "count": 30,
+              "median": 97.29999995231628,
+              "p95": null,
+              "maximum": 128.60000014305115
+            }
+          },
+          "failure": null,
+          "cancellation": null,
+          "console": "[viewer-benchmark] start load\n[viewer-benchmark] end load 604.8 ms\n[viewer-benchmark] start validation-readback\n[viewer-benchmark] end validation-readback 2.5 ms\n[viewer-benchmark] start select\n[viewer-benchmark] end select 62.2 ms\n[viewer-benchmark] start properties\n[viewer-benchmark] end properties 0.9 ms\n[viewer-benchmark] start pick\n[viewer-benchmark] end pick 3.0 ms\n[viewer-benchmark] start filter\n[viewer-benchmark] end filter 202.2 ms\n[viewer-benchmark] start section\n[viewer-benchmark] end section 247.7 ms\n[viewer-benchmark] start proposal\n[viewer-benchmark] end proposal 371.2 ms\n[viewer-benchmark] start comparison\n[viewer-benchmark] end comparison 461.9 ms\n[viewer-benchmark] start comparison-exit\n[viewer-benchmark] end comparison-exit 355.8 ms\n[viewer-benchmark] start discard\n[viewer-benchmark] end discard 352.4 ms\n[viewer-benchmark] start proposal-1\n[viewer-benchmark] end proposal-1 473.6 ms\n[viewer-benchmark] start proposal-10\n[viewer-benchmark] end proposal-10 324.4 ms\n",
+          "reviewSummary": {
+            "comparison": true,
+            "renderedRecords": 26,
+            "ghostRecords": 2,
+            "upsertedRecords": 2,
+            "removedRecords": 1,
+            "acceptedRevision": "baseline-1",
+            "proposedRevision": "baseline-1-proposal",
+            "overviewImagesEqual": false
+          }
+        }
+      },
+      "completion": {
+        "status": "completed",
+        "qualified": false,
+        "purpose": "setup-smoke",
+        "realisticDataset": "not-qualified",
+        "finishedAt": "2026-10-27T20:27:25.163Z"
+      },
+      "privateArtifacts": [
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/babylon-U2TSGYLY.mjs",
+          "bytes": 1300056,
+          "sha256": "7535806f9e1d04b358d11298d5bda9e727958084f67a50a208dcea813ed85f30"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/babylon-U2TSGYLY.mjs.map",
+          "bytes": 2308095,
+          "sha256": "837056032255032be26176fc168f50e99245507d0a61c9953db44b3c175ae738"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/basisTextureLoader-CZWGLHQU.mjs",
+          "bytes": 19211,
+          "sha256": "f3c148e11b1bab6f2b42a065e54bbe59d69d744483a268dac8cc89d8e2d15eb1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/basisTextureLoader-CZWGLHQU.mjs.map",
+          "bytes": 43501,
+          "sha256": "589f4cd02b12d0759c57d0b20fcc8a79d65c22eba53424682d50e3f17229ab9e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/browser.mjs",
+          "bytes": 382074,
+          "sha256": "057cd832637bf6977a9da4239cbcbf1c173fe2f057cc20b91177d6ea3216103d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/browser.mjs.map",
+          "bytes": 992058,
+          "sha256": "e043d17abd9e4724e0cc10df189434637a6786fd5ba1aad734dedc32ea3c5688"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-3WLJDAWD.mjs",
+          "bytes": 16702,
+          "sha256": "95de06d63c24e0345ee7b47aea28c066f2bff51ccf8aecc494695f34e9f910db"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-3WLJDAWD.mjs.map",
+          "bytes": 44786,
+          "sha256": "be7c41fde056288c9d8c8239d660973bfc68657d58ec9d7ecc6b2e0f2b8f791e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-4ASEFE4V.mjs",
+          "bytes": 6721,
+          "sha256": "c147333167bd76996b3883977c0c64225f7229f7149ef6125ae66a7b1e9c52d8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-4ASEFE4V.mjs.map",
+          "bytes": 7123,
+          "sha256": "4a31dcc3a369161143f0e0bbf1eeb27b948d9088d41e0e1e9efd8944742be9cb"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-4IGVKMZV.mjs",
+          "bytes": 8407,
+          "sha256": "96f49ce0c444be187396a04bccc750ea34c365b0fcf50fed4c00c9596e9c5928"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-4IGVKMZV.mjs.map",
+          "bytes": 41459,
+          "sha256": "d69d8913445b32c4119f830c41bb6c6a9c0bab0331fd53eb69977d8ddaf4e070"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-66HXD7RA.mjs",
+          "bytes": 1373,
+          "sha256": "f5656eed012f5021538d3c7be6b3071e58138a2d7bf0bd6f0bbb1ebcdf26d03f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-66HXD7RA.mjs.map",
+          "bytes": 3014,
+          "sha256": "2c2c88d8022de818328e88a5fc68afba61976872cc6b05cc740724ac8692d27a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-AIH64IBY.mjs",
+          "bytes": 46588,
+          "sha256": "07710422d5e960b23dac7bd5a4efc441dc9697f64c95c8ce8caae7cbacbfbac8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-AIH64IBY.mjs.map",
+          "bytes": 83684,
+          "sha256": "65a2f4df5c79dfa1cd0cea808bf8dbf2833d592193a140d286a4858493dcbe45"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-CE2YF2DP.mjs",
+          "bytes": 460149,
+          "sha256": "ea0dd1bed89d164a5c9471dab46334df419ac178d05d4445a76aa6008e050e6b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-CE2YF2DP.mjs.map",
+          "bytes": 889420,
+          "sha256": "d6e5157561f0f114ddd612ecd4bc519eb540dde00d1245a6235be244afba8d96"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-D3LEBB5T.mjs",
+          "bytes": 19934,
+          "sha256": "501016ea50c30a0552463a555559e154fa4b527665e87aa7ee4884b72591665b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-D3LEBB5T.mjs.map",
+          "bytes": 43363,
+          "sha256": "60f921ada23fb54825052b534406736270e975adf5c747c89f54e1f34af6e508"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-DOC37M34.mjs",
+          "bytes": 47431,
+          "sha256": "b20552124882315d848dfd49d8cd2549e58bfa98fa29149681957b31131a11ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-DOC37M34.mjs.map",
+          "bytes": 114577,
+          "sha256": "38f38ad53aa5c25eb3a379496d491f1132e6bb9d044be810d4432001e1098bb1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ET5C67MH.mjs",
+          "bytes": 187,
+          "sha256": "9e3da45a867443c5942688ca0faec36d9bf3fd5f7d1b17db0954fc88b9253037"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ET5C67MH.mjs.map",
+          "bytes": 1233,
+          "sha256": "fd360658e62900f60d73c9ac335d10e52822e269c03bf48e2d80d9ca737be668"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-H2T3BAN5.mjs",
+          "bytes": 7035,
+          "sha256": "814c361357859a81e16164b98d48913572ece1da1a16bde48dc5f12d017b5933"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-H2T3BAN5.mjs.map",
+          "bytes": 7505,
+          "sha256": "67ed035a061727e3ede8f67c99bc6cb9b1d6a6d794f9962e03a59ed71336e24c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-H5NRXJHK.mjs",
+          "bytes": 52023,
+          "sha256": "a760131437180b6675ac3abea36b53579fa48e20be282469df46c936d524b2ad"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-H5NRXJHK.mjs.map",
+          "bytes": 93629,
+          "sha256": "33417975d204556105e7e5b5b158f5aa0820bf1b059475da7365fe8b5b2d3c45"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-J5LGTIGS.mjs",
+          "bytes": 235,
+          "sha256": "a2fa550627e500536a9458cb7c60e7dcc4410a9f48015191f18c410ec7fac8a9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-J5LGTIGS.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-KLTBVVXT.mjs",
+          "bytes": 6900,
+          "sha256": "50f621c9209877b7c285b17e5f6e7aae9e0e9a838dfb4ccd73f022800df614e4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-KLTBVVXT.mjs.map",
+          "bytes": 17659,
+          "sha256": "7be6f796cb89292ae1e00362ca1950a96db6255b67cc7e35b0923d3ceb607fde"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-NA4AK5JV.mjs",
+          "bytes": 16614,
+          "sha256": "defe103d885935c908432c924894bdcc46fad1c75892c0218053c3fc68b6e790"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-NA4AK5JV.mjs.map",
+          "bytes": 34886,
+          "sha256": "8c5b56cf324bc83f5b6c36252038c5335dc9994875780a33f2bebaec8df3e99c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ODZYG5TH.mjs",
+          "bytes": 17475,
+          "sha256": "b291ed01770084509df8f43579d584aeedca70a56e47eae609350c5ae0755bad"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ODZYG5TH.mjs.map",
+          "bytes": 40314,
+          "sha256": "35ac6ae3f674d92b5b2864fb5a16c71d5273c3a25498b745b5de2af1494865e2"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-PRLMZZW3.mjs",
+          "bytes": 3678,
+          "sha256": "7747fca2c23f18c46997cc2466da9480d3baaa97a2b6dc13540b0b41739d98db"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-PRLMZZW3.mjs.map",
+          "bytes": 8379,
+          "sha256": "372d4ad1c4cf84cae1af85ae5386cb3f8123df8d1195ac6feb76e88417b72697"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-PSSJ4RLO.mjs",
+          "bytes": 23707,
+          "sha256": "064fcdf939aae7638d81075749660a3d369bcddcc9a7f678559834952b3bc4b1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-PSSJ4RLO.mjs.map",
+          "bytes": 54745,
+          "sha256": "7aa0c2c5f69296da2110f5b95cfb14a14f2bdda403b58be5280a68aa245c9743"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-QFCZGCZ7.mjs",
+          "bytes": 297033,
+          "sha256": "20a9fbb7740882abe99c35202c050f1cba1cadf32ac28c195f7a8669e79229c7"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-QFCZGCZ7.mjs.map",
+          "bytes": 629022,
+          "sha256": "a0b2db7898ef0dcae215d2741e49d053c8fe8aa4f7c9ee0ffc37e8685b23fe13"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-VS62YXHU.mjs",
+          "bytes": 15912,
+          "sha256": "8ae5e7307abb3129bc38f5a62f5553f7ea4b398a02a9e41b46efd41133fd02ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-VS62YXHU.mjs.map",
+          "bytes": 34841,
+          "sha256": "d93c0f5e7d896199706d871a7a7e957b77af6ef9c209be4095c5f37927c6f1ca"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-WJW7Z6BG.mjs",
+          "bytes": 411604,
+          "sha256": "542c9870313b117ad0a8acdef141b70c0c2c77b25f2e8a90b61f75c661092e8a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-WJW7Z6BG.mjs.map",
+          "bytes": 709034,
+          "sha256": "02f7d46de505699ab9c21d4e0195a8697977d3f1077ac78ebb01a36be649a66e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-XS3XUYBV.mjs",
+          "bytes": 3659,
+          "sha256": "3b58e0a1c796681946e60cbb9c9fdf15f4e0865f5b961522938f1a9c1e6258c0"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-XS3XUYBV.mjs.map",
+          "bytes": 5024,
+          "sha256": "4fd2d07c93c91f0ba846a45fd6ae4c95907210588b7ea9cd68f28b86f7fbf210"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-XSNHNRTC.mjs",
+          "bytes": 1261,
+          "sha256": "e4e2e9bef37e13400619e7fde97c682539353c5fe353829da175a6be616639e1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-XSNHNRTC.mjs.map",
+          "bytes": 14037,
+          "sha256": "cd7a5483d31cd2fac888e3b2bcf431475a33031171c95d311b80dd457c258174"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ZME33DCY.mjs",
+          "bytes": 84077,
+          "sha256": "5d1a7a5aa7fe6926d4bc5008221e7b525de7dd44cf179e6edcc5ac4f0198237c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ZME33DCY.mjs.map",
+          "bytes": 174939,
+          "sha256": "f0320c810c1bb33e22c2c388702b951435bdd06aa1a395798c317fc3eb5c5680"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ZZVHRYWG.mjs",
+          "bytes": 3214,
+          "sha256": "459ae400ae11c131e1c80f1261422cfbdd47386fe526bb49bcad5f09194d2cda"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/chunk-ZZVHRYWG.mjs.map",
+          "bytes": 4600,
+          "sha256": "4ae184a04a916739564b9a9490e54631a56a43909b601d674c3da27867fc3da8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/dds.pure-DUMSEDPM.mjs",
+          "bytes": 617,
+          "sha256": "2d372b6efdb4e7e2a23078855a10578422b69a35195cd8174f2cfda6a8e85938"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/dds.pure-DUMSEDPM.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/ddsTextureLoader-N36HP3PT.mjs",
+          "bytes": 3694,
+          "sha256": "c7b0c6987ad2dfc3efa028e422c2710bf17ae00bf0b9c0b797e3a1179dab0cc3"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/ddsTextureLoader-N36HP3PT.mjs.map",
+          "bytes": 6323,
+          "sha256": "8d84b41b76baf95548c3b26d8bc26a561a159c15bf55aafe28a3f535ed9f1fc3"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.fragment-KKPPT44T.mjs",
+          "bytes": 124449,
+          "sha256": "cad09e37a2b5b0e909da919b0e030802e4067867ca28107b5d000915a64cdb57"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.fragment-KKPPT44T.mjs.map",
+          "bytes": 139687,
+          "sha256": "106226d06bad10ba086b9b2bdf612c822c78c8474051bae3e43ee32ac669a24a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.fragment-OLQ6RALU.mjs",
+          "bytes": 119259,
+          "sha256": "cc727e661a43b481cebb37e4fffc52d0e403ab5f2ff49ed18f55ee85176490cc"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.fragment-OLQ6RALU.mjs.map",
+          "bytes": 135362,
+          "sha256": "f0ce7b4b8cc9e56b620fb2e35ccdf5880927816b0d6a882f55b7e5f694dd44c4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.vertex-G5GSLZBS.mjs",
+          "bytes": 36602,
+          "sha256": "bd4496cfdc04f4a228d322c98979add1513bec20a9c7d1edf5a32d964523b481"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.vertex-G5GSLZBS.mjs.map",
+          "bytes": 49768,
+          "sha256": "a639b560901815a4885b26e327067e57f8f4b748d79033cd0d6032a9a92c4251"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.vertex-NLVZATHO.mjs",
+          "bytes": 56552,
+          "sha256": "82abbc7090016eed93446c01136b505f34537b248d9af051ad8faecf5fcc0c10"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/default.vertex-NLVZATHO.mjs.map",
+          "bytes": 70032,
+          "sha256": "6624af4e29dd3f4fa719fb31a8c76efb7a5ccebd50ac491cee0dcf5dbd42e39a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/dumpTools.pure-ELVC5FDE.mjs",
+          "bytes": 701,
+          "sha256": "d02645e0293357e47b454402a4bfa6e4632f98f73ba4f02df8cc7d4cfc85ad96"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/dumpTools.pure-ELVC5FDE.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/envTextureLoader-UHWCWFLY.mjs",
+          "bytes": 17189,
+          "sha256": "6034186c5b2670b8e6856f2f59c4b11d3f44e15b470423bf2085e3889af4edae"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/envTextureLoader-UHWCWFLY.mjs.map",
+          "bytes": 59608,
+          "sha256": "3516a3738a0ab2cefb70bd3bd7eab3bcec54f1ce7961b2fe7acb5af05077be25"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/exrTextureLoader-QZ6ECQJ4.mjs",
+          "bytes": 34554,
+          "sha256": "f671cf0a900b70ce7a4e18e9def0ccc3a094c0c4919c4e028696088f870fd8a5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/exrTextureLoader-QZ6ECQJ4.mjs.map",
+          "bytes": 107512,
+          "sha256": "2644d751e2e496a43fc72c70888a53c362ecf019fbf96eba9da241d1f54c388f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/fragments-QV4OULNM.mjs",
+          "bytes": 2378437,
+          "sha256": "6e33cb13385b9fbb98d3504dc3e10cccd30cd60731acc9b2daa8fbf832c497da"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/fragments-QV4OULNM.mjs.map",
+          "bytes": 4603777,
+          "sha256": "d3cec4ac3e949dff048469046e5eb87d400b8d9d9f842b4bd18652a636e53379"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/fragments-worker.mjs",
+          "bytes": 1306151,
+          "sha256": "0dd8c1658eecf1df05ede192dbbc16d0a83b348f44b05b1a5ddfed877e90a4d9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/hdrTextureLoader-XLFD5VGS.mjs",
+          "bytes": 6728,
+          "sha256": "47929f7b7385226095ea94bd8812d6884fe4f81c393affeb6f94bf838aa73f99"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/hdrTextureLoader-XLFD5VGS.mjs.map",
+          "bytes": 17629,
+          "sha256": "603727c05efb22334b7b44ae74b7a3ff4000396c39515da3953d988a47b3019d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/iesTextureLoader-WIBCKPY6.mjs",
+          "bytes": 5708,
+          "sha256": "0c14f6c81f2fc39e4a591e6d3790c8fa2dce80c74ec10dd9295c6e02d256f8f1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/iesTextureLoader-WIBCKPY6.mjs.map",
+          "bytes": 13270,
+          "sha256": "c476b12b630be01e6143dcda92dc5a4fc54312d2a3301cc3a5853d4566efc054"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/ktxTextureLoader-U4CPETMT.mjs",
+          "bytes": 35039,
+          "sha256": "e8b408251cece819ce260caa5a799c5a848e556843dad7cf289434d8e8aa42ee"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/ktxTextureLoader-U4CPETMT.mjs.map",
+          "bytes": 82377,
+          "sha256": "d8cb4f96a2f96c55228f64e81ba4cacf47e671233ba16d016bcb1fbe28a7b8c5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod.fragment-76YO26ZL.mjs",
+          "bytes": 804,
+          "sha256": "a0cbb2b43a30cbb6b1d82bd23d4d658cee8f69954ad153fee1c068120ef500ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod.fragment-76YO26ZL.mjs.map",
+          "bytes": 1003,
+          "sha256": "50c14c366bf352d3392024b7ba325f2cc0c5482dd4d69c93df02abdb2bce45f0"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod.fragment-MOJ4UTNF.mjs",
+          "bytes": 902,
+          "sha256": "276182bea24bf14e09196f0cf7d63e961318abf9792d5bb98f4a165757a63c8c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod.fragment-MOJ4UTNF.mjs.map",
+          "bytes": 1101,
+          "sha256": "d41c077d05714369d42f8d944a2386e7799827e00e4201e98dace6101a55390f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod3D.fragment-QLZQOM7G.mjs",
+          "bytes": 855,
+          "sha256": "7127e09dac0facf4ca1cfded8f035bdea8e5e5667cc1d9b42ce161545afdf05f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod3D.fragment-QLZQOM7G.mjs.map",
+          "bytes": 1050,
+          "sha256": "31c183c71068de11fbfe3510155a921d9c5e953e995691a7ee65c474dd6a1b72"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod3D.fragment-U6QMELCF.mjs",
+          "bytes": 1005,
+          "sha256": "cea431dea8f7a0cacc7ce0963898a12eeb15ec74f0017a2f0bd570fe6c5c7e84"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lod3D.fragment-U6QMELCF.mjs.map",
+          "bytes": 1200,
+          "sha256": "880381e503ef51f51d597046d56cb9c4d295676edc029a3b09e120aa8c2903d8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lodCube.fragment-765HNHTN.mjs",
+          "bytes": 1660,
+          "sha256": "b05b17c46d32928b81f7ff787c82c1866c7fc271f9bd81592d46be8048935947"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lodCube.fragment-765HNHTN.mjs.map",
+          "bytes": 1890,
+          "sha256": "554f53a29a155a7afb031a8a9482a7a861aebcbd878bcf7f5288f8bd80fd1a15"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lodCube.fragment-UTOTJ25U.mjs",
+          "bytes": 1229,
+          "sha256": "4b042f6039e4f74e7aed659385209ab8d200301dd131ea168608de14619b67c5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/lodCube.fragment-UTOTJ25U.mjs.map",
+          "bytes": 1459,
+          "sha256": "46ece85f6abb4f50f626b5f452c4bedcc9c74b5539df23b458cb8a87cecaca1b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/mesh.vertexData.functions-YL6QXU6L.mjs",
+          "bytes": 3099,
+          "sha256": "f2f9ca86f8eb444387b785d5214c1a1b98a82f620a4c8a49962264c4f1ee46ef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/mesh.vertexData.functions-YL6QXU6L.mjs.map",
+          "bytes": 6751,
+          "sha256": "52f1ab895aea89fdfffd52fdd8cd82672ca7f921e6ab5a1e70fc08b6800285c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/pass.fragment-BWQB7EMC.mjs",
+          "bytes": 545,
+          "sha256": "73bfae662ae8c579740678011259559ce313f6914d3c920289fc3d0dd1a15454"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/pass.fragment-BWQB7EMC.mjs.map",
+          "bytes": 744,
+          "sha256": "a7b303bf12b2d5297c6c9c956bb9c8fec78684238e7921058445a20132ee1495"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/pass.fragment-FGRO7FTR.mjs",
+          "bytes": 687,
+          "sha256": "db5a662b6d57375c7245d352d8b0705b849d8d7605a679f4cf612f4a66a94baa"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/pass.fragment-FGRO7FTR.mjs.map",
+          "bytes": 886,
+          "sha256": "5db757b0401d58b2d689f7faffc48834cce45f7834fe1fe448660435e7db1cdf"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/passCube.fragment-DTE6F6AP.mjs",
+          "bytes": 1379,
+          "sha256": "c9bdd9f318349a7b882ad18bd72c22ab4e2efb0b422e81a99aadb63ce879d533"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/passCube.fragment-DTE6F6AP.mjs.map",
+          "bytes": 1609,
+          "sha256": "4585085438befe65016f546bdd8ef411c2acc21924dfd5d9567cd2af03d5a560"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/passCube.fragment-QYGUAABO.mjs",
+          "bytes": 1062,
+          "sha256": "dac66bb9c7c0ad4dd2971d22fd8a9736056a5a9fd9926becfd8d4d55311fc3cd"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/passCube.fragment-QYGUAABO.mjs.map",
+          "bytes": 1292,
+          "sha256": "76932cdedd19e81cbe15d00b2d22b15a633720acf9dbcd41325c915cb637d2df"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/postprocess.vertex-BGAYFU5S.mjs",
+          "bytes": 705,
+          "sha256": "489f7e9cb60ee9bc1d82afa9e4585e6c0c2c5a4df1d3c7697f7681cf99623f95"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/postprocess.vertex-BGAYFU5S.mjs.map",
+          "bytes": 897,
+          "sha256": "0099dcfbddb58465d48f5ca45cb8589a9d6549578e2b130724ef4f5278aea374"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/postprocess.vertex-GD335QVS.mjs",
+          "bytes": 837,
+          "sha256": "3cf8dfa70bb79c4ed52cdd7ef5821f189c51563e87dc41646807f7f956eb2407"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/postprocess.vertex-GD335QVS.mjs.map",
+          "bytes": 1033,
+          "sha256": "9281a3060bb69f8219b64118af0f001e673bdf16d9d714126022ee53759cac93"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdDecode.fragment-3XL2MEFS.mjs",
+          "bytes": 863,
+          "sha256": "cc152e0056f1e5dc0c853f65cf95db46862c27684681c1d131a3d1c05c4a5962"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdDecode.fragment-3XL2MEFS.mjs.map",
+          "bytes": 1223,
+          "sha256": "3e970d453ff97723f7031798f78fafb84ee1c73fc6a05ad69d29fc047897d097"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdDecode.fragment-S3BFJ7LE.mjs",
+          "bytes": 1022,
+          "sha256": "1e660ddf6e93be894756567e3bd73711eb75537838d5c13d847628a6882ac96c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdDecode.fragment-S3BFJ7LE.mjs.map",
+          "bytes": 1384,
+          "sha256": "1a7fbc77a6b61e2aec0e51c04b7ef3581d3658d20801d123ede2cf30bcff325c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdEncode.fragment-3J5KKCSF.mjs",
+          "bytes": 1013,
+          "sha256": "d95a03f855eea056d4507e820f911b982946eecea6d1d585516db1184c018f59"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdEncode.fragment-3J5KKCSF.mjs.map",
+          "bytes": 1375,
+          "sha256": "2ba6569f7ea68c8ad71712b9ea1901a1f797168081bc83eced15e93030e646ea"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdEncode.fragment-LPYSD2Y6.mjs",
+          "bytes": 855,
+          "sha256": "cf76dfe15294778e00262e75e3383c403dce118c49388aec156bad88f28e9aef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/rgbdEncode.fragment-LPYSD2Y6.mjs.map",
+          "bytes": 1215,
+          "sha256": "9cc6421322f8f2935ad9d179b484c45e5ba6cfc784184f7e2d8168465b103644"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/tgaTextureLoader-EC5ZDTMS.mjs",
+          "bytes": 9783,
+          "sha256": "ce97cd5e710062c9a4705067aa383813341283c21fdb00abc272cfe3e79eb9f9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/tgaTextureLoader-EC5ZDTMS.mjs.map",
+          "bytes": 21352,
+          "sha256": "7a1ff8d2b1e2740dd91bf7f63185a85c6a7681004c39a5355a83ecc99431828d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/thinEngine.pure-XB3LYSFU.mjs",
+          "bytes": 287,
+          "sha256": "9fb490b3f08bcd91bb420b9a73e1eef943f4cd708a39c47b46eba3713fce9a48"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/assets/thinEngine.pure-XB3LYSFU.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/babylon-baseline.png",
+          "bytes": 12572,
+          "sha256": "fa6a1926ef964b12253a8c47e711867f482dbea14901d9898da43adac6cb2797"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/babylon-comparison.png",
+          "bytes": 13334,
+          "sha256": "a643b76347fe45a1bd9cd586100e3b7f26e56fd488673d1b9dfc6688eb839f3c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/babylon-review.json",
+          "bytes": 8694,
+          "sha256": "9b4937b91b80ab3ce9c07f168acca009014ec39df6a76782bbc9db782ded25e4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/babylon-stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/babylon-stdout.txt",
+          "bytes": 979,
+          "sha256": "90e768e9361b75880d0d3a012eb12f835abda0466c3d1e180e9aef055a6fa65c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/babylon-trace.zip",
+          "bytes": 318674,
+          "sha256": "2f38c48b9a480d3962dfcbb60c8d2bd67a24bc3d7e6aef8c92f5db4a61d60cb0"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/babylon.json",
+          "bytes": 6308,
+          "sha256": "3029937057210335d8696bcb68c83665b2cbdf769f1faa5dfd34fdc4fe27411a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/completion.json",
+          "bytes": 161,
+          "sha256": "6a1254a8517a61b6d41e9bbdbd0068dd0e12ab9d00e80edaf8cfe950b7be16e8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/fragments-baseline.png",
+          "bytes": 12576,
+          "sha256": "ace949448442c97e6a098227a88757373c4199246c38833bcaa1bdb90045731d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/fragments-comparison.png",
+          "bytes": 13276,
+          "sha256": "f931b30d50ca777c8065b6ba9ced2849e0d37b48590f869b4b790c787c090721"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/fragments-review.json",
+          "bytes": 8717,
+          "sha256": "a0d0d0432a40fff795136867c2d9119753c460ced06b99623833923ec83d5f75"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/fragments-stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/fragments-stdout.txt",
+          "bytes": 994,
+          "sha256": "a9b1105979671172a150f063160017b7c0917cd18a62df799d7e6ce661562924"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/fragments-trace.zip",
+          "bytes": 739113,
+          "sha256": "48d230a6a29ace6227bd174cef014d657a4df5cd6666654bee7e934af8a3113a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/fragments.json",
+          "bytes": 6541,
+          "sha256": "2f5e5751e4e9dd482e0f7986b798fba8c1e930c70722102334c7a0ecac09dd54"
+        },
+        {
+          "path": "artifacts/private/west-riverside/smoke-001/run.json",
+          "bytes": 5501,
+          "sha256": "341675799c04c7cd850ae7ae6be141f212cf1140f378803b2e51e01155f2583b"
+        }
+      ]
+    },
+    {
+      "directory": "run-001",
+      "manifest": {
+        "version": 1,
+        "issue": 192,
+        "purpose": "initial-local",
+        "qualified": false,
+        "source": "f59687e976d7b165f7df10d0d77a2fc42879e67a",
+        "dirty": true,
+        "sourceFiles": [
+          {
+            "path": "benchmarks/viewer/west-riverside.md",
+            "sha256": "8ca2a29d0a99af21626e2aaa2da59c0e6fb77a3590fdf011975ca98c2f43c888"
+          },
+          {
+            "path": "benchmarks/viewer/west-riverside.test.ts",
+            "sha256": "e37b0693721b00b563a11397fc9dffd3dab96a6eaa5ea1bc14704db7c4c2ea0f"
+          },
+          {
+            "path": "benchmarks/viewer/west-riverside.ts",
+            "sha256": "291cbc18cce3e695085564a47129bce12cd835e25e83d84b053957aed1c71e74"
+          },
+          {
+            "path": "benchmarks/viewer/README.md",
+            "sha256": "82598e1a059b05456b3cc0fe11958e6d3f4510dfdf33338828ea6d1623f8a0c0"
+          },
+          {
+            "path": "benchmarks/viewer/adapters/babylon.ts",
+            "sha256": "534345e9b6ba911efba9254fe2f9ddd3526e25ecb179d4ae596ccd5b09751a6b"
+          },
+          {
+            "path": "benchmarks/viewer/adapters/fragments.ts",
+            "sha256": "ac3e6c06530127abccddbc2d02251d2b13127457e388e23bf0a718a17bb3de8a"
+          },
+          {
+            "path": "benchmarks/viewer/babylon-lifecycle.test.ts",
+            "sha256": "af5e2f065999917bba91989f14bdf9082d98cb120adcc000f68ae29535d31319"
+          },
+          {
+            "path": "benchmarks/viewer/browser.ts",
+            "sha256": "d4a14b6099ef885d22c1e799d0802f12e4b85e261c05c2e0505ea593bc1796ed"
+          },
+          {
+            "path": "benchmarks/viewer/contract.test.ts",
+            "sha256": "a8cfb2b11f0b83ff29e7297eeaa6a6b43d5132894e7642939f85a3db7ec94b3c"
+          },
+          {
+            "path": "benchmarks/viewer/contract.ts",
+            "sha256": "84e79de672717c36e8f3783f4e4d152428e68b238893aabce4bf7b0968467f7b"
+          },
+          {
+            "path": "benchmarks/viewer/dataset-requirements.md",
+            "sha256": "79f993edeaccfe2ca3f19a2acb4cecafd1216f1eae4331c3b61b29f22a529362"
+          },
+          {
+            "path": "benchmarks/viewer/fixtures.ts",
+            "sha256": "e0a8111017015c612ed1ef7a6c451c2a3cac94857d80c2e76b7531140bba90b5"
+          },
+          {
+            "path": "benchmarks/viewer/metrics.ts",
+            "sha256": "7f27d7be4af01fe16bd0fb19da1fde39d1f9f2d876ed92580541102c091bce91"
+          },
+          {
+            "path": "benchmarks/viewer/profile.json",
+            "sha256": "32bd711b5d0a978519cc5d41210d1c27470aa60664bcae9de1d4b1ec389ac33e"
+          },
+          {
+            "path": "benchmarks/viewer/runner-candidate.ts",
+            "sha256": "12f3965caa0f56ce75af80f8019558491011ec767d8d59323983b6bb3cb18e34"
+          },
+          {
+            "path": "benchmarks/viewer/runner-limits.test.ts",
+            "sha256": "6ad5782a3700e508c52a171893d56c163dac2430989c88b0b0510a5119b19b27"
+          },
+          {
+            "path": "benchmarks/viewer/runner-limits.ts",
+            "sha256": "fd143ab37c8465ce7510bb8d0c0a248fc53f5bdfcd29d89baff6194af4abe7dd"
+          },
+          {
+            "path": "benchmarks/viewer/runner.ts",
+            "sha256": "2085cdcdd9d8c143558ebb6a857213bddec6ec04cb1d011a0a9bb8c6e55ae557"
+          },
+          {
+            "path": "package-lock.json",
+            "sha256": "a2afdfe83301de34d8a39177695ac5d6a36cda1b7c420bb36f846f78d5987452"
+          },
+          {
+            "path": "package.json",
+            "sha256": "12d4986b4a133ba7f43352ec423d5c39f2541aad43fc78786967c9955c708477"
+          },
+          {
+            "path": "scripts/validate-typescript.ts",
+            "sha256": "e741cdce33c9c8c0335d8a49d48ef3bbc5c7b6c03ef6b1cf81865d2bb6e109bb"
+          },
+          {
+            "path": "tsconfig.json",
+            "sha256": "0d37e2036572fa7a3d9132ce83a0825eb30bfcce6793039e0b9f1ec5371204e9"
+          }
+        ],
+        "dataset": {
+          "id": "west-riverside-seven-ifc4",
+          "sha256": "99ca530d28d01f8a906af7b2ebb3cfa020af62226968c937fa3fcd4dbdd96a30",
+          "elements": 97590,
+          "triangles": 5347554,
+          "admission": {
+            "qualified": false,
+            "reasons": [
+              "Public model identity, area and rights have not been admitted",
+              "Gross floor area is unknown",
+              "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification"
+            ]
+          },
+          "grossFloorAreaM2": null,
+          "provenance": {
+            "kind": "public-unverified",
+            "sourceHashes": [
+              "230afa4d72a59c9ce18cdd9a7bc7c5c3e409a46078de6e14b19741b4cf92cf09",
+              "7eed88eb21dafdc5a5950d9b1ee18df3fd00fcd376a14fd1bae80658e371975e",
+              "04a29bc312fe0b026634ad86390e8b72c1d1c1765255351f787503d3d8ce1c13",
+              "8e404c4e4c9085338383a89ae57a3a31ebe96ee406214392a1bf69a6775dcecc",
+              "bb53f0eb8f7295e91e0fb6ec6b79a30022a2e0e248714aab6bb1a8930c4793dd",
+              "f04e6fb62ad10cd78177d1d390758e912e3ad65881a184cca8ea1da07c59ae23",
+              "0e30c25a77ebcd75b2fc3a6cb87dc3891bd476f60a269e36eb5e0149bcc06ea7"
+            ],
+            "permissionEvidence": "sources.json; user authorized local-only evaluation",
+            "floorAreaEvidence": "Unknown; no building-level 200,000 m² area proof",
+            "coordinateReference": "web-ifc placed geometry, common origin in conversion.json",
+            "conversionEvidence": "conversion.json",
+            "inventoryEvidence": "conversion.json",
+            "limitations": [
+              "Publisher CC BY 3.0 notice retained locally; upstream authorization history unresolved. No source or derived geometry publication.",
+              "Gross floor area and real-building identity unverified. No 200k+ qualification.",
+              "Tessellated mesh parts keep source product IDs; part count is not BIM entity count.",
+              "Rooms/storey containment, full property sets, textures, transparency and engineering regeneration are not qualified.",
+              "web-ifc 0.0.77; 12 circle segments; affine orientation baked; coordinates rounded to 1 micrometre; alpha made opaque."
+            ]
+          },
+          "disciplines": {
+            "architecture": 31036,
+            "structure": 2925,
+            "mechanical": 23690,
+            "electrical": 5313,
+            "plumbing": 12541,
+            "fire-alarm": 1021,
+            "sprinklers": 21064
+          }
+        },
+        "profile": {
+          "id": "viewer-192-v1",
+          "status": "setup-only",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1
+          },
+          "materialProfile": "basic-double-sided-opaque-unqualified-fidelity",
+          "coordinateSystem": "right-handed-y-up-metres",
+          "coldOpens": 5,
+          "warmSessions": 10,
+          "interactionSamples": 100,
+          "proposalSizes": [
+            1,
+            10,
+            100,
+            1000
+          ],
+          "stressProposalSize": 10000,
+          "reviewCycles": 100,
+          "network": {
+            "bandwidthMbit": 50,
+            "rttMs": 30
+          },
+          "targets": {
+            "usefulFrameMs": 5000,
+            "overviewMs": 30000,
+            "p95FrameMs": 33.3,
+            "p95PickMs": 100,
+            "p95PropertiesMs": 200,
+            "p95ComparisonMs": 1000
+          },
+          "dataset": {
+            "status": "missing-real-project",
+            "minimumGrossFloorAreaM2": 200000,
+            "requiredDisciplines": [
+              "architecture",
+              "structure",
+              "mechanical",
+              "electrical",
+              "plumbing"
+            ]
+          }
+        },
+        "candidates": [
+          "babylon",
+          "fragments"
+        ],
+        "cycles": 1,
+        "timeout": 600000,
+        "node": "v24.18.0",
+        "os": {
+          "platform": "win32",
+          "release": "10.0.26300",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 7700X 8-Core Processor             ",
+          "totalMemoryBytes": 67756871680
+        },
+        "network": "loopback, unshaped",
+        "memory": "not-measured",
+        "status": "started"
+      },
+      "candidates": {
+        "babylon": {
+          "outcome": "failed",
+          "data": null,
+          "failure": {
+            "status": "failed",
+            "qualified": false,
+            "phase": "replay",
+            "error": "Candidate lifecycle timeout",
+            "timeoutMs": 600000,
+            "elapsedMs": 601046,
+            "cleanupErrors": []
+          },
+          "cancellation": null,
+          "console": "[viewer-benchmark] start load\n[viewer-benchmark] end load 5230.4 ms\n[viewer-benchmark] start validation-readback\n[viewer-benchmark] end validation-readback 385.3 ms\n[viewer-benchmark] start select\n[viewer-benchmark] end select 542.3 ms\n[viewer-benchmark] start properties\n[viewer-benchmark] end properties 0.1 ms\n[viewer-benchmark] start pick\n[viewer-benchmark] end pick 661.8 ms\n[viewer-benchmark] start filter\n[viewer-benchmark] end filter 507.4 ms\n[viewer-benchmark] start section\n[viewer-benchmark] end section 2602.1 ms\n[viewer-benchmark] start proposal\n[viewer-benchmark] end proposal 20996.5 ms\n"
+        },
+        "fragments": {
+          "outcome": "cancelled",
+          "data": null,
+          "failure": {
+            "status": "failed",
+            "qualified": false,
+            "phase": "replay",
+            "error": "Candidate exited before successful close: 4294967295",
+            "timeoutMs": 600000,
+            "elapsedMs": 163091,
+            "cleanupErrors": []
+          },
+          "cancellation": {
+            "candidate": "fragments",
+            "status": "cancelled",
+            "time": "2026-10-27T20:41:48.276Z",
+            "workerPid": 27148,
+            "reason": "Unscored harness admission cancelled after Babylon lifecycle timeout. Rerun both with exact per-record accepted-state audit and shared proposal tessellation to reduce avoidable full-input allocations. This is not an engine capacity failure."
+          },
+          "console": "[viewer-benchmark] start load\n"
+        }
+      },
+      "completion": {
+        "status": "failed",
+        "qualified": false,
+        "purpose": "initial-local",
+        "realisticDataset": "not-qualified",
+        "finishedAt": "2026-10-27T20:41:49.765Z"
+      },
+      "privateArtifacts": [
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/babylon-U2TSGYLY.mjs",
+          "bytes": 1300056,
+          "sha256": "7535806f9e1d04b358d11298d5bda9e727958084f67a50a208dcea813ed85f30"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/babylon-U2TSGYLY.mjs.map",
+          "bytes": 2308095,
+          "sha256": "837056032255032be26176fc168f50e99245507d0a61c9953db44b3c175ae738"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/basisTextureLoader-CZWGLHQU.mjs",
+          "bytes": 19211,
+          "sha256": "f3c148e11b1bab6f2b42a065e54bbe59d69d744483a268dac8cc89d8e2d15eb1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/basisTextureLoader-CZWGLHQU.mjs.map",
+          "bytes": 43501,
+          "sha256": "589f4cd02b12d0759c57d0b20fcc8a79d65c22eba53424682d50e3f17229ab9e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/browser.mjs",
+          "bytes": 382074,
+          "sha256": "057cd832637bf6977a9da4239cbcbf1c173fe2f057cc20b91177d6ea3216103d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/browser.mjs.map",
+          "bytes": 992058,
+          "sha256": "e043d17abd9e4724e0cc10df189434637a6786fd5ba1aad734dedc32ea3c5688"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-3WLJDAWD.mjs",
+          "bytes": 16702,
+          "sha256": "95de06d63c24e0345ee7b47aea28c066f2bff51ccf8aecc494695f34e9f910db"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-3WLJDAWD.mjs.map",
+          "bytes": 44786,
+          "sha256": "be7c41fde056288c9d8c8239d660973bfc68657d58ec9d7ecc6b2e0f2b8f791e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-4ASEFE4V.mjs",
+          "bytes": 6721,
+          "sha256": "c147333167bd76996b3883977c0c64225f7229f7149ef6125ae66a7b1e9c52d8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-4ASEFE4V.mjs.map",
+          "bytes": 7123,
+          "sha256": "4a31dcc3a369161143f0e0bbf1eeb27b948d9088d41e0e1e9efd8944742be9cb"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-4IGVKMZV.mjs",
+          "bytes": 8407,
+          "sha256": "96f49ce0c444be187396a04bccc750ea34c365b0fcf50fed4c00c9596e9c5928"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-4IGVKMZV.mjs.map",
+          "bytes": 41459,
+          "sha256": "d69d8913445b32c4119f830c41bb6c6a9c0bab0331fd53eb69977d8ddaf4e070"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-66HXD7RA.mjs",
+          "bytes": 1373,
+          "sha256": "f5656eed012f5021538d3c7be6b3071e58138a2d7bf0bd6f0bbb1ebcdf26d03f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-66HXD7RA.mjs.map",
+          "bytes": 3014,
+          "sha256": "2c2c88d8022de818328e88a5fc68afba61976872cc6b05cc740724ac8692d27a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-AIH64IBY.mjs",
+          "bytes": 46588,
+          "sha256": "07710422d5e960b23dac7bd5a4efc441dc9697f64c95c8ce8caae7cbacbfbac8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-AIH64IBY.mjs.map",
+          "bytes": 83684,
+          "sha256": "65a2f4df5c79dfa1cd0cea808bf8dbf2833d592193a140d286a4858493dcbe45"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-CE2YF2DP.mjs",
+          "bytes": 460149,
+          "sha256": "ea0dd1bed89d164a5c9471dab46334df419ac178d05d4445a76aa6008e050e6b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-CE2YF2DP.mjs.map",
+          "bytes": 889420,
+          "sha256": "d6e5157561f0f114ddd612ecd4bc519eb540dde00d1245a6235be244afba8d96"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-D3LEBB5T.mjs",
+          "bytes": 19934,
+          "sha256": "501016ea50c30a0552463a555559e154fa4b527665e87aa7ee4884b72591665b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-D3LEBB5T.mjs.map",
+          "bytes": 43363,
+          "sha256": "60f921ada23fb54825052b534406736270e975adf5c747c89f54e1f34af6e508"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-DOC37M34.mjs",
+          "bytes": 47431,
+          "sha256": "b20552124882315d848dfd49d8cd2549e58bfa98fa29149681957b31131a11ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-DOC37M34.mjs.map",
+          "bytes": 114577,
+          "sha256": "38f38ad53aa5c25eb3a379496d491f1132e6bb9d044be810d4432001e1098bb1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ET5C67MH.mjs",
+          "bytes": 187,
+          "sha256": "9e3da45a867443c5942688ca0faec36d9bf3fd5f7d1b17db0954fc88b9253037"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ET5C67MH.mjs.map",
+          "bytes": 1233,
+          "sha256": "fd360658e62900f60d73c9ac335d10e52822e269c03bf48e2d80d9ca737be668"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-H2T3BAN5.mjs",
+          "bytes": 7035,
+          "sha256": "814c361357859a81e16164b98d48913572ece1da1a16bde48dc5f12d017b5933"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-H2T3BAN5.mjs.map",
+          "bytes": 7505,
+          "sha256": "67ed035a061727e3ede8f67c99bc6cb9b1d6a6d794f9962e03a59ed71336e24c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-H5NRXJHK.mjs",
+          "bytes": 52023,
+          "sha256": "a760131437180b6675ac3abea36b53579fa48e20be282469df46c936d524b2ad"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-H5NRXJHK.mjs.map",
+          "bytes": 93629,
+          "sha256": "33417975d204556105e7e5b5b158f5aa0820bf1b059475da7365fe8b5b2d3c45"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-J5LGTIGS.mjs",
+          "bytes": 235,
+          "sha256": "a2fa550627e500536a9458cb7c60e7dcc4410a9f48015191f18c410ec7fac8a9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-J5LGTIGS.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-KLTBVVXT.mjs",
+          "bytes": 6900,
+          "sha256": "50f621c9209877b7c285b17e5f6e7aae9e0e9a838dfb4ccd73f022800df614e4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-KLTBVVXT.mjs.map",
+          "bytes": 17659,
+          "sha256": "7be6f796cb89292ae1e00362ca1950a96db6255b67cc7e35b0923d3ceb607fde"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-NA4AK5JV.mjs",
+          "bytes": 16614,
+          "sha256": "defe103d885935c908432c924894bdcc46fad1c75892c0218053c3fc68b6e790"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-NA4AK5JV.mjs.map",
+          "bytes": 34886,
+          "sha256": "8c5b56cf324bc83f5b6c36252038c5335dc9994875780a33f2bebaec8df3e99c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ODZYG5TH.mjs",
+          "bytes": 17475,
+          "sha256": "b291ed01770084509df8f43579d584aeedca70a56e47eae609350c5ae0755bad"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ODZYG5TH.mjs.map",
+          "bytes": 40314,
+          "sha256": "35ac6ae3f674d92b5b2864fb5a16c71d5273c3a25498b745b5de2af1494865e2"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-PRLMZZW3.mjs",
+          "bytes": 3678,
+          "sha256": "7747fca2c23f18c46997cc2466da9480d3baaa97a2b6dc13540b0b41739d98db"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-PRLMZZW3.mjs.map",
+          "bytes": 8379,
+          "sha256": "372d4ad1c4cf84cae1af85ae5386cb3f8123df8d1195ac6feb76e88417b72697"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-PSSJ4RLO.mjs",
+          "bytes": 23707,
+          "sha256": "064fcdf939aae7638d81075749660a3d369bcddcc9a7f678559834952b3bc4b1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-PSSJ4RLO.mjs.map",
+          "bytes": 54745,
+          "sha256": "7aa0c2c5f69296da2110f5b95cfb14a14f2bdda403b58be5280a68aa245c9743"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-QFCZGCZ7.mjs",
+          "bytes": 297033,
+          "sha256": "20a9fbb7740882abe99c35202c050f1cba1cadf32ac28c195f7a8669e79229c7"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-QFCZGCZ7.mjs.map",
+          "bytes": 629022,
+          "sha256": "a0b2db7898ef0dcae215d2741e49d053c8fe8aa4f7c9ee0ffc37e8685b23fe13"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-VS62YXHU.mjs",
+          "bytes": 15912,
+          "sha256": "8ae5e7307abb3129bc38f5a62f5553f7ea4b398a02a9e41b46efd41133fd02ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-VS62YXHU.mjs.map",
+          "bytes": 34841,
+          "sha256": "d93c0f5e7d896199706d871a7a7e957b77af6ef9c209be4095c5f37927c6f1ca"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-WJW7Z6BG.mjs",
+          "bytes": 411604,
+          "sha256": "542c9870313b117ad0a8acdef141b70c0c2c77b25f2e8a90b61f75c661092e8a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-WJW7Z6BG.mjs.map",
+          "bytes": 709034,
+          "sha256": "02f7d46de505699ab9c21d4e0195a8697977d3f1077ac78ebb01a36be649a66e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-XS3XUYBV.mjs",
+          "bytes": 3659,
+          "sha256": "3b58e0a1c796681946e60cbb9c9fdf15f4e0865f5b961522938f1a9c1e6258c0"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-XS3XUYBV.mjs.map",
+          "bytes": 5024,
+          "sha256": "4fd2d07c93c91f0ba846a45fd6ae4c95907210588b7ea9cd68f28b86f7fbf210"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-XSNHNRTC.mjs",
+          "bytes": 1261,
+          "sha256": "e4e2e9bef37e13400619e7fde97c682539353c5fe353829da175a6be616639e1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-XSNHNRTC.mjs.map",
+          "bytes": 14037,
+          "sha256": "cd7a5483d31cd2fac888e3b2bcf431475a33031171c95d311b80dd457c258174"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ZME33DCY.mjs",
+          "bytes": 84077,
+          "sha256": "5d1a7a5aa7fe6926d4bc5008221e7b525de7dd44cf179e6edcc5ac4f0198237c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ZME33DCY.mjs.map",
+          "bytes": 174939,
+          "sha256": "f0320c810c1bb33e22c2c388702b951435bdd06aa1a395798c317fc3eb5c5680"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ZZVHRYWG.mjs",
+          "bytes": 3214,
+          "sha256": "459ae400ae11c131e1c80f1261422cfbdd47386fe526bb49bcad5f09194d2cda"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/chunk-ZZVHRYWG.mjs.map",
+          "bytes": 4600,
+          "sha256": "4ae184a04a916739564b9a9490e54631a56a43909b601d674c3da27867fc3da8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/dds.pure-DUMSEDPM.mjs",
+          "bytes": 617,
+          "sha256": "2d372b6efdb4e7e2a23078855a10578422b69a35195cd8174f2cfda6a8e85938"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/dds.pure-DUMSEDPM.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/ddsTextureLoader-N36HP3PT.mjs",
+          "bytes": 3694,
+          "sha256": "c7b0c6987ad2dfc3efa028e422c2710bf17ae00bf0b9c0b797e3a1179dab0cc3"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/ddsTextureLoader-N36HP3PT.mjs.map",
+          "bytes": 6323,
+          "sha256": "8d84b41b76baf95548c3b26d8bc26a561a159c15bf55aafe28a3f535ed9f1fc3"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.fragment-KKPPT44T.mjs",
+          "bytes": 124449,
+          "sha256": "cad09e37a2b5b0e909da919b0e030802e4067867ca28107b5d000915a64cdb57"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.fragment-KKPPT44T.mjs.map",
+          "bytes": 139687,
+          "sha256": "106226d06bad10ba086b9b2bdf612c822c78c8474051bae3e43ee32ac669a24a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.fragment-OLQ6RALU.mjs",
+          "bytes": 119259,
+          "sha256": "cc727e661a43b481cebb37e4fffc52d0e403ab5f2ff49ed18f55ee85176490cc"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.fragment-OLQ6RALU.mjs.map",
+          "bytes": 135362,
+          "sha256": "f0ce7b4b8cc9e56b620fb2e35ccdf5880927816b0d6a882f55b7e5f694dd44c4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.vertex-G5GSLZBS.mjs",
+          "bytes": 36602,
+          "sha256": "bd4496cfdc04f4a228d322c98979add1513bec20a9c7d1edf5a32d964523b481"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.vertex-G5GSLZBS.mjs.map",
+          "bytes": 49768,
+          "sha256": "a639b560901815a4885b26e327067e57f8f4b748d79033cd0d6032a9a92c4251"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.vertex-NLVZATHO.mjs",
+          "bytes": 56552,
+          "sha256": "82abbc7090016eed93446c01136b505f34537b248d9af051ad8faecf5fcc0c10"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/default.vertex-NLVZATHO.mjs.map",
+          "bytes": 70032,
+          "sha256": "6624af4e29dd3f4fa719fb31a8c76efb7a5ccebd50ac491cee0dcf5dbd42e39a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/dumpTools.pure-ELVC5FDE.mjs",
+          "bytes": 701,
+          "sha256": "d02645e0293357e47b454402a4bfa6e4632f98f73ba4f02df8cc7d4cfc85ad96"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/dumpTools.pure-ELVC5FDE.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/envTextureLoader-UHWCWFLY.mjs",
+          "bytes": 17189,
+          "sha256": "6034186c5b2670b8e6856f2f59c4b11d3f44e15b470423bf2085e3889af4edae"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/envTextureLoader-UHWCWFLY.mjs.map",
+          "bytes": 59608,
+          "sha256": "3516a3738a0ab2cefb70bd3bd7eab3bcec54f1ce7961b2fe7acb5af05077be25"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/exrTextureLoader-QZ6ECQJ4.mjs",
+          "bytes": 34554,
+          "sha256": "f671cf0a900b70ce7a4e18e9def0ccc3a094c0c4919c4e028696088f870fd8a5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/exrTextureLoader-QZ6ECQJ4.mjs.map",
+          "bytes": 107512,
+          "sha256": "2644d751e2e496a43fc72c70888a53c362ecf019fbf96eba9da241d1f54c388f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/fragments-QV4OULNM.mjs",
+          "bytes": 2378437,
+          "sha256": "6e33cb13385b9fbb98d3504dc3e10cccd30cd60731acc9b2daa8fbf832c497da"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/fragments-QV4OULNM.mjs.map",
+          "bytes": 4603777,
+          "sha256": "d3cec4ac3e949dff048469046e5eb87d400b8d9d9f842b4bd18652a636e53379"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/fragments-worker.mjs",
+          "bytes": 1306151,
+          "sha256": "0dd8c1658eecf1df05ede192dbbc16d0a83b348f44b05b1a5ddfed877e90a4d9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/hdrTextureLoader-XLFD5VGS.mjs",
+          "bytes": 6728,
+          "sha256": "47929f7b7385226095ea94bd8812d6884fe4f81c393affeb6f94bf838aa73f99"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/hdrTextureLoader-XLFD5VGS.mjs.map",
+          "bytes": 17629,
+          "sha256": "603727c05efb22334b7b44ae74b7a3ff4000396c39515da3953d988a47b3019d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/iesTextureLoader-WIBCKPY6.mjs",
+          "bytes": 5708,
+          "sha256": "0c14f6c81f2fc39e4a591e6d3790c8fa2dce80c74ec10dd9295c6e02d256f8f1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/iesTextureLoader-WIBCKPY6.mjs.map",
+          "bytes": 13270,
+          "sha256": "c476b12b630be01e6143dcda92dc5a4fc54312d2a3301cc3a5853d4566efc054"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/ktxTextureLoader-U4CPETMT.mjs",
+          "bytes": 35039,
+          "sha256": "e8b408251cece819ce260caa5a799c5a848e556843dad7cf289434d8e8aa42ee"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/ktxTextureLoader-U4CPETMT.mjs.map",
+          "bytes": 82377,
+          "sha256": "d8cb4f96a2f96c55228f64e81ba4cacf47e671233ba16d016bcb1fbe28a7b8c5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod.fragment-76YO26ZL.mjs",
+          "bytes": 804,
+          "sha256": "a0cbb2b43a30cbb6b1d82bd23d4d658cee8f69954ad153fee1c068120ef500ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod.fragment-76YO26ZL.mjs.map",
+          "bytes": 1003,
+          "sha256": "50c14c366bf352d3392024b7ba325f2cc0c5482dd4d69c93df02abdb2bce45f0"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod.fragment-MOJ4UTNF.mjs",
+          "bytes": 902,
+          "sha256": "276182bea24bf14e09196f0cf7d63e961318abf9792d5bb98f4a165757a63c8c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod.fragment-MOJ4UTNF.mjs.map",
+          "bytes": 1101,
+          "sha256": "d41c077d05714369d42f8d944a2386e7799827e00e4201e98dace6101a55390f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod3D.fragment-QLZQOM7G.mjs",
+          "bytes": 855,
+          "sha256": "7127e09dac0facf4ca1cfded8f035bdea8e5e5667cc1d9b42ce161545afdf05f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod3D.fragment-QLZQOM7G.mjs.map",
+          "bytes": 1050,
+          "sha256": "31c183c71068de11fbfe3510155a921d9c5e953e995691a7ee65c474dd6a1b72"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod3D.fragment-U6QMELCF.mjs",
+          "bytes": 1005,
+          "sha256": "cea431dea8f7a0cacc7ce0963898a12eeb15ec74f0017a2f0bd570fe6c5c7e84"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lod3D.fragment-U6QMELCF.mjs.map",
+          "bytes": 1200,
+          "sha256": "880381e503ef51f51d597046d56cb9c4d295676edc029a3b09e120aa8c2903d8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lodCube.fragment-765HNHTN.mjs",
+          "bytes": 1660,
+          "sha256": "b05b17c46d32928b81f7ff787c82c1866c7fc271f9bd81592d46be8048935947"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lodCube.fragment-765HNHTN.mjs.map",
+          "bytes": 1890,
+          "sha256": "554f53a29a155a7afb031a8a9482a7a861aebcbd878bcf7f5288f8bd80fd1a15"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lodCube.fragment-UTOTJ25U.mjs",
+          "bytes": 1229,
+          "sha256": "4b042f6039e4f74e7aed659385209ab8d200301dd131ea168608de14619b67c5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/lodCube.fragment-UTOTJ25U.mjs.map",
+          "bytes": 1459,
+          "sha256": "46ece85f6abb4f50f626b5f452c4bedcc9c74b5539df23b458cb8a87cecaca1b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/mesh.vertexData.functions-YL6QXU6L.mjs",
+          "bytes": 3099,
+          "sha256": "f2f9ca86f8eb444387b785d5214c1a1b98a82f620a4c8a49962264c4f1ee46ef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/mesh.vertexData.functions-YL6QXU6L.mjs.map",
+          "bytes": 6751,
+          "sha256": "52f1ab895aea89fdfffd52fdd8cd82672ca7f921e6ab5a1e70fc08b6800285c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/pass.fragment-BWQB7EMC.mjs",
+          "bytes": 545,
+          "sha256": "73bfae662ae8c579740678011259559ce313f6914d3c920289fc3d0dd1a15454"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/pass.fragment-BWQB7EMC.mjs.map",
+          "bytes": 744,
+          "sha256": "a7b303bf12b2d5297c6c9c956bb9c8fec78684238e7921058445a20132ee1495"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/pass.fragment-FGRO7FTR.mjs",
+          "bytes": 687,
+          "sha256": "db5a662b6d57375c7245d352d8b0705b849d8d7605a679f4cf612f4a66a94baa"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/pass.fragment-FGRO7FTR.mjs.map",
+          "bytes": 886,
+          "sha256": "5db757b0401d58b2d689f7faffc48834cce45f7834fe1fe448660435e7db1cdf"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/passCube.fragment-DTE6F6AP.mjs",
+          "bytes": 1379,
+          "sha256": "c9bdd9f318349a7b882ad18bd72c22ab4e2efb0b422e81a99aadb63ce879d533"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/passCube.fragment-DTE6F6AP.mjs.map",
+          "bytes": 1609,
+          "sha256": "4585085438befe65016f546bdd8ef411c2acc21924dfd5d9567cd2af03d5a560"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/passCube.fragment-QYGUAABO.mjs",
+          "bytes": 1062,
+          "sha256": "dac66bb9c7c0ad4dd2971d22fd8a9736056a5a9fd9926becfd8d4d55311fc3cd"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/passCube.fragment-QYGUAABO.mjs.map",
+          "bytes": 1292,
+          "sha256": "76932cdedd19e81cbe15d00b2d22b15a633720acf9dbcd41325c915cb637d2df"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/postprocess.vertex-BGAYFU5S.mjs",
+          "bytes": 705,
+          "sha256": "489f7e9cb60ee9bc1d82afa9e4585e6c0c2c5a4df1d3c7697f7681cf99623f95"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/postprocess.vertex-BGAYFU5S.mjs.map",
+          "bytes": 897,
+          "sha256": "0099dcfbddb58465d48f5ca45cb8589a9d6549578e2b130724ef4f5278aea374"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/postprocess.vertex-GD335QVS.mjs",
+          "bytes": 837,
+          "sha256": "3cf8dfa70bb79c4ed52cdd7ef5821f189c51563e87dc41646807f7f956eb2407"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/postprocess.vertex-GD335QVS.mjs.map",
+          "bytes": 1033,
+          "sha256": "9281a3060bb69f8219b64118af0f001e673bdf16d9d714126022ee53759cac93"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdDecode.fragment-3XL2MEFS.mjs",
+          "bytes": 863,
+          "sha256": "cc152e0056f1e5dc0c853f65cf95db46862c27684681c1d131a3d1c05c4a5962"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdDecode.fragment-3XL2MEFS.mjs.map",
+          "bytes": 1223,
+          "sha256": "3e970d453ff97723f7031798f78fafb84ee1c73fc6a05ad69d29fc047897d097"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdDecode.fragment-S3BFJ7LE.mjs",
+          "bytes": 1022,
+          "sha256": "1e660ddf6e93be894756567e3bd73711eb75537838d5c13d847628a6882ac96c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdDecode.fragment-S3BFJ7LE.mjs.map",
+          "bytes": 1384,
+          "sha256": "1a7fbc77a6b61e2aec0e51c04b7ef3581d3658d20801d123ede2cf30bcff325c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdEncode.fragment-3J5KKCSF.mjs",
+          "bytes": 1013,
+          "sha256": "d95a03f855eea056d4507e820f911b982946eecea6d1d585516db1184c018f59"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdEncode.fragment-3J5KKCSF.mjs.map",
+          "bytes": 1375,
+          "sha256": "2ba6569f7ea68c8ad71712b9ea1901a1f797168081bc83eced15e93030e646ea"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdEncode.fragment-LPYSD2Y6.mjs",
+          "bytes": 855,
+          "sha256": "cf76dfe15294778e00262e75e3383c403dce118c49388aec156bad88f28e9aef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/rgbdEncode.fragment-LPYSD2Y6.mjs.map",
+          "bytes": 1215,
+          "sha256": "9cc6421322f8f2935ad9d179b484c45e5ba6cfc784184f7e2d8168465b103644"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/tgaTextureLoader-EC5ZDTMS.mjs",
+          "bytes": 9783,
+          "sha256": "ce97cd5e710062c9a4705067aa383813341283c21fdb00abc272cfe3e79eb9f9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/tgaTextureLoader-EC5ZDTMS.mjs.map",
+          "bytes": 21352,
+          "sha256": "7a1ff8d2b1e2740dd91bf7f63185a85c6a7681004c39a5355a83ecc99431828d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/thinEngine.pure-XB3LYSFU.mjs",
+          "bytes": 287,
+          "sha256": "9fb490b3f08bcd91bb420b9a73e1eef943f4cd708a39c47b46eba3713fce9a48"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/assets/thinEngine.pure-XB3LYSFU.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/babylon-failure.json",
+          "bytes": 179,
+          "sha256": "f5f1f2f8fa997a149fdaf5e458e38a6d7d23543633cb741f771f53210c2712b2"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/babylon-stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/babylon-stdout.txt",
+          "bytes": 602,
+          "sha256": "bf171518409e2be4e8d97fb67cf2d11985931ae41a62b7ba3b01c51da666c209"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/completion.json",
+          "bytes": 160,
+          "sha256": "d249b21ade7c2a9342355c58300eb8555ef6699cea6d17fc04b72c84cb3532be"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/fragments-failure.json",
+          "bytes": 204,
+          "sha256": "14cf97d0316667a6a04d3779a9c82569cdfe53384103f9e50e69a00e31c6aaa5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/fragments-stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/fragments-stdout.txt",
+          "bytes": 30,
+          "sha256": "7c7923f576c10782129a8b812c900297d1dd3ab8132dbf1c80dfbf7d4243d4dc"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/manual-cancellation.json",
+          "bytes": 372,
+          "sha256": "c0117fbfc001f4810891f83026c96d0a0bbf8847badd4eaf3af16ca2f89cd225"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-001/run.json",
+          "bytes": 7106,
+          "sha256": "a1c0d93b6e63950d589296194b290d5053b490297be024b48474e3edbc8459ba"
+        }
+      ]
+    },
+    {
+      "directory": "run-002",
+      "manifest": {
+        "version": 1,
+        "issue": 192,
+        "purpose": "initial-local",
+        "qualified": false,
+        "source": "f59687e976d7b165f7df10d0d77a2fc42879e67a",
+        "dirty": true,
+        "sourceFiles": [
+          {
+            "path": "benchmarks/viewer/west-riverside.test.ts",
+            "sha256": "7439f0be127ba788ff99f3ac651b5bed673946aad9ad1b093cd6660fcd5e1f60"
+          },
+          {
+            "path": "benchmarks/viewer/west-riverside.ts",
+            "sha256": "291cbc18cce3e695085564a47129bce12cd835e25e83d84b053957aed1c71e74"
+          },
+          {
+            "path": "benchmarks/viewer/README.md",
+            "sha256": "82598e1a059b05456b3cc0fe11958e6d3f4510dfdf33338828ea6d1623f8a0c0"
+          },
+          {
+            "path": "benchmarks/viewer/adapters/babylon.ts",
+            "sha256": "534345e9b6ba911efba9254fe2f9ddd3526e25ecb179d4ae596ccd5b09751a6b"
+          },
+          {
+            "path": "benchmarks/viewer/adapters/fragments.ts",
+            "sha256": "ac3e6c06530127abccddbc2d02251d2b13127457e388e23bf0a718a17bb3de8a"
+          },
+          {
+            "path": "benchmarks/viewer/babylon-lifecycle.test.ts",
+            "sha256": "af5e2f065999917bba91989f14bdf9082d98cb120adcc000f68ae29535d31319"
+          },
+          {
+            "path": "benchmarks/viewer/browser.ts",
+            "sha256": "93eebe023181e04843f4d91a0144ed0e0134d24b89d64d2fd4002fd7a220dab9"
+          },
+          {
+            "path": "benchmarks/viewer/contract.test.ts",
+            "sha256": "a8cfb2b11f0b83ff29e7297eeaa6a6b43d5132894e7642939f85a3db7ec94b3c"
+          },
+          {
+            "path": "benchmarks/viewer/contract.ts",
+            "sha256": "72dfd153354770feed09328c37d51f2613c8c010321dd1348d659ecccdd37c3f"
+          },
+          {
+            "path": "benchmarks/viewer/dataset-requirements.md",
+            "sha256": "79f993edeaccfe2ca3f19a2acb4cecafd1216f1eae4331c3b61b29f22a529362"
+          },
+          {
+            "path": "benchmarks/viewer/fixtures.ts",
+            "sha256": "e0a8111017015c612ed1ef7a6c451c2a3cac94857d80c2e76b7531140bba90b5"
+          },
+          {
+            "path": "benchmarks/viewer/metrics.ts",
+            "sha256": "7f27d7be4af01fe16bd0fb19da1fde39d1f9f2d876ed92580541102c091bce91"
+          },
+          {
+            "path": "benchmarks/viewer/profile.json",
+            "sha256": "32bd711b5d0a978519cc5d41210d1c27470aa60664bcae9de1d4b1ec389ac33e"
+          },
+          {
+            "path": "benchmarks/viewer/runner-candidate.ts",
+            "sha256": "12f3965caa0f56ce75af80f8019558491011ec767d8d59323983b6bb3cb18e34"
+          },
+          {
+            "path": "benchmarks/viewer/runner-limits.test.ts",
+            "sha256": "6ad5782a3700e508c52a171893d56c163dac2430989c88b0b0510a5119b19b27"
+          },
+          {
+            "path": "benchmarks/viewer/runner-limits.ts",
+            "sha256": "fd143ab37c8465ce7510bb8d0c0a248fc53f5bdfcd29d89baff6194af4abe7dd"
+          },
+          {
+            "path": "benchmarks/viewer/runner.ts",
+            "sha256": "2085cdcdd9d8c143558ebb6a857213bddec6ec04cb1d011a0a9bb8c6e55ae557"
+          },
+          {
+            "path": "package-lock.json",
+            "sha256": "a2afdfe83301de34d8a39177695ac5d6a36cda1b7c420bb36f846f78d5987452"
+          },
+          {
+            "path": "package.json",
+            "sha256": "12d4986b4a133ba7f43352ec423d5c39f2541aad43fc78786967c9955c708477"
+          },
+          {
+            "path": "scripts/validate-typescript.ts",
+            "sha256": "e741cdce33c9c8c0335d8a49d48ef3bbc5c7b6c03ef6b1cf81865d2bb6e109bb"
+          },
+          {
+            "path": "tsconfig.json",
+            "sha256": "0d37e2036572fa7a3d9132ce83a0825eb30bfcce6793039e0b9f1ec5371204e9"
+          }
+        ],
+        "dataset": {
+          "id": "west-riverside-seven-ifc4",
+          "sha256": "99ca530d28d01f8a906af7b2ebb3cfa020af62226968c937fa3fcd4dbdd96a30",
+          "elements": 97590,
+          "triangles": 5347554,
+          "admission": {
+            "qualified": false,
+            "reasons": [
+              "Public model identity, area and rights have not been admitted",
+              "Gross floor area is unknown",
+              "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification"
+            ]
+          },
+          "grossFloorAreaM2": null,
+          "provenance": {
+            "kind": "public-unverified",
+            "sourceHashes": [
+              "230afa4d72a59c9ce18cdd9a7bc7c5c3e409a46078de6e14b19741b4cf92cf09",
+              "7eed88eb21dafdc5a5950d9b1ee18df3fd00fcd376a14fd1bae80658e371975e",
+              "04a29bc312fe0b026634ad86390e8b72c1d1c1765255351f787503d3d8ce1c13",
+              "8e404c4e4c9085338383a89ae57a3a31ebe96ee406214392a1bf69a6775dcecc",
+              "bb53f0eb8f7295e91e0fb6ec6b79a30022a2e0e248714aab6bb1a8930c4793dd",
+              "f04e6fb62ad10cd78177d1d390758e912e3ad65881a184cca8ea1da07c59ae23",
+              "0e30c25a77ebcd75b2fc3a6cb87dc3891bd476f60a269e36eb5e0149bcc06ea7"
+            ],
+            "permissionEvidence": "sources.json; user authorized local-only evaluation",
+            "floorAreaEvidence": "Unknown; no building-level 200,000 m² area proof",
+            "coordinateReference": "web-ifc placed geometry, common origin in conversion.json",
+            "conversionEvidence": "conversion.json",
+            "inventoryEvidence": "conversion.json",
+            "limitations": [
+              "Publisher CC BY 3.0 notice retained locally; upstream authorization history unresolved. No source or derived geometry publication.",
+              "Gross floor area and real-building identity unverified. No 200k+ qualification.",
+              "Tessellated mesh parts keep source product IDs; part count is not BIM entity count.",
+              "Rooms/storey containment, full property sets, textures, transparency and engineering regeneration are not qualified.",
+              "web-ifc 0.0.77; 12 circle segments; affine orientation baked; coordinates rounded to 1 micrometre; alpha made opaque."
+            ]
+          },
+          "disciplines": {
+            "architecture": 31036,
+            "structure": 2925,
+            "mechanical": 23690,
+            "electrical": 5313,
+            "plumbing": 12541,
+            "fire-alarm": 1021,
+            "sprinklers": 21064
+          }
+        },
+        "profile": {
+          "id": "viewer-192-v1",
+          "status": "setup-only",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1
+          },
+          "materialProfile": "basic-double-sided-opaque-unqualified-fidelity",
+          "coordinateSystem": "right-handed-y-up-metres",
+          "coldOpens": 5,
+          "warmSessions": 10,
+          "interactionSamples": 100,
+          "proposalSizes": [
+            1,
+            10,
+            100,
+            1000
+          ],
+          "stressProposalSize": 10000,
+          "reviewCycles": 100,
+          "network": {
+            "bandwidthMbit": 50,
+            "rttMs": 30
+          },
+          "targets": {
+            "usefulFrameMs": 5000,
+            "overviewMs": 30000,
+            "p95FrameMs": 33.3,
+            "p95PickMs": 100,
+            "p95PropertiesMs": 200,
+            "p95ComparisonMs": 1000
+          },
+          "dataset": {
+            "status": "missing-real-project",
+            "minimumGrossFloorAreaM2": 200000,
+            "requiredDisciplines": [
+              "architecture",
+              "structure",
+              "mechanical",
+              "electrical",
+              "plumbing"
+            ]
+          }
+        },
+        "candidates": [
+          "babylon",
+          "fragments"
+        ],
+        "cycles": 1,
+        "timeout": 600000,
+        "node": "v24.18.0",
+        "os": {
+          "platform": "win32",
+          "release": "10.0.26300",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 7700X 8-Core Processor             ",
+          "totalMemoryBytes": 67756871680
+        },
+        "network": "loopback, unshaped",
+        "memory": "not-measured",
+        "status": "started"
+      },
+      "candidates": {
+        "babylon": {
+          "outcome": "completed",
+          "data": {
+            "result": {
+              "version": 1,
+              "candidate": "babylon",
+              "profile": "viewer-192-v1",
+              "purpose": "initial-local",
+              "status": "completed",
+              "qualified": false,
+              "reviewCycles": 1,
+              "samples": [
+                {
+                  "operation": "load",
+                  "durationMs": 4382.900000095367,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "validation-readback",
+                  "durationMs": 290.7000000476837,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "select",
+                  "durationMs": 389.40000009536743,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "properties",
+                  "durationMs": 0.10000014305114746,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "pick",
+                  "durationMs": 565.7999999523163,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "filter",
+                  "durationMs": 441.5,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "section",
+                  "durationMs": 2000.9000000953674,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "proposal",
+                  "durationMs": 17444.700000047684,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "comparison",
+                  "durationMs": 1071.3000001907349,
+                  "drawCalls": 97592,
+                  "triangles": 15335885
+                },
+                {
+                  "operation": "comparison-exit",
+                  "durationMs": 710.3000001907349,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "discard",
+                  "durationMs": 749.6000001430511,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "proposal-1",
+                  "durationMs": 17675,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "proposal-10",
+                  "durationMs": 17616.60000014305,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "proposal-100",
+                  "durationMs": 17455.700000047684,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                },
+                {
+                  "operation": "proposal-1000",
+                  "durationMs": 17421.400000095367,
+                  "drawCalls": 97590,
+                  "triangles": 15334885
+                }
+              ],
+              "checks": [
+                "load",
+                "validation-readback",
+                "renderer-readback",
+                "select",
+                "properties",
+                "pick",
+                "filter",
+                "section",
+                "proposal",
+                "accepted-immutable",
+                "comparison",
+                "accepted-immutable",
+                "comparison-exit",
+                "accepted-immutable",
+                "discard",
+                "accepted-immutable",
+                "stale-rejected",
+                "proposal-1",
+                "proposal-10",
+                "proposal-100",
+                "proposal-1000"
+              ],
+              "frameIntervalsMs": [
+                341.10000014305115,
+                348.19999980926514,
+                336.40000009536743,
+                344.7000000476837,
+                344.2999999523163,
+                338.7000000476837,
+                335,
+                348.39999985694885,
+                343,
+                344,
+                344.30000019073486,
+                335.69999980926514,
+                336.7000000476837,
+                339.7999999523163,
+                343.40000009536743,
+                336.7000000476837,
+                340.89999985694885,
+                342.5,
+                336.5,
+                338.90000009536743,
+                338.40000009536743,
+                343.5,
+                340,
+                342.59999990463257,
+                363.7999999523163,
+                343.90000009536743,
+                341.2999999523163,
+                390.5,
+                348.90000009536743,
+                336.59999990463257
+              ],
+              "error": null,
+              "limitations": [
+                "Setup replay, not a scored engine comparison. No full-project or hardware qualification.",
+                "No current production Babylon baseline, native IFC conversion, streaming, instancing tuning, or automated memory qualification yet.",
+                "Renderer completion is followed by requestAnimationFrame; GPU presentation timing requires external tracing.",
+                "CPU, process/GPU memory, transfer shaping, long tasks, conversion equivalence, and shader fidelity need scored-run instrumentation.",
+                "Neutral diff/readback scans the input. Timings include those checks and must not be called isolated renderer performance.",
+                "Publisher CC BY 3.0 notice retained locally; upstream authorization history unresolved. No source or derived geometry publication.",
+                "Gross floor area and real-building identity unverified. No 200k+ qualification.",
+                "Tessellated mesh parts keep source product IDs; part count is not BIM entity count.",
+                "Rooms/storey containment, full property sets, textures, transparency and engineering regeneration are not qualified.",
+                "web-ifc 0.0.77; 12 circle segments; affine orientation baked; coordinates rounded to 1 micrometre; alpha made opaque.",
+                "Public model identity, area and rights have not been admitted",
+                "Gross floor area is unknown",
+                "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification"
+              ],
+              "environment": {
+                "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+                "hardwareConcurrency": 16,
+                "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                "viewport": [
+                  1280,
+                  800
+                ],
+                "devicePixelRatio": 1
+              }
+            },
+            "errors": [],
+            "browserVersion": "155.0.8059.80",
+            "summaries": {
+              "load": {
+                "count": 1,
+                "median": 4382.900000095367,
+                "p95": null,
+                "maximum": 4382.900000095367
+              },
+              "validation-readback": {
+                "count": 1,
+                "median": 290.7000000476837,
+                "p95": null,
+                "maximum": 290.7000000476837
+              },
+              "select": {
+                "count": 1,
+                "median": 389.40000009536743,
+                "p95": null,
+                "maximum": 389.40000009536743
+              },
+              "properties": {
+                "count": 1,
+                "median": 0.10000014305114746,
+                "p95": null,
+                "maximum": 0.10000014305114746
+              },
+              "pick": {
+                "count": 1,
+                "median": 565.7999999523163,
+                "p95": null,
+                "maximum": 565.7999999523163
+              },
+              "filter": {
+                "count": 1,
+                "median": 441.5,
+                "p95": null,
+                "maximum": 441.5
+              },
+              "section": {
+                "count": 1,
+                "median": 2000.9000000953674,
+                "p95": null,
+                "maximum": 2000.9000000953674
+              },
+              "proposal": {
+                "count": 1,
+                "median": 17444.700000047684,
+                "p95": null,
+                "maximum": 17444.700000047684
+              },
+              "comparison": {
+                "count": 1,
+                "median": 1071.3000001907349,
+                "p95": null,
+                "maximum": 1071.3000001907349
+              },
+              "comparison-exit": {
+                "count": 1,
+                "median": 710.3000001907349,
+                "p95": null,
+                "maximum": 710.3000001907349
+              },
+              "discard": {
+                "count": 1,
+                "median": 749.6000001430511,
+                "p95": null,
+                "maximum": 749.6000001430511
+              },
+              "proposal-1": {
+                "count": 1,
+                "median": 17675,
+                "p95": null,
+                "maximum": 17675
+              },
+              "proposal-10": {
+                "count": 1,
+                "median": 17616.60000014305,
+                "p95": null,
+                "maximum": 17616.60000014305
+              },
+              "proposal-100": {
+                "count": 1,
+                "median": 17455.700000047684,
+                "p95": null,
+                "maximum": 17455.700000047684
+              },
+              "proposal-1000": {
+                "count": 1,
+                "median": 17421.400000095367,
+                "p95": null,
+                "maximum": 17421.400000095367
+              }
+            },
+            "frameSummary": {
+              "count": 30,
+              "median": 341.2999999523163,
+              "p95": null,
+              "maximum": 390.5
+            }
+          },
+          "failure": null,
+          "cancellation": null,
+          "console": "[viewer-benchmark] start load\n[viewer-benchmark] end load 4382.9 ms\n[viewer-benchmark] start validation-readback\n[viewer-benchmark] end validation-readback 290.7 ms\n[viewer-benchmark] start select\n[viewer-benchmark] end select 389.4 ms\n[viewer-benchmark] start properties\n[viewer-benchmark] end properties 0.1 ms\n[viewer-benchmark] start pick\n[viewer-benchmark] end pick 565.8 ms\n[viewer-benchmark] start filter\n[viewer-benchmark] end filter 441.5 ms\n[viewer-benchmark] start section\n[viewer-benchmark] end section 2000.9 ms\n[viewer-benchmark] start proposal\n[viewer-benchmark] end proposal 17444.7 ms\n[viewer-benchmark] start comparison\n[viewer-benchmark] end comparison 1071.3 ms\n[viewer-benchmark] start comparison-exit\n[viewer-benchmark] end comparison-exit 710.3 ms\n[viewer-benchmark] start discard\n[viewer-benchmark] end discard 749.6 ms\n[viewer-benchmark] start proposal-1\n[viewer-benchmark] end proposal-1 17675.0 ms\n[viewer-benchmark] start proposal-10\n[viewer-benchmark] end proposal-10 17616.6 ms\n[viewer-benchmark] start proposal-100\n[viewer-benchmark] end proposal-100 17455.7 ms\n[viewer-benchmark] start proposal-1000\n[viewer-benchmark] end proposal-1000 17421.4 ms\n",
+          "reviewSummary": {
+            "comparison": true,
+            "renderedRecords": 97592,
+            "ghostRecords": 2,
+            "upsertedRecords": 2,
+            "removedRecords": 1,
+            "acceptedRevision": "9ba471a3e38b353a81a1dc9ecb4aa56d2ce0a7fa",
+            "proposedRevision": "9ba471a3e38b353a81a1dc9ecb4aa56d2ce0a7fa-proposal",
+            "overviewImagesEqual": true
+          }
+        },
+        "fragments": {
+          "outcome": "failed",
+          "data": null,
+          "failure": {
+            "status": "failed",
+            "qualified": false,
+            "phase": "replay",
+            "error": "Candidate lifecycle timeout",
+            "timeoutMs": 600000,
+            "elapsedMs": 600932,
+            "cleanupErrors": []
+          },
+          "cancellation": null,
+          "console": "[viewer-benchmark] start load\n"
+        }
+      },
+      "completion": {
+        "status": "failed",
+        "qualified": false,
+        "purpose": "initial-local",
+        "realisticDataset": "not-qualified",
+        "finishedAt": "2026-10-27T20:55:51.756Z"
+      },
+      "privateArtifacts": [
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/babylon-U2TSGYLY.mjs",
+          "bytes": 1300056,
+          "sha256": "7535806f9e1d04b358d11298d5bda9e727958084f67a50a208dcea813ed85f30"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/babylon-U2TSGYLY.mjs.map",
+          "bytes": 2308095,
+          "sha256": "837056032255032be26176fc168f50e99245507d0a61c9953db44b3c175ae738"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/basisTextureLoader-CZWGLHQU.mjs",
+          "bytes": 19211,
+          "sha256": "f3c148e11b1bab6f2b42a065e54bbe59d69d744483a268dac8cc89d8e2d15eb1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/basisTextureLoader-CZWGLHQU.mjs.map",
+          "bytes": 43501,
+          "sha256": "589f4cd02b12d0759c57d0b20fcc8a79d65c22eba53424682d50e3f17229ab9e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/browser.mjs",
+          "bytes": 382705,
+          "sha256": "083cd0ac5ca15f1eb02ca2d757afd028b01ec089bdf2dd4de7c72e6851d8e2d4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/browser.mjs.map",
+          "bytes": 993476,
+          "sha256": "f72f35c404b29bd1092a512de013dc44d23e5c743a637c48f0c3e6f7bb8adfd9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-3WLJDAWD.mjs",
+          "bytes": 16702,
+          "sha256": "95de06d63c24e0345ee7b47aea28c066f2bff51ccf8aecc494695f34e9f910db"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-3WLJDAWD.mjs.map",
+          "bytes": 44786,
+          "sha256": "be7c41fde056288c9d8c8239d660973bfc68657d58ec9d7ecc6b2e0f2b8f791e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-4ASEFE4V.mjs",
+          "bytes": 6721,
+          "sha256": "c147333167bd76996b3883977c0c64225f7229f7149ef6125ae66a7b1e9c52d8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-4ASEFE4V.mjs.map",
+          "bytes": 7123,
+          "sha256": "4a31dcc3a369161143f0e0bbf1eeb27b948d9088d41e0e1e9efd8944742be9cb"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-4IGVKMZV.mjs",
+          "bytes": 8407,
+          "sha256": "96f49ce0c444be187396a04bccc750ea34c365b0fcf50fed4c00c9596e9c5928"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-4IGVKMZV.mjs.map",
+          "bytes": 41459,
+          "sha256": "d69d8913445b32c4119f830c41bb6c6a9c0bab0331fd53eb69977d8ddaf4e070"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-66HXD7RA.mjs",
+          "bytes": 1373,
+          "sha256": "f5656eed012f5021538d3c7be6b3071e58138a2d7bf0bd6f0bbb1ebcdf26d03f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-66HXD7RA.mjs.map",
+          "bytes": 3014,
+          "sha256": "2c2c88d8022de818328e88a5fc68afba61976872cc6b05cc740724ac8692d27a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-AIH64IBY.mjs",
+          "bytes": 46588,
+          "sha256": "07710422d5e960b23dac7bd5a4efc441dc9697f64c95c8ce8caae7cbacbfbac8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-AIH64IBY.mjs.map",
+          "bytes": 83684,
+          "sha256": "65a2f4df5c79dfa1cd0cea808bf8dbf2833d592193a140d286a4858493dcbe45"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-CE2YF2DP.mjs",
+          "bytes": 460149,
+          "sha256": "ea0dd1bed89d164a5c9471dab46334df419ac178d05d4445a76aa6008e050e6b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-CE2YF2DP.mjs.map",
+          "bytes": 889420,
+          "sha256": "d6e5157561f0f114ddd612ecd4bc519eb540dde00d1245a6235be244afba8d96"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-D3LEBB5T.mjs",
+          "bytes": 19934,
+          "sha256": "501016ea50c30a0552463a555559e154fa4b527665e87aa7ee4884b72591665b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-D3LEBB5T.mjs.map",
+          "bytes": 43363,
+          "sha256": "60f921ada23fb54825052b534406736270e975adf5c747c89f54e1f34af6e508"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-DOC37M34.mjs",
+          "bytes": 47431,
+          "sha256": "b20552124882315d848dfd49d8cd2549e58bfa98fa29149681957b31131a11ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-DOC37M34.mjs.map",
+          "bytes": 114577,
+          "sha256": "38f38ad53aa5c25eb3a379496d491f1132e6bb9d044be810d4432001e1098bb1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ET5C67MH.mjs",
+          "bytes": 187,
+          "sha256": "9e3da45a867443c5942688ca0faec36d9bf3fd5f7d1b17db0954fc88b9253037"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ET5C67MH.mjs.map",
+          "bytes": 1233,
+          "sha256": "fd360658e62900f60d73c9ac335d10e52822e269c03bf48e2d80d9ca737be668"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-H2T3BAN5.mjs",
+          "bytes": 7035,
+          "sha256": "814c361357859a81e16164b98d48913572ece1da1a16bde48dc5f12d017b5933"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-H2T3BAN5.mjs.map",
+          "bytes": 7505,
+          "sha256": "67ed035a061727e3ede8f67c99bc6cb9b1d6a6d794f9962e03a59ed71336e24c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-H5NRXJHK.mjs",
+          "bytes": 52023,
+          "sha256": "a760131437180b6675ac3abea36b53579fa48e20be282469df46c936d524b2ad"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-H5NRXJHK.mjs.map",
+          "bytes": 93629,
+          "sha256": "33417975d204556105e7e5b5b158f5aa0820bf1b059475da7365fe8b5b2d3c45"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-J5LGTIGS.mjs",
+          "bytes": 235,
+          "sha256": "a2fa550627e500536a9458cb7c60e7dcc4410a9f48015191f18c410ec7fac8a9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-J5LGTIGS.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-KLTBVVXT.mjs",
+          "bytes": 6900,
+          "sha256": "50f621c9209877b7c285b17e5f6e7aae9e0e9a838dfb4ccd73f022800df614e4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-KLTBVVXT.mjs.map",
+          "bytes": 17659,
+          "sha256": "7be6f796cb89292ae1e00362ca1950a96db6255b67cc7e35b0923d3ceb607fde"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-NA4AK5JV.mjs",
+          "bytes": 16614,
+          "sha256": "defe103d885935c908432c924894bdcc46fad1c75892c0218053c3fc68b6e790"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-NA4AK5JV.mjs.map",
+          "bytes": 34886,
+          "sha256": "8c5b56cf324bc83f5b6c36252038c5335dc9994875780a33f2bebaec8df3e99c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ODZYG5TH.mjs",
+          "bytes": 17475,
+          "sha256": "b291ed01770084509df8f43579d584aeedca70a56e47eae609350c5ae0755bad"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ODZYG5TH.mjs.map",
+          "bytes": 40314,
+          "sha256": "35ac6ae3f674d92b5b2864fb5a16c71d5273c3a25498b745b5de2af1494865e2"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-PRLMZZW3.mjs",
+          "bytes": 3678,
+          "sha256": "7747fca2c23f18c46997cc2466da9480d3baaa97a2b6dc13540b0b41739d98db"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-PRLMZZW3.mjs.map",
+          "bytes": 8379,
+          "sha256": "372d4ad1c4cf84cae1af85ae5386cb3f8123df8d1195ac6feb76e88417b72697"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-PSSJ4RLO.mjs",
+          "bytes": 23707,
+          "sha256": "064fcdf939aae7638d81075749660a3d369bcddcc9a7f678559834952b3bc4b1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-PSSJ4RLO.mjs.map",
+          "bytes": 54745,
+          "sha256": "7aa0c2c5f69296da2110f5b95cfb14a14f2bdda403b58be5280a68aa245c9743"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-QFCZGCZ7.mjs",
+          "bytes": 297033,
+          "sha256": "20a9fbb7740882abe99c35202c050f1cba1cadf32ac28c195f7a8669e79229c7"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-QFCZGCZ7.mjs.map",
+          "bytes": 629022,
+          "sha256": "a0b2db7898ef0dcae215d2741e49d053c8fe8aa4f7c9ee0ffc37e8685b23fe13"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-VS62YXHU.mjs",
+          "bytes": 15912,
+          "sha256": "8ae5e7307abb3129bc38f5a62f5553f7ea4b398a02a9e41b46efd41133fd02ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-VS62YXHU.mjs.map",
+          "bytes": 34841,
+          "sha256": "d93c0f5e7d896199706d871a7a7e957b77af6ef9c209be4095c5f37927c6f1ca"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-WJW7Z6BG.mjs",
+          "bytes": 411604,
+          "sha256": "542c9870313b117ad0a8acdef141b70c0c2c77b25f2e8a90b61f75c661092e8a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-WJW7Z6BG.mjs.map",
+          "bytes": 709034,
+          "sha256": "02f7d46de505699ab9c21d4e0195a8697977d3f1077ac78ebb01a36be649a66e"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-XS3XUYBV.mjs",
+          "bytes": 3659,
+          "sha256": "3b58e0a1c796681946e60cbb9c9fdf15f4e0865f5b961522938f1a9c1e6258c0"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-XS3XUYBV.mjs.map",
+          "bytes": 5024,
+          "sha256": "4fd2d07c93c91f0ba846a45fd6ae4c95907210588b7ea9cd68f28b86f7fbf210"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-XSNHNRTC.mjs",
+          "bytes": 1261,
+          "sha256": "e4e2e9bef37e13400619e7fde97c682539353c5fe353829da175a6be616639e1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-XSNHNRTC.mjs.map",
+          "bytes": 14037,
+          "sha256": "cd7a5483d31cd2fac888e3b2bcf431475a33031171c95d311b80dd457c258174"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ZME33DCY.mjs",
+          "bytes": 84077,
+          "sha256": "5d1a7a5aa7fe6926d4bc5008221e7b525de7dd44cf179e6edcc5ac4f0198237c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ZME33DCY.mjs.map",
+          "bytes": 174939,
+          "sha256": "f0320c810c1bb33e22c2c388702b951435bdd06aa1a395798c317fc3eb5c5680"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ZZVHRYWG.mjs",
+          "bytes": 3214,
+          "sha256": "459ae400ae11c131e1c80f1261422cfbdd47386fe526bb49bcad5f09194d2cda"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/chunk-ZZVHRYWG.mjs.map",
+          "bytes": 4600,
+          "sha256": "4ae184a04a916739564b9a9490e54631a56a43909b601d674c3da27867fc3da8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/dds.pure-DUMSEDPM.mjs",
+          "bytes": 617,
+          "sha256": "2d372b6efdb4e7e2a23078855a10578422b69a35195cd8174f2cfda6a8e85938"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/dds.pure-DUMSEDPM.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/ddsTextureLoader-N36HP3PT.mjs",
+          "bytes": 3694,
+          "sha256": "c7b0c6987ad2dfc3efa028e422c2710bf17ae00bf0b9c0b797e3a1179dab0cc3"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/ddsTextureLoader-N36HP3PT.mjs.map",
+          "bytes": 6323,
+          "sha256": "8d84b41b76baf95548c3b26d8bc26a561a159c15bf55aafe28a3f535ed9f1fc3"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.fragment-KKPPT44T.mjs",
+          "bytes": 124449,
+          "sha256": "cad09e37a2b5b0e909da919b0e030802e4067867ca28107b5d000915a64cdb57"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.fragment-KKPPT44T.mjs.map",
+          "bytes": 139687,
+          "sha256": "106226d06bad10ba086b9b2bdf612c822c78c8474051bae3e43ee32ac669a24a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.fragment-OLQ6RALU.mjs",
+          "bytes": 119259,
+          "sha256": "cc727e661a43b481cebb37e4fffc52d0e403ab5f2ff49ed18f55ee85176490cc"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.fragment-OLQ6RALU.mjs.map",
+          "bytes": 135362,
+          "sha256": "f0ce7b4b8cc9e56b620fb2e35ccdf5880927816b0d6a882f55b7e5f694dd44c4"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.vertex-G5GSLZBS.mjs",
+          "bytes": 36602,
+          "sha256": "bd4496cfdc04f4a228d322c98979add1513bec20a9c7d1edf5a32d964523b481"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.vertex-G5GSLZBS.mjs.map",
+          "bytes": 49768,
+          "sha256": "a639b560901815a4885b26e327067e57f8f4b748d79033cd0d6032a9a92c4251"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.vertex-NLVZATHO.mjs",
+          "bytes": 56552,
+          "sha256": "82abbc7090016eed93446c01136b505f34537b248d9af051ad8faecf5fcc0c10"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/default.vertex-NLVZATHO.mjs.map",
+          "bytes": 70032,
+          "sha256": "6624af4e29dd3f4fa719fb31a8c76efb7a5ccebd50ac491cee0dcf5dbd42e39a"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/dumpTools.pure-ELVC5FDE.mjs",
+          "bytes": 701,
+          "sha256": "d02645e0293357e47b454402a4bfa6e4632f98f73ba4f02df8cc7d4cfc85ad96"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/dumpTools.pure-ELVC5FDE.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/envTextureLoader-UHWCWFLY.mjs",
+          "bytes": 17189,
+          "sha256": "6034186c5b2670b8e6856f2f59c4b11d3f44e15b470423bf2085e3889af4edae"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/envTextureLoader-UHWCWFLY.mjs.map",
+          "bytes": 59608,
+          "sha256": "3516a3738a0ab2cefb70bd3bd7eab3bcec54f1ce7961b2fe7acb5af05077be25"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/exrTextureLoader-QZ6ECQJ4.mjs",
+          "bytes": 34554,
+          "sha256": "f671cf0a900b70ce7a4e18e9def0ccc3a094c0c4919c4e028696088f870fd8a5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/exrTextureLoader-QZ6ECQJ4.mjs.map",
+          "bytes": 107512,
+          "sha256": "2644d751e2e496a43fc72c70888a53c362ecf019fbf96eba9da241d1f54c388f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/fragments-QV4OULNM.mjs",
+          "bytes": 2378437,
+          "sha256": "6e33cb13385b9fbb98d3504dc3e10cccd30cd60731acc9b2daa8fbf832c497da"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/fragments-QV4OULNM.mjs.map",
+          "bytes": 4603777,
+          "sha256": "d3cec4ac3e949dff048469046e5eb87d400b8d9d9f842b4bd18652a636e53379"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/fragments-worker.mjs",
+          "bytes": 1306151,
+          "sha256": "0dd8c1658eecf1df05ede192dbbc16d0a83b348f44b05b1a5ddfed877e90a4d9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/hdrTextureLoader-XLFD5VGS.mjs",
+          "bytes": 6728,
+          "sha256": "47929f7b7385226095ea94bd8812d6884fe4f81c393affeb6f94bf838aa73f99"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/hdrTextureLoader-XLFD5VGS.mjs.map",
+          "bytes": 17629,
+          "sha256": "603727c05efb22334b7b44ae74b7a3ff4000396c39515da3953d988a47b3019d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/iesTextureLoader-WIBCKPY6.mjs",
+          "bytes": 5708,
+          "sha256": "0c14f6c81f2fc39e4a591e6d3790c8fa2dce80c74ec10dd9295c6e02d256f8f1"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/iesTextureLoader-WIBCKPY6.mjs.map",
+          "bytes": 13270,
+          "sha256": "c476b12b630be01e6143dcda92dc5a4fc54312d2a3301cc3a5853d4566efc054"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/ktxTextureLoader-U4CPETMT.mjs",
+          "bytes": 35039,
+          "sha256": "e8b408251cece819ce260caa5a799c5a848e556843dad7cf289434d8e8aa42ee"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/ktxTextureLoader-U4CPETMT.mjs.map",
+          "bytes": 82377,
+          "sha256": "d8cb4f96a2f96c55228f64e81ba4cacf47e671233ba16d016bcb1fbe28a7b8c5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod.fragment-76YO26ZL.mjs",
+          "bytes": 804,
+          "sha256": "a0cbb2b43a30cbb6b1d82bd23d4d658cee8f69954ad153fee1c068120ef500ac"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod.fragment-76YO26ZL.mjs.map",
+          "bytes": 1003,
+          "sha256": "50c14c366bf352d3392024b7ba325f2cc0c5482dd4d69c93df02abdb2bce45f0"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod.fragment-MOJ4UTNF.mjs",
+          "bytes": 902,
+          "sha256": "276182bea24bf14e09196f0cf7d63e961318abf9792d5bb98f4a165757a63c8c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod.fragment-MOJ4UTNF.mjs.map",
+          "bytes": 1101,
+          "sha256": "d41c077d05714369d42f8d944a2386e7799827e00e4201e98dace6101a55390f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod3D.fragment-QLZQOM7G.mjs",
+          "bytes": 855,
+          "sha256": "7127e09dac0facf4ca1cfded8f035bdea8e5e5667cc1d9b42ce161545afdf05f"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod3D.fragment-QLZQOM7G.mjs.map",
+          "bytes": 1050,
+          "sha256": "31c183c71068de11fbfe3510155a921d9c5e953e995691a7ee65c474dd6a1b72"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod3D.fragment-U6QMELCF.mjs",
+          "bytes": 1005,
+          "sha256": "cea431dea8f7a0cacc7ce0963898a12eeb15ec74f0017a2f0bd570fe6c5c7e84"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lod3D.fragment-U6QMELCF.mjs.map",
+          "bytes": 1200,
+          "sha256": "880381e503ef51f51d597046d56cb9c4d295676edc029a3b09e120aa8c2903d8"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lodCube.fragment-765HNHTN.mjs",
+          "bytes": 1660,
+          "sha256": "b05b17c46d32928b81f7ff787c82c1866c7fc271f9bd81592d46be8048935947"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lodCube.fragment-765HNHTN.mjs.map",
+          "bytes": 1890,
+          "sha256": "554f53a29a155a7afb031a8a9482a7a861aebcbd878bcf7f5288f8bd80fd1a15"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lodCube.fragment-UTOTJ25U.mjs",
+          "bytes": 1229,
+          "sha256": "4b042f6039e4f74e7aed659385209ab8d200301dd131ea168608de14619b67c5"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/lodCube.fragment-UTOTJ25U.mjs.map",
+          "bytes": 1459,
+          "sha256": "46ece85f6abb4f50f626b5f452c4bedcc9c74b5539df23b458cb8a87cecaca1b"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/mesh.vertexData.functions-YL6QXU6L.mjs",
+          "bytes": 3099,
+          "sha256": "f2f9ca86f8eb444387b785d5214c1a1b98a82f620a4c8a49962264c4f1ee46ef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/mesh.vertexData.functions-YL6QXU6L.mjs.map",
+          "bytes": 6751,
+          "sha256": "52f1ab895aea89fdfffd52fdd8cd82672ca7f921e6ab5a1e70fc08b6800285c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/pass.fragment-BWQB7EMC.mjs",
+          "bytes": 545,
+          "sha256": "73bfae662ae8c579740678011259559ce313f6914d3c920289fc3d0dd1a15454"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/pass.fragment-BWQB7EMC.mjs.map",
+          "bytes": 744,
+          "sha256": "a7b303bf12b2d5297c6c9c956bb9c8fec78684238e7921058445a20132ee1495"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/pass.fragment-FGRO7FTR.mjs",
+          "bytes": 687,
+          "sha256": "db5a662b6d57375c7245d352d8b0705b849d8d7605a679f4cf612f4a66a94baa"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/pass.fragment-FGRO7FTR.mjs.map",
+          "bytes": 886,
+          "sha256": "5db757b0401d58b2d689f7faffc48834cce45f7834fe1fe448660435e7db1cdf"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/passCube.fragment-DTE6F6AP.mjs",
+          "bytes": 1379,
+          "sha256": "c9bdd9f318349a7b882ad18bd72c22ab4e2efb0b422e81a99aadb63ce879d533"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/passCube.fragment-DTE6F6AP.mjs.map",
+          "bytes": 1609,
+          "sha256": "4585085438befe65016f546bdd8ef411c2acc21924dfd5d9567cd2af03d5a560"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/passCube.fragment-QYGUAABO.mjs",
+          "bytes": 1062,
+          "sha256": "dac66bb9c7c0ad4dd2971d22fd8a9736056a5a9fd9926becfd8d4d55311fc3cd"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/passCube.fragment-QYGUAABO.mjs.map",
+          "bytes": 1292,
+          "sha256": "76932cdedd19e81cbe15d00b2d22b15a633720acf9dbcd41325c915cb637d2df"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/postprocess.vertex-BGAYFU5S.mjs",
+          "bytes": 705,
+          "sha256": "489f7e9cb60ee9bc1d82afa9e4585e6c0c2c5a4df1d3c7697f7681cf99623f95"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/postprocess.vertex-BGAYFU5S.mjs.map",
+          "bytes": 897,
+          "sha256": "0099dcfbddb58465d48f5ca45cb8589a9d6549578e2b130724ef4f5278aea374"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/postprocess.vertex-GD335QVS.mjs",
+          "bytes": 837,
+          "sha256": "3cf8dfa70bb79c4ed52cdd7ef5821f189c51563e87dc41646807f7f956eb2407"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/postprocess.vertex-GD335QVS.mjs.map",
+          "bytes": 1033,
+          "sha256": "9281a3060bb69f8219b64118af0f001e673bdf16d9d714126022ee53759cac93"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdDecode.fragment-3XL2MEFS.mjs",
+          "bytes": 863,
+          "sha256": "cc152e0056f1e5dc0c853f65cf95db46862c27684681c1d131a3d1c05c4a5962"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdDecode.fragment-3XL2MEFS.mjs.map",
+          "bytes": 1223,
+          "sha256": "3e970d453ff97723f7031798f78fafb84ee1c73fc6a05ad69d29fc047897d097"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdDecode.fragment-S3BFJ7LE.mjs",
+          "bytes": 1022,
+          "sha256": "1e660ddf6e93be894756567e3bd73711eb75537838d5c13d847628a6882ac96c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdDecode.fragment-S3BFJ7LE.mjs.map",
+          "bytes": 1384,
+          "sha256": "1a7fbc77a6b61e2aec0e51c04b7ef3581d3658d20801d123ede2cf30bcff325c"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdEncode.fragment-3J5KKCSF.mjs",
+          "bytes": 1013,
+          "sha256": "d95a03f855eea056d4507e820f911b982946eecea6d1d585516db1184c018f59"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdEncode.fragment-3J5KKCSF.mjs.map",
+          "bytes": 1375,
+          "sha256": "2ba6569f7ea68c8ad71712b9ea1901a1f797168081bc83eced15e93030e646ea"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdEncode.fragment-LPYSD2Y6.mjs",
+          "bytes": 855,
+          "sha256": "cf76dfe15294778e00262e75e3383c403dce118c49388aec156bad88f28e9aef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/rgbdEncode.fragment-LPYSD2Y6.mjs.map",
+          "bytes": 1215,
+          "sha256": "9cc6421322f8f2935ad9d179b484c45e5ba6cfc784184f7e2d8168465b103644"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/tgaTextureLoader-EC5ZDTMS.mjs",
+          "bytes": 9783,
+          "sha256": "ce97cd5e710062c9a4705067aa383813341283c21fdb00abc272cfe3e79eb9f9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/tgaTextureLoader-EC5ZDTMS.mjs.map",
+          "bytes": 21352,
+          "sha256": "7a1ff8d2b1e2740dd91bf7f63185a85c6a7681004c39a5355a83ecc99431828d"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/thinEngine.pure-XB3LYSFU.mjs",
+          "bytes": 287,
+          "sha256": "9fb490b3f08bcd91bb420b9a73e1eef943f4cd708a39c47b46eba3713fce9a48"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/assets/thinEngine.pure-XB3LYSFU.mjs.map",
+          "bytes": 93,
+          "sha256": "ed562b0bba7ee7214e56ac7f728054b3496bec4597c94a4eb7b4179e6f5cb1c9"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/babylon-baseline.png",
+          "bytes": 71290,
+          "sha256": "27f7f149907bc2afa9a45d8b8ce48b81fd105cab427da3b445a65298bf11e225"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/babylon-comparison.png",
+          "bytes": 71290,
+          "sha256": "27f7f149907bc2afa9a45d8b8ce48b81fd105cab427da3b445a65298bf11e225"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/babylon-review.json",
+          "bytes": 37707230,
+          "sha256": "cb9f816eaed85ab118ae3a8dafa272e44c94786d5fa249dfdd973ad4c6ea0188"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/babylon-stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/babylon-stdout.txt",
+          "bytes": 1180,
+          "sha256": "0deafffb85db66ae8dc7a68cbde6872723790315cbfe1e457f863e4a9b8a03da"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/babylon-trace.zip",
+          "bytes": 8781513,
+          "sha256": "c31b9bc87a2201c4424163f0ba5ac487a8cf2c3b0ed0ad8848dd43211aa29a51"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/babylon.json",
+          "bytes": 7678,
+          "sha256": "464eb955605a62857fda35b182b6dfbee53512976423c6831fe702ff5df05bef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/completion.json",
+          "bytes": 160,
+          "sha256": "d6a81ee2bcdf59f99cf5695fedcb255980eada401fae087f392d0c14bad406ef"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/fragments-failure.json",
+          "bytes": 179,
+          "sha256": "bffbf660b9dd31a07aeaed230b0ef68dae3bd3964b2034c3ee9a33b1cb8d7647"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/fragments-stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/fragments-stdout.txt",
+          "bytes": 30,
+          "sha256": "7c7923f576c10782129a8b812c900297d1dd3ab8132dbf1c80dfbf7d4243d4dc"
+        },
+        {
+          "path": "artifacts/private/west-riverside/run-002/run.json",
+          "bytes": 6957,
+          "sha256": "3af170a85bd18ea6eb05c07b73f0a9021e4fe41840a20c329ff6d1486bafc5f3"
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "root": "\r\n> bim-forge@0.1.0 validate\r\n> npm run lint && npm run typecheck && node scripts/validate-policy.ts\r\n\r\n\r\n> bim-forge@0.1.0 lint\r\n> node scripts/validate-typescript.ts\r\n\r\nStrict TypeScript valid. 242 source file(s) checked.\r\n\r\n> bim-forge@0.1.0 typecheck\r\n> tsc --noEmit\r\n\r\nPolicy valid. 0 changed file(s) checked.\r\n",
+    "benchmark": "\r\n> bim-forge@0.1.0 test:viewer-benchmark\r\n> node --test benchmarks/viewer/contract.test.ts benchmarks/viewer/west-riverside.test.ts benchmarks/viewer/babylon-lifecycle.test.ts benchmarks/viewer/runner-limits.test.ts\r\n\r\nBJS - [21:42:03]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:42:03]: Babylon.js v9.32.0 - Null engine\r\n✔ unique triangle retains buffers and bounds through repeated moves (19.1094ms)\r\n✔ shared triangle survives replacing every instance and a zero-instance interval (4.4076ms)\r\n✔ fixture is deterministic and cannot qualify a realistic hospital by changing its area (10.8786ms)\r\n✔ input boundary rejects missing geometry, duplicate identities, invalid indices, and non-finite coordinates (14.9253ms)\r\n✔ proposal adds, moves, and removes exactly its declared elements without mutating the baseline (3.2472ms)\r\n✔ stale, duplicate, and invalid proposals leave accepted input intact (2.4021ms)\r\n✔ comparison retains removed and previous geometry and discard restores the exact base (11.2092ms)\r\n✔ renderer oracle catches lost IDs, duplicate IDs, and wrong movement (3.0045ms)\r\n✔ percentiles require enough samples and never combine missing values into zeros (0.3206ms)\r\n✔ result validator rejects a false completion or a qualification claim (0.9344ms)\r\n✔ completed results require every claimed scenario check and operation (7.9309ms)\r\n✔ completed results reject truncated, overcounted and relabelled review cycles (3.5086ms)\r\n✔ one watchdog bounds hangs in every candidate phase including browser close (14951.2765ms)\r\n✔ watchdog kills detached descendants even before launch reports a browser PID (1962.4205ms)\r\n✔ phase transitions do not restart the candidate deadline (1982.3949ms)\r\n✔ premature exit and launch errors retain failure evidence; successful close does not (1590.4018ms)\r\n﹣ real browser evaluations hanging after replay are terminated with failed evidence (0.1327ms) # SKIP\r\n✔ all seven disciplines have distinct IFC4 sources, without duplicate schema exports (0.8825ms)\r\n✔ IFC matrix baking retains rotation and metre scale while translation stays on the element (0.2389ms)\r\n✔ unknown floor area and publicly mirrored provenance cannot become qualified (7.4482ms)\r\n✔ owned input may transfer after validation; default parsing still isolates the caller (5.0504ms)\r\n✔ review shares tessellation but isolates element metadata; exact audit detects any accepted mutation (3.54ms)\r\nℹ tests 22\r\nℹ suites 0\r\nℹ pass 21\r\nℹ fail 0\r\nℹ cancelled 0\r\nℹ skipped 1\r\nℹ todo 0\r\nℹ duration_ms 20613.6754\r\n",
+    "changedPaths": "Policy valid. 12 changed file(s) checked.\r\n",
+    "sceneProposal": {
+      "exitCode": 1,
+      "pass": 36,
+      "fail": 2,
+      "output": "BJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ real Babylon scene preserves every object, support elevation, camera and selection across modes without changing the model (119.215ms)\r\n✔ walls have actual door and window gaps, cutaway affects visibility only, and replacement disposes old resources (32.9652ms)\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ ray destinations are generic, millimetre-bound floor/wall references and do not infer move/group operations (1.023ms)\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ actual Babylon rays select visible desk geometry and mark floor points through cutaway walls (18.6149ms)\r\n✔ 3D delta retains before ghosts for moved and removed objects, solid additions and a stable camera without changing either revision (37.4958ms)\r\n✔ 3D delta includes opening placement and host geometry when only hosting relationships change (4.5031ms)\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ derived support elevation and door-size gaps appear in the 3D delta even without changed relationship records (2.6407ms)\r\n✔ a residential floor renders shared walls once, frames a room without editing geometry and retains whole-floor deltas (122.3432ms)\r\n✔ legacy floor references stay visible on an isolated residential level without changing their wire shape or model (39.9639ms)\r\n✔ stacked geometry applies each floor elevation once, including supported furniture, openings and equipment (47.1755ms)\r\n✔ incoming stair footprints are real slab voids and ray picking preserves the selected floor (28.8514ms)\r\n✔ pitched roof solids and gable wall vertices meet the shared roof underside at eaves and ridge (35.8718ms)\r\n✔ level isolation and roof visibility compose with cutaway, framing and annotation visibility without rebuilding geometry (35.3916ms)\r\n✔ building floor annotations require explicit levels and wall annotations inherit the host elevation (2.1712ms)\r\n✔ level elevation and incoming stair changes produce derived object and slab-void deltas with before ghosts (47.2884ms)\r\n✔ roof changes derive clipped-wall deltas and flat roofs have physical thickness (29.9902ms)\r\n✔ before slab ghosts stay inspectable but cannot intercept a current-floor reference ray (28.7763ms)\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ generated families render exact instance heights and unrelated geometry in both modes without changing definitions (28.1374ms)\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ resizing one generated instance retains its family, ghosts and isolated delta without changing another size of that family (21.3098ms)\r\n✔ room-owned generated instances follow their level exactly once, including anchors, ghosts and visibility (83.0132ms)\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ explicit family reassignment preserves the original definition and reviews the new definition without rendering it (13.8251ms)\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:01]: Babylon.js v9.32.0 - Null engine\r\n✔ real picked IDs drive distinct purple hover and blue selection without mutating shared materials, geometry or model bytes (22.3597ms)\r\n✔ hover clears on model, level and view changes while the selected stable ID survives (46.5694ms)\r\n✔ picking excludes cutaway, hidden, transparent, unpickable, out-of-level and roof-hidden meshes (21.1215ms)\r\n✔ comparison ghost picking and highlights retain wireframes and removed evidence, then discard disposed mappings on replacement (28.9313ms)\r\n✔ single primary pointer click allows small jitter, while out-and-back and release-only drags never select (0.2984ms)\r\n✔ multi-pointer gestures cannot select regardless of release order or primary status (0.1133ms)\r\n✔ cancellation, leaving, capture loss, view changes and non-primary buttons invalidate pending selection (0.1198ms)\r\n✔ desk and bed requests from the same revision can both be accepted without revising either (854.3654ms)\r\n✔ a request finishing after an unrelated acceptance remains ready for review (598.5471ms)\r\n✔ accepting the bed before the desk preserves both independent changes and exposes only accepted ancestry (588.9138ms)\r\n✖ old needs-input tickets recover on opening without revising or rerunning the agent (631.7227ms)\r\n✔ simultaneous acceptance cannot overwrite work and a rejected race can retry the same decision (631.657ms)\r\n✔ unrelated additions, removals and relationship edits are retained together (23.6155ms)\r\n✔ different object IDs still conflict when their combined geometry overlaps (4.4612ms)\r\n✔ a changed hosting relationship and a door edit must validate together (1.633ms)\r\n✔ restore refuses an applied revision that does not contain the reviewed delta (31.6245ms)\r\n✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1848.4645ms)\r\nℹ tests 38\r\nℹ suites 0\r\nℹ pass 36\r\nℹ fail 2\r\nℹ cancelled 0\r\nℹ skipped 0\r\nℹ todo 0\r\nℹ duration_ms 5601.6028\r\n\r\n✖ failing tests:\r\n\r\ntest at demo\\proposal-reconciliation.test.ts:120:1\r\n✖ old needs-input tickets recover on opening without revising or rerunning the agent (631.7227ms)\r\n  Error: EPERM, Permission denied: \\\\?\\D:\\Codex\\temp\\bim-reconcile-jX0bcs '\\\\?\\D:\\Codex\\temp\\bim-reconcile-jX0bcs'\r\n      at Object.rmSync (node:fs:1222:18)\r\n      at TestContext.<anonymous> (file:///D:/Codex/issue-192/west-riverside/demo/proposal-reconciliation.test.ts:122:20)\r\n      at TestHook.runInAsyncScope (node:async_hooks:227:14)\r\n      at TestHook.run (node:internal/test_runner/test:1325:25)\r\n      at TestHook.run (node:internal/test_runner/test:1669:18)\r\n      at TestHook.run (node:internal/util:581:20)\r\n      at Test.runHook (node:internal/test_runner/test:1212:20)\r\n      at after (node:internal/test_runner/test:1265:20)\r\n      at Test.run (node:internal/test_runner/test:1351:13)\r\n      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {\r\n    errno: 1,\r\n    code: 'EPERM',\r\n    path: '\\\\\\\\?\\\\D:\\\\Codex\\\\temp\\\\bim-reconcile-jX0bcs',\r\n    syscall: 'rm'\r\n  }\r\n\r\ntest at demo\\proposal-reconciliation.test.ts:206:1\r\n✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1848.4645ms)\r\n  Error: EPERM, Permission denied: \\\\?\\D:\\Codex\\temp\\bim-portable-accept-VQCyQs '\\\\?\\D:\\Codex\\temp\\bim-portable-accept-VQCyQs'\r\n      at Object.rmSync (node:fs:1222:18)\r\n      at TestContext.<anonymous> (file:///D:/Codex/issue-192/west-riverside/demo/proposal-reconciliation.test.ts:223:20)\r\n      at TestHook.runInAsyncScope (node:async_hooks:227:14)\r\n      at TestHook.run (node:internal/test_runner/test:1325:25)\r\n      at TestHook.run (node:internal/test_runner/test:1669:18)\r\n      at TestHook.run (node:internal/util:581:20)\r\n      at Test.runHook (node:internal/test_runner/test:1212:20)\r\n      at after (node:internal/test_runner/test:1265:20)\r\n      at Test.run (node:internal/test_runner/test:1351:13)\r\n      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {\r\n    errno: 1,\r\n    code: 'EPERM',\r\n    path: '\\\\\\\\?\\\\D:\\\\Codex\\\\temp\\\\bim-portable-accept-VQCyQs',\r\n    syscall: 'rm'\r\n  }\r\n"
+    },
+    "unchangedBaseSceneProposal": {
+      "commit": "f59687e",
+      "exitCode": 1,
+      "pass": 36,
+      "fail": 2,
+      "output": "BJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\n✔ real Babylon scene preserves every object, support elevation, camera and selection across modes without changing the model (107.0927ms)\r\n✔ walls have actual door and window gaps, cutaway affects visibility only, and replacement disposes old resources (29.0277ms)\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\n✔ ray destinations are generic, millimetre-bound floor/wall references and do not infer move/group operations (0.7238ms)\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\n✔ actual Babylon rays select visible desk geometry and mark floor points through cutaway walls (16.1541ms)\r\n✔ 3D delta retains before ghosts for moved and removed objects, solid additions and a stable camera without changing either revision (33.5032ms)\r\n✔ 3D delta includes opening placement and host geometry when only hosting relationships change (1.8763ms)\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:43]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\n✔ derived support elevation and door-size gaps appear in the 3D delta even without changed relationship records (2.0126ms)\r\n✔ a residential floor renders shared walls once, frames a room without editing geometry and retains whole-floor deltas (121.5311ms)\r\n✔ legacy floor references stay visible on an isolated residential level without changing their wire shape or model (46.7087ms)\r\n✔ stacked geometry applies each floor elevation once, including supported furniture, openings and equipment (27.7098ms)\r\n✔ incoming stair footprints are real slab voids and ray picking preserves the selected floor (19.0532ms)\r\n✔ pitched roof solids and gable wall vertices meet the shared roof underside at eaves and ridge (39.1822ms)\r\n✔ level isolation and roof visibility compose with cutaway, framing and annotation visibility without rebuilding geometry (29.2346ms)\r\n✔ building floor annotations require explicit levels and wall annotations inherit the host elevation (3.0249ms)\r\n✔ level elevation and incoming stair changes produce derived object and slab-void deltas with before ghosts (45.625ms)\r\n✔ roof changes derive clipped-wall deltas and flat roofs have physical thickness (36.1526ms)\r\n✔ before slab ghosts stay inspectable but cannot intercept a current-floor reference ray (29.8684ms)\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\n✔ generated families render exact instance heights and unrelated geometry in both modes without changing definitions (24.5165ms)\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\n✔ resizing one generated instance retains its family, ghosts and isolated delta without changing another size of that family (20.6472ms)\r\n✔ room-owned generated instances follow their level exactly once, including anchors, ghosts and visibility (69.6279ms)\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\n✔ explicit family reassignment preserves the original definition and reviews the new definition without rendering it (14.2678ms)\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\nBJS - [21:57:44]: Babylon.js v9.32.0 - Null engine\r\n✔ real picked IDs drive distinct purple hover and blue selection without mutating shared materials, geometry or model bytes (22.0519ms)\r\n✔ hover clears on model, level and view changes while the selected stable ID survives (48.5861ms)\r\n✔ picking excludes cutaway, hidden, transparent, unpickable, out-of-level and roof-hidden meshes (17.5943ms)\r\n✔ comparison ghost picking and highlights retain wireframes and removed evidence, then discard disposed mappings on replacement (26.6648ms)\r\n✔ single primary pointer click allows small jitter, while out-and-back and release-only drags never select (0.2612ms)\r\n✔ multi-pointer gestures cannot select regardless of release order or primary status (0.1053ms)\r\n✔ cancellation, leaving, capture loss, view changes and non-primary buttons invalidate pending selection (0.1146ms)\r\n✔ desk and bed requests from the same revision can both be accepted without revising either (714.0255ms)\r\n✔ a request finishing after an unrelated acceptance remains ready for review (563.4573ms)\r\n✔ accepting the bed before the desk preserves both independent changes and exposes only accepted ancestry (529.2224ms)\r\n✖ old needs-input tickets recover on opening without revising or rerunning the agent (587.2587ms)\r\n✔ simultaneous acceptance cannot overwrite work and a rejected race can retry the same decision (539.7789ms)\r\n✔ unrelated additions, removals and relationship edits are retained together (17.241ms)\r\n✔ different object IDs still conflict when their combined geometry overlaps (3.0775ms)\r\n✔ a changed hosting relationship and a door edit must validate together (1.4165ms)\r\n✔ restore refuses an applied revision that does not contain the reviewed delta (21.5016ms)\r\n✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1377.148ms)\r\nℹ tests 38\r\nℹ suites 0\r\nℹ pass 36\r\nℹ fail 2\r\nℹ cancelled 0\r\nℹ skipped 0\r\nℹ todo 0\r\nℹ duration_ms 4706.6886\r\n\r\n✖ failing tests:\r\n\r\ntest at demo\\proposal-reconciliation.test.ts:120:1\r\n✖ old needs-input tickets recover on opening without revising or rerunning the agent (587.2587ms)\r\n  Error: EPERM, Permission denied: \\\\?\\D:\\Codex\\temp\\bim-reconcile-jvay3i '\\\\?\\D:\\Codex\\temp\\bim-reconcile-jvay3i'\r\n      at Object.rmSync (node:fs:1222:18)\r\n      at TestContext.<anonymous> (file:///D:/Codex/issue-192/west-riverside-base/demo/proposal-reconciliation.test.ts:122:20)\r\n      at TestHook.runInAsyncScope (node:async_hooks:227:14)\r\n      at TestHook.run (node:internal/test_runner/test:1325:25)\r\n      at TestHook.run (node:internal/test_runner/test:1669:18)\r\n      at TestHook.run (node:internal/util:581:20)\r\n      at Test.runHook (node:internal/test_runner/test:1212:20)\r\n      at after (node:internal/test_runner/test:1265:20)\r\n      at Test.run (node:internal/test_runner/test:1351:13)\r\n      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {\r\n    errno: 1,\r\n    code: 'EPERM',\r\n    path: '\\\\\\\\?\\\\D:\\\\Codex\\\\temp\\\\bim-reconcile-jvay3i',\r\n    syscall: 'rm'\r\n  }\r\n\r\ntest at demo\\proposal-reconciliation.test.ts:206:1\r\n✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1377.148ms)\r\n  Error: EPERM, Permission denied: \\\\?\\D:\\Codex\\temp\\bim-portable-accept-jsFi8c '\\\\?\\D:\\Codex\\temp\\bim-portable-accept-jsFi8c'\r\n      at Object.rmSync (node:fs:1222:18)\r\n      at TestContext.<anonymous> (file:///D:/Codex/issue-192/west-riverside-base/demo/proposal-reconciliation.test.ts:223:20)\r\n      at TestHook.runInAsyncScope (node:async_hooks:227:14)\r\n      at TestHook.run (node:internal/test_runner/test:1325:25)\r\n      at TestHook.run (node:internal/test_runner/test:1669:18)\r\n      at TestHook.run (node:internal/util:581:20)\r\n      at Test.runHook (node:internal/test_runner/test:1212:20)\r\n      at after (node:internal/test_runner/test:1265:20)\r\n      at Test.run (node:internal/test_runner/test:1351:13)\r\n      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {\r\n    errno: 1,\r\n    code: 'EPERM',\r\n    path: '\\\\\\\\?\\\\D:\\\\Codex\\\\temp\\\\bim-portable-accept-jsFi8c',\r\n    syscall: 'rm'\r\n  }\r\n"
+    },
+    "artifactAssertions": "Passed result schemas, full-input hash/count/disciplines, unqualified status, final source-file hash matches and expected success/failure outcomes",
+    "whitespace": "git -c core.whitespace=cr-at-eol diff --check passed"
+  }
+}

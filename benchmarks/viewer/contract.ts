@@ -8,6 +8,11 @@ const finite = Type.Number();
 const vec3 = Type.Tuple([finite, finite, finite]);
 const sha256 = Type.String({ pattern: '^[a-f0-9]{64}$' });
 const cameraSchema = Type.Object({ eye: vec3, target: vec3 }, options);
+const sourceEvidence = {
+  sourceHashes: Type.Array(sha256, { minItems: 1 }), permissionEvidence: text,
+  floorAreaEvidence: text, coordinateReference: text, conversionEvidence: text,
+  inventoryEvidence: text, limitations: Type.Array(text),
+};
 const elementSchema = Type.Object({
   id: text, category: text, discipline: text, storey: text, geometryId: text,
   position: vec3, scale: vec3, color: vec3,
@@ -20,14 +25,12 @@ const geometrySchema = Type.Object({ id: text,
 export const ModelSchema = Type.Object({
   version: Type.Literal(1), id: text, revision: text,
   coordinateSystem: Type.Literal('right-handed-y-up-metres'),
-  grossFloorAreaM2: Type.Number({ minimum: 0 }),
+  grossFloorAreaM2: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
   cameraPath: Type.Array(cameraSchema, { minItems: 1 }),
   provenance: Type.Union([
     Type.Object({ kind: Type.Literal('synthetic'), seed: Type.Integer() }, options),
-    Type.Object({ kind: Type.Literal('real'), sourceHashes: Type.Array(sha256, { minItems: 1 }),
-      permissionEvidence: text, floorAreaEvidence: text, coordinateReference: text,
-      conversionEvidence: text, inventoryEvidence: text, limitations: Type.Array(text),
-    }, options),
+    Type.Object({ kind: Type.Literal('real'), ...sourceEvidence }, options),
+    Type.Object({ kind: Type.Literal('public-unverified'), ...sourceEvidence }, options),
   ]),
   geometries: Type.Array(geometrySchema, { minItems: 1 }),
   elements: Type.Array(elementSchema, { minItems: 1 }),
@@ -59,7 +62,7 @@ export interface Adapter {
   dispose(): Promise<void>;
 }
 
-export function parseModel(input: unknown): Model {
+export function parseModel(input: unknown, ownership: 'copy' | 'transfer' = 'copy'): Model {
   if (!Check(ModelSchema, input)) throw new Error('Invalid viewer model schema');
   const ids = new Set<string>(); const geometries = new Map<string, Geometry>();
   for (const geometry of input.geometries) {
@@ -80,7 +83,7 @@ export function parseModel(input: unknown): Model {
     if ([...camera.eye, ...camera.target].some(value => !Number.isFinite(value))
       || camera.eye.every((value, axis) => value === camera.target[axis])) throw new Error('Invalid camera');
   }
-  return structuredClone(input);
+  return ownership === 'copy' ? structuredClone(input) : input;
 }
 
 export function applyProposal(base: Model, input: unknown): Model {
@@ -96,7 +99,21 @@ export function applyProposal(base: Model, input: unknown): Model {
     if (touched.has(item.id)) throw new Error('Duplicate proposal change');
     touched.add(item.id); elements.set(item.id, item);
   }
-  return parseModel({ ...base, revision: input.nextRevision, elements: [...elements.values()] });
+  // Proposals replace element records; tessellation is shared and read-only.
+  return parseModel({ ...base, revision: input.nextRevision, elements: structuredClone([...elements.values()]) }, 'transfer');
+}
+
+export function unchangedModel(model: Model): () => boolean {
+  const header = (): string => JSON.stringify({ ...model, geometries: [], elements: [] });
+  const originalHeader = header();
+  const geometries = model.geometries.map(item => JSON.stringify(item));
+  const elements = model.elements.map(item => JSON.stringify(item));
+  // Exact per-record comparisons retain full mutation coverage without another
+  // federation-sized temporary string during every accepted-state assertion.
+  return () => header() === originalHeader
+    && model.geometries.length === geometries.length && model.elements.length === elements.length
+    && model.geometries.every((item, index) => JSON.stringify(item) === geometries[index])
+    && model.elements.every((item, index) => JSON.stringify(item) === elements[index]);
 }
 
 export function changesBetween(before: Element[], after: Element[]): Changes {
@@ -124,8 +141,10 @@ export function comparisonElements(base: Model, proposal: Model): Element[] {
 
 export function admission(model: Model): { qualified: boolean; reasons: string[] } {
   const reasons: string[] = [];
-  if (model.provenance.kind !== 'real') reasons.push('Synthetic fixture cannot qualify a realistic project');
-  if (model.grossFloorAreaM2 < 200000) reasons.push('Gross floor area is below 200,000 m²');
+  if (model.provenance.kind === 'synthetic') reasons.push('Synthetic fixture cannot qualify a realistic project');
+  if (model.provenance.kind === 'public-unverified') reasons.push('Public model identity, area and rights have not been admitted');
+  if (model.grossFloorAreaM2 === null) reasons.push('Gross floor area is unknown');
+  else if (model.grossFloorAreaM2 < 200000) reasons.push('Gross floor area is below 200,000 m²');
   const disciplines = new Set(model.elements.map(item => item.discipline));
   for (const discipline of ['architecture', 'structure', 'mechanical', 'electrical', 'plumbing']) {
     if (!disciplines.has(discipline)) reasons.push('Missing discipline: ' + discipline);
