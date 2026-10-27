@@ -22,6 +22,7 @@ import { assertModelScopeFresh, assertModelScopeWrites } from '../src/model-scop
 import { CONVERSATION_LIMITS, parseConversationReply, parseConversationMessage, parseConversationVisual, parseRequestConversation } from '../src/request-conversation.ts';
 import type { RequestConversation, ConversationMessage } from '../src/request-conversation.ts';
 import { ModelScopeStore } from './model-scope-store.ts';
+import type { RequestDraft } from '../src/request-draft.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
@@ -226,6 +227,7 @@ export class ChangeRequests {
   readonly #worker: () => ModelWorker | null;
   readonly #scripts = new ModelScripts();
   readonly #attempts = new Map<string, ActiveAttempt>();
+  readonly #drafts = new Map<string, RequestDraft>();
   #closing: Promise<void> | null = null;
   #closed = false;
   #timer: ReturnType<typeof setInterval> | null = null;
@@ -396,6 +398,8 @@ export class ChangeRequests {
       if (existing.length && !isDeepStrictEqual(existing, conversation.messages)) throw new Error('Imported conversation differs from the immutable journal.');
     }
     this.#db.prepare('INSERT INTO requests(id, project_id, state, body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, body=excluded.body').run(ticket.id, ticket.projectId, ticket.state, JSON.stringify(stored));
+    const draft = this.#drafts.get(ticket.id);
+    if (ticket.state !== 'working' || (draft && (draft.requestId !== ticket.request.requestId || draft.attempt !== ticket.attempts))) this.#drafts.delete(ticket.id);
     if (conversation && !this.#messages(ticket.id).length) for (const message of conversation.messages) this.#appendMessage(ticket.id, message);
   }
   #withState(state: RequestState): Ticket[] {
@@ -474,6 +478,16 @@ export class ChangeRequests {
       at: ticket.updatedAt, requestId: ticket.request.requestId, baseRevisionId: ticket.request.baseRevisionId, action, decisionId: ticket.decisionId });
   }
   get(id: string): TicketProjection { return this.#projection(this.#get(id)); }
+  draft(id: string): RequestDraft | null {
+    this.#assertOpen();
+    const ticket = this.#get(id);
+    const active = this.#attempts.get(id);
+    const draft = this.#drafts.get(id);
+    if (!draft || !active || active.controller.signal.aborted || ticket.state !== 'working'
+        || draft.requestId !== ticket.request.requestId || draft.attempt !== ticket.attempts
+        || active.requestId !== draft.requestId || active.attempt !== draft.attempt) return null;
+    return { ...draft };
+  }
   async refreshProposal(id: string): Promise<TicketProjection> { return this.#projection(await this.#refreshProposal(id)); }
   async #refreshProposal(id: string): Promise<Ticket> {
     for (;;) {
@@ -799,6 +813,12 @@ export class ChangeRequests {
     return current.state === 'working' && current.request.requestId === ticket.request.requestId && current.attempts === ticket.attempts;
   }
   async #run(ticket: Ticket, worker: ModelWorker, signal: AbortSignal): Promise<void> {
+    let sequence = 0;
+    const clearDraft = (): void => {
+      const draft = this.#drafts.get(ticket.id);
+      if (draft?.requestId === ticket.request.requestId && draft.attempt === ticket.attempts) this.#drafts.delete(ticket.id);
+    };
+    signal.addEventListener('abort', clearDraft, { once: true });
     let evidenceError: Error | null = null;
     let prepared: Awaited<ReturnType<RequestSourceStore['prepare']>> | null = null;
     const work: { task: Promise<void> | null } = { task: null };
@@ -820,7 +840,13 @@ export class ChangeRequests {
       const initialDraft = prior && priorRepository ? repository.proposalSnapshot(priorRepository, prior.request.proposalName) : undefined;
       const result = await prepareModelProposal(repository, ticket.request, trackedWorker, (event) => {
         if (this.#isWorking(ticket)) this.#put(recordActivity(this.#get(ticket.id), event));
-      }, { signal, scripts: this.#scripts, conversation: this.#conversation(ticket.id), ...(initialDraft ? { initialDraft } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}), ...(prepared ? { sourceInput: prepared } : {}), onExecution: (record) => {
+      }, { signal, scripts: this.#scripts, conversation: this.#conversation(ticket.id), ...(initialDraft ? { initialDraft } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}), ...(prepared ? { sourceInput: prepared } : {}), onPreview: snapshot => {
+        if (snapshot === null) { clearDraft(); return; }
+        const active = this.#attempts.get(ticket.id);
+        if (signal.aborted || !this.#isWorking(ticket) || !active || active.requestId !== ticket.request.requestId || active.attempt !== ticket.attempts) return;
+        this.#drafts.set(ticket.id, { ticketId: ticket.id, requestId: ticket.request.requestId,
+          baseRevisionId: ticket.request.baseRevisionId, attempt: ticket.attempts, sequence: ++sequence, snapshot });
+      }, onExecution: (record) => {
         try { this.#recordExecution(ticket, record); }
         catch (error) {
           evidenceError = error instanceof Error ? error : new Error('Execution evidence could not be saved.');
@@ -844,6 +870,7 @@ export class ChangeRequests {
       const failure = evidenceError ?? error;
       this.#put(recordActivity({ ...this.#get(ticket.id), state: 'failed', error: failure instanceof Error ? failure.message.slice(0, 1000) : 'The agent could not finish this request.' }, { stage: 'failed', message: 'The agent could not complete this attempt. The accepted model is unchanged.' }));
     } finally {
+      clearDraft(); signal.removeEventListener('abort', clearDraft);
       // Core drains script calls; retain the slot until provider cleanup also ends.
       if (work.task) await work.task.catch(() => {});
       await prepared?.dispose();
@@ -917,6 +944,7 @@ export class ChangeRequests {
   close(): Promise<void> {
     if (this.#closing) return this.#closing;
     this.#closed = true;
+    this.#drafts.clear();
     if (this.#timer) clearInterval(this.#timer);
     for (const active of this.#attempts.values()) active.controller.abort();
     for (const controller of this.#uploads.keys()) controller.abort();

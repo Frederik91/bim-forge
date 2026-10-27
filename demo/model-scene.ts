@@ -29,6 +29,8 @@ RegisterFileTools();
 RegisterRay();
 
 export type RenderingMode = 'basic' | 'realistic';
+export const SELECTION_COLOR = '#1267d6';
+export const HOVER_COLOR = '#ac67df';
 type Surface = 'floor' | 'roof' | 'stair' | 'asset' | 'wall' | 'wood' | 'metal' | 'glass' | 'screen' | 'fabric' | 'leaf' | 'pot';
 interface RenderPart {
   mesh: Mesh; objectId: string | null; wallId: string | null; surface: Surface; color: string; before: boolean;
@@ -135,6 +137,8 @@ export class ModelScene {
   private readonly comparisonLines: { mesh: Mesh; levelIds: readonly string[] }[] = [];
   private mode: RenderingMode = 'realistic';
   private selectedId = '';
+  private hoveredId: string | null = null;
+  private readonly pickParts = new Map<number, RenderPart>();
   private cutaway = true;
   private levelId: string | null = null;
   private roofVisible = true;
@@ -196,7 +200,8 @@ export class ModelScene {
     const item = snapshot.entities.find((entity) => entity.id === objectId);
     const level = item ? entityLevel(snapshot, item) : null;
     const levelIds = item?.type === 'Stair' ? [item.fromLevelId, item.toLevelId] : level ? [level.id] : [];
-    this.parts.push({ mesh, objectId, wallId, surface, color, before: false, levelIds });
+    const part = { mesh, objectId, wallId, surface, color, before: false, levelIds };
+    this.parts.push(part); this.pickParts.set(mesh.uniqueId, part);
     if (surface !== 'floor') this.shadow.addShadowCaster(mesh);
   }
 
@@ -354,7 +359,7 @@ export class ModelScene {
       for (let i = this.parts.length - 1; i >= afterCount; i -= 1) {
         const part = this.parts[i]; const change = part.objectId ? this.changes.get(part.objectId) : null;
         this.shadow.removeShadowCaster(part.mesh);
-        if (!change || change.status === 'added') { part.mesh.dispose(); this.parts.splice(i, 1); continue; }
+        if (!change || change.status === 'added') { this.pickParts.delete(part.mesh.uniqueId); part.mesh.dispose(); this.parts.splice(i, 1); continue; }
         part.before = true; part.mesh.name = 'before:' + part.mesh.name;
       }
       this.walls.clear();
@@ -400,6 +405,7 @@ export class ModelScene {
   }
 
   setMode(mode: RenderingMode): void {
+    if (mode !== this.mode) this.hover(null);
     this.mode = mode;
     this.scene.shadowsEnabled = mode === 'realistic';
     this.scene.imageProcessingConfiguration.toneMappingEnabled = mode === 'realistic';
@@ -411,10 +417,28 @@ export class ModelScene {
 
   select(id: string): void {
     this.selectedId = id;
-    for (const part of this.parts) part.mesh.renderOutline = part.objectId === id;
+    this.updateHighlights();
+  }
+
+  hover(id: string | null): void {
+    if (id === this.hoveredId) return;
+    this.hoveredId = id; this.updateHighlights();
+  }
+
+  private updateHighlights(): void {
+    for (const part of this.parts) {
+      const selected = part.objectId === this.selectedId;
+      const hovered = part.objectId !== null && part.objectId === this.hoveredId;
+      part.mesh.renderOutline = selected || hovered;
+      part.mesh.outlineColor = Color3.FromHexString(selected ? SELECTION_COLOR : HOVER_COLOR);
+      part.mesh.outlineWidth = selected ? .025 : .018;
+      part.mesh.renderOverlay = !part.before && (selected || hovered);
+      part.mesh.overlayColor = part.mesh.outlineColor; part.mesh.overlayAlpha = selected ? .3 : .18;
+    }
   }
 
   frame(focusId: string | null = this.focusId): void {
+    this.hover(null);
     this.focusId = focusId;
     if (!this.snapshot) return;
     const focused = spaces(this.snapshot).find((room) => room.id === focusId && (this.levelId === null || room.levelId === this.levelId));
@@ -443,15 +467,22 @@ export class ModelScene {
     this.camera.inertialPanningX = 0; this.camera.inertialPanningY = 0;
   }
 
-  setCutaway(enabled: boolean): void { this.cutaway = enabled; this.updateCutaway(); }
+  setCutaway(enabled: boolean): void {
+    if (enabled !== this.cutaway) this.hover(null);
+    this.cutaway = enabled; this.updateCutaway();
+  }
 
   setLevel(levelId: string | null): void {
     if (levelId === this.levelId) return;
     if (levelId !== null && this.snapshot && ![...levels(this.snapshot), ...(this.comparison ? levels(this.comparison) : [])].some((level) => level.id === levelId)) throw new Error('Unknown viewer level.');
+    this.hover(null);
     this.levelId = levelId; this.focusId = null; this.updateCutaway(); this.frame(null);
   }
 
-  setRoofVisible(visible: boolean): void { this.roofVisible = visible; this.updateCutaway(); }
+  setRoofVisible(visible: boolean): void {
+    if (visible !== this.roofVisible) this.hover(null);
+    this.roofVisible = visible; this.updateCutaway();
+  }
 
   private contextBounds(): Bounds {
     if (!this.snapshot) throw new Error('No model to frame.');
@@ -484,8 +515,8 @@ export class ModelScene {
   }
 
   objectAt(x: number, y: number): string | null {
-    const hit = this.scene.pick(x, y, (mesh) => mesh.isEnabled() && mesh.isVisible && this.parts.some((part) => part.mesh === mesh && part.objectId !== null));
-    return this.parts.find((part) => part.mesh === hit?.pickedMesh)?.objectId ?? null;
+    const hit = this.scene.pick(x, y, (mesh) => mesh.isPickable && mesh.isEnabled() && mesh.isVisible && mesh.visibility > 0 && this.pickParts.get(mesh.uniqueId)?.objectId != null);
+    return hit?.pickedMesh ? this.pickParts.get(hit.pickedMesh.uniqueId)?.objectId ?? null : null;
   }
 
   referenceAt(x: number, y: number): SpatialReference | null {
@@ -536,7 +567,7 @@ export class ModelScene {
   private clearModel(): void {
     this.mark(null);
     for (const part of this.parts) { this.shadow.removeShadowCaster(part.mesh); part.mesh.dispose(); }
-    this.parts.length = 0; this.walls.clear();
+    this.parts.length = 0; this.walls.clear(); this.pickParts.clear(); this.hoveredId = null;
     for (const line of this.comparisonLines) line.mesh.dispose();
     this.comparisonLines.length = 0;
   }

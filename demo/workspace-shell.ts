@@ -75,6 +75,12 @@ export class WorkspaceShell {
     else if (this.phone.matches) this.setPanel('context', false);
   }
 
+  showInspector(): void {
+    this.setPanel('navigation', true);
+    const inspector = document.getElementById('element-inspector');
+    if (inspector instanceof HTMLDetailsElement) inspector.open = true;
+  }
+
   private close(panel: 'navigation' | 'context'): void {
     this.setPanel(panel, false);
     (panel === 'navigation' ? this.navigationToggle : this.contextToggle).focus({ preventScroll: true });
