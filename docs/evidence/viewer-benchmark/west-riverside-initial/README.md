@@ -168,6 +168,13 @@ Historical bundles/source maps remain private and hashed, including the first
 run's earlier allocation strategy. Public evidence contains aggregate metrics,
 inventories and hashes, with no IFC, mesh payload, render images or traces.
 
+After measurement, main advanced to `1ff0d68`. The branch integrated that commit
+and retained both test lists in the package-script conflict. Benchmark runtime
+file hashes and dependency versions still match the recorded run; only the
+package test scripts changed. Root validation and benchmark tests passed again.
+The historical run manifests remain bound to the measured source rather than
+being rewritten to claim a run on the integrated application.
+
 ## Execution profile
 
 The initial run uses Windows, Node 24.18.0, installed Chrome, an AMD Ryzen 7
