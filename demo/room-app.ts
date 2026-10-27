@@ -1277,7 +1277,7 @@ ui['transfer-legacy'].addEventListener('click', () => { void perform(async () =>
   await recognizeHousePilot(accepted);
   displayAccepted(accepted);
   await refreshProjectChoices();
-  closeDialog(ui['start-dialog']); showPage('project');
+  closeDialog(ui['start-dialog']); showPage('request');
   status('Browser project registered. Existing server accepted state wins. Browser recovery bytes are retained unchanged; pending proposals still require human review.');
 }); });
 ui['history-newest'].addEventListener('click', () => { void loadServerHistory(); });
@@ -1307,7 +1307,7 @@ async function openServerProject(next: RoomRepository): Promise<void> {
   await recognizeHousePilot(next);
   displayAccepted(next);
   if (projectChoices.some(choice => choice.projectId === next.projectId)) ui['saved-projects'].value = next.projectId;
-  closeDialog(ui['start-dialog']); showPage('project');
+  closeDialog(ui['start-dialog']); showPage('request');
   await refreshBacklog();
   status('Latest accepted model reopened from the server. Pending work remains in the backlog; unsent sketches are not saved.');
 }
