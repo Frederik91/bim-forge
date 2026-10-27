@@ -3243,7 +3243,7 @@ for (const conflictChoice of [ui['conflict-left'], ui['conflict-right']]) confli
 });
 
 function render(): void {
-  if (repo) designWorkspace.update(repo.designTargets(), selectedDesignTarget);
+  if (repo) designWorkspace.update(repo.designTargets(), selectedDesignTarget, repo.projectId);
   if (currentPage === 'evidence') refreshEvidencePanel();
   const project = requireRepository();
   ui['project-title'].textContent = project.name;
