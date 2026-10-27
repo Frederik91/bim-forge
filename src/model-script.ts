@@ -24,6 +24,10 @@ import type { Clarification } from './request-conversation.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
 import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
+import { previewWallShift } from './wall-dependencies.ts';
+import type { WallShiftImpact } from './wall-dependencies.ts';
+import { parseEvidenceUses } from './model-evidence.ts';
+import type { EvidenceUse } from './model-evidence.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -76,6 +80,14 @@ const scopeRead = Type.Object({ version: Type.Literal(1), baseRevisionId: Type.S
   targetIds: scopeReadIds, contextIds: scopeReadIds, dependentIds: scopeReadIds, writableIds: scopeReadIds, relationshipIds: scopeReadIds });
 const collectionChanges = Type.Object({ added: Type.Array(identifier), removed: Type.Array(identifier), modified: Type.Array(identifier) });
 const changes = Type.Object({ entities: collectionChanges, relationships: collectionChanges });
+const wallShiftImpacts = Type.Array(Type.Object({
+  kind: Type.Union([Type.Literal('entity'), Type.Literal('relationship')]), id: identifier,
+  reasons: Type.Array(Type.Union([
+    Type.Literal('target-translation'), Type.Literal('room-boundary'), Type.Literal('wall-junction'),
+    Type.Literal('hosted-opening'), Type.Literal('opening-host'), Type.Literal('room-contents'),
+    Type.Literal('support'), Type.Literal('level-envelope'),
+  ]), { maxItems: 8 }), changed: Type.Boolean(),
+}, { additionalProperties: false }), { maxItems: 200 });
 const inspection = Type.Object({
   revisionId: Type.String(), selectedObjectIds: Type.Array(identifier), model: snapshot,
   parameters: Type.Array(Type.Object({ entityId: identifier, parameters: Type.Array(ModelParameterSchema, { maxItems: 32 }) }), { maxItems: 100 }),
@@ -101,7 +113,10 @@ export interface ModelScriptBinding {
   authoringScope?: AuthoringScope;
   scope?: FrozenModelScope;
 }
-export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment }
+export interface ScriptReviewText {
+  summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment;
+  evidenceUses?: EvidenceUse[];
+}
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
@@ -163,10 +178,12 @@ function decision(value: unknown):
   }
   if (value.kind === 'propose') {
     fields(value, ['kind', 'review']);
-    fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', 'intent']);
+    const hasEvidenceUses = record(value.review) && Object.hasOwn(value.review, 'evidenceUses');
+    fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', 'intent', ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
     return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
       constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
-      intent: parseIntentAssessment(value.review.intent) } };
+      intent: parseIntentAssessment(value.review.intent),
+      ...(hasEvidenceUses ? { evidenceUses: parseEvidenceUses(value.review.evidenceUses) } : {}) } };
   }
   if (value.kind === 'clarify') {
     fields(value, ['kind', 'question', 'options']);
@@ -257,6 +274,20 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
       if (!scope) throw new Error('Parameter editing requires a frozen model scope.');
       return applyModelParameterEdits({ snapshot: call.context.snapshot, targetIds: scope.targetIds, edits: input.edits });
     }, () => call.throwIfRevoked()) }),
+  previewWallShift: api.method({ summary: 'Stage a bounded shared-partition shift and report stored changes and evaluated dependencies.',
+    description: 'Translate an existing complete interior axis-aligned partition, updating adjacent rectangular room bounds and supported wall junctions. Nonzero millimetre-grid offset, at most one metre; positive means global +X for vertical walls or +Y for horizontal walls. Existing contents and hosted openings are validated. Impacts describe evaluation, not write authority: a hosted door may move while changed is false. Frozen scope must authorize every stored write, including adjacent Spaces; readable context grants no writes. No model is accepted or published.',
+    effect: 'draft-write', metadata: { units: 'm', acceptsOrPublishesModel: false },
+    params: { input: Type.Object({ wallId: identifier, offsetMetres: Type.Number({ minimum: -1, maximum: 1 }) }, { additionalProperties: false }) },
+    result: Type.Object({ model: snapshot, changes, impacts: wallShiftImpacts }),
+    handler: ({ input }, call) => {
+      let impacts: WallShiftImpact[] = [];
+      const result = stage(call.context, () => {
+        const preview = previewWallShift(call.context.snapshot, input);
+        impacts = preview.impacts;
+        return preview.snapshot;
+      }, () => call.throwIfRevoked());
+      return { ...result, impacts };
+    } }),
   inspect: api.method({ summary: 'Inspect the current draft, selected identities, room membership and placement constraints.', effect: 'read', result: inspection,
     handler: (_args, call) => {
       const draft = call.context; const current = modelWorkingGraph(draft.snapshot, draft.binding.scope);
@@ -318,9 +349,13 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
       () => previewRoomFurnishings(call.context.snapshot, input), () => call.throwIfRevoked()) }),
 } });
 
+export { model as modelScriptApi };
+
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
+  'A propose decision returns review:{summary,rationale,constraints,uncertainty,intent,evidenceUses?}. Optional evidenceUses is an array of {pin,subject,rationale} choosing exact pinned known sourceEvidence facts as proposal-local assumptions for human review. Copy the complete frozen subject including anchor.target; preserve competing claims and explain the choice without promoting global truth. The host validates choices against the bound read set and context; self-rated certainty grants no authority. ' +
   'For scoped requests, await model.scope() returns {scope,graph}: immutable target/context/dependent/writable IDs and a live partial working graph. Context is never write authority. model.inspect and mutation results use this same context. It is not a standalone valid project. ' +
   'Call model.previewParameters({edits:[{definitionId,name,value}]}) to edit frozen targets with explicit typed units. All mutation tools enforce frozen write limits; query matches never expand during a proposal. Changed membership or dependencies require a fresh human review. ' +
+  'Call model.previewWallShift({wallId,offsetMetres}) for a bounded complete shared partition. Offsets are nonzero metres on a 1 mm grid, at most one metre; positive means global +X for vertical walls or +Y for horizontal walls. The existing helper updates adjacent rectangular Spaces and supported wall junctions, then validates contents and openings atomically. Frozen scope must authorize every stored write; adjacent Spaces in read-only context do not grant permission. The result contains model, cumulative stored changes from the execution base, and impacts for this operation. An impact with changed:false can still move in world geometry when its host moves. Impacts never expand write authority. Unsupported topology or invalid contents leave the draft unchanged. ' +
   'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base or the supplied prior proposal draft for a conversation continuation. ' +
   'placement.levels lists stable levels and world elevations; placement.selectedLevelId binds a selected Level, spatial reference or unambiguous selected-object owner. ' +
   'placement.entities supplies entityId, levelId and world floor-base elevation. placement.rooms supplies levelId and entityIds computed within that level. ' +
@@ -409,7 +444,7 @@ export class ModelScripts {
       const draft: Draft = { base: input.base, snapshot: input.initialDraft ?? input.base, binding, signal: input.signal,
         onActivity: input.onActivity, ...(input.onPreview ? { onPreview: input.onPreview } : {}) };
       const session = runtime.createSession({ context: draft,
-        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewWallShift', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
           ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
           ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
         limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },

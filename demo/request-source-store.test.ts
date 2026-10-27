@@ -2,7 +2,7 @@ import test from 'node:test';
 import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, constants } from 'node:sqlite';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -124,6 +124,78 @@ test('memberships share the ticket transaction; expiry preserves bound sources a
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM request_source_blobs').get()?.count, 1);
 });
 
+test('explicit project retention extends expiry and read/prepare eligibility without request binding or rekeying', async (t) => {
+  const { db, store } = setup(t);
+  const bytes = Buffer.from('Original project observation.');
+  const source = await upload(store, bytes);
+  const abandoned = await upload(store, Buffer.from('Unretained abandoned upload.'));
+  assert.throws(() => store.retained(project, source.id), /not retained/);
+  assert.throws(() => store.retainProject(otherProject, source), /Unknown/);
+  assert.throws(() => store.retainProject(project, { ...source, sha256: '0'.repeat(64) }), /immutable/);
+  assert.deepEqual(store.retainProject(project, source), source);
+  assert.deepEqual(store.retainProject(project, source), source);
+  const manifest = db.prepare('SELECT manifest FROM request_source_identities WHERE id=?').get(source.id)?.manifest;
+  db.prepare('UPDATE request_source_blobs SET created_at=?').run(Date.now() - 48 * 60 * 60 * 1000);
+  const reopened = new RequestSourceStore(db);
+  assert.deepEqual(reopened.get(project, source.id), { source, bytes });
+  assert.deepEqual(reopened.retained(project, source.id), source);
+  assert.throws(() => reopened.get(project, abandoned.id), /expired/);
+  assert.throws(() => reopened.retainProject(project, abandoned), /expired/);
+  assert.throws(() => reopened.retained(otherProject, source.id), /not retained/);
+  const prepared = await reopened.prepare(project, [source], signal());
+  assert.deepEqual(prepared.documents, [{ sourceId: source.id, text: bytes.toString('utf8') }]);
+  await prepared.dispose();
+  assert.equal(db.prepare('SELECT manifest FROM request_source_identities WHERE id=?').get(source.id)?.manifest, manifest);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_source_bindings').get()?.n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_source_blobs').get()?.n, 1);
+});
+
+test('project source pages expose bounded ordered retained metadata only, isolate projects and reject invalid cursors', async (t) => {
+  const { db, store } = setup(t);
+  const retained: RequestSource[] = [];
+  for (let index = 24; index >= 0; index--) {
+    const source = await upload(store, Buffer.from(`Source ${index}.`), 'text/plain', `source-${index}.txt`,
+      `00000199-0000-4000-8000-${String(index).padStart(12, '0')}`);
+    store.retainProject(project, source); retained.push(source);
+  }
+  retained.sort((left, right) => left.id.localeCompare(right.id));
+  const unretained = await upload(store, Buffer.from('Not admitted to the project library.'));
+  store.bind(project, [unretained], 'request-only-source');
+  const foreign = await store.add({ projectId: otherProject, id: randomUUID(), name: 'private.txt', mediaType: 'text/plain',
+    bytes: Buffer.from('Other project source.'), signal: signal() });
+  store.retainProject(otherProject, foreign);
+  db.prepare('UPDATE request_source_blobs SET created_at=?').run(Date.now() - 48 * 60 * 60 * 1000);
+  const reopened = new RequestSourceStore(db);
+  const firstRetained = retained[0]; const lastRetained = retained.at(-1); assert.ok(firstRetained && lastRetained);
+  // A real SQLite authorizer forbids reading original content during discovery.
+  db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === 'request_source_blobs' && column === 'bytes'
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try {
+    const first = reopened.projectPage({ projectId: project, after: null });
+    assert.deepEqual(first.sources, retained.slice(0, 20)); assert.equal(first.next, retained[19]?.id);
+    assert.ok(first.next);
+    const second = reopened.projectPage({ projectId: project, after: first.next, limit: 20 });
+    assert.deepEqual(second, { sources: retained.slice(20), next: null });
+    assert.deepEqual(reopened.projectPage({ projectId: project, after: first.next, limit: 20 }), second);
+    assert.deepEqual(reopened.projectPage({ projectId: project, after: lastRetained.id, limit: 1 }), { sources: [], next: null });
+    assert.deepEqual(reopened.projectPage({ projectId: otherProject, after: null }), { sources: [foreign], next: null });
+    assert.deepEqual(reopened.projectPage({ projectId: 'empty-project', after: null }), { sources: [], next: null });
+    assert.deepEqual(reopened.projectPage({ projectId: project, after: null, limit: 1 }), { sources: [firstRetained], next: firstRetained.id });
+    for (const after of ['', 'not-a-uuid', firstRetained.id.replace('00000199', '0000019A'), randomUUID(), foreign.id, unretained.id]) {
+      assert.throws(() => reopened.projectPage({ projectId: project, after }), /Invalid project source page cursor/);
+    }
+    assert.throws(() => reopened.projectPage({ projectId: otherProject, after: firstRetained.id }), /Invalid project source page cursor/);
+    for (const limit of [0, -1, 21, 1.5, NaN, Infinity]) assert.throws(() => reopened.projectPage({ projectId: project, after: null, limit }), /limit/);
+    assert.throws(() => reopened.projectPage({ projectId: 'bad project', after: null }), /identity/);
+    assert.throws(() => reopened.get(project, firstRetained.id), /prohibited|authoriz/i);
+  } finally { db.setAuthorizer(null); }
+  assert.deepEqual(reopened.get(project, firstRetained.id).source, firstRetained);
+  db.prepare('UPDATE request_source_blobs SET bytes=zeroblob(byte_length) WHERE id=?').run(firstRetained.id);
+  assert.deepEqual(reopened.projectPage({ projectId: project, after: null, limit: 1 }).sources, [firstRetained]);
+  assert.throws(() => reopened.get(project, firstRetained.id), /integrity/);
+  assert.throws(() => reopened.retained(project, firstRetained.id), /integrity/);
+});
+
 test('source bytes and request memberships survive SQLite close and reopen', async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'bim-source-store-test-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -133,10 +205,12 @@ test('source bytes and request memberships survive SQLite close and reopen', asy
   const bytes = Buffer.from('# Floor\nTwo adjacent rectangular rooms.\n');
   const source = await upload(store, bytes, 'text/markdown', 'floor.md');
   store.bind(project, [source], 'durable-request');
+  store.retainProject(project, source);
   db.close();
   db = new DatabaseSync(filename); t.after(() => db.close());
   store = new RequestSourceStore(db);
   store.assert(project, [source]); store.bind(project, [source], 'durable-request');
+  assert.deepEqual(store.projectPage({ projectId: project, after: null }), { sources: [source], next: null });
   assert.deepEqual(store.get(project, source.id), { source, bytes });
   const prepared = await store.prepare(project, [source], signal());
   assert.deepEqual(prepared.documents, [{ sourceId: source.id, text: bytes.toString('utf8') }]);

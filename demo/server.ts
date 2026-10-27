@@ -9,6 +9,7 @@ import type { ModelWorker } from '../src/model-proposal.ts';
 import { MAX_SOURCE_BYTES, sourceMediaType, sourceName } from '../src/request-sources.ts';
 import { parseModelScopeQuery } from '../src/model-scope-contract.ts';
 import { ScopeStoreConflict } from './model-scope-store.ts';
+import { parseWritableDesignTarget } from '../src/design-targets.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
@@ -204,6 +205,41 @@ export async function createDemoServer({
     let projectUrl: URL;
     try { projectUrl = new URL(request.url ?? '/', 'http://localhost'); }
     catch { send(response, 400, { error: 'Invalid request URL.' }); return; }
+    const designRoute = /^\/api\/projects\/([^/]+)\/(project-sources|evidence|baselines|alternatives)$/.exec(projectUrl.pathname);
+    if (designRoute) {
+      try {
+        sameOriginRequest(request, publicOrigin);
+        const projectId = decodeURIComponent(designRoute[1] ?? '');
+        if (!backlog.hasProject(projectId)) { send(response, 404, { error: 'Unknown project.' }); return; }
+        const resource = designRoute[2];
+        if (request.method === 'GET' && (resource === 'project-sources' || resource === 'evidence')) {
+          const query = projectUrl.searchParams;
+          if ([...query.keys()].some(key => key !== 'after') || query.getAll('after').length > 1) throw new Error('Unsupported collection query.');
+          const after = query.get('after');
+          if (resource === 'project-sources') {
+            if (after !== null && !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(after)) throw new Error('Invalid project source cursor.');
+            send(response, 200, backlog.listProjectSources(projectId, after));
+          } else {
+            if (after !== null && (!/^(0|[1-9][0-9]*)$/.test(after) || !Number.isSafeInteger(Number(after)))) throw new Error('Invalid evidence cursor.');
+            send(response, 200, backlog.listEvidence(projectId, after === null ? null : Number(after)));
+          }
+        } else if (request.method === 'POST') {
+          if (projectUrl.search) throw new Error('Project commands do not accept query parameters.');
+          if (resource === 'project-sources') {
+            const value = await readJson(request, 2048);
+            if (!isRecord(value) || Object.keys(value).length !== 1 || !Object.hasOwn(value, 'source')) throw new Error('Project source retention requires exactly source.');
+            send(response, 200, { source: backlog.retainProjectSource(projectId, value.source) });
+          }
+          else if (resource === 'evidence') send(response, 200, { pin: await backlog.recordEvidence(projectId, await readJson(request, 32 * 1024)) });
+          else {
+            send(response, 200, await backlog.designCommand(projectId, resource === 'baselines' ? 'baseline' : 'alternative', await readJson(request, 4096)));
+          }
+        } else send(response, 405, { error: resource === 'baselines' || resource === 'alternatives' ? 'Design commands require POST.' : 'Project collections require GET or POST.' });
+      } catch (error) {
+        send(response, error instanceof BacklogConflict ? 409 : 400, { error: error instanceof Error ? error.message : 'Project command failed.' });
+      }
+      return;
+    }
     const scopeRoute = /^\/api\/projects\/([^/]+)\/(scope-preview|scopes)$/.exec(projectUrl.pathname);
     if (scopeRoute) {
       try {
@@ -252,11 +288,14 @@ export async function createDemoServer({
           if (!backlog.project(projectId)) { send(response, 404, { error: 'Unknown project.' }); return; }
           if (savedProjectRoute[2]) {
             const query = projectUrl.searchParams;
-            if ([...query.keys()].some((key) => key !== 'before' && key !== 'limit') || query.getAll('before').length > 1
-                || query.getAll('limit').length > 1) throw new Error('Unsupported history query.');
+            if ([...query.keys()].some(key => !['before', 'limit', 'target', 'targetId'].includes(key))
+                || [...query.keys()].some(key => query.getAll(key).length > 1)) throw new Error('Unsupported history query.');
             const limitText = query.get('limit') ?? '20';
             if (!/^[1-9][0-9]?$/.test(limitText)) throw new Error('History limit must be from 1 through 50.');
-            send(response, 200, backlog.history({ projectId, before: query.get('before'), limit: Number(limitText) }));
+            const kind = query.get('target'); const targetId = query.get('targetId');
+            if ((kind === null || kind === 'main') && targetId !== null) throw new Error('Only an explicit alternative history target accepts targetId.');
+            const target = parseWritableDesignTarget(kind === null ? { kind: 'main' } : targetId === null ? { kind } : { kind, id: targetId });
+            send(response, 200, backlog.history({ projectId, before: query.get('before'), limit: Number(limitText), target }));
           } else {
             if (projectUrl.search) throw new Error('Saved projects do not accept query parameters.');
             send(response, 200, { project: backlog.project(projectId) });

@@ -16,18 +16,24 @@ import type { RequestSource } from '../src/request-sources.ts';
 import { parseIntentAssessment } from '../src/model-intent.ts';
 import { VersionedProjectStore } from './versioned-project-store.ts';
 import type { RepositoryReference, VersionedProjects } from './versioned-project-contract.ts';
-import { parseScopedRequest, parseFrozenModelScope, parseModelScopeQuery } from '../src/model-scope-contract.ts';
+import { parseScopedRequest, parseFrozenModelScope, parseModelScopeQuery, plainScopeData } from '../src/model-scope-contract.ts';
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from '../src/model-scope.ts';
 import { CONVERSATION_LIMITS, parseConversationReply, parseConversationMessage, parseConversationVisual, parseRequestConversation } from '../src/request-conversation.ts';
 import type { RequestConversation, ConversationMessage } from '../src/request-conversation.ts';
 import { ModelScopeStore } from './model-scope-store.ts';
 import type { RequestDraft } from '../src/request-draft.ts';
+import { parseDesignTarget, parseFrozenDesignTarget, sameDesignTarget } from '../src/design-targets.ts';
+import type { DesignTarget, FrozenDesignTarget, WritableDesignTarget } from '../src/design-targets.ts';
+import { ProjectEvidenceStore } from './project-evidence-store.ts';
+import { MAX_EVIDENCE_PINS, parseEvidenceEntry, parseEvidencePin, parseEvidenceReadSet } from '../src/model-evidence.ts';
+import type { EvidencePin, EvidenceReadSet } from '../src/model-evidence.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
-type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope' | 'conversationVisual'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
+type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope' | 'conversationVisual' | 'target' | 'evidencePins'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
 interface RequestTicket<Project> {
+  evidence?: EvidenceReadSet;
   conversation?: RequestConversation;
   id: string;
   projectId: string;
@@ -52,17 +58,18 @@ export type TicketSummary = Omit<Ticket, 'project' | 'fingerprint' | 'result' | 
 export class BacklogConflict extends Error {}
 
 type ProposalReadiness = { state: 'ready'; error: null } | { state: 'needs-input'; error: string };
-function proposalReadiness(current: RoomRepository, proposed: RoomRepository, name: string): ProposalReadiness {
+function proposalReadiness(current: RoomRepository, proposed: RoomRepository, name: string, target?: FrozenDesignTarget): ProposalReadiness {
   try {
     const review = proposed.review(name);
     if (review.scope) {
       const base = proposed.view(review.baseRevisionId).snapshot;
       try {
-        assertModelScopeFresh({ base, current: current.view(current.head('main')).snapshot, binding: review.scope });
+        const head = target ? current.freezeDesignTarget(target.target).revisionId : current.head('main');
+        assertModelScopeFresh({ base, current: current.view(head).snapshot, binding: review.scope });
         assertModelScopeWrites({ before: base, after: proposed.view(review.proposalRevisionId).snapshot, binding: review.scope });
       } catch (error) { return { state: 'needs-input', error: error instanceof Error ? error.message.slice(0, 1000) : 'Scope requires a new review.' }; }
     }
-    current.proposalSnapshot(proposed, name); return { state: 'ready', error: null };
+    current.proposalSnapshot(proposed, name, target); return { state: 'ready', error: null };
   }
   catch (error) {
     if (!(error instanceof ProposalConflict)) throw error;
@@ -131,9 +138,22 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
     throw new Error('The stored change request is invalid.');
   }
   // The payload is parsed by the model request boundary again before every run.
-  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation']);
+  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation', 'evidence']);
   const r = value.request;
-  fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope', 'conversationVisual']);
+  fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope', 'conversationVisual', 'target', 'evidencePins']);
+  const target = Object.hasOwn(r, 'target') ? parseFrozenDesignTarget(r.target) : undefined;
+  if (target && (target.projectId !== value.projectId || target.revisionId !== r.baseRevisionId)) throw new Error('Stored request design does not match its project and base.');
+  const evidence = Object.hasOwn(value, 'evidence') ? parseEvidenceReadSet(value.evidence) : undefined;
+  let evidencePins: EvidencePin[] | undefined;
+  if (Object.hasOwn(r, 'evidencePins')) {
+    if (!Array.isArray(r.evidencePins) || r.evidencePins.length > MAX_EVIDENCE_PINS) throw new Error('Invalid stored evidence selection.');
+    evidencePins = r.evidencePins.map(parseEvidencePin);
+    if (new Set(evidencePins.map(pin => pin.entryId)).size !== evidencePins.length) throw new Error('Duplicate stored evidence selection.');
+  }
+  if (evidencePins?.length && !evidence) throw new Error('Stored request is missing its frozen project evidence.');
+  if (evidence && (evidence.projectId !== value.projectId || evidence.revisionId !== r.baseRevisionId
+      || !isDeepStrictEqual(evidence.target, target?.target ?? { kind: 'main' })
+      || !isDeepStrictEqual(evidence.pins, evidencePins ?? []))) throw new Error('Stored project evidence differs from its request binding.');
   const scopedRequest = Object.hasOwn(r, 'scope') ? parseScopedRequest(r.scope) : undefined;
   const scope = Object.hasOwn(value, 'scope') ? parseFrozenModelScope(value.scope) : undefined;
   if (Boolean(scopedRequest) !== Boolean(scope) || (scope && (scope.baseRevisionId !== r.baseRevisionId || !isDeepStrictEqual(scope.query, scopedRequest?.query)))) {
@@ -169,10 +189,13 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   const conversation = Object.hasOwn(value, 'conversation') ? parseRequestConversation(value.conversation) : undefined;
   if (conversation && conversation.ticketId !== value.id) throw new Error('Conversation belongs to another ticket.');
   return { ...(conversation ? { conversation } : {}), id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
+    ...(evidence ? { evidence } : {}),
     ...(scope ? { scope } : {}),
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     decisionId: value.decisionId, decisionAction: value.decisionAction, result, history: value.history, activity,
     request: { requestId: r.requestId, proposalName: r.proposalName, baseRevisionId: r.baseRevisionId,
+      ...(target ? { target } : {}),
+      ...(evidencePins ? { evidencePins } : {}),
       ...(Object.hasOwn(r, 'conversationVisual') ? { conversationVisual: parseConversationVisual(r.conversationVisual) } : {}),
       selectedObjectIds: r.selectedObjectIds, instruction: r.instruction, visualIntent: storedVisual(visual),
       ...(Object.hasOwn(r, 'sources') ? { sources: parseRequestSources(r.sources) } : {}),
@@ -223,6 +246,7 @@ export class ChangeRequests {
   readonly #projects: VersionedProjects;
   readonly #scopes: ModelScopeStore;
   readonly #sources: RequestSourceStore;
+  readonly #evidence: ProjectEvidenceStore;
   readonly #uploads = new Map<AbortController, Promise<RequestSource>>();
   readonly #worker: () => ModelWorker | null;
   readonly #scripts = new ModelScripts();
@@ -239,9 +263,11 @@ export class ChangeRequests {
     this.#db.exec('CREATE TABLE IF NOT EXISTS request_executions (ticket_id TEXT NOT NULL REFERENCES requests(id), request_id TEXT NOT NULL, attempt INTEGER NOT NULL, execution_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(ticket_id, request_id, attempt, execution_id));');
     this.#db.exec('CREATE TABLE IF NOT EXISTS request_messages (ticket_id TEXT NOT NULL REFERENCES requests(id), sequence INTEGER NOT NULL, id TEXT NOT NULL UNIQUE, body TEXT NOT NULL, PRIMARY KEY(ticket_id,sequence));');
     this.#db.exec('CREATE TABLE IF NOT EXISTS request_continuations (request_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES requests(id));');
+    this.#db.exec('CREATE TABLE IF NOT EXISTS project_design_commands (project_id TEXT NOT NULL REFERENCES projects(id), command_id TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(project_id,command_id));');
     this.#projects = new VersionedProjectStore(this.#db);
     this.#scopes = new ModelScopeStore(this.#db, this.#projects);
     this.#sources = new RequestSourceStore(this.#db);
+    this.#evidence = new ProjectEvidenceStore(this.#db, this.#sources);
   }
   static async open(file: string, worker: () => ModelWorker | null): Promise<ChangeRequests> {
     const db = new DatabaseSync(file);
@@ -447,7 +473,8 @@ export class ChangeRequests {
       const sequence = this.#messages(ticket.id).length + 1;
       this.#appendMessage(ticket.id, { kind: 'user', id: version.request.requestId, sequence, at: version.createdAt,
         requestId: version.request.requestId, baseRevisionId: version.request.baseRevisionId, text: version.request.instruction,
-        sources: version.request.sources ?? [], visual: version.request.conversationVisual ?? null });
+        sources: version.request.sources ?? [], visual: version.request.conversationVisual ?? null,
+        ...(version.request.evidencePins ? { evidencePins: [...version.request.evidencePins] } : {}) });
       if (version.result) this.#assistantMessage(version);
       if (version.decisionId && version.decisionAction) this.#decisionMessage(version);
     }
@@ -498,7 +525,7 @@ export class ChangeRequests {
       const [current, proposed] = await Promise.all([RoomRepository.restore(text), RoomRepository.restore(this.#projects.read(ticket.result.project))]);
       this.#assertOpen();
       if (this.project(ticket.projectId) !== text || JSON.stringify(this.#get(id)) !== JSON.stringify(ticket)) continue;
-      const next = assessedTicket(ticket, proposalReadiness(current, proposed, ticket.request.proposalName));
+      const next = assessedTicket(ticket, this.#proposalReadiness(ticket, current, proposed));
       if (next !== ticket) this.#put(next);
       return next;
     }
@@ -614,6 +641,98 @@ export class ChangeRequests {
     this.#assertOpen();
     return this.#sources.get(identifier(projectId), identifier(id));
   }
+  listProjectSources(projectId: string, after: string | null, limit = 20): ReturnType<RequestSourceStore['projectPage']> {
+    this.#assertOpen(); this.#requiredCurrent(identifier(projectId));
+    return this.#sources.projectPage({ projectId, after, limit });
+  }
+  retainProjectSource(projectId: string, input: unknown): RequestSource {
+    this.#assertOpen(); this.#requiredCurrent(identifier(projectId));
+    const [source] = parseRequestSources([input]);
+    if (!source) throw new Error('Choose one uploaded source.');
+    return this.#sources.retainProject(projectId, source);
+  }
+  listEvidence(projectId: string, after: number | null, limit = 20): ReturnType<ProjectEvidenceStore['page']> {
+    this.#assertOpen(); this.#requiredCurrent(identifier(projectId));
+    return this.#evidence.page({ projectId, after: after ?? 0, limit });
+  }
+  async recordEvidence(projectId: string, input: unknown): Promise<EvidencePin> {
+    this.#assertOpen(); identifier(projectId);
+    const value = plainScopeData(input);
+    if (!object(value)) throw new Error('Invalid project evidence command.');
+    fields(value, ['commandId', 'entry']);
+    const commandId = identifier(value.commandId);
+    const repository = await RoomRepository.restore(this.#projects.read(this.#requiredCurrent(projectId)));
+    this.#assertOpen();
+    return this.#evidence.append({ repository, commandId, actor: 'preview-human', entry: parseEvidenceEntry(value.entry) });
+  }
+  #freezeEvidence(repository: RoomRepository, request: RequestInput): EvidenceReadSet | undefined {
+    return request.evidencePins?.length ? this.#evidence.freezeReadSet({ repository,
+      revisionId: request.baseRevisionId, target: request.target?.target ?? { kind: 'main' }, pins: request.evidencePins, subjects: [] }) : undefined;
+  }
+  #pinEvidence(requestId: string, evidence: EvidenceReadSet | undefined): void {
+    if (evidence) this.#evidence.pinReadSet({ requestId, readSet: evidence });
+  }
+  #proposalReadiness(ticket: Ticket, current: RoomRepository, proposed: RoomRepository): ProposalReadiness {
+    const review = proposed.review(ticket.request.proposalName);
+    if (!isDeepStrictEqual(review.evidence, ticket.evidence)) return { state: 'needs-input', error: 'Proposal evidence differs from the submitted evidence. Reopen this chat before deciding.' };
+    if (ticket.evidence) {
+      if (!isDeepStrictEqual(this.#evidence.readPinned({ projectId: ticket.projectId, requestId: ticket.request.requestId }), ticket.evidence)) {
+        return { state: 'needs-input', error: 'The stored evidence binding is incomplete or changed.' };
+      }
+      const status = this.#evidence.verifyForReview({ repository: current, readSet: ticket.evidence, uses: review.evidenceUses ?? [] });
+      if (!status.ready) return { state: 'needs-input', error: status.reasons.join(' ').slice(0, 1000) };
+    }
+    return proposalReadiness(current, proposed, ticket.request.proposalName, ticket.request.target);
+  }
+  async designCommand(projectId: string, action: 'baseline' | 'alternative', input: unknown): Promise<{ project: string; created: DesignTarget }> {
+    this.#assertOpen(); identifier(projectId);
+    const value = plainScopeData(input);
+    if (!object(value)) throw new Error('Invalid design command.');
+    fields(value, action === 'baseline' ? ['commandId', 'name', 'from'] : ['commandId', 'name', 'baselineId']);
+    const commandId = identifier(value.commandId);
+    if (typeof value.name !== 'string') throw new Error('Choose a design name.');
+    const name = value.name;
+    const from = action === 'baseline' ? parseFrozenDesignTarget(value.from) : null;
+    const baselineId = action === 'alternative' ? identifier(value.baselineId) : null;
+    const id = `${action}-` + createHash('sha256').update(`${projectId}\n${commandId}`).digest('hex').slice(0, 32);
+    const fingerprint = createHash('sha256').update(JSON.stringify({ action, actor: 'preview-human', name, from, baselineId })).digest('hex');
+    const replay = (): DesignTarget | null => {
+      const row = this.#db.prepare('SELECT fingerprint,result FROM project_design_commands WHERE project_id=? AND command_id=?').get(projectId, commandId);
+      if (!row) return null;
+      if (row.fingerprint !== fingerprint) throw new BacklogConflict('This design command already has different inputs.');
+      if (typeof row.result !== 'string') throw new Error('Invalid design command receipt.');
+      const created = parseDesignTarget(JSON.parse(row.result));
+      if (created.kind === 'main' || created.kind !== action || created.id !== id) throw new Error('Corrupt design command receipt.');
+      return created;
+    };
+    const previous = replay();
+    if (previous) return { project: this.#projects.read(this.#requiredCurrent(projectId)), created: previous };
+    const reference = this.#requiredCurrent(projectId);
+    const repository = await RoomRepository.restore(this.#projects.read(reference));
+    this.#assertOpen();
+    const completed = replay();
+    if (completed) return { project: this.#projects.read(this.#requiredCurrent(projectId)), created: completed };
+    let candidate: RoomRepository;
+    let created: DesignTarget;
+    if (action === 'baseline') {
+      if (!from || from.projectId !== projectId) throw new BacklogConflict('The baseline belongs to another project.');
+      candidate = repository.captureBaseline({ id, name, from });
+      created = parseDesignTarget({ kind: 'baseline', id });
+    } else {
+      if (!baselineId) throw new Error('Choose a fixed baseline.');
+      candidate = repository.forkAlternative({ id, name, baselineId });
+      created = parseDesignTarget({ kind: 'alternative', id });
+    }
+    this.#transaction(() => {
+      const concurrent = replay();
+      if (concurrent) { created = concurrent; return; }
+      if (this.#requiredCurrent(projectId).documentId !== reference.documentId) throw new BacklogConflict('The project changed while saving the design. Refresh and try again.');
+      this.#projects.publishMetadata({ projectId, expectedDocumentId: reference.documentId, reference: this.#projects.put(candidate) });
+      this.#db.prepare('INSERT INTO project_design_commands(project_id,command_id,fingerprint,result) VALUES(?,?,?,?)')
+        .run(projectId, commandId, fingerprint, JSON.stringify(created));
+    });
+    return { project: this.#projects.read(this.#requiredCurrent(projectId)), created };
+  }
   list(projectId: string): TicketSummary[] {
     const titles = new Map<string, string>();
     for (const row of this.#db.prepare("SELECT m.ticket_id,json_extract(m.body,'$.text') AS title FROM request_messages m JOIN requests r ON r.id=m.ticket_id WHERE r.project_id=? AND m.sequence=1").all(identifier(projectId))) {
@@ -627,7 +746,7 @@ export class ChangeRequests {
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    const request: RequestInput = { ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+    const request: RequestInput = { ...(bound.target ? { target: bound.target } : {}), ...(bound.evidencePins ? { evidencePins: bound.evidencePins } : {}), ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
       ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };
@@ -650,23 +769,29 @@ export class ChangeRequests {
       return summary;
     }
     if (current.root() !== repository.root()) throw new BacklogConflict('This project identity belongs to a different model.');
-    if (current.head('main') !== repository.head('main')) throw new BacklogConflict('The accepted server model changed. Refresh the backlog and open its current model before submitting.');
+    const selectedHead = bound.target ? current.freezeDesignTarget(bound.target.target).revisionId : current.head('main');
+    if (selectedHead !== (bound.target?.revisionId ?? repository.head('main'))) throw new BacklogConflict(bound.target
+      ? 'The selected design changed. Reopen that design before submitting.'
+      : 'The accepted server model changed. Reopen the latest server project before submitting.');
     if (bound.scope && !isDeepStrictEqual(current.view(bound.baseRevisionId).snapshot, bound.base.snapshot)) {
       throw new BacklogConflict('The scoped request base is not the authoritative server revision.');
     }
     if (this.#all(repository.projectId).some((ticket) => ticket.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket already uses this proposal name.');
     const pending = this.#db.prepare("SELECT COUNT(*) AS count FROM requests WHERE state IN ('queued','working')").get();
     if (pending && typeof pending.count === 'number' && pending.count >= 64) throw new Error('The pending request backlog is full. Finish or cancel existing work first.');
+    const evidence = this.#freezeEvidence(current, request);
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
       const latest = this.project(repository.projectId);
       if (latest !== currentText && latest !== body) throw new BacklogConflict('The accepted server model changed during submission. Refresh before submitting.');
       if (!latest) this.#register(repository);
       this.#assertSavedScope(repository.projectId, bound.scopedRequest);
-      const ticket: Ticket = recordActivity({ id: request.requestId, projectId: repository.projectId, request, project: this.#projects.put(repository), fingerprint,
+      const ticket: Ticket = recordActivity({ id: request.requestId, projectId: repository.projectId, request, project: this.#projects.put(current), fingerprint,
+        ...(evidence ? { evidence } : {}),
         ...(bound.scope ? { scope: bound.scope } : {}),
         state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [], activity: [] }, { stage: 'queued', message: 'Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.' });
       if (request.sources) this.#sources.bind(repository.projectId, request.sources, request.requestId);
+      this.#pinEvidence(request.requestId, evidence);
       this.#put(ticket);
       this.#seedConversation(ticket);
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
@@ -683,7 +808,7 @@ export class ChangeRequests {
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    const request: RequestInput = { ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+    const request: RequestInput = { ...(bound.target ? { target: bound.target } : {}), ...(bound.evidencePins ? { evidencePins: bound.evidencePins } : {}), ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
       ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };
@@ -700,22 +825,29 @@ export class ChangeRequests {
     if (!currentText) throw new Error('Missing project.');
     const current = await RoomRepository.restore(currentText);
     this.#assertOpen();
-    if (repository.projectId !== ticket.projectId || repository.root() !== current.root() || repository.head('main') !== current.head('main') || request.baseRevisionId !== current.head('main')) {
-      throw new BacklogConflict('A revision must use the current accepted model in this project.');
+    const destination: WritableDesignTarget = ticket.request.target?.target ?? { kind: 'main' };
+    const head = current.freezeDesignTarget(destination).revisionId;
+    if (!sameDesignTarget(destination, request.target?.target ?? { kind: 'main' })) throw new BacklogConflict('A conversation cannot change its design destination. Start a new chat for another design.');
+    if (repository.projectId !== ticket.projectId || repository.root() !== current.root()
+        || repository.freezeDesignTarget(destination).revisionId !== head || request.baseRevisionId !== head) {
+      throw new BacklogConflict('A revision must use the current accepted revision of this design.');
     }
     if (this.#all(ticket.projectId).some((other) => other.id !== ticket.id && other.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket uses that proposal name.');
+    const evidence = this.#freezeEvidence(current, request);
     this.#seedConversation(ticket);
     const archived = JSON.stringify({ ...ticket, history: [] });
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
-      if (this.project(ticket.projectId) !== currentText || this.#get(id).fingerprint !== ticket.fingerprint) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
+      if (this.project(ticket.projectId) !== currentText || !isDeepStrictEqual(this.#get(id), ticket)) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
       this.#assertSavedScope(ticket.projectId, bound.scopedRequest);
       if (request.sources) this.#sources.bind(ticket.projectId, request.sources, request.requestId);
-      const { scope: previousScope, ...previousTicket } = ticket;
-      const next: Ticket = recordActivity({ ...previousTicket, ...(bound.scope ? { scope: bound.scope } : {}), project: this.#projects.put(repository), request, fingerprint, history: [...ticket.history, archived], activity: [],
+      this.#pinEvidence(request.requestId, evidence);
+      const { scope: previousScope, evidence: previousEvidence, ...previousTicket } = ticket;
+      const next: Ticket = recordActivity({ ...previousTicket, ...(bound.scope ? { scope: bound.scope } : {}), ...(evidence ? { evidence } : {}), project: this.#projects.put(current), request, fingerprint, history: [...ticket.history, archived], activity: [],
         state: 'queued', attempts: 0, result: null, error: null, decisionId: null, decisionAction: null, updatedAt: Date.now() }, { stage: 'queued', message: 'New revision queued. Earlier attempts remain in request history.' });
       this.#put(next);
-      this.#appendMessage(id, { kind: 'user', id: request.requestId, sequence: this.#messages(id).length + 1, at: Date.now(), requestId: request.requestId, baseRevisionId: request.baseRevisionId, text: request.instruction, sources: request.sources ?? [], visual: request.conversationVisual ?? null });
+      this.#appendMessage(id, { kind: 'user', id: request.requestId, sequence: this.#messages(id).length + 1, at: Date.now(), requestId: request.requestId, baseRevisionId: request.baseRevisionId, text: request.instruction, sources: request.sources ?? [], visual: request.conversationVisual ?? null,
+        ...(request.evidencePins ? { evidencePins: [...request.evidencePins] } : {}) });
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
     setImmediate(() => this.#pump());
@@ -735,7 +867,9 @@ export class ChangeRequests {
     const currentText = this.project(ticket.projectId);
     if (!currentText) throw new Error('Missing accepted model.');
     const repository = await RoomRepository.restore(currentText);
-    if (reply.baseRevisionId !== repository.head('main')) throw new BacklogConflict('The accepted model changed. Refresh before attaching or replying.');
+    const target = ticket.request.target || repository.persistence().version === 3
+      ? repository.freezeDesignTarget(ticket.request.target?.target ?? { kind: 'main' }) : undefined;
+    if (reply.baseRevisionId !== (target?.revisionId ?? repository.head('main'))) throw new BacklogConflict('This design changed. Refresh before attaching or replying.');
     if (ticket.scope && ticket.request.baseRevisionId !== reply.baseRevisionId) throw new BacklogConflict('The scoped base changed. Start a fresh scope review before continuing.');
     if (reply.visual) {
       let snapshot = repository.view(reply.baseRevisionId).snapshot;
@@ -758,18 +892,23 @@ export class ChangeRequests {
     if (sources.length) parseRequestSources(sources);
     const selected = reply.visual?.snapshot.kind === 'accepted' && reply.visual.selectedObjectIds.length ? reply.visual.selectedObjectIds : ticket.request.selectedObjectIds;
     const bound = validateModelProposalRequest(repository, { requestId: reply.messageId, baseRevisionId: reply.baseRevisionId,
+      ...(target ? { target } : {}),
+      ...((reply.evidencePins ?? ticket.request.evidencePins) ? { evidencePins: reply.evidencePins ?? ticket.request.evidencePins } : {}),
       selectedObjectIds: selected, instruction: reply.text, visualIntent: { kind: 'selection' }, ...(sources.length ? { sources } : {}),
       ...(ticket.request.authoringScope ? { authoringScope: ticket.request.authoringScope } : {}), ...(ticket.request.scope ? { scope: ticket.request.scope } : {}) });
+    const evidence = this.#freezeEvidence(repository, bound);
     this.#assertOpen();
     this.#transaction(() => {
       if (this.#submission(reply.messageId, fingerprint)) return;
       const latest = this.#get(id);
       if (this.project(ticket.projectId) !== currentText || latest.request.requestId !== ticket.request.requestId || latest.fingerprint !== ticket.fingerprint || this.#messages(id).length !== reply.expectedSequence) throw new BacklogConflict('The model or conversation changed while sending. Refresh and retry.');
       if (sources.length) this.#sources.bind(ticket.projectId, sources, reply.messageId);
-      const request: RequestInput = { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+      this.#pinEvidence(reply.messageId, evidence);
+      const request: RequestInput = { ...(bound.target ? { target: bound.target } : {}), ...(bound.evidencePins ? { evidencePins: bound.evidencePins } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
         selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
         ...(sources.length ? { sources } : {}), ...(ticket.request.authoringScope ? { authoringScope: ticket.request.authoringScope } : {}), ...(ticket.request.scope ? { scope: ticket.request.scope } : {}) };
-      const next = recordActivity({ ...latest, request, project: this.#projects.put(repository), fingerprint,
+      const { evidence: previousEvidence, ...previousTicket } = latest;
+      const next = recordActivity({ ...previousTicket, ...(evidence ? { evidence } : {}), request, project: this.#projects.put(repository), fingerprint,
         history: [...latest.history, JSON.stringify({ ...latest, history: [] })], activity: [], state: 'queued', attempts: 0,
         result: null, error: null, decisionId: null, decisionAction: null }, { stage: 'queued', message: 'Reply saved. Earlier messages and proposals remain in the conversation.' });
       this.#put(next);
@@ -779,7 +918,8 @@ export class ChangeRequests {
           content: { kind: 'explanation', text: 'This turn was superseded by a later message. Its late result cannot change the conversation or accepted model.' } });
       }
       this.#appendMessage(id, { kind: 'user', id: reply.messageId, sequence: this.#messages(id).length + 1, at: Date.now(), requestId: reply.messageId,
-        baseRevisionId: reply.baseRevisionId, text: reply.text, sources: reply.sources, visual: reply.visual });
+        baseRevisionId: reply.baseRevisionId, text: reply.text, sources: reply.sources, visual: reply.visual,
+        ...(reply.evidencePins ? { evidencePins: reply.evidencePins } : {}) });
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(reply.messageId, id, fingerprint);
       this.#db.prepare('INSERT INTO request_continuations(request_id,ticket_id) VALUES(?,?)').run(reply.messageId, id);
     });
@@ -829,6 +969,9 @@ export class ChangeRequests {
     try {
       const repository = await RoomRepository.restore(this.#projects.read(ticket.project));
       if (!this.#isWorking(ticket) || signal.aborted) return;
+      const current = ticket.evidence ? await RoomRepository.restore(this.#projects.read(this.#requiredCurrent(ticket.projectId))) : repository;
+      if (!this.#isWorking(ticket) || signal.aborted) return;
+      const context = ticket.evidence ? this.#evidence.reviewContext({ repository: current, readSet: ticket.evidence }) : undefined;
       if (ticket.request.sources) {
         this.#put(recordActivity(this.#get(ticket.id), { stage: 'inspecting', message: 'Preparing the attached reference files for the agent.' }));
         prepared = await this.#sources.prepare(ticket.projectId, ticket.request.sources, signal);
@@ -837,10 +980,12 @@ export class ChangeRequests {
       const continuation = this.#db.prepare('SELECT request_id FROM request_continuations WHERE request_id=? AND ticket_id=?').get(ticket.request.requestId, ticket.id);
       const prior = continuation ? [...ticket.history].reverse().map(text => parseTicket(text, reference)).find(item => item.result?.status === 'ready' && isDeepStrictEqual(item.scope, ticket.scope)) : undefined;
       const priorRepository = prior?.result ? await RoomRepository.restore(this.#projects.read(prior.result.project)) : null;
-      const initialDraft = prior && priorRepository ? repository.proposalSnapshot(priorRepository, prior.request.proposalName) : undefined;
+      const initialDraft = prior && priorRepository ? repository.proposalSnapshot(priorRepository, prior.request.proposalName, prior.request.target) : undefined;
       const result = await prepareModelProposal(repository, ticket.request, trackedWorker, (event) => {
         if (this.#isWorking(ticket)) this.#put(recordActivity(this.#get(ticket.id), event));
-      }, { signal, scripts: this.#scripts, conversation: this.#conversation(ticket.id), ...(initialDraft ? { initialDraft } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}), ...(prepared ? { sourceInput: prepared } : {}), onPreview: snapshot => {
+      }, { signal, scripts: this.#scripts, conversation: this.#conversation(ticket.id),
+        ...(context ? { evidenceContext: { ...context, entries: context.entries.map(item => item.entry) } } : {}),
+        ...(initialDraft ? { initialDraft } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}), ...(prepared ? { sourceInput: prepared } : {}), onPreview: snapshot => {
         if (snapshot === null) { clearDraft(); return; }
         const active = this.#attempts.get(ticket.id);
         if (signal.aborted || !this.#isWorking(ticket) || !active || active.requestId !== ticket.request.requestId || active.attempt !== ticket.attempts) return;
@@ -912,9 +1057,9 @@ export class ChangeRequests {
     const proposed = await RoomRepository.restore(this.#projects.read(ticket.result.project));
     this.#assertOpen();
     if (!isDeepStrictEqual(ticket.scope, proposed.review(ticket.request.proposalName).scope)) throw new BacklogConflict('The reviewed scope differs from the submitted scope. Reopen the request before deciding.');
-    const readiness = proposalReadiness(current, proposed, ticket.request.proposalName);
+    const readiness = this.#proposalReadiness(ticket, current, proposed);
     if (readiness.state === 'needs-input') throw new BacklogConflict(readiness.error);
-    const candidate = await current.acceptFrom(proposed, ticket.request.proposalName, { decisionId, actor: 'preview-human' });
+    const candidate = await current.acceptFrom(proposed, ticket.request.proposalName, { decisionId, actor: 'preview-human' }, ticket.request.target);
     const accepted = await RoomRepository.restore(candidate.serialize());
     const acceptedText = accepted.serialize();
     const next: Ticket = recordActivity({ ...ticket, state: 'completed', decisionId, decisionAction: action }, { stage: 'completed', message: 'Proposal explicitly accepted and saved as the current model.' });
@@ -922,7 +1067,7 @@ export class ChangeRequests {
     for (const other of this.#all(ticket.projectId)) {
       if (other.id === ticket.id || (other.state !== 'ready' && other.state !== 'needs-input') || other.result?.status !== 'ready') continue;
       const otherProposal = await RoomRepository.restore(this.#projects.read(other.result.project));
-      assessments.push({ before: other, after: assessedTicket(other, proposalReadiness(accepted, otherProposal, other.request.proposalName)) });
+      assessments.push({ before: other, after: assessedTicket(other, this.#proposalReadiness(other, accepted, otherProposal)) });
     }
     this.#assertOpen();
     this.#transaction(() => {
@@ -930,8 +1075,12 @@ export class ChangeRequests {
       const latest = this.#get(id);
       if (latest.decisionId === decisionId && latest.decisionAction === action) return;
       if (this.#requiredCurrent(ticket.projectId).documentId !== expected.documentId || JSON.stringify(latest) !== JSON.stringify(ticket)) throw new BacklogConflict('The model or ticket changed while reviewing. Refresh before deciding.');
+      const finalReadiness = this.#proposalReadiness(ticket, current, proposed);
+      if (finalReadiness.state === 'needs-input') throw new BacklogConflict(finalReadiness.error);
       this.#projects.publish({ projectId: ticket.projectId, expectedDocumentId: expected.documentId,
-        reference: this.#projects.put(accepted), origin: 'accepted', requestId: ticket.request.requestId, decisionId });
+        reference: this.#projects.put(accepted), origin: 'accepted', requestId: ticket.request.requestId, decisionId,
+        ...(ticket.request.target ? { target: ticket.request.target.target,
+          expectedTargetRevisionId: current.freezeDesignTarget(ticket.request.target.target).revisionId } : {}) });
       this.#put(next);
       this.#decisionMessage(next);
       for (const assessment of assessments) {

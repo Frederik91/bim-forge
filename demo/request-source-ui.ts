@@ -25,6 +25,50 @@ function sourceUrl(projectId: string, id: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/sources/${encodeURIComponent(id)}`;
 }
 
+/** Shared private upload protocol; retention remains an explicit separate action. */
+export async function uploadSourceFile(input: { projectId: string; id: string; file: File;
+  signal: AbortSignal; fetcher?: typeof fetch }): Promise<RequestSource> {
+  const admitted = admitSourceFiles([input.file], { count: 0, bytes: 0 })[0];
+  if (!admitted) throw new Error('Choose a source file.');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.projectId)
+      || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.id)) throw new Error('Invalid private source identity.');
+  const response = await (input.fetcher ?? fetch)(sourceUrl(input.projectId, input.id), {
+    method: 'POST', headers: { 'Content-Type': admitted.mediaType, 'X-Source-Name': encodeURIComponent(admitted.name) },
+    body: input.file, signal: input.signal, credentials: 'same-origin', redirect: 'error',
+  });
+  const value: unknown = await readSourceUploadResponse(response);
+  if (!response.ok) {
+    let message = `Upload failed (HTTP ${response.status}). Retry this file.`;
+    if (value && typeof value === 'object' && 'error' in value && typeof value.error === 'string') {
+      const detail = value.error.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 300);
+      if (detail) message = detail;
+    }
+    throw new Error(message);
+  }
+  if (!value || typeof value !== 'object' || !('source' in value)
+      || Object.keys(value).length !== 1) throw new Error('Upload returned an invalid source reference.');
+  const source = parseRequestSources([value.source])[0];
+  if (!source || source.id !== input.id || source.name !== admitted.name || source.mediaType !== admitted.mediaType
+      || source.byteLength !== input.file.size) throw new Error('Upload returned a different source reference.');
+  return source;
+}
+
+async function readSourceUploadResponse(response: Response): Promise<unknown> {
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  try {
+    const decoder = new TextDecoder(); let text = ''; let bytes = 0;
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > 4096) throw new Error('Upload response exceeds its metadata limit.');
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    try { return JSON.parse(text + decoder.decode()); } catch { return null; }
+  } finally { await reader.cancel(); reader.releaseLock(); }
+}
+
 function sizeLabel(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KiB` : `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
@@ -212,25 +256,7 @@ export class RequestSourcePicker {
     const entries = this.#entries;
     const controller = new AbortController(); entry.upload = { kind: 'uploading', controller }; this.#render();
     try {
-      const response = await fetch(sourceUrl(projectId, entry.id), {
-        method: 'POST', headers: { 'Content-Type': entry.mediaType, 'X-Source-Name': encodeURIComponent(entry.name) },
-        body: entry.file, signal: controller.signal,
-      });
-      if (!response.ok) {
-        let message = `Upload failed (HTTP ${response.status}). Retry this file.`;
-        try {
-          const failure: unknown = await response.json();
-          if (failure && typeof failure === 'object' && 'error' in failure && typeof failure.error === 'string') {
-            const detail = failure.error.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 300);
-            if (detail) message = detail;
-          }
-        } catch { /* Non-JSON responses retain the HTTP fallback. */ }
-        throw new Error(message);
-      }
-      const value: unknown = await response.json();
-      if (!value || typeof value !== 'object' || !('source' in value)) throw new Error('Upload returned an invalid source reference.');
-      const source = parseRequestSources([value.source])[0];
-      if (!source || source.id !== entry.id || source.name !== entry.name || source.mediaType !== entry.mediaType || source.byteLength !== entry.file.size) throw new Error('Upload returned a different source reference.');
+      const source = await uploadSourceFile({ projectId, id: entry.id, file: entry.file, signal: controller.signal });
       if (!controller.signal.aborted && entries.includes(entry)) {
         entry.upload = { kind: 'ready', source };
         if (entry.previewUrl) { URL.revokeObjectURL(entry.previewUrl); entry.previewUrl = null; }

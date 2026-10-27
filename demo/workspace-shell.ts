@@ -1,8 +1,9 @@
-export type WorkspaceContext = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
+export type WorkspaceContext = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history' | 'evidence';
 
 const contextLabels: Record<WorkspaceContext, string> = {
   project: 'Project overview', request: 'Change request', backlog: 'Change requests',
   activity: 'Agent activity', review: 'Proposal review', history: 'Model history',
+  evidence: 'Project evidence',
 };
 
 export class WorkspaceShell {
@@ -38,7 +39,7 @@ export class WorkspaceShell {
     const fileMenu = document.querySelector('.workspace-file-menu');
     if (fileMenu instanceof HTMLDetailsElement) {
       fileMenu.addEventListener('click', event => {
-        if (event.target instanceof Element && event.target.closest('button')) fileMenu.open = false;
+        if (event.target instanceof Element && event.target.closest('button') && !event.target.closest('#design-views-mount')) fileMenu.open = false;
       });
       fileMenu.addEventListener('keydown', event => {
         if (event.key === 'Escape') fileMenu.open = false;
