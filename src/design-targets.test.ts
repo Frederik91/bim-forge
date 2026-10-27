@@ -204,9 +204,9 @@ test('native wall proposal enforces wall AND changed-space authority and reports
 });
 
 function evidenceReadSet(repository: RoomRepository, target: FrozenDesignTarget): EvidenceReadSet {
-  return { version: 1, projectId: repository.projectId, revisionId: target.revisionId,
+  return { version: 1, projectId: repository.projectId, revisionId: target.revisionId, target: target.target,
     pins: [{ entryId: 'measured-entry', hash: 'a'.repeat(64) }], subjects: [{ subject: {
-      anchor: { projectId: repository.projectId, revisionId: target.revisionId, entityId: 'door-entry', bodyHash: 'b'.repeat(64) },
+      anchor: { projectId: repository.projectId, revisionId: target.revisionId, entityId: 'door-entry', bodyHash: 'b'.repeat(64), target: target.target },
       property: { definitionId: 'geometry-width', valueKind: 'length' } }, signature: 'c'.repeat(64) }] };
 }
 

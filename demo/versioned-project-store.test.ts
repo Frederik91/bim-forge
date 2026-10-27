@@ -512,7 +512,7 @@ test('identical sibling geometry retains distinct target-local review decisions 
 test('changed-only documents hash native evidence pins before decisions and retain explicit external dependencies on restart', async t => {
   const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
   const { repository, reference } = await targetFixture(store); const frozen = repository.freezeDesignTarget(targetKitchen);
-  const evidence: EvidenceReadSet = { version: 1, projectId: repository.projectId, revisionId: frozen.revisionId,
+  const evidence: EvidenceReadSet = { version: 1, projectId: repository.projectId, revisionId: frozen.revisionId, target: frozen.target,
     pins: [{ entryId: 'authoritative-entry', hash: 'a'.repeat(64) }], subjects: [] };
   const proposed = await targetStudy(repository, 'store-evidence', targetKitchen, evidence);
   const pendingReference = store.put(proposed); const countBefore = count(db, 'reviews');
