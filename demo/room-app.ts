@@ -5,8 +5,11 @@ import { initializeSyntheticEvidence } from './synthetic-pilot-client.ts';
 import { DesignWorkspace } from './design-workspace.ts';
 import { parseDesignTarget, parseFrozenDesignTarget } from '../src/design-targets.ts';
 import type { DesignTarget, FrozenDesignTarget } from '../src/design-targets.ts';
-import { parseEvidenceUses } from '../src/model-evidence.ts';
-import type { EvidenceUse } from '../src/model-evidence.ts';
+import { MAX_EVIDENCE_PINS, parseEvidencePin, parseEvidenceUses } from '../src/model-evidence.ts';
+import type { EvidencePin, EvidenceUse } from '../src/model-evidence.ts';
+import { ProjectEvidencePanel } from './project-evidence-ui.ts';
+import type { ProjectEvidenceContext } from './project-evidence-ui.ts';
+import { parseRequestSources } from '../src/request-sources.ts';
 import { levels, levelView, entityLevel, stairFootprint } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
@@ -70,7 +73,7 @@ type AuthSession =
   | (AuthSessionBase & { status: 'connected'; connected: true; account: AuthAccount });
 interface ActiveReview extends RequestSourceContext {
   target?: FrozenDesignTarget;
-  evidenceUses?: readonly EvidenceUse[];
+  evidenceUses?: EvidenceUse[];
   scope?: FrozenModelScope;
   requestId: string;
   proposalName: string;
@@ -308,6 +311,8 @@ let chatVisual: ConversationVisual | null = null;
 let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
 let chatRefreshing = false;
 let newDraftId = 'new';
+let chatEvidencePins: readonly EvidencePin[] = [];
+let chatEvidenceEdited = false;
 const chatDrafts = new Map<string, ReturnType<typeof captureChatDraft>>();
 const chatInspectionOrigins = new Map<string, ReturnType<typeof captureChatDraft>>();
 let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
@@ -365,7 +370,7 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
   add: button('composer-add'), menu: generic('composer-menu'), visual: generic('composer-model-context') }, {
   items: () => (preview?.entities ?? []).map(({ id, name, type }) => ({ id, name, type })),
   action: action => {
-    if (action === 'evidence') { showPage('evidence'); return; }
+    if (action === 'evidence') { showPage('evidence'); return true; }
     if (action === 'files') return sourcePicker.chooseFiles();
     if (action === 'view') return attachChatContext(selectedObject ? [selectedObject] : []);
     const options = requiredElement('request-options', HTMLDetailsElement); options.open = true;
@@ -377,6 +382,64 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
   changed: updateControls,
 });
 
+function assertEvidenceDestination(context: ProjectEvidenceContext | null, signal: AbortSignal): void {
+  signal.throwIfAborted();
+  if (!repo || busy || selectedDesignTarget.kind === 'baseline' || !context || context.projectId !== repo.projectId
+      || context.bindingId !== currentChatKey() || designKey(context.target) !== designKey(selectedDesignTarget)
+      || context.revisionId !== selectedDesignHead()) throw new Error('Reopen project evidence from the chat and design you want to use.');
+}
+const evidencePanel = new ProjectEvidencePanel(generic('project-evidence-mount'), {
+  useSources: (sources, context, signal) => {
+    assertEvidenceDestination(context, signal);
+    if (!sources.length) return;
+    if (!sourcePicker.ready) throw new Error('Finish the current attachment uploads before adding retained files.');
+    const existing = sourcePicker.sources;
+    for (const source of sources) {
+      const previous = existing.find(item => item.id === source.id);
+      if (previous && (previous.name !== source.name || previous.mediaType !== source.mediaType
+          || previous.byteLength !== source.byteLength || previous.sha256 !== source.sha256)) throw new Error('A source identity has changed. Reopen the project source library.');
+    }
+    const combined = parseRequestSources([...new Map([...existing, ...sources].map(source => [source.id, source])).values()]);
+    sourcePicker.restore(requireRepository().projectId, combined); submission = null; chatReply = null;
+    showPage('request'); showRequestPane('details'); updateControls();
+    status('Retained files attached to this chat. Remove individual files from the composer if needed.');
+  },
+  useEvidence: (pins, context, signal) => {
+    assertEvidenceDestination(context, signal);
+    chatEvidencePins = pins.map(parseEvidencePin); chatEvidenceEdited = true; submission = null; chatReply = null;
+    showPage('request'); showRequestPane('details'); updateControls();
+    status(pins.length ? 'Evidence records attached. Their relevance and sources are checked when the agent starts and before acceptance.' : 'Evidence selection cleared for the next message. Earlier messages retain their references.');
+  },
+  selectEntity: anchor => {
+    if (!repo || anchor.projectId !== repo.projectId) throw new Error('This evidence belongs to another project.');
+    const snapshot = repo.view(anchor.revisionId).snapshot;
+    if (!snapshot.entities.some(item => item.id === anchor.entityId)) throw new Error('The evidence anchor is unavailable.');
+    renderElementProperties(generic('element-properties'), snapshot, anchor.entityId, `Evidence anchor · ${anchor.revisionId.slice(0, 10)}`);
+    workspace.showInspector(); status('Inspecting the evidence’s saved object properties. The current model and chat destination are unchanged.');
+  },
+});
+function refreshEvidencePanel(): void {
+  const snapshot = repo ? selectedDesignView().snapshot : null;
+  const selected = snapshot?.entities.find(item => item.id === selectedObject);
+  const context: ProjectEvidenceContext | null = repo && snapshot ? { projectId: repo.projectId, bindingId: currentChatKey(),
+    target: selectedDesignTarget, revisionId: selectedDesignHead(), selectedObject: selected ? { id: selected.id, name: selected.name } : null,
+    entityName: id => snapshot.entities.find(item => item.id === id)?.name } : null;
+  void evidencePanel.update(context).catch(report);
+}
+function renderEvidenceContext(): void {
+  const mount = generic('request-evidence-context'); mount.replaceChildren();
+  for (const pin of chatEvidencePins) {
+    const chip = element('span', undefined, 'request-evidence-chip');
+    chip.append(element('span', pin.entryId));
+    const remove = element('button', '×'); remove.type = 'button'; remove.setAttribute('aria-label', `Remove evidence ${pin.entryId}`);
+    remove.disabled = busy || selectedDesignTarget.kind === 'baseline';
+    remove.addEventListener('click', () => {
+      chatEvidencePins = chatEvidencePins.filter(item => item.entryId !== pin.entryId); chatEvidenceEdited = true;
+      submission = null; chatReply = null; updateControls();
+    });
+    chip.append(remove); mount.append(chip);
+  }
+}
 function designKey(target: DesignTarget): string { return target.kind === 'main' ? 'main' : `${target.kind}:${target.id}`; }
 function selectedDesignView(project: RoomRepository = repo ?? requireRepository()) { return project.designView(selectedDesignTarget); }
 function selectedDesignHead(project: RoomRepository = repo ?? requireRepository()): string { return selectedDesignView(project).revisionId; }
@@ -440,7 +503,7 @@ function clearRequestSources(): void {
 }
 
 function requestDirty(): boolean {
-  return dirty() || Boolean(chatVisual) || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
+  return dirty() || Boolean(chatVisual) || chatEvidenceEdited || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
 function currentChatKey(): string { return `${repo?.projectId ?? 'none'}:${chatTicketId ?? newDraftId}`; }
@@ -448,7 +511,8 @@ function captureChatDraft() {
   return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, designTarget: selectedDesignTarget, conversationTarget, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
-    invalid: invalidInput, reply: chatReply, submission, review: activeReview, reviewTicketId: activeTicketId, proposalMessageId: activeChatProposalMessageId,
+    invalid: invalidInput, reply: chatReply, submission, evidencePins: chatEvidencePins, evidenceEdited: chatEvidenceEdited,
+    review: activeReview, reviewTicketId: activeTicketId, proposalMessageId: activeChatProposalMessageId,
     geometryValues: [ui['door-width'].value, ui['door-offset'].value, ui['wall-position'].value, ui['wall-length'].value],
     scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
     reconstructionScope: ui['reconstruction-scope'].value, updatedAt: Date.now() };
@@ -466,6 +530,7 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
   preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
   invalidInput = draft.invalid; chatReply = draft.reply; submission = draft.submission; newDraftId = draft.draftId;
+  chatEvidencePins = draft.evidencePins; chatEvidenceEdited = draft.evidenceEdited;
   activeReview = draft.review; activeTicketId = draft.reviewTicketId; activeChatProposalMessageId = draft.proposalMessageId;
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
   ui['request-reconstruct'].checked = draft.reconstruction; ui['reconstruction-scope'].value = draft.reconstructionScope;
@@ -657,6 +722,7 @@ function showPage(name: PageName): void {
   if (name === 'review' && !activeReview) return;
   if ((name === 'project' || name === 'history') && !repo) return;
   currentPage = name;
+  if (name === 'evidence') refreshEvidencePanel();
   generic('evidence-page').hidden = name !== 'evidence';
   generic('activity-page').hidden = name !== 'activity';
   ui['project-page'].hidden = name !== 'project';
@@ -815,6 +881,7 @@ function scheduleAuthPoll(): void {
 }
 
 function updateControls() {
+  renderEvidenceContext();
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
   const writable = serverAvailable && !busy && !dragging;
@@ -1487,6 +1554,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
       selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...(selectedObject ? [selectedObject] : []), ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
+      ...(chatEvidencePins.length ? { evidencePins: chatEvidencePins } : {}),
       ...(chatVisual ? { conversationVisual: checkedChatVisual() } : {}),
       ...(scope ? { scope } : {}),
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
@@ -1501,6 +1569,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const submittedTicket = parseBacklogItem(acknowledgement.ticket);
     const submittedName = submittedTicket.request.proposalName;
     chatTicketId = submittedTicket.id;
+    chatEvidencePins = submittedTicket.request.evidencePins ?? []; chatEvidenceEdited = false;
     submission = null;
     clearRequestSources();
     chatDrafts.delete(draftKey); sourcePicker.switchDraft(currentChatKey());
@@ -1523,6 +1592,7 @@ async function proposalJson(response: Response): Promise<unknown> {
 
 function closeChat(): void {
   conversationTarget = null;
+  chatEvidencePins = []; chatEvidenceEdited = false;
   liveChatPreview = null; livePreviewSelection = null;
   chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
 }
@@ -1669,7 +1739,7 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   if (!context.selectedId) {
     selectedObject = ''; ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', '', true, true)); syncInspector();
   }
-  if (!draft) clearRequestSources();
+  if (!draft) { clearRequestSources(); chatEvidencePins = ticket.request.evidencePins ?? []; chatEvidenceEdited = false; }
   ui['request-text'].value = ''; ui['proposal-name'].value = '';
   chatVisual = null; chatReply = null; composer.setVisual(null);
   showChatTicket(value.ticket);
@@ -1700,7 +1770,8 @@ async function sendChatReply(): Promise<void> {
   if (!id || !conversation || !repo) throw new Error('Open this conversation again before replying.');
   const target = conversationTarget?.target ?? { kind: 'main' };
   if (designKey(target) !== designKey(selectedDesignTarget)) throw new Error('Reopen this conversation in its bound design before replying.');
-  const content = { baseRevisionId: repo.freezeDesignTarget(target).revisionId, text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual() };
+  const content = { baseRevisionId: repo.freezeDesignTarget(target).revisionId, text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual(),
+    ...(chatEvidencePins.length || chatEvidenceEdited ? { evidencePins: chatEvidencePins } : {}) };
   const fingerprint = JSON.stringify(content);
   if (!chatReply || chatReply.fingerprint !== fingerprint) chatReply = { fingerprint, body: parseConversationReply({
     ...content, messageId: globalThis.crypto.randomUUID(), expectedSequence: conversation.sequence,
@@ -1715,7 +1786,7 @@ async function sendChatReply(): Promise<void> {
   }
   const value = await proposalJson(response);
   if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
-  showChatTicket(value.ticket); chatReply = null; chatVisual = null; composer.setVisual(null);
+  showChatTicket(value.ticket); chatReply = null; chatVisual = null; chatEvidenceEdited = false; composer.setVisual(null);
   chatDrafts.delete(currentChatKey());
   clearRequestSources(); ui['request-text'].value = ''; visualDraft = null; renderComparison();
   await refreshBacklog(); status('Reply saved on this request. The assistant will continue with the complete conversation and earlier proposal.');
@@ -1772,7 +1843,7 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
 
 interface BacklogItem {
   id: string; projectId: string; title: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
-  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; target?: FrozenDesignTarget; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
+  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; target?: FrozenDesignTarget; evidencePins?: readonly EvidencePin[]; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
 }
 const ticketScopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
@@ -1786,6 +1857,12 @@ function parseBacklogItem(value: unknown): BacklogItem {
   const baseRevisionId = requiredText(value.request, 'baseRevisionId');
   const target = Object.hasOwn(value.request, 'target') ? parseFrozenDesignTarget(value.request.target) : null;
   if (target && (target.projectId !== value.projectId || target.revisionId !== baseRevisionId)) throw new Error('Request design target does not match its project and base.');
+  let evidencePins: EvidencePin[] | undefined;
+  if (Object.hasOwn(value.request, 'evidencePins')) {
+    if (!Array.isArray(value.request.evidencePins) || value.request.evidencePins.length > MAX_EVIDENCE_PINS) throw new Error('Invalid request evidence selection.');
+    evidencePins = value.request.evidencePins.map(parseEvidencePin);
+    if (new Set(evidencePins.map(pin => pin.entryId)).size !== evidencePins.length) throw new Error('Duplicate request evidence selection.');
+  }
   if (!Array.isArray(value.request.selectedObjectIds) || value.request.selectedObjectIds.length > 100) throw new Error('Invalid saved request selection.');
   const selectedObjectIds = value.request.selectedObjectIds.map(identifier);
   const requestScope = requestScopeContext(value.request);
@@ -1802,7 +1879,7 @@ function parseBacklogItem(value: unknown): BacklogItem {
   return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
     request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId,
-      ...(target ? { target } : {}), selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
+      ...(target ? { target } : {}), ...(evidencePins ? { evidencePins } : {}), selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
 }
 async function inspectTicketScope(item: BacklogItem): Promise<void> {
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
@@ -3107,6 +3184,7 @@ for (const conflictChoice of [ui['conflict-left'], ui['conflict-right']]) confli
 
 function render(): void {
   if (repo) designWorkspace.update(repo.designTargets(), selectedDesignTarget);
+  if (currentPage === 'evidence') refreshEvidencePanel();
   const project = requireRepository();
   ui['project-title'].textContent = project.name;
   document.title = `${project.name} · Room studies`;
