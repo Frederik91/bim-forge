@@ -1,6 +1,9 @@
 import { Type } from 'typebox';
 import { Check } from 'typebox/value';
 import { RoomRepository } from '../src/room-model.ts';
+import { DesignTargetSchema } from '../src/design-target-contract.ts';
+import { parseDesignTarget, parseFrozenDesignTarget, parseWritableDesignTarget } from '../src/design-targets.ts';
+import type { DesignTarget, FrozenDesignTarget, WritableDesignTarget } from '../src/design-targets.ts';
 import type { ProjectSummary, ProjectHistoryPage } from './versioned-project-contract.ts';
 
 // Legacy browser bytes are read-only recovery material. Accepted state lives on the server.
@@ -119,6 +122,7 @@ const ProjectListSchema = Type.Object({ projects: Type.Array(Type.Object({
   projectId: id, name: Type.String({ minLength: 1, maxLength: 80 }), headRevisionId: id, recordedAt,
 }), { maxItems: 32 }) });
 const ProjectSchema = Type.Object({ project: Type.String({ minLength: 1 }) });
+const DesignCommandSchema = Type.Object({ project: Type.String({ minLength: 1 }), created: DesignTargetSchema });
 const HistorySchema = Type.Object({ entries: Type.Array(Type.Object({
   revisionId: id, parentRevisionId: nullableId,
   changedEntityIds: Type.Array(id), changedRelationshipIds: Type.Array(id), recordedAt,
@@ -195,10 +199,52 @@ export class ProjectClient {
     return this.#repository(value, { projectId: project.projectId, root: project.root() });
   }
 
-  async history(projectId: string, before: string | null = null, limit = 20): Promise<ProjectHistoryPage> {
+  async capture(input: { project: RoomRepository; name: string; commandId: string; fromFrozen: FrozenDesignTarget }): Promise<{ project: RoomRepository; created: DesignTarget }> {
+    const from = parseFrozenDesignTarget(input.fromFrozen);
+    if (from.projectId !== input.project.projectId) throw new ProjectServerError('Baseline source belongs to a different project.');
+    const result = await this.#designCommand(input.project, 'baselines', { commandId: input.commandId, name: input.name, from });
+    if (result.created.kind !== 'baseline') throw new ProjectServerError('Project server returned the wrong design target kind.');
+    const state = result.project.persistence(); const id = result.created.id;
+    const baseline = state.version === 3 ? state.designTargets.baselines.find(item => item.id === id) : undefined;
+    if (!baseline || baseline.name !== input.name.trim() || baseline.from.projectId !== from.projectId
+        || baseline.from.revisionId !== from.revisionId || JSON.stringify(baseline.from.target) !== JSON.stringify(from.target)) {
+      throw new ProjectServerError('Project server returned a baseline with a different frozen source.');
+    }
+    return result;
+  }
+
+  async fork(input: { project: RoomRepository; name: string; commandId: string; baselineId: string }): Promise<{ project: RoomRepository; created: DesignTarget }> {
+    const original = input.project.persistence();
+    if (original.version !== 3 || !original.designTargets.baselines.some(item => item.id === input.baselineId)) throw new ProjectServerError('Choose an existing immutable baseline.');
+    const result = await this.#designCommand(input.project, 'alternatives', { commandId: input.commandId, name: input.name, baselineId: input.baselineId });
+    if (result.created.kind !== 'alternative') throw new ProjectServerError('Project server returned the wrong design target kind.');
+    const state = result.project.persistence(); const id = result.created.id;
+    const alternative = state.version === 3 ? state.designTargets.alternatives.find(item => item.id === id) : undefined;
+    if (!alternative || alternative.baselineId !== input.baselineId || alternative.name !== input.name.trim()) throw new ProjectServerError('Project server returned an alternative with a different baseline.');
+    return result;
+  }
+
+  async #designCommand(project: RoomRepository, resource: 'baselines' | 'alternatives', body: { commandId: string; name: string; from?: FrozenDesignTarget; baselineId?: string }): Promise<{ project: RoomRepository; created: DesignTarget }> {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(body.commandId) || !body.name.trim() || body.name.trim().length > 80 || /[\u0000-\u001f\u007f]/.test(body.name)) {
+      throw new ProjectServerError('Use a readable design name and stable command identity.');
+    }
+    const value = await this.#json(`/api/projects/${encodeURIComponent(project.projectId)}/${resource}`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, name: body.name.trim() }) });
+    if (!Check(DesignCommandSchema, value)) throw new ProjectServerError('Project server returned an invalid design command envelope.');
+    const restored = await this.#repository(value, { projectId: project.projectId, root: project.root() });
+    const created = parseDesignTarget(value.created);
+    restored.designView(created);
+    return { project: restored, created };
+  }
+
+  async history(projectId: string, before: string | null = null, limit = 20, target?: WritableDesignTarget): Promise<ProjectHistoryPage> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new Error('History page size must be between 1 and 50.');
     const query = new URLSearchParams({ limit: String(limit) });
     if (before !== null) query.set('before', before);
+    if (target !== undefined) {
+      const selected = parseWritableDesignTarget(target); query.set('target', selected.kind);
+      if (selected.kind === 'alternative') query.set('targetId', selected.id);
+    }
     const value = await this.#json(`/api/projects/${encodeURIComponent(projectId)}/history?${query}`);
     if (!Check(HistorySchema, value) || value.entries.length > limit) throw new ProjectServerError('Project server returned an invalid history page.');
     const seen = new Set<string>();

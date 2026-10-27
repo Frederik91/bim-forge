@@ -1,5 +1,12 @@
 import { createResidentialProject } from '../src/residential-floor.ts';
 import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
+import { syntheticResidentialFixture } from '../src/synthetic-residential-fixture.ts';
+import { initializeSyntheticEvidence } from './synthetic-pilot-client.ts';
+import { DesignWorkspace } from './design-workspace.ts';
+import { parseDesignTarget, parseFrozenDesignTarget } from '../src/design-targets.ts';
+import type { DesignTarget, FrozenDesignTarget } from '../src/design-targets.ts';
+import { parseEvidenceUses } from '../src/model-evidence.ts';
+import type { EvidenceUse } from '../src/model-evidence.ts';
 import { levels, levelView, entityLevel, stairFootprint } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
@@ -38,7 +45,7 @@ import type { ConversationMessage, ConversationReply, ConversationVisual } from 
 import { parseRequestDraft } from '../src/request-draft.ts';
 import type { RequestDraft } from '../src/request-draft.ts';
 
-type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history';
+type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history' | 'evidence';
 type RequestPane = 'canvas' | 'details';
 type ModelView = 'plan' | '3d';
 type ChangesTab = '3d' | 'properties';
@@ -62,6 +69,8 @@ type AuthSession =
   | (AuthSessionBase & { status: 'pending'; connected: false; account: null; device: { verificationUrl: string; userCode: string; expiresAt: number } })
   | (AuthSessionBase & { status: 'connected'; connected: true; account: AuthAccount });
 interface ActiveReview extends RequestSourceContext {
+  target?: FrozenDesignTarget;
+  evidenceUses?: readonly EvidenceUse[];
   scope?: FrozenModelScope;
   requestId: string;
   proposalName: string;
@@ -274,6 +283,9 @@ let savedText: string | null = null;
 let recoveryText: string | null = null;
 let selectedRevision = '';
 let selectedBranch = 'main';
+let selectedDesignTarget: DesignTarget = { kind: 'main' };
+let conversationTarget: FrozenDesignTarget | null = null;
+let syntheticSeedPending: string | null = null;
 let busy = true;
 let layout: RoomLayout | null = null;
 let preview: ModelSnapshot | null = null;
@@ -353,6 +365,7 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
   add: button('composer-add'), menu: generic('composer-menu'), visual: generic('composer-model-context') }, {
   items: () => (preview?.entities ?? []).map(({ id, name, type }) => ({ id, name, type })),
   action: action => {
+    if (action === 'evidence') { showPage('evidence'); return; }
     if (action === 'files') return sourcePicker.chooseFiles();
     if (action === 'view') return attachChatContext(selectedObject ? [selectedObject] : []);
     const options = requiredElement('request-options', HTMLDetailsElement); options.open = true;
@@ -363,6 +376,52 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
   remove: id => { chatVisual = id && chatVisual ? { ...chatVisual, selectedObjectIds: chatVisual.selectedObjectIds.filter(item => item !== id) } : null; composer.setVisual(chatVisual); updateControls(); },
   changed: updateControls,
 });
+
+function designKey(target: DesignTarget): string { return target.kind === 'main' ? 'main' : `${target.kind}:${target.id}`; }
+function selectedDesignView(project: RoomRepository = repo ?? requireRepository()) { return project.designView(selectedDesignTarget); }
+function selectedDesignHead(project: RoomRepository = repo ?? requireRepository()): string { return selectedDesignView(project).revisionId; }
+function designLabel(project: RoomRepository = repo ?? requireRepository()): string { return selectedDesignView(project).target.kind === 'baseline' ? `${selectedDesignView(project).name} · read only` : selectedDesignView(project).name; }
+function branchHead(project: RoomRepository, branch: string): string { return branch === 'main' ? selectedDesignHead(project) : project.head(branch); }
+function targetMatches(target?: FrozenDesignTarget): boolean { return designKey(target?.target ?? { kind: 'main' }) === designKey(selectedDesignTarget); }
+function selectedReviewAt(project: RoomRepository, revisionId: string) {
+  const review = project.reviews().find(item => targetMatches(item.target) && (item.proposalRevisionId === revisionId
+    || 'appliedRevisionId' in item.decision && item.decision.appliedRevisionId === revisionId));
+  if (!review) return null;
+  const applied = 'appliedRevisionId' in review.decision && review.decision.appliedRevisionId === revisionId;
+  return { review, comparisonBaseRevisionId: applied ? project.view(revisionId).parentId ?? review.baseRevisionId : review.baseRevisionId };
+}
+async function designAction(action: () => Promise<void>): Promise<void> {
+  if (busy || gesture || visualGesture || !repo) throw new Error('Wait for the current model action to finish.');
+  busy = true; updateControls();
+  try { await action(); } finally { busy = false; render(); updateControls(); }
+}
+function beginDesignDraft(): void {
+  closeChat(); newDraftId = `draft-${crypto.randomUUID()}`; sourcePicker.switchDraft(currentChatKey());
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; chatVisual = null;
+}
+const designWorkspace = new DesignWorkspace(generic('design-views-mount'), {
+  select: target => designAction(async () => {
+    saveChatDraft(); closeChat();
+    selectedDesignTarget = parseDesignTarget(target); selectedRevision = selectedDesignHead(repo ?? undefined); selectedBranch = 'main';
+    reviewRepository = null; activeReview = null; activeTicketId = null; liveChatPreview = null; livePreviewSelection = null;
+    beginDesignDraft();
+    activeLevelId = null; focusedRoomId = null; historyEpoch++; historyLoading = false; historyPage = null; historyProjectId = null;
+    resetEditor(); showPage('request'); status(`${designLabel()} opened. Chats stay bound to their original designs.`);
+  }),
+  capture: input => designAction(async () => {
+    if (!repo || selectedDesignTarget.kind === 'baseline') throw new Error('Select a writable design before capturing a baseline.');
+    const result = await projects.capture({ project: repo, ...input, fromFrozen: repo.freezeDesignTarget(selectedDesignTarget) });
+    saveChatDraft(); closeChat(); selectedDesignTarget = result.created; displayAccepted(result.project); beginDesignDraft(); status('Fixed baseline captured. Open Design views to create an alternative.');
+  }),
+  fork: input => designAction(async () => {
+    if (!repo) throw new Error('Open a project first.');
+    const result = await projects.fork({ project: repo, ...input });
+    saveChatDraft(); closeChat(); selectedDesignTarget = result.created; displayAccepted(result.project); beginDesignDraft();
+    showPage('request'); status(`${designLabel()} opened as an independent design alternative.`);
+  }),
+});
+button('open-project-evidence').addEventListener('click', () => showPage('evidence'));
+button('fork-selected-baseline').addEventListener('click', () => generic('design-views-mount').querySelector('button')?.click());
 
 function attachChatContext(ids: readonly string[]): boolean {
   try {
@@ -387,7 +446,7 @@ function requestDirty(): boolean {
 function currentChatKey(): string { return `${repo?.projectId ?? 'none'}:${chatTicketId ?? newDraftId}`; }
 function captureChatDraft() {
   return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
-    model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, selection: selectedObject,
+    model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, designTarget: selectedDesignTarget, conversationTarget, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
     invalid: invalidInput, reply: chatReply, submission, review: activeReview, reviewTicketId: activeTicketId, proposalMessageId: activeChatProposalMessageId,
     geometryValues: [ui['door-width'].value, ui['door-offset'].value, ui['wall-position'].value, ui['wall-length'].value],
@@ -403,6 +462,7 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   if (!draft.model) return;
   liveChatPreview = null; livePreviewSelection = null;
   repo = draft.model; reviewRepository = draft.reviewModel; selectedRevision = draft.revision; selectedBranch = draft.branch;
+  selectedDesignTarget = draft.designTarget; conversationTarget = draft.conversationTarget;
   selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
   preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
   invalidInput = draft.invalid; chatReply = draft.reply; submission = draft.submission; newDraftId = draft.draftId;
@@ -597,6 +657,7 @@ function showPage(name: PageName): void {
   if (name === 'review' && !activeReview) return;
   if ((name === 'project' || name === 'history') && !repo) return;
   currentPage = name;
+  generic('evidence-page').hidden = name !== 'evidence';
   generic('activity-page').hidden = name !== 'activity';
   ui['project-page'].hidden = name !== 'project';
   ui.journey.hidden = false;
@@ -757,28 +818,34 @@ function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
   const writable = serverAvailable && !busy && !dragging;
+  const authoring = writable && selectedDesignTarget.kind !== 'baseline';
+  generic('design-readonly-banner').hidden = selectedDesignTarget.kind !== 'baseline';
+  button('fork-selected-baseline').disabled = !writable;
+  button('open-project-evidence').disabled = !repo || busy || dragging;
+  button('retry-synthetic-evidence').hidden = syntheticSeedPending !== repo?.projectId;
+  button('retry-synthetic-evidence').disabled = !writable;
   explorer.setDisabled(busy || dragging || !repo);
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
-  for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture) || Boolean(chatTicketId);
+  for (const control of geometryControls) control.disabled = !authoring || !layout || Boolean(gesture) || Boolean(chatTicketId);
   ui['project-template'].disabled = !writable;
   ui['selected-object'].disabled = busy || !preview || dragging;
-  ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture) || Boolean(chatTicketId);
-  ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
-  sourcePicker.setDisabled(!writable || !preview || Boolean(reviewRepository && !chatTicketId));
-  scopeBuilder.setDisabled(!writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
-  ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
+  ui['proposal-name'].disabled = !authoring || !preview || Boolean(gesture) || Boolean(chatTicketId);
+  ui['request-text'].disabled = !authoring || !preview || Boolean(gesture);
+  sourcePicker.setDisabled(!authoring || !preview || Boolean(reviewRepository && !chatTicketId));
+  scopeBuilder.setDisabled(!authoring || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
+  ui['request-reconstruct'].disabled = !authoring || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
   ui['show-roof'].disabled = !(liveChatPreview?.snapshot ?? preview)?.entities.some(item => item.type === 'Roof');
-  ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready || !ui['request-text'].value.trim();
+  ui['save-proposal'].disabled = !authoring || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready || !ui['request-text'].value.trim();
   ui['save-proposal'].textContent = sourcePicker.uploading || busy ? '…' : '↑';
   ui['save-proposal'].setAttribute('aria-label', sourcePicker.uploading ? 'Uploading attachments' : busy ? 'Sending message' : 'Send message');
-  composer.setDisabled(!writable || !preview); composer.refresh();
+  composer.setDisabled(!authoring || !preview); composer.refresh();
   button('new-chat').disabled = busy || !repo; button('chat-switcher-button').disabled = busy || !repo;
   renderChatSwitcher();
   generic('request-options-summary').textContent = [scopeBuilder.dirty ? 'Scope enabled' : '', ui['request-reconstruct'].checked ? 'Reconstruction enabled' : ''].filter(Boolean).join(' · ');
-  requestChat.setDisabled(!writable || !preview);
+  requestChat.setDisabled(!authoring || !preview);
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
   ui['discard-preview'].disabled = busy || !repo || !dirty() || dragging;
@@ -807,12 +874,12 @@ function updateControls() {
   ui['check-conflicts'].disabled = !canCompare;
   ui['recover-save'].disabled = busy;
   const reviewMatches = activeReview?.proposalRevisionId === null || activeReview?.proposalRevisionId === selectedRevision
-    || (repo !== null && requireRepository().reviewAt(selectedRevision)?.review.requestId === activeReview?.requestId);
+    || (repo !== null && selectedReviewAt(requireRepository(), selectedRevision)?.review.requestId === activeReview?.requestId);
   const ticket = backlogItems.find((item) => item.id === activeTicketId);
-  ui['accept-proposal'].disabled = !writable || !activeTicketId || ticket?.state !== 'ready' || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || reviewState(activeReview) !== 'pending';
-  ui['reject-proposal'].disabled = !writable || !ticket || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || !['ready', 'needs-input', 'failed'].includes(ticket.state);
+  ui['accept-proposal'].disabled = !authoring || !activeTicketId || ticket?.state !== 'ready' || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || reviewState(activeReview) !== 'pending';
+  ui['reject-proposal'].disabled = !authoring || !ticket || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || !['ready', 'needs-input', 'failed'].includes(ticket.state);
   const state = reviewState(activeReview);
-  ui['request-revision'].disabled = !writable || !reviewMatches || (state !== 'pending' && state !== 'declined');
+  ui['request-revision'].disabled = !authoring || !reviewMatches || (state !== 'pending' && state !== 'declined');
   updateChatProposalCard();
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
@@ -870,7 +937,7 @@ function syncInspector() {
   const isWall = object?.type === 'Wall';
   ui['door-fields'].hidden = !isDoor || !layout;
   ui['wall-fields'].hidden = !isWall || !layout;
-  ui['editor-base'].textContent = `${object?.name ?? 'Model'} · ${selectedBranch} · ${selectedRevision.slice(0, 7)}`;
+  ui['editor-base'].textContent = `${designLabel()} · ${object?.name ?? 'Model'} · ${selectedBranch} · ${selectedRevision.slice(0, 7)}`;
   renderKnowledge();
   const assetPanel = generic('asset-details');
   assetPanel.hidden = object?.type !== 'AssetInstance';
@@ -931,7 +998,7 @@ function acceptLayout(candidate: RoomLayout): void {
 }
 
 function editFields(event: Event): void {
-  if (!repo || busy || !serverAvailable || !layout || !preview || gesture) return;
+  if (!repo || busy || selectedDesignTarget.kind === 'baseline' || !serverAvailable || !layout || !preview || gesture) return;
   const object = preview.entities.find((item) => item.id === selectedObject);
   if (!object || (object.type !== 'Door' && object.type !== 'Wall')) return;
   const fields = object.type === 'Door' ? [ui['door-width'], ui['door-offset']] : [ui['wall-position'], ui['wall-length']];
@@ -980,9 +1047,10 @@ function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
+  if (projectChanged || !next.designTargets().some(view => designKey(view.target) === designKey(selectedDesignTarget))) selectedDesignTarget = { kind: 'main' };
   if (projectChanged) { newDraftId = 'new'; backlogItems = []; ticketScopes.clear(); submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
   serverProjectText = text;
-  serverHeadRevisionId = next.head('main');
+  serverHeadRevisionId = selectedDesignHead(next);
   historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
   ui['server-history-list'].replaceChildren();
   ui['server-history-status'].textContent = 'Open History to read the accepted server ancestry.';
@@ -992,7 +1060,7 @@ function displayAccepted(next: RoomRepository): void {
   activeReview = null;
   activeTicketId = null;
   selectedBranch = 'main';
-  selectedRevision = repo.head('main'); inspectedComparison = null;
+  selectedRevision = selectedDesignHead(repo); inspectedComparison = null;
   resetEditor();
   if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); }
   try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
@@ -1013,19 +1081,41 @@ async function recognizeHousePilot(project: RoomRepository): Promise<void> {
 async function createProject(name: string): Promise<void> {
   if (!confirmReplacement()) { status('Project creation cancelled. Your current project is unchanged.'); return; }
   status('Creating and saving your original room…');
-  const next = ui['project-template'].value === 'house' ? await createMultiStoreyProject(name)
+  const generated = ui['project-template'].value === 'synthetic-residential';
+  const next = generated ? await RoomRepository.createProject({ projectId: crypto.randomUUID(), name, snapshot: syntheticResidentialFixture().snapshot })
+    : ui['project-template'].value === 'house' ? await createMultiStoreyProject(name)
     : ui['project-template'].value === 'residential' ? await createResidentialProject(name) : await RoomRepository.create(name);
   focusedRoomId = null;
   activeReview = null;
   housePilotFixture = null;
   displayAccepted(await projects.register(next));
+  const seeded = generated ? await seedGeneratedEvidence(requireRepository()) : true;
   await refreshProjectChoices();
   ui['project-name'].value = next.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
   showPage('project');
-  status('Original model saved on the server. Choose a room and describe a request to begin.');
+  status(generated ? seeded ? 'Generated residential model and test evidence saved. NOT SURVEY data; inspect the intentional contradiction before approving changes.'
+    : 'Generated model saved. Evidence setup is incomplete; use Retry generated evidence to finish safely.'
+    : 'Original model saved on the server. Choose a room and describe a request to begin.');
 }
+
+async function seedGeneratedEvidence(project: RoomRepository): Promise<boolean> {
+  syntheticSeedPending = project.projectId;
+  try {
+    await initializeSyntheticEvidence(project, AbortSignal.timeout(30_000));
+    syntheticSeedPending = null;
+    return true;
+  } catch (error) {
+    status(`Model saved; generated evidence may be partially saved. Retry is safe. ${error instanceof Error ? error.message : 'Evidence setup was interrupted.'}`);
+    return false;
+  }
+}
+button('retry-synthetic-evidence').addEventListener('click', () => { void perform(async () => {
+  if (!repo || syntheticSeedPending !== repo.projectId) return;
+  const latest = await projects.read(repo.projectId);
+  if (await seedGeneratedEvidence(latest)) status('Generated evidence setup complete. NOT SURVEY data; conflicting claims remain explicit.');
+}); });
 
 async function createHousePilot(): Promise<void> {
   if (!confirmReplacement()) { status('House Pilot opening cancelled. Your current project is unchanged.'); return; }
@@ -1087,7 +1177,7 @@ async function refreshProjectChoices(): Promise<void> {
     ui['project-list-status'].textContent = projectChoices.length
       ? `${projectChoices.length} saved server projects (up to 32 shown). Open to read the latest accepted model.`
       : 'Server connected. Create a project, import JSON, or transfer browser recovery data.';
-    serverConnection(true, repo ? `Server connected · displayed accepted ${repo.head('main').slice(0, 10)} · reopen to refresh` : 'Server connected · no project open');
+    serverConnection(true, repo ? `Server connected · ${designLabel()} · displayed accepted ${selectedDesignHead(repo).slice(0, 10)} · reopen to refresh` : 'Server connected · no project open');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Project list unavailable.';
     ui['project-list-status'].textContent = message;
@@ -1131,12 +1221,19 @@ async function readLegacyRecovery(): Promise<void> {
 async function loadServerHistory(before: string | null = null): Promise<void> {
   if (!repo || historyLoading) return;
   const projectId = repo.projectId;
+  const target = selectedDesignTarget;
+  if (target.kind === 'baseline') {
+    historyPage = null; historyProjectId = projectId;
+    ui['server-history-list'].replaceChildren();
+    ui['server-history-status'].textContent = `Fixed baseline ${designLabel()} · ${selectedDesignHead().slice(0, 10)}. Retained ancestry is shown above; this baseline cannot accept changes.`;
+    updateControls(); return;
+  }
   const epoch = ++historyEpoch;
   historyLoading = true;
   ui['server-history-status'].textContent = 'Reading accepted server history…';
   updateControls();
   try {
-    const page = await projects.history(projectId, before);
+    const page = await projects.history(projectId, before, 20, repo.persistence().version === 3 ? target : undefined);
     if (repo?.projectId !== projectId || epoch !== historyEpoch) return;
     historyPage = page; historyProjectId = projectId;
     ui['server-history-list'].replaceChildren(...page.entries.map(entry => {
@@ -1191,6 +1288,7 @@ ui['open-room'].addEventListener('click', () => {
 });
 async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
+  if (selectedDesignTarget.kind === 'baseline') throw new Error('Create an alternative from this baseline to request changes.');
   const accepted = await projects.read(repo.projectId);
   saveChatDraft();
   closeChat();
@@ -1198,7 +1296,7 @@ async function beginRequest(): Promise<boolean> {
   sourcePicker.switchDraft(`${repo.projectId}:${newDraftId}`);
   displayAccepted(accepted);
   reviewRepository = null; activeTicketId = null; activeReview = null;
-  selectedBranch = 'main'; selectedRevision = repo.head('main');
+  selectedBranch = 'main'; selectedRevision = selectedDesignHead(repo);
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   resetEditor(); render(); showPage('request');
   return true;
@@ -1351,6 +1449,8 @@ function parseProposalResponse(value: unknown): ProposalResponse {
       rationale: requiredText(reviewValue, 'rationale'),
       constraints: requiredText(reviewValue, 'constraints'),
       uncertainty: requiredText(reviewValue, 'uncertainty'),
+      ...(Object.hasOwn(reviewValue, 'target') ? { target: parseFrozenDesignTarget(reviewValue.target) } : {}),
+      ...(Object.hasOwn(reviewValue, 'evidenceUses') ? { evidenceUses: parseEvidenceUses(reviewValue.evidenceUses) } : {}),
       ...(Object.hasOwn(reviewValue, 'intent') ? { intent: parseIntentAssessment(reviewValue.intent) } : {}),
       ...parseSourceContext(reviewValue),
       ...reviewScopeContext(reviewValue),
@@ -1367,6 +1467,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const draftKey = currentChatKey();
     if (!serverAvailable) throw new Error('Reconnect to the project server before submitting.');
     if (!repo || !preview || invalidInput) throw new Error('Open a project and fix the request input first.');
+    if (selectedDesignTarget.kind === 'baseline') throw new Error('A fixed baseline is read only. Create an alternative first.');
     if (chatTicketId) { await sendChatReply(); return; }
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
@@ -1378,7 +1479,11 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const contextLevelId = activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null;
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
-    const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: selectedRevision,
+    const frozenTarget = repo.freezeDesignTarget(selectedDesignTarget);
+    const explicitTarget = repo.persistence().version === 3;
+    if (explicitTarget && selectedRevision !== frozenTarget.revisionId) throw new Error('Open the current selected design or start a new chat before submitting.');
+    const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: explicitTarget ? frozenTarget.revisionId : selectedRevision,
+      ...(explicitTarget ? { target: frozenTarget } : {}),
       selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...(selectedObject ? [selectedObject] : []), ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
@@ -1417,6 +1522,7 @@ async function proposalJson(response: Response): Promise<unknown> {
 }
 
 function closeChat(): void {
+  conversationTarget = null;
   liveChatPreview = null; livePreviewSelection = null;
   chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
 }
@@ -1508,6 +1614,7 @@ function updateChatProposalCard(): void {
   if (message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== review.requestId
     || message.content.proposalRevisionId !== review.proposalRevisionId) { requestChat.setProposalReview(null); return; }
   requestChat.setProposalReview({ messageId, requestId: review.requestId, proposalRevisionId: review.proposalRevisionId,
+    ...(review.target ? { target: review.target } : {}), ...(review.evidenceUses ? { evidenceUses: review.evidenceUses } : {}),
     summary: review.summary, rationale: review.rationale, constraints: review.constraints, uncertainty: review.uncertainty,
     status: generic('review-status').textContent ?? 'Proposal', canAccept: !ui['accept-proposal'].disabled,
     canReject: !ui['reject-proposal'].disabled, canRevise: !ui['request-revision'].disabled, delta: reviewDelta });
@@ -1525,6 +1632,8 @@ async function decideChatProposal(action: 'accept' | 'reject' | 'revise', messag
 function showChatTicket(value: unknown): void {
   const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
+  conversationTarget = ticket.request.target ?? null;
+  selectedDesignTarget = conversationTarget?.target ?? { kind: 'main' };
   if (liveChatPreview && (liveChatPreview.ticketId !== ticket.id || liveChatPreview.requestId !== ticket.request.requestId)) {
     liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null;
     renderComparison(); syncInspector();
@@ -1532,7 +1641,7 @@ function showChatTicket(value: unknown): void {
   chatTicketId = ticket.id; requestChat.setOffline(false);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
-    title: firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
+    title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
 }
 
 async function openConversation(id: string, keepProposal = false): Promise<void> {
@@ -1545,6 +1654,9 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
   const key = `${projectId}:${id}`; const draft = chatDrafts.get(key);
   if (!keepProposal) displayAccepted(await projects.read(projectId));
+  selectedDesignTarget = ticket.request.target?.target ?? { kind: 'main' };
+  conversationTarget = ticket.request.target ?? null;
+  if (!keepProposal) { selectedRevision = selectedDesignHead(repo ?? undefined); selectedBranch = 'main'; }
   sourcePicker.switchDraft(key);
   const conversation = conversationFromTicket(value.ticket);
   const latestUser = [...conversation.messages].reverse().find(message => message.kind === 'user');
@@ -1586,7 +1698,9 @@ async function refreshConversation(): Promise<void> {
 async function sendChatReply(): Promise<void> {
   const id = chatTicketId; const conversation = requestChat.conversation;
   if (!id || !conversation || !repo) throw new Error('Open this conversation again before replying.');
-  const content = { baseRevisionId: repo.head('main'), text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual() };
+  const target = conversationTarget?.target ?? { kind: 'main' };
+  if (designKey(target) !== designKey(selectedDesignTarget)) throw new Error('Reopen this conversation in its bound design before replying.');
+  const content = { baseRevisionId: repo.freezeDesignTarget(target).revisionId, text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual() };
   const fingerprint = JSON.stringify(content);
   if (!chatReply || chatReply.fingerprint !== fingerprint) chatReply = { fingerprint, body: parseConversationReply({
     ...content, messageId: globalThis.crypto.randomUUID(), expectedSequence: conversation.sequence,
@@ -1658,7 +1772,7 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
 
 interface BacklogItem {
   id: string; projectId: string; title: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
-  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
+  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; target?: FrozenDesignTarget; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
 }
 const ticketScopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
@@ -1670,6 +1784,8 @@ function parseBacklogItem(value: unknown): BacklogItem {
       && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
   const requestId = requiredText(value.request, 'requestId');
   const baseRevisionId = requiredText(value.request, 'baseRevisionId');
+  const target = Object.hasOwn(value.request, 'target') ? parseFrozenDesignTarget(value.request.target) : null;
+  if (target && (target.projectId !== value.projectId || target.revisionId !== baseRevisionId)) throw new Error('Request design target does not match its project and base.');
   if (!Array.isArray(value.request.selectedObjectIds) || value.request.selectedObjectIds.length > 100) throw new Error('Invalid saved request selection.');
   const selectedObjectIds = value.request.selectedObjectIds.map(identifier);
   const requestScope = requestScopeContext(value.request);
@@ -1685,7 +1801,8 @@ function parseBacklogItem(value: unknown): BacklogItem {
   if (!first.trim() || first.length > 1000) throw new Error('Invalid chat title.');
   return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
-    request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId, selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
+    request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId,
+      ...(target ? { target } : {}), selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
 }
 async function inspectTicketScope(item: BacklogItem): Promise<void> {
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
@@ -1713,10 +1830,10 @@ async function refreshBacklog(): Promise<void> {
     if (accepted && (accepted.projectId !== projectId || accepted.root() !== repo.root())) throw new Error('Accepted backlog model identity mismatch.');
     const changed = JSON.stringify(items) !== JSON.stringify(backlogItems);
     backlogItems = items; serverProjectText = value.project;
-    if (accepted) serverHeadRevisionId = accepted.head('main');
-    serverConnection(true, serverHeadRevisionId !== repo.head('main')
+    if (accepted) serverHeadRevisionId = selectedDesignHead(accepted);
+    serverConnection(true, serverHeadRevisionId !== selectedDesignHead(repo)
       ? 'Server has a newer accepted model · open current model from Backlog · request sketch is unsaved'
-      : `Server saved · displayed accepted ${repo.head('main').slice(0, 10)} · request sketches are unsaved`);
+      : `Server saved · ${designLabel()} · displayed accepted ${selectedDesignHead(repo).slice(0, 10)} · request sketches are unsaved`);
     ui['backlog-connection'].textContent = 'Synced with server · work continues when this page is closed';
     if (changed) renderBacklog();
     updateControls();
@@ -1787,7 +1904,9 @@ function renderBacklog(): void {
     const scope = element('pre', undefined, 'scope-evidence'); renderScopeEvidence(scope, item.scope); card.append(scope);
     if (item.request.scope && !item.scope) card.append(element('p', `Submitted scope query: ${JSON.stringify(item.request.scope.query)}`, 'scope-evidence'));
     if (item.error) card.append(element('p', item.error, 'ticket-error'));
-    if (repo && item.request.baseRevisionId !== repo.head('main') && item.state === 'ready') card.append(element('p', 'Prepared on an earlier revision. Acceptance will retain unrelated changes and validate the combined model.', 'ticket-warning'));
+    card.append(element('p', `Design: ${designKey(item.request.target?.target ?? { kind: 'main' })}`, 'ticket-design'));
+    const requestHead = repo?.designTargets().find(view => designKey(view.target) === designKey(item.request.target?.target ?? { kind: 'main' }))?.revisionId;
+    if (requestHead && item.request.baseRevisionId !== requestHead && item.state === 'ready') card.append(element('p', 'Prepared on an earlier revision. Acceptance will retain unrelated changes and validate the combined model.', 'ticket-warning'));
     const actions = element('div', undefined, 'ticket-actions');
     const add = (label: string, action: () => void) => { const control = element('button', label, 'button outline'); control.type = 'button'; control.disabled = busy; control.addEventListener('click', action); actions.append(control); };
     if (item.request.scope && !item.scope) add('Inspect frozen scope', () => { void perform(() => inspectTicketScope(item)); });
@@ -1875,6 +1994,9 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   } });
   const proposed = await RoomRepository.restore(result.project);
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
+  if (result.review.target && (result.review.target.projectId !== repo.projectId || result.review.target.revisionId !== result.review.baseRevisionId)) throw new Error('Review target differs from its frozen project/base.');
+  if (ticket.request.target && (!result.review.target || designKey(result.review.target.target) !== designKey(ticket.request.target.target))) throw new Error('Review target differs from the conversation design.');
+  selectedDesignTarget = result.review.target?.target ?? ticket.request.target?.target ?? { kind: 'main' };
   liveChatPreview = null; livePreviewSelection = null;
   reviewRepository = proposed; activeTicketId = id; activeReview = { ...parseSourceContext(ticket.request), ...result.review };
   reviewDelta = result.status === 'ready'; modelView = '3d';
@@ -1882,7 +2004,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   if (ticket.state === 'rejected' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'superseded' };
   inspectedChatView = null;
   selectedBranch = result.status === 'ready' ? result.review.proposalName : 'main';
-  selectedRevision = proposed.head(selectedBranch);
+  selectedRevision = branchHead(proposed, selectedBranch);
   const context = requestContext(proposed.view(selectedRevision).snapshot, result.review.selectedObjectIds);
   activeLevelId = context.levelId; focusedRoomId = context.roomId;
   selectedObject = context.selectedId ?? selectedObject;
@@ -1952,6 +2074,11 @@ function renderReview() {
   ui['review-rationale'].textContent = review.rationale;
   ui['review-constraints'].textContent = review.constraints;
   ui['review-uncertainty'].textContent = review.uncertainty;
+  const choices = generic('review-evidence-uses'); choices.replaceChildren(); choices.hidden = !review.evidenceUses?.length;
+  if (review.evidenceUses?.length) {
+    choices.append(element('h3', 'Evidence choices for your approval'), element('p', 'These design assumptions leave the original claims and conflicts unchanged.'));
+    for (const use of review.evidenceUses) choices.append(element('p', `${use.subject.anchor.entityId} · ${use.subject.property.definitionId} · ${use.pin.entryId} (${use.pin.hash.slice(0, 10)}): ${use.rationale}`));
+  }
   const intent = review.intent;
   generic('review-intent').hidden = !intent;
   generic('review-interpretation').textContent = intent?.interpretation ?? '';
@@ -1960,7 +2087,7 @@ function renderReview() {
   generic('review-assumptions').replaceChildren(...(intent ? intent.assumptions.length
     ? intent.assumptions.map(assumption => element('li', assumption)) : [element('li', 'No additional assumptions reported.')] : []));
   const evidence = review.worker ? ` · ${review.worker.provider}/${review.worker.model} · ${review.validator}` : '';
-  ui['review-binding'].textContent = `Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}${evidence}`;
+  ui['review-binding'].textContent = `${designLabel()} · ${review.target ? designKey(review.target.target) : 'main (legacy)'} · Request ${review.requestId} · base ${review.baseRevisionId.slice(0, 10)} · objects ${review.selectedObjectIds.join(', ')}${evidence}`;
   if (ticket?.state === 'ready' && serverProjectText) ui['review-binding'].textContent += ' · Acceptance checks this reviewed delta against the current server model.';
   updateControls();
 }
@@ -2406,7 +2533,7 @@ function referencePoint(reference: SpatialReference, snapshot: ModelGraph): Poin
 function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (point: Point) => Point): void {
   if (liveChatPreview) return;
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
-  if (!selected || !serverAvailable || busy) return;
+  if (!selected || selectedDesignTarget.kind === 'baseline' || !serverAvailable || busy) return;
   const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
   const centre = project(objectAnchor(selected, snapshot));
   const reference = visibleReference();
@@ -2458,7 +2585,7 @@ function endVisualGesture(cancel: boolean): void {
 
 ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
   if (event.target instanceof Element && event.target.closest('[data-visual-handle]')) {
-    if (!repo || busy || gesture || visualGesture || !serverAvailable || event.button !== 0 || !event.isPrimary) return;
+    if (!repo || busy || selectedDesignTarget.kind === 'baseline' || gesture || visualGesture || !serverAvailable || event.button !== 0 || !event.isPrimary) return;
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
     if (!root || !preview) return;
     event.preventDefault();
@@ -2478,7 +2605,7 @@ ui['proposal-drawing'].addEventListener('pointerdown', (event) => {
     if (objectId) chooseObject(objectId);
     return;
   }
-  if (!serverAvailable || !layout || !preview) return;
+  if (selectedDesignTarget.kind === 'baseline' || !serverAvailable || !layout || !preview) return;
   if (operation !== 'wall' && operation !== 'door-move' && operation !== 'door-width') return;
   if (invalidInput) { feedback('Fix or discard the invalid input before dragging.', true); return; }
   event.preventDefault();
@@ -2646,7 +2773,7 @@ async function selectRevision(branch: string, revisionId: string): Promise<void>
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   selectedBranch = branch;
   selectedRevision = revisionId;
-  activeReview = project.reviewAt(revisionId)?.review ?? null;
+  activeReview = selectedReviewAt(project, revisionId)?.review ?? null;
   activeTicketId = backlogItems.find((item) => item.request.requestId === activeReview?.requestId)?.id ?? null;
   resetEditor();
   renderComparison();
@@ -2659,7 +2786,7 @@ async function selectRevision(branch: string, revisionId: string): Promise<void>
     else button.setAttribute('aria-current', String(selected));
   }
   showPage(activeReview ? 'review' : 'request');
-  status(`Viewing ${branch}${revisionId === project.head(branch) ? '' : ' · earlier revision'}. The original remains in revision history.`);
+  status(`Viewing ${designLabel()} · ${branch}${revisionId === branchHead(project, branch) ? '' : ' · earlier revision'}. The original remains in revision history.`);
 }
 
 function requireRepository(): RoomRepository {
@@ -2670,7 +2797,11 @@ function requireRepository(): RoomRepository {
 function renderHistory(): void {
   if (!repo) return;
   const project = repo;
-  const branches = project.branches();
+  const branches = [{ name: 'main', revisionId: selectedDesignHead(project) }, ...project.branches().filter(branch => {
+    if (branch.name === 'main' || selectedDesignTarget.kind === 'baseline') return false;
+    const review = project.reviews().find(item => item.proposalName === branch.name);
+    return review ? targetMatches(review.target) : selectedDesignTarget.kind === 'main';
+  })];
   ui['branch-count'].textContent = `${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}`;
   ui['history-list'].replaceChildren(...branches.map((branch) => {
     const wrapper = element('div', undefined, 'history-item');
@@ -2684,7 +2815,7 @@ function renderHistory(): void {
     const review = project.reviews().find((item) => item.proposalName === branch.name);
     const changed = project.compare(review?.baseRevisionId ?? project.root(), branch.revisionId);
     const mainDetail = branch.revisionId === project.root() ? 'Original model' : 'Current accepted model';
-    copy.append(element('span', branch.name, 'history-name'), element('span', `${branch.name === 'main' ? mainDetail : `AI proposal · ${changed.entities.added.length} added · ${changed.entities.modified.length} modified · ${changed.entities.removed.length} removed`} · ${width === undefined ? 'entry absent' : `${millimetres(width)} mm entrance`}`, 'history-detail'));
+    copy.append(element('span', branch.name === 'main' ? designLabel() : branch.name, 'history-name'), element('span', `${branch.name === 'main' ? mainDetail : `AI proposal · ${changed.entities.added.length} added · ${changed.entities.modified.length} modified · ${changed.entities.removed.length} removed`} · ${width === undefined ? 'entry absent' : `${millimetres(width)} mm entrance`}`, 'history-detail'));
     button.append(symbol, copy);
     button.addEventListener('click', () => selectRevision(branch.name, branch.revisionId));
     wrapper.append(button);
@@ -2795,7 +2926,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       select: chooseObject,
       inspect: (id, graph) => { if (liveChatPreview) inspectLiveObject(id, graph); else { inspectedComparison = { id, graph }; renderElementProperties(generic('element-properties'), graph, id, 'Comparison snapshot'); workspace.showInspector(); } },
       reference: (destination) => {
-        if (busy || !serverAvailable || currentPage !== 'request') return;
+        if (busy || selectedDesignTarget.kind === 'baseline' || !serverAvailable || currentPage !== 'request') return;
         stageVisualReference(destination); renderComparison(); updateControls();
         feedback('Location marked. Describe what to create, move or copy here; no model objects have moved.');
       },
@@ -2812,10 +2943,11 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
 
 function renderComparison(): void {
   const project = requireRepository();
-  const originalId = project.root();
+  const baselineId = selectedDesignView().baselineRevisionId;
+  const originalId = project.persistence().revisions.some(item => item.id === baselineId) ? baselineId : project.root();
   const original = project.view(originalId).snapshot;
   const selected = liveChatPreview?.snapshot ?? preview ?? project.view(selectedRevision).snapshot;
-  const reviewedRevision = liveChatPreview ? null : project.reviewAt(selectedRevision);
+  const reviewedRevision = liveChatPreview ? null : selectedReviewAt(project, selectedRevision);
   const review = reviewedRevision?.review;
   const comparison = liveChatPreview ? repo?.view(liveChatPreview.baseRevisionId).snapshot ?? original : reviewedRevision ? project.view(reviewedRevision.comparisonBaseRevisionId).snapshot : original;
   const comparisonLabel = generic('workspace-review-canvas').querySelector('.comparison-toolbar span');
@@ -2877,7 +3009,7 @@ function renderComparison(): void {
   button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
   renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
   ui['selected-title'].textContent = spaces(selected).length ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
-  ui['selected-badge'].textContent = liveChatPreview ? 'Live agent draft' : dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? 'Accepted model' : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
+  ui['selected-badge'].textContent = selectedDesignTarget.kind === 'baseline' ? 'Fixed baseline · read only' : liveChatPreview ? 'Live agent draft' : dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? `${designLabel()} · accepted` : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = spaces(selected).length ? 'Choose a storey for its plan, or explore the whole building in 3D. Select an object and describe a change for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), reviewedRevision
     ? `${reviewedRevision.comparisonBaseRevisionId === review?.baseRevisionId ? 'Proposal base' : 'Accepted predecessor'} ${reviewedRevision.comparisonBaseRevisionId.slice(0, 10)}` : 'Original');
@@ -2886,7 +3018,7 @@ function renderComparison(): void {
 function renderProjectOverview(): void {
   if (!repo) return;
   const project = repo;
-  const revision = project.view(project.head('main'));
+  const revision = project.view(selectedDesignHead(project));
   ui['overview-revision'].textContent = revision.id.slice(0, 10);
   ui['overview-entity-count'].textContent = `${revision.snapshot.entities.length} model objects`;
   generic('overview-project-label').textContent = `${project.name} · PROJECT OVERVIEW`;
@@ -2974,6 +3106,7 @@ for (const conflictChoice of [ui['conflict-left'], ui['conflict-right']]) confli
 });
 
 function render(): void {
+  if (repo) designWorkspace.update(repo.designTargets(), selectedDesignTarget);
   const project = requireRepository();
   ui['project-title'].textContent = project.name;
   document.title = `${project.name} · Room studies`;

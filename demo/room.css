@@ -686,3 +686,11 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
 .design-workspace-create label { margin: 0; }
 .design-workspace-create input { margin-top: .35rem; }
 .design-workspace-create .button { justify-self: start; }
+.workspace-stage { flex-direction: column; }
+.workspace-stage #request-page { flex: 1; height: auto; }
+.design-readonly-banner { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: #fff4d9; color: #533e13; font-size: 12px; }
+.design-readonly-banner[hidden] { display: none; }
+.review-evidence-uses { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
+.review-evidence-uses p { margin-top: 8px; }
+#request-evidence-context:empty { display: none; }
+@media (max-width: 600px) { .design-readonly-banner { flex-wrap: wrap; gap: 6px; } }
