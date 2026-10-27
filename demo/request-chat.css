@@ -16,7 +16,7 @@
 .request-chat button { max-width: 100%; white-space: normal; text-align: start; }
 
 /* The conversation scrolls while its composer stays available beside the model. */
-.workspace-shell[data-context="request"] .workspace-context-content { display: flex; flex-direction: column; overflow: hidden; }
+.workspace-shell[data-context="request"] .workspace-context-content { display: flex; flex: 1 1 0; flex-direction: column; overflow: hidden; }
 .workspace-context .chat-workspace.request-pane { display: flex; flex: 1; flex-direction: column; min-height: 0; background: #f9fbf9; }
 .chat-toolbar { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #e0e8e3; }
 .chat-toolbar .button { min-height: 36px; padding: 8px 12px; font-size: 11px; }
@@ -29,7 +29,7 @@
 .chat-switcher-item strong, .chat-switcher-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-switcher-item strong { font-size: 12px; }
 .chat-switcher-item small, .chat-list-empty { margin-top: 5px; font-size: 10px; color: #6a7b73; }
-.chat-workspace #request-chat-mount { flex: 1 1 100px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.chat-workspace #request-chat-mount { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .chat-workspace .request-chat { margin: 0; padding: 16px; }
 .chat-workspace .request-chat > header { gap: 8px; }
 .chat-workspace .request-chat > header h3 { flex-basis: 100%; margin: 0; font-size: 14px; line-height: 1.4; }

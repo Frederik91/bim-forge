@@ -8,6 +8,8 @@ import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.t
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint, identifier } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
 import { WorkspaceShell } from './workspace-shell.ts';
+import { ModelExplorer, renderElementProperties } from './model-explorer.ts';
+import type { ModelNode } from './model-explorer.ts';
 import { requestContext } from './request-context.ts';
 import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
@@ -163,8 +165,8 @@ const ui = {
   'project-name': input('project-name'),
   'create-project': button('create-project'),
   'load-sample': button('load-sample'),
-  'project-template': select('project-template'), 'room-focus': select('room-focus'),
-  'level-focus': select('level-focus'), 'show-roof': input('show-roof'), 'whole-building': button('whole-building'),
+  'project-template': select('project-template'),
+  'show-roof': input('show-roof'),
   'reconstruction-scope': select('reconstruction-scope'),
   'proposal-form': requiredElement('proposal-form', HTMLFormElement),
   'door-width': input('door-width'),
@@ -254,6 +256,8 @@ const ui = {
 
 const projects = new ProjectClient();
 const workspace = new WorkspaceShell();
+const explorer = new ModelExplorer(generic('model-explorer'), navigateModel);
+let inspectedComparison: { graph: ModelSnapshot; id: string } | null = null;
 let serverAvailable = false;
 let projectChoices: readonly ProjectSummary[] = [];
 let legacyProject: RoomRepository | null = null;
@@ -742,13 +746,12 @@ function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
   const writable = serverAvailable && !busy && !dragging;
+  explorer.setDisabled(busy || dragging || !repo);
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
   for (const control of geometryControls) control.disabled = !writable || !layout || Boolean(gesture) || Boolean(chatTicketId);
   ui['project-template'].disabled = !writable;
-  ui['room-focus'].disabled = busy || dragging || !repo;
-  button('whole-floor').disabled = busy || dragging || !repo;
   ui['selected-object'].disabled = busy || !preview || dragging;
   ui['proposal-name'].disabled = !writable || !preview || Boolean(gesture) || Boolean(chatTicketId);
   ui['request-text'].disabled = !writable || !preview || Boolean(gesture);
@@ -756,8 +759,6 @@ function updateControls() {
   scopeBuilder.setDisabled(!writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
   ui['request-reconstruct'].disabled = !writable || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
-  ui['level-focus'].disabled = busy || dragging || !repo;
-  ui['whole-building'].disabled = busy || dragging || !repo;
   ui['show-roof'].disabled = !preview?.entities.some(item => item.type === 'Roof');
   ui['save-proposal'].disabled = !writable || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready || !ui['request-text'].value.trim();
   ui['save-proposal'].textContent = sourcePicker.uploading || busy ? '…' : '↑';
@@ -851,6 +852,7 @@ function syncInspector() {
   const dimensionInputs = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
   for (const dimensionInput of dimensionInputs) dimensionInput.removeAttribute('aria-invalid');
   const object = preview?.entities.find((item) => item.id === selectedObject);
+  if (preview) renderElementProperties(generic('element-properties'), inspectedComparison?.graph ?? preview, inspectedComparison?.id ?? selectedObject, `${selectedBranch} · ${selectedRevision.slice(0, 7)}`);
   const isDoor = object?.type === 'Door';
   const isWall = object?.type === 'Wall';
   ui['door-fields'].hidden = !isDoor || !layout;
@@ -894,11 +896,11 @@ function chooseObject(id: string): void {
   if (!repo || busy || gesture || visualGesture) return;
   if (visualDraft && id !== selectedObject) visualDraft = null;
   if (invalidInput && !window.confirm('Discard the incomplete or invalid input and select another object?')) return;
-  invalidInput = false; clearError(); selectedObject = id;
+  invalidInput = false; clearError(); selectedObject = id; inspectedComparison = null;
   const item = preview?.entities.find((entity) => entity.id === id);
   if (item?.type === 'Space') focusedRoomId = item.id;
   else if (preview && focusedRoomId && item) focusedRoomId = entitySpace(preview, item)?.id ?? focusedRoomId;
-  syncInspector(); renderComparison(); updateControls();
+  syncInspector(); renderComparison(); updateControls(); workspace.showInspector();
 }
 
 ui['selected-object'].addEventListener('change', () => {
@@ -975,7 +977,7 @@ function displayAccepted(next: RoomRepository): void {
   activeReview = null;
   activeTicketId = null;
   selectedBranch = 'main';
-  selectedRevision = repo.head('main');
+  selectedRevision = repo.head('main'); inspectedComparison = null;
   resetEditor();
   if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); }
   try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
@@ -2594,49 +2596,34 @@ function focusRoom(id: string | null): void {
 }
 function renderRoomNavigation(snapshot: ModelSnapshot): void {
   const storeys = levels(snapshot);
-  const needsPlan = modelView === 'plan';
   if (activeLevelId && !storeys.some(level => level.id === activeLevelId)) activeLevelId = null;
-  if (!activeLevelId && needsPlan && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
+  if (!activeLevelId && modelView === 'plan' && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
   const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
-  const rooms = spaces(view);
-  generic('level-navigation').hidden = !storeys.length;
-  const all = new Option('All storeys · 3D', ''); all.disabled = needsPlan;
-  ui['level-focus'].replaceChildren(all, ...storeys.map(level => new Option(`${level.name} · ${number.format(level.elevation)} m`, level.id)));
-  ui['level-focus'].value = activeLevelId ?? '';
-  ui['show-roof'].checked = roofVisible;
-  generic('level-context').textContent = activeLevelId ? `Viewing ${storeys.find(level => level.id === activeLevelId)?.name ?? 'level'}. Requests keep this level as context.`
-    : 'Whole building in 3D. Pick a level to isolate its plan and contents.';
-  const objects = view.entities.filter(item => item.type !== 'AssetFamily' && (!activeLevelId || item.type !== 'Level' || item.id === activeLevelId));
+  const objects = view.entities.filter(item => item.type !== 'AssetFamily');
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
-  if (!objects.some(item => item.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects.find(item => item.type === 'Space')?.id ?? objects[0]?.id ?? '';
+  if (!snapshot.entities.some(item => item.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
   if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
-  ui['selected-object'].value = selectedObject;
-  if (!rooms.some((room) => room.id === focusedRoomId)) focusedRoomId = null;
-  generic('room-navigation').hidden = !rooms.length;
-  ui['room-focus'].replaceChildren(new Option(activeLevelId ? 'Whole level' : 'Whole building', ''), ...rooms.map((room) => new Option(
-    activeLevelId ? room.name : `${entityLevel(snapshot, room)?.name ?? ''} · ${room.name}`, room.id)));
-  ui['room-focus'].value = focusedRoomId ?? '';
-  generic('room-context').textContent = focusedRoomId
-    ? 'Room focus frames the camera and accompanies your request. Adjacent rooms remain part of the shared model.'
-    : 'Shared model · rooms stay tied to their level · room areas use wall centre lines.';
+  ui['selected-object'].value = selectedObject; ui['show-roof'].checked = roofVisible;
+  explorer.show({ graph: snapshot, projectId: requireRepository().projectId, name: requireRepository().name, selectedId: selectedObject });
 }
-
-ui['level-focus'].addEventListener('change', () => {
+function navigateModel(node: ModelNode): void {
   if (!preview || busy || gesture || visualGesture) return;
-  if (visualDraft) { status('Clear the current location marker before changing level context.'); ui['level-focus'].value = activeLevelId ?? ''; return; }
-  activeLevelId = ui['level-focus'].value || null; focusedRoomId = null;
-  if (!activeLevelId) modelView = '3d';
-  else selectedObject = activeLevelId;
-  renderComparison(); if (currentPage === 'project') renderProjectOverview(); syncInspector(); updateControls();
-});
-ui['whole-building'].addEventListener('click', () => {
-  if (!repo || busy || gesture || visualGesture) return;
-  if (visualDraft) { status('Clear the current location marker before changing level context.'); return; }
-  activeLevelId = null; focusedRoomId = null; modelView = '3d'; showPage('request'); updateControls();
-});
+  if (visualDraft) { status('Attach or clear the current location marker before changing view context.'); return; }
+  inspectedComparison = null;
+  if (node.kind === 'project') { activeLevelId = null; focusedRoomId = null; modelView = '3d'; }
+  else if (node.kind === 'level') { activeLevelId = node.id; focusedRoomId = null; selectedObject = node.id; }
+  else if (node.kind === 'room') { focusRoom(node.id); workspace.showInspector(); return; }
+  else if (node.kind === 'element') {
+    const entity = preview.entities.find(item => item.id === node.id); if (!entity) return;
+    activeLevelId = entityLevel(preview, entity)?.id ?? null;
+    focusedRoomId = entitySpace(preview, entity)?.id ?? null;
+    if (!activeLevelId) modelView = '3d';
+    chooseObject(node.id); return;
+  } else return;
+  renderComparison(); syncInspector(); updateControls(); workspace.showInspector();
+  status(`Viewing ${node.name}. Inspection leaves the model and chat drafts unchanged.`);
+}
 ui['show-roof'].addEventListener('change', () => { roofVisible = ui['show-roof'].checked; if (roofVisible) cutaway = false; if (repo) renderComparison(); });
-ui['room-focus'].addEventListener('change', () => focusRoom(ui['room-focus'].value || null));
-button('whole-floor').addEventListener('click', () => focusRoom(null));
 
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
@@ -2649,6 +2636,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
     }
     modelViewer ??= new ModelViewer({
       select: chooseObject,
+      inspect: (id, graph) => { inspectedComparison = { id, graph }; renderElementProperties(generic('element-properties'), graph, id, 'Comparison snapshot'); workspace.showInspector(); },
       reference: (destination) => {
         if (busy || !serverAvailable || currentPage !== 'request') return;
         stageVisualReference(destination); renderComparison(); updateControls();

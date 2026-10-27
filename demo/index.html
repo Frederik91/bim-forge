@@ -45,13 +45,9 @@
       <div id="workspace-shell" class="workspace-shell" data-navigation-open="true" data-context-open="true">
         <aside id="workspace-navigation" class="workspace-navigation" aria-labelledby="workspace-navigation-heading">
           <div class="workspace-panel-heading"><div><p class="eyebrow">PROJECT EXPLORER</p><h2 id="workspace-navigation-heading">Navigate model</h2></div><button id="workspace-navigation-close" class="icon-button" type="button" aria-label="Close model navigation">×</button></div>
-<nav id="level-navigation" class="level-navigation" aria-label="Building storeys" hidden>
-        <div><label for="level-focus">Storey</label><select id="level-focus"></select></div>
-        <button id="whole-building" class="button outline" type="button">Whole building · 3D</button>
-        <label class="roof-toggle" for="show-roof"><input id="show-roof" type="checkbox"> Show roof</label><p id="level-context"></p>
-      </nav>
-<div id="room-navigation" class="room-navigation" hidden><div><label for="room-focus">Explore rooms</label><select id="room-focus"><option value="">Whole storey</option></select></div><button id="whole-floor" class="button outline" type="button">Whole storey</button><p id="room-context"></p></div>
-          <p class="workspace-navigation-note">Explore the building, then select an object in the model. Your request stays tied to this revision.</p>
+          <div class="model-explorer-toolbar"><label class="roof-toggle" for="show-roof"><input id="show-roof" type="checkbox"> Show roof</label><small>Click to view · arrows to expand</small></div>
+          <div id="model-explorer" class="model-explorer"></div>
+          <details id="element-inspector" class="element-inspector" open><summary>Element properties</summary><div id="element-properties"></div></details>
         </aside>
         <div class="workspace-stage" aria-label="Model workspace">
       <section id="request-page" class="workflow-page" data-request-pane="canvas" aria-labelledby="request-heading">
