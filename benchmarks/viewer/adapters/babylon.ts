@@ -26,8 +26,8 @@ export class BabylonAdapter implements Adapter {
   private filter: Set<string> | null = null;
   private clipHeight: number | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
+  constructor(surface: HTMLCanvasElement | Engine) {
+    this.engine = surface instanceof Engine ? surface : new Engine(surface, true, { preserveDrawingBuffer: false, stencil: true });
     this.engine.setHardwareScalingLevel(1);
     this.scene = new Scene(this.engine); this.scene.useRightHandedSystem = true;
     this.scene.clearColor = new Color4(.94, .95, .97, 1);
@@ -52,7 +52,12 @@ export class BabylonAdapter implements Adapter {
   async apply(changes: Changes): Promise<void> {
     if (!changes.remove.length && !changes.upsert.length) return;
     for (const id of [...changes.remove, ...changes.upsert.map(item => item.id)]) {
-      this.meshes.get(id)?.dispose(); this.meshes.delete(id); this.data.delete(id);
+      const mesh = this.meshes.get(id);
+      if (mesh) {
+        // The adapter owns cached geometry even while it has no mesh instances.
+        mesh.geometry?.releaseForMesh(mesh, false); mesh.dispose();
+      }
+      this.meshes.delete(id); this.data.delete(id);
     }
     for (const item of changes.upsert) {
       const geometry = this.geometries.get(item.geometryId);
@@ -119,7 +124,9 @@ export class BabylonAdapter implements Adapter {
     return { drawCalls: this.instrumentation.drawCallsCounter.current, triangles: this.scene.getActiveIndices() / 3 };
   }
   async dispose(): Promise<void> {
-    this.instrumentation.dispose(); this.scene.dispose(); this.engine.dispose();
+    this.instrumentation.dispose();
+    for (const geometry of this.geometries.values()) geometry.dispose();
+    this.scene.dispose(); this.engine.dispose();
     this.meshes.clear(); this.geometries.clear(); this.materials.clear(); this.data.clear();
   }
 }
