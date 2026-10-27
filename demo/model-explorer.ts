@@ -129,7 +129,7 @@ export function renderElementProperties(host: HTMLElement, graph: ModelGraph, id
   const properties = elementProperties(graph, id); host.replaceChildren();
   const title = document.createElement('h3'); title.textContent = properties?.name ?? 'Select a model item'; host.append(title);
   const note = document.createElement('p'); note.className = 'inspector-note'; note.textContent = `${context} · Read-only properties`; host.append(note);
-  if (!properties) return;
+  if (!properties) { delete host.dataset.selectedId; return; }
   host.dataset.selectedId = id; const list = document.createElement('dl');
   for (const [label, value] of properties.rows) { const row = document.createElement('div'); const term = document.createElement('dt'); term.textContent = label; const description = document.createElement('dd'); description.textContent = value; row.append(term, description); list.append(row); }
   host.append(list);

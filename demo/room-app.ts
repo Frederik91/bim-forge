@@ -1203,7 +1203,10 @@ ui['nav-request'].addEventListener('click', () => { showPage('request'); showReq
 for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
   showPage('backlog'); void refreshBacklog();
 });
-ui['nav-review'].addEventListener('click', () => showPage(activeChatProposalMessageId && chatTicketId === activeTicketId ? 'request' : 'review'));
+ui['nav-review'].addEventListener('click', () => {
+  const ticketId = activeTicketId ?? backlogItems.find(item => item.request.requestId === activeReview?.requestId)?.id;
+  if (ticketId) void perform(() => openTicket(ticketId)); else showPage('review');
+});
 ui['nav-history'].addEventListener('click', () => { showPage('history'); void loadServerHistory(); });
 function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
