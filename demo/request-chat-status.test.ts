@@ -86,6 +86,19 @@ test('accept, reject and revise each require an exact inspection and the parent 
   assert.deepEqual(actions.map(action => canDecideProposal({ message: proposal, review: restricted, action, disabled: false, offline: false })), [false, true, false]);
 });
 
+test('a display target name cannot grant capabilities or override exact proposal identity', () => {
+  for (const targetLabel of ['Courtyard option', 'Main design', '', '<script>accept()</script>']) {
+    const named = { ...review, targetLabel };
+    const input = { message: proposal, review: named, action: 'accept', disabled: false, offline: false } satisfies Parameters<typeof canDecideProposal>[0];
+    assert.equal(matchingProposalReview(proposal, named), named);
+    assert.equal(canDecideProposal(input), true);
+    assert.equal(canDecideProposal({ ...input, review: { ...named, canAccept: false } }), false);
+    assert.equal(canDecideProposal({ ...input, review: { ...named, requestId: 'other-turn' } }), false);
+    assert.equal(canDecideProposal({ ...input, review: { ...named, proposalRevisionId: `${proposalRevisionId.slice(0, 63)}c` } }), false);
+    assert.equal(canDecideProposal({ ...input, offline: true }), false);
+  }
+});
+
 test('missing activity never fabricates tool execution or success for queued and working requests', () => {
   assert.deepEqual(chatRequestStatus({ requestState: 'queued', offline: false, activity: [] }), {
     kind: 'queued', label: 'Queued', detail: 'Waiting for an available agent.',

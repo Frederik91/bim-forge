@@ -15,6 +15,8 @@ export interface RequestChatProposalReview extends Pick<ConversationMessage, 're
   canAccept: boolean;
   canReject: boolean;
   canRevise: boolean;
+  /** Display only; the parent supplies the reviewed target's human-readable name. */
+  targetLabel?: string;
   /** Whether the parent is currently displaying the reviewed delta. */
   delta: boolean;
 }
