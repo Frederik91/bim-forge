@@ -17,6 +17,7 @@ export class BabylonAdapter implements Adapter {
   private readonly scene: Scene;
   private readonly view: FreeCamera;
   private readonly instrumentation: SceneInstrumentation;
+  private readonly selectionMaterial: StandardMaterial;
   private readonly geometries = new Map<string, Geometry>();
   private readonly materials = new Map<string, StandardMaterial>();
   private readonly meshes = new Map<string, Mesh>();
@@ -33,6 +34,9 @@ export class BabylonAdapter implements Adapter {
     this.view = new FreeCamera('benchmark-camera', new Vector3(18, 15, 22), this.scene);
     this.view.minZ = .01; this.view.maxZ = 100000; this.view.fov = Math.PI / 3;
     this.instrumentation = new SceneInstrumentation(this.scene);
+    this.selectionMaterial = new StandardMaterial('selection', this.scene);
+    this.selectionMaterial.disableLighting = true; this.selectionMaterial.emissiveColor = new Color3(0, 1, 1);
+    this.selectionMaterial.backFaceCulling = false;
   }
 
   async load(model: Model): Promise<void> {
@@ -81,7 +85,8 @@ export class BabylonAdapter implements Adapter {
     if (id && !this.meshes.has(id)) id = null;
     this.selection = id;
     for (const [key, mesh] of this.meshes) {
-      mesh.renderOverlay = key === id; mesh.overlayColor = new Color3(0, 1, 1); mesh.overlayAlpha = .5;
+      const item = this.data.get(key);
+      if (item) mesh.material = key === id ? this.selectionMaterial : this.materials.get(item.color.join(',')) ?? null;
     }
     await this.frame();
   }
