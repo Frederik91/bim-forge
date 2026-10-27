@@ -1,0 +1,23 @@
+{
+  "name": "W0 tiny building projected to W3 vertical dependency datums",
+  "seed": "deterministic-no-randomness",
+  "units": "millimetres (converted from W0 metres)",
+  "fixtures": [
+    {
+      "path": "experiments/fixtures/tiny-building.json",
+      "bytes": 3215,
+      "sha256": "65923d59dfc1014f2a4790113dee7c41dabf75fd0e5912f7303ddfe7efb3df7f"
+    },
+    {
+      "path": "experiments/regeneration/fixture.json",
+      "bytes": 746,
+      "sha256": "d3c5097068475a7c969ef4636eb15f4654ab8b07ee4686996e3ace98b0fe0ba5"
+    }
+  ],
+  "identityProjection": {
+    "ground": "level-ground",
+    "first": "level-upper",
+    "shared-wall": "wall",
+    "door": "opening"
+  }
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "caseId": "occt-real-face-split",
+    "expected": "A valid OCCT box is split by a real plane: 6 initial faces, more final faces, and exactly two top-face history successors.",
+    "experimentId": "EX-07",
+    "limitations": [
+      "One planar box split, one datum and two points; not a general topological naming solution or parametric kernel.",
+      "Explicit traversal permutation uses a compound of actual OCCT result faces; it is an adversarial traversal-order case, not a second Boolean edit.",
+      "No persistence/reload, fillets, curved faces, tolerance sweep, IFC export, Revit API or production authoring integration."
+    ],
+    "observed": "{\"artifacts\": [], \"checks\": {}, \"environment\": {\"cadqueryOcp\": \"8.0.1.1.0\", \"cadqueryOcpProxy\": \"8.0.1.1.0\", \"ocpReportedVersion\": \"8.0.1.1\", \"platform\": \"Linux-6.8.0-111-generic-x86_64-with-glibc2.36\", \"python\": \"3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]\", \"runnerSha256\": \"96d832311acb76aefbcebdbcd11cfd14ec5fa05d3e3913069c48a4fc4ed2e4b7\", \"toleranceMm\": 1e-07, \"vtk\": \"9.6.2\"}, \"error\": \"Traceback (most recent call last):\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 213, in main\\n    run_kernel(args.out, raw)\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 110, in run_kernel\\n    before = faces(box)\\n             ^^^^^^^^^^\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 70, in faces\\n    face = TopoDS.Face_s(explorer.Current())\\n           ^^^^^^^^^^^^^\\nAttributeError: module 'OCP.OCP.TopoDS.TopoDS' has no attribute 'Face_s'\\n\"}",
+    "passed": false
+  },
+  {
+    "caseId": "occt-raw-index-reference",
+    "expected": "The original top-face index loses its original meaning; the guarded attachment stays pending with no chosen successor.",
+    "experimentId": "EX-07",
+    "limitations": [
+      "One planar box split, one datum and two points; not a general topological naming solution or parametric kernel.",
+      "Explicit traversal permutation uses a compound of actual OCCT result faces; it is an adversarial traversal-order case, not a second Boolean edit.",
+      "No persistence/reload, fillets, curved faces, tolerance sweep, IFC export, Revit API or production authoring integration."
+    ],
+    "observed": "{\"artifacts\": [], \"checks\": {}, \"environment\": {\"cadqueryOcp\": \"8.0.1.1.0\", \"cadqueryOcpProxy\": \"8.0.1.1.0\", \"ocpReportedVersion\": \"8.0.1.1\", \"platform\": \"Linux-6.8.0-111-generic-x86_64-with-glibc2.36\", \"python\": \"3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]\", \"runnerSha256\": \"96d832311acb76aefbcebdbcd11cfd14ec5fa05d3e3913069c48a4fc4ed2e4b7\", \"toleranceMm\": 1e-07, \"vtk\": \"9.6.2\"}, \"error\": \"Traceback (most recent call last):\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 213, in main\\n    run_kernel(args.out, raw)\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 110, in run_kernel\\n    before = faces(box)\\n             ^^^^^^^^^^\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 70, in faces\\n    face = TopoDS.Face_s(explorer.Current())\\n           ^^^^^^^^^^^^^\\nAttributeError: module 'OCP.OCP.TopoDS.TopoDS' has no attribute 'Face_s'\\n\"}",
+    "passed": false
+  },
+  {
+    "caseId": "occt-datum-ambiguity",
+    "expected": "Top-plane datum alone finds two successors and returns pending, with no arbitrary attachment.",
+    "experimentId": "EX-07",
+    "limitations": [
+      "One planar box split, one datum and two points; not a general topological naming solution or parametric kernel.",
+      "Explicit traversal permutation uses a compound of actual OCCT result faces; it is an adversarial traversal-order case, not a second Boolean edit.",
+      "No persistence/reload, fillets, curved faces, tolerance sweep, IFC export, Revit API or production authoring integration."
+    ],
+    "observed": "{\"artifacts\": [], \"checks\": {}, \"environment\": {\"cadqueryOcp\": \"8.0.1.1.0\", \"cadqueryOcpProxy\": \"8.0.1.1.0\", \"ocpReportedVersion\": \"8.0.1.1\", \"platform\": \"Linux-6.8.0-111-generic-x86_64-with-glibc2.36\", \"python\": \"3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]\", \"runnerSha256\": \"96d832311acb76aefbcebdbcd11cfd14ec5fa05d3e3913069c48a4fc4ed2e4b7\", \"toleranceMm\": 1e-07, \"vtk\": \"9.6.2\"}, \"error\": \"Traceback (most recent call last):\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 213, in main\\n    run_kernel(args.out, raw)\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 110, in run_kernel\\n    before = faces(box)\\n             ^^^^^^^^^^\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 70, in faces\\n    face = TopoDS.Face_s(explorer.Current())\\n           ^^^^^^^^^^^^^\\nAttributeError: module 'OCP.OCP.TopoDS.TopoDS' has no attribute 'Face_s'\\n\"}",
+    "passed": false
+  },
+  {
+    "caseId": "occt-semantic-anchor",
+    "expected": "Top datum plus an interior point resolves exactly one successor and preserves that physical anchor.",
+    "experimentId": "EX-07",
+    "limitations": [
+      "One planar box split, one datum and two points; not a general topological naming solution or parametric kernel.",
+      "Explicit traversal permutation uses a compound of actual OCCT result faces; it is an adversarial traversal-order case, not a second Boolean edit.",
+      "No persistence/reload, fillets, curved faces, tolerance sweep, IFC export, Revit API or production authoring integration."
+    ],
+    "observed": "{\"artifacts\": [], \"checks\": {}, \"environment\": {\"cadqueryOcp\": \"8.0.1.1.0\", \"cadqueryOcpProxy\": \"8.0.1.1.0\", \"ocpReportedVersion\": \"8.0.1.1\", \"platform\": \"Linux-6.8.0-111-generic-x86_64-with-glibc2.36\", \"python\": \"3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]\", \"runnerSha256\": \"96d832311acb76aefbcebdbcd11cfd14ec5fa05d3e3913069c48a4fc4ed2e4b7\", \"toleranceMm\": 1e-07, \"vtk\": \"9.6.2\"}, \"error\": \"Traceback (most recent call last):\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 213, in main\\n    run_kernel(args.out, raw)\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 110, in run_kernel\\n    before = faces(box)\\n             ^^^^^^^^^^\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 70, in faces\\n    face = TopoDS.Face_s(explorer.Current())\\n           ^^^^^^^^^^^^^\\nAttributeError: module 'OCP.OCP.TopoDS.TopoDS' has no attribute 'Face_s'\\n\"}",
+    "passed": false
+  },
+  {
+    "caseId": "occt-boundary-anchor-pending",
+    "expected": "An anchor on the split boundary finds two faces and stays pending with no chosen successor.",
+    "experimentId": "EX-07",
+    "limitations": [
+      "One planar box split, one datum and two points; not a general topological naming solution or parametric kernel.",
+      "Explicit traversal permutation uses a compound of actual OCCT result faces; it is an adversarial traversal-order case, not a second Boolean edit.",
+      "No persistence/reload, fillets, curved faces, tolerance sweep, IFC export, Revit API or production authoring integration."
+    ],
+    "observed": "{\"artifacts\": [], \"checks\": {}, \"environment\": {\"cadqueryOcp\": \"8.0.1.1.0\", \"cadqueryOcpProxy\": \"8.0.1.1.0\", \"ocpReportedVersion\": \"8.0.1.1\", \"platform\": \"Linux-6.8.0-111-generic-x86_64-with-glibc2.36\", \"python\": \"3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]\", \"runnerSha256\": \"96d832311acb76aefbcebdbcd11cfd14ec5fa05d3e3913069c48a4fc4ed2e4b7\", \"toleranceMm\": 1e-07, \"vtk\": \"9.6.2\"}, \"error\": \"Traceback (most recent call last):\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 213, in main\\n    run_kernel(args.out, raw)\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 110, in run_kernel\\n    before = faces(box)\\n             ^^^^^^^^^^\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 70, in faces\\n    face = TopoDS.Face_s(explorer.Current())\\n           ^^^^^^^^^^^^^\\nAttributeError: module 'OCP.OCP.TopoDS.TopoDS' has no attribute 'Face_s'\\n\"}",
+    "passed": false
+  },
+  {
+    "caseId": "occt-reordered-traversal",
+    "expected": "Repackaging actual result faces in rotated order changes raw index identity while the interior semantic anchor resolves the same OCCT face.",
+    "experimentId": "EX-07",
+    "limitations": [
+      "One planar box split, one datum and two points; not a general topological naming solution or parametric kernel.",
+      "Explicit traversal permutation uses a compound of actual OCCT result faces; it is an adversarial traversal-order case, not a second Boolean edit.",
+      "No persistence/reload, fillets, curved faces, tolerance sweep, IFC export, Revit API or production authoring integration."
+    ],
+    "observed": "{\"artifacts\": [], \"checks\": {}, \"environment\": {\"cadqueryOcp\": \"8.0.1.1.0\", \"cadqueryOcpProxy\": \"8.0.1.1.0\", \"ocpReportedVersion\": \"8.0.1.1\", \"platform\": \"Linux-6.8.0-111-generic-x86_64-with-glibc2.36\", \"python\": \"3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]\", \"runnerSha256\": \"96d832311acb76aefbcebdbcd11cfd14ec5fa05d3e3913069c48a4fc4ed2e4b7\", \"toleranceMm\": 1e-07, \"vtk\": \"9.6.2\"}, \"error\": \"Traceback (most recent call last):\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 213, in main\\n    run_kernel(args.out, raw)\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 110, in run_kernel\\n    before = faces(box)\\n             ^^^^^^^^^^\\n  File \\\"/qualification/sources/w3-debug/experiments/regeneration/topology.py\\\", line 70, in faces\\n    face = TopoDS.Face_s(explorer.Current())\\n           ^^^^^^^^^^^^^\\nAttributeError: module 'OCP.OCP.TopoDS.TopoDS' has no attribute 'Face_s'\\n\"}",
+    "passed": false
+  }
+]

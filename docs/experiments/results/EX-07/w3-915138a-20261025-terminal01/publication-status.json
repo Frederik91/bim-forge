@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "npm",
+      "run",
+      "validate"
+    ],
+    "exitStatus": 0
+  },
+  {
+    "command": [
+      "./node_modules/.bin/tsc",
+      "--project",
+      "experiments/regeneration/tsconfig.json"
+    ],
+    "exitStatus": 0
+  },
+  {
+    "command": [
+      "node",
+      "experiments/regeneration/finalize.ts",
+      "--artifacts",
+      "/qualification/artifacts",
+      "--evidence",
+      "docs/experiments/results/EX-07/w3-915138a-20261025-terminal01-evidence",
+      "--results",
+      "docs/experiments/results",
+      "--run-id",
+      "w3-915138a-20261025-terminal01"
+    ],
+    "exitStatus": 0
+  }
+]
