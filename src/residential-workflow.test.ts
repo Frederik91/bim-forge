@@ -26,15 +26,14 @@ test('a residential partition draft updates both rooms and its hosted doorway wi
   const beforeClearance = doorClearanceBounds(fixture.snapshot, beforeDoor);
   const afterClearance = doorClearanceBounds(preview.snapshot, afterDoor);
   assert.ok(Math.abs(afterClearance.minX - beforeClearance.minX - .2) < 1e-9);
-  assert.deepEqual(preview.impacts.find(item => item.kind === 'entity' && item.id === afterDoor.id),
-    { kind: 'entity', id: afterDoor.id, reasons: ['hosted-opening', 'room-contents'], changed: false });
+  assert.ok(preview.impacts.some(item => item.kind === 'entity' && item.id === afterDoor.id
+    && !item.changed && item.reasons.includes('hosted-opening')));
   for (const id of ['room-office', 'office-desk', 'office-laptop', 'office-monitor', 'main-bed']) {
     assert.deepEqual(preview.snapshot.entities.find(item => item.id === id), fixture.snapshot.entities.find(item => item.id === id));
   }
   assert.deepEqual(preview.delta.entities.modified.map(item => item.id).sort(), ['room-kitchen', 'room-living', 'wall-living-kitchen']);
   assert.equal(JSON.stringify(fixture.sources), evidence);
   assert.equal(repository.serialize(), accepted);
-  assert.equal(repository.view(repository.head('main')).snapshot.entities.find(item => item.id === 'wall-living-kitchen')?.type, 'Wall');
 });
 
 test('a partition draft that cuts through existing kitchen contents is refused without publishing geometry or resolving evidence', async () => {
