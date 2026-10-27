@@ -8,6 +8,7 @@ export const ResultSchema = Type.Object({
   version: Type.Literal(1), candidate: Type.Union([Type.Literal('babylon'), Type.Literal('fragments')]),
   profile: Type.Literal('viewer-192-v1'), purpose: Type.Literal('setup-smoke'),
   status: Type.Union([Type.Literal('completed'), Type.Literal('failed')]), qualified: Type.Literal(false),
+  reviewCycles: Type.Integer({ minimum: 1, maximum: 100 }),
   samples: Type.Array(sampleSchema), frameIntervalsMs: Type.Array(Type.Number({ minimum: 0 })),
   checks: Type.Array(Type.String()), limitations: Type.Array(Type.String()),
   error: Type.Union([Type.Null(), Type.String()]),
@@ -19,14 +20,20 @@ export type Result = Static<typeof ResultSchema>;
 export type Sample = Result['samples'][number];
 export type Candidate = Result['candidate'];
 
-export function parseResult(input: unknown): Result {
+export function parseResult(input: unknown, expected?: { candidate: Candidate; reviewCycles: number }): Result {
   if (!Check(ResultSchema, input)) throw new Error('Invalid benchmark result');
+  if (expected && (input.candidate !== expected.candidate || input.reviewCycles !== expected.reviewCycles)) throw new Error('Benchmark result does not match requested candidate/cycles');
   if (input.samples.some(sample => !Number.isFinite(sample.durationMs))
     || input.frameIntervalsMs.some(value => !Number.isFinite(value))) throw new Error('Non-finite measurements');
-  if (input.status === 'completed' && (input.error !== null || !input.samples.length
-    || !['load', 'proposal', 'comparison', 'discard', 'renderer-readback', 'pick', 'filter', 'section'].every(check => input.checks.includes(check))
-    || !['load', 'proposal', 'comparison', 'discard', 'pick', 'filter', 'section'].every(operation => input.samples.some(sample => sample.operation === operation)))) {
-    throw new Error('Completed result is missing scenario evidence');
+  if (input.status === 'completed') {
+    const operations = { load: 1, select: 1, properties: 1, pick: 1, filter: 1, section: 1,
+      proposal: input.reviewCycles, comparison: input.reviewCycles, 'comparison-exit': input.reviewCycles, discard: input.reviewCycles };
+    const checks = { ...operations, 'renderer-readback': 1, 'accepted-immutable': input.reviewCycles * 4, 'stale-rejected': 1 };
+    if (input.error !== null || !input.frameIntervalsMs.length
+      || !Object.entries(checks).every(([name, count]) => input.checks.filter(check => check === name).length === count)
+      || !Object.entries(operations).every(([name, count]) => input.samples.filter(sample => sample.operation === name).length === count)) {
+      throw new Error('Completed result is missing scenario evidence or has inconsistent counts');
+    }
   }
   if (input.status === 'failed' && !input.error) throw new Error('Failed result is missing the error');
   return input;

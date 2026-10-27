@@ -73,9 +73,46 @@ test('percentiles require enough samples and never combine missing values into z
 });
 test('result validator rejects a false completion or a qualification claim', () => {
   const result: Result = { version: 1, candidate: 'babylon', profile: 'viewer-192-v1', purpose: 'setup-smoke', status: 'failed', qualified: false,
-    samples: [], frameIntervalsMs: [], checks: [], limitations: [], error: 'Browser unavailable',
+    reviewCycles: 3, samples: [], frameIntervalsMs: [], checks: [], limitations: [], error: 'Browser unavailable',
     environment: { userAgent: 'test', hardwareConcurrency: 1, renderer: 'unavailable', viewport: [1280, 800], devicePixelRatio: 1 } };
   parseResult(result);
   assert.throws(() => parseResult({ ...result, status: 'completed', error: null }), /missing scenario evidence/);
   assert.throws(() => parseResult({ ...result, qualified: true }), /Invalid benchmark result/);
+});
+
+function completedResult(): Result {
+  const operations = ['load', 'select', 'properties', 'pick', 'filter', 'section',
+    ...Array.from({ length: 3 }, () => ['proposal', 'comparison', 'comparison-exit', 'discard']).flat()];
+  return { version: 1, candidate: 'babylon', profile: 'viewer-192-v1', purpose: 'setup-smoke', status: 'completed', qualified: false,
+    reviewCycles: 3, samples: operations.map(operation => ({ operation, durationMs: 1, drawCalls: 1, triangles: 12 })),
+    checks: [...operations, 'renderer-readback', 'stale-rejected', ...Array.from({ length: 12 }, () => 'accepted-immutable')],
+    frameIntervalsMs: [16], limitations: ['Unit-test result, no browser measurement'], error: null,
+    environment: { userAgent: 'test', hardwareConcurrency: 1, renderer: 'unavailable', viewport: [1280, 800], devicePixelRatio: 1 } };
+}
+
+test('completed results require every claimed scenario check and operation', () => {
+  const result = completedResult(); parseResult(result, { candidate: 'babylon', reviewCycles: 3 });
+  for (const check of new Set(result.checks)) {
+    assert.throws(() => parseResult({ ...result, checks: result.checks.filter(item => item !== check) }), /scenario evidence/, check);
+  }
+  for (const operation of new Set(result.samples.map(sample => sample.operation))) {
+    assert.throws(() => parseResult({ ...result, samples: result.samples.filter(sample => sample.operation !== operation) }), /scenario evidence/, operation);
+  }
+  assert.throws(() => parseResult({ ...result, frameIntervalsMs: [] }), /scenario evidence/);
+});
+
+test('completed results reject truncated, overcounted and relabelled review cycles', () => {
+  const result = completedResult();
+  for (const operation of ['proposal', 'comparison', 'comparison-exit', 'discard']) {
+    const index = result.samples.findIndex(sample => sample.operation === operation);
+    assert.throws(() => parseResult({ ...result, samples: result.samples.filter((_, i) => i !== index) }), /counts/, operation);
+    assert.throws(() => parseResult({ ...result, samples: [...result.samples, result.samples[index]] }), /counts/, operation);
+    const checkIndex = result.checks.indexOf(operation);
+    assert.throws(() => parseResult({ ...result, checks: result.checks.filter((_, i) => i !== checkIndex) }), /counts/, operation);
+  }
+  const index = result.checks.indexOf('accepted-immutable');
+  assert.throws(() => parseResult({ ...result, checks: result.checks.filter((_, i) => i !== index) }), /counts/);
+  assert.throws(() => parseResult({ ...result, reviewCycles: 1 }), /counts/);
+  assert.throws(() => parseResult(result, { candidate: 'babylon', reviewCycles: 100 }), /requested/);
+  assert.throws(() => parseResult(result, { candidate: 'fragments', reviewCycles: 3 }), /requested/);
 });

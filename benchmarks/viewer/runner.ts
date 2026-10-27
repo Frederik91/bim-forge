@@ -7,11 +7,9 @@ import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { chromium } from 'playwright';
-import type { Browser } from 'playwright';
 import { admission, parseModel } from './contract.ts';
 import { smokeModel } from './fixtures.ts';
-import { parseResult, summarize } from './metrics.ts';
+import { runCandidateProcess } from './runner-limits.ts';
 import type { Candidate } from './metrics.ts';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -86,46 +84,19 @@ if (args.includes('--serve')) {
   let failed = false;
   try {
     for (const engine of candidates) {
-      let browser: Browser | null = null;
-      const errors: string[] = [];
-      try {
-        browser = await chromium.launch({ headless: !args.includes('--headed'), ...(channel ? { channel } : {}), timeout });
-        const context = await browser.newContext({ viewport: { width: 1320, height: 1080 }, deviceScaleFactor: 1 });
-        await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
-        const page = await context.newPage(); page.setDefaultTimeout(timeout);
-        page.on('pageerror', error => errors.push(error.message));
-        await page.goto(url); await page.waitForFunction(() => !!window.viewerBenchmark);
-        const raw: unknown = await Promise.race([
-          page.evaluate(({ engine, cycles }) => window.viewerBenchmark.run(engine, cycles), { engine, cycles }),
-          new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error('Benchmark timeout')), timeout); timer.unref(); }),
-        ]);
-        const result = parseResult(raw);
-        await fs.writeFile(path.join(output, engine + '.json'), JSON.stringify({ result, errors, browserVersion: browser.version(),
-          summaries: Object.fromEntries([...new Set(result.samples.map(sample => sample.operation))].map(operation => [operation, summarize(result.samples.filter(sample => sample.operation === operation).map(sample => sample.durationMs))])),
-          frameSummary: summarize(result.frameIntervalsMs),
-        }, null, 2) + '\n');
-        await page.locator('canvas').screenshot({ path: path.join(output, engine + '-baseline.png') });
-        if (result.status === 'completed') {
-          await page.evaluate(() => window.viewerBenchmark.preview());
-          await page.evaluate(() => window.viewerBenchmark.compare());
-          await page.locator('canvas').screenshot({ path: path.join(output, engine + '-comparison.png') });
-          const delta: unknown = await page.evaluate(() => window.viewerBenchmark.inspect());
-          await fs.writeFile(path.join(output, engine + '-review.json'), JSON.stringify(delta, null, 2) + '\n');
-          await page.evaluate(() => window.viewerBenchmark.discard());
-        }
-        await page.evaluate(() => window.viewerBenchmark.dispose());
-        await context.tracing.stop({ path: path.join(output, engine + '-trace.zip') });
-        if (result.status !== 'completed' || errors.length) failed = true;
-        process.stdout.write(engine + ': ' + result.status + (result.error ? ' (' + result.error + ')' : '') + '\n');
-      } catch (error) {
-        failed = true;
-        await fs.writeFile(path.join(output, engine + '-failure.json'), JSON.stringify({ status: 'failed', qualified: false, errors,
-          error: error instanceof Error ? error.message : String(error) }, null, 2) + '\n');
-        process.stderr.write(engine + ': ' + String(error) + '\n');
-      } finally { await browser?.close(); }
+      const passed = await runCandidateProcess({ candidate: engine, output, timeoutMs: timeout, executable: process.execPath,
+        args: [fileURLToPath(new URL('./runner-candidate.ts', import.meta.url)), JSON.stringify({
+          candidate: engine, url, output, channel, headed: args.includes('--headed'), cycles, timeout,
+        })],
+      });
+      if (!passed) failed = true;
+      process.stdout.write(engine + ': ' + (passed ? 'completed' : 'failed') + '\n');
     }
     await fs.writeFile(path.join(output, 'completion.json'), JSON.stringify({ status: failed ? 'failed' : 'completed', qualified: false,
       purpose: 'setup-smoke', realisticDataset: 'not-qualified', finishedAt: new Date().toISOString() }, null, 2) + '\n');
     if (failed) process.exitCode = 1;
-  } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
 }

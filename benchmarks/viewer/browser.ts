@@ -63,7 +63,7 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
   active = true;
   const samples: Sample[] = []; const checks: string[] = []; const frameIntervalsMs: number[] = [];
   const result: Result = { version: 1, candidate, profile: 'viewer-192-v1', purpose: 'setup-smoke', status: 'failed', qualified: false,
-    samples, checks, frameIntervalsMs, error: null,
+    reviewCycles: cycles, samples, checks, frameIntervalsMs, error: null,
     limitations: ['Setup replay, not a scored engine comparison. No full-project or hardware qualification.',
       'No current production Babylon baseline, native IFC conversion, streaming, instancing tuning, or automated memory qualification yet.',
       'Renderer completion is followed by requestAnimationFrame; GPU presentation timing requires external tracing.',
@@ -76,6 +76,7 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
     const start = performance.now(); await work();
     if (!adapter) throw new Error('Missing active adapter');
     samples.push({ operation, durationMs: performance.now() - start, ...adapter.stats() });
+    checks.push(operation);
   }
   try {
     await dispose();
@@ -98,7 +99,7 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
     }
     await measure('load', async () => { await renderer.load(model); await renderer.camera(firstCamera); });
     displayed = model.elements;
-    assertReadback(model, model.elements, await renderer.readback()); checks.push('load', 'renderer-readback');
+    assertReadback(model, model.elements, await renderer.readback()); checks.push('renderer-readback');
     const stable = model.elements[2]; if (!stable) throw new Error('Replay needs three elements');
     await measure('select', () => renderer.select(stable.id));
     await measure('properties', async () => {
@@ -114,29 +115,34 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
         }
       }
       throw new Error('No geometry could be ray-picked');
-    }); checks.push('pick');
+    });
     await measure('filter', async () => {
       await renderer.visible([]);
       if (await renderer.pick(pickX, pickY)) throw new Error('Hidden geometry intercepted a pick');
       await renderer.visible(null);
-    }); checks.push('filter');
+    });
     await measure('section', async () => {
       await renderer.section(-1000);
       if (await renderer.pick(pickX, pickY)) throw new Error('Clipped geometry intercepted a pick');
       await renderer.section(null);
-    }); checks.push('section');
-    for (let i = 0; i < cycles; i++) {
-      await measure('proposal', () => preview());
-      await measure('comparison', compare);
-      await measure('comparison-exit', compare);
-      await measure('discard', discard);
+    });
+    async function review(operation: string, work: () => Promise<void>): Promise<void> {
+      await measure(operation, work);
       if (JSON.stringify(accepted) !== baseline) throw new Error('Accepted model mutated during review');
+      checks.push('accepted-immutable');
     }
-    checks.push('proposal', 'comparison', 'discard', 'accepted-immutable');
+    for (let i = 0; i < cycles; i++) {
+      await review('proposal', () => preview());
+      await review('comparison', compare);
+      await review('comparison-exit', compare);
+      await review('discard', discard);
+    }
     const beforeStale = JSON.stringify(displayed);
     try { await preview({ ...smokeProposal(model), baseRevision: 'stale-revision' }); throw new Error('Stale proposal was accepted'); }
     catch (error) { if (!(error instanceof Error) || error.message !== 'Stale or invalid proposal revision') throw error; }
     if (JSON.stringify(displayed) !== beforeStale) throw new Error('Stale proposal changed rendered state');
+    if (JSON.stringify(accepted) !== baseline) throw new Error('Stale proposal changed accepted state');
+    assertReadback(model, model.elements, await renderer.readback());
     checks.push('stale-rejected');
     for (const size of [1, 10, 100, 1000]) {
       if (size > model.elements.length) { result.limitations.push('Proposal size ' + size + ' not run: insufficient fixture elements'); continue; }
