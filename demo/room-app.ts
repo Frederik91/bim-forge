@@ -1430,8 +1430,13 @@ function openRoomRequest(roomId: string | null): void {
   });
 }
 ui['nav-request'].addEventListener('click', () => { showPage('request'); showRequestPane('details'); });
-for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
+ui['nav-backlog'].addEventListener('click', () => {
   showPage('backlog'); void refreshBacklog();
+});
+ui['open-backlog'].addEventListener('click', () => {
+  showPage('request'); showRequestPane('details'); saveChatDraft(); renderChatSwitcher();
+  generic('chat-switcher').hidden = false; button('chat-switcher-button').setAttribute('aria-expanded', 'true');
+  input('chat-search').focus();
 });
 ui['nav-review'].addEventListener('click', () => {
   const ticketId = activeTicketId ?? backlogItems.find(item => item.request.requestId === activeReview?.requestId)?.id;
@@ -2014,7 +2019,7 @@ function renderBacklog(): void {
   const ready = items.filter((item) => item.state === 'ready').length;
   const pending = items.filter((item) => item.state === 'queued' || item.state === 'working').length;
   ui['nav-backlog'].replaceChildren(element('span', '2'), element('b', 'Backlog'), element('small', `${ready} ready for review`));
-  ui['open-backlog'].textContent = `Change requests · ${items.length}`;
+  ui['open-backlog'].textContent = `Chats · ${items.length}${ready ? ` · ${ready} ready` : ''}`;
   ui['backlog-summary'].textContent = `${items.length} requests · ${groups.review.length} need your attention · ${pending} active or waiting`;
   let empty = '';
   for (const tab of requestTabs) {

@@ -245,6 +245,7 @@ export class RequestChat {
     const targetLabel = review.targetLabel?.trim() || (review.target?.target.kind === 'main' ? 'Main design'
       : review.target?.target.kind === 'alternative' ? 'selected alternative' : 'selected design');
     card.append(node('p', `Target: ${targetLabel}`, 'request-chat-target'));
+    if (review.uncertainty.trim()) card.append(node('p', `Assumptions: ${review.uncertainty}`, 'request-chat-assumption'));
     if (review.evidenceUses?.length) {
       const choices = node('details'); choices.dataset.detailKey = `evidence:${message.id}`;
       choices.append(node('summary', `Evidence choices for this proposal · ${review.evidenceUses.length}`),
