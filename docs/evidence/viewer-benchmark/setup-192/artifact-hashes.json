@@ -1,0 +1,76 @@
+{
+  "files": [
+    {
+      "name": "babylon-baseline.png",
+      "sha256": "fa6a1926ef964b12253a8c47e711867f482dbea14901d9898da43adac6cb2797"
+    },
+    {
+      "name": "babylon-comparison.png",
+      "sha256": "a643b76347fe45a1bd9cd586100e3b7f26e56fd488673d1b9dfc6688eb839f3c"
+    },
+    {
+      "name": "babylon-review.json",
+      "sha256": "cb63af0e230958f2e7fd952dd9acac5231632fda1dfe7ef530e26c2929d859f8"
+    },
+    {
+      "name": "babylon.json",
+      "sha256": "107cb9273dbfe93ee562c7d6c2959de4f60eedfdda2e810e4f8e1e466c5fa8ca"
+    },
+    {
+      "name": "baseline-proposal-tests.txt",
+      "sha256": "caeec983355fb16a81af3639377bcfd7824da3c83b872a5ccf190a0a0e406dbb"
+    },
+    {
+      "name": "benchmark-and-scene-tests.txt",
+      "sha256": "274c296376e509594b8a319e724824a3ad196a8f850b95db4a9699089b449350"
+    },
+    {
+      "name": "completion.json",
+      "sha256": "2dfea9386fee298d8207a5e05dda964a7a28c85bd2e9eaa88c5cd2a9962991c8"
+    },
+    {
+      "name": "focused-tests.txt",
+      "sha256": "52d26bd8b0f259e27424898c56565c70a129e27e8ae5aa26df96e875da38a62a"
+    },
+    {
+      "name": "fragments-baseline.png",
+      "sha256": "ace949448442c97e6a098227a88757373c4199246c38833bcaa1bdb90045731d"
+    },
+    {
+      "name": "fragments-comparison.png",
+      "sha256": "f931b30d50ca777c8065b6ba9ced2849e0d37b48590f869b4b790c787c090721"
+    },
+    {
+      "name": "fragments-review.json",
+      "sha256": "212d9da3a7369c73244c0f988a74be3e9316955acb86ba5e40aa8e40b8793307"
+    },
+    {
+      "name": "fragments.json",
+      "sha256": "3b3b619da358d97b9c6ae69bcc2ba17e2cc1296b2da63780a4367a0a8be5949f"
+    },
+    {
+      "name": "launch-failure.txt",
+      "sha256": "6def5697c1ef6607eacf5bba4b5cd230d0de29ac40d39fca2c0152a52fdca243"
+    },
+    {
+      "name": "run.json",
+      "sha256": "914898dc01ad057a20ac8933b16aba79b866eb60983a1dd6402f8e47abab5cfa"
+    },
+    {
+      "name": "validate.txt",
+      "sha256": "89b5c32d673c7c6536dd95443769ec49add734af75f7fcb749b34787e5d391af"
+    }
+  ],
+  "traces": [
+    {
+      "path": "artifacts/private/viewer-benchmark/setup-192-final/babylon-trace.zip",
+      "sha256": "b1ac78bf0fb64e5233444209d863c3ca334815cac5759e774d412c0954e9865d",
+      "publication": "local-only"
+    },
+    {
+      "path": "artifacts/private/viewer-benchmark/setup-192-final/fragments-trace.zip",
+      "sha256": "6263d8def05b006847538ed9a9601a0814c8d886759e7784b5e30e06f4830da2",
+      "publication": "local-only"
+    }
+  ]
+}

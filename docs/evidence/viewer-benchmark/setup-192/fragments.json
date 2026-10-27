@@ -1,0 +1,2609 @@
+{
+  "result": {
+    "version": 1,
+    "candidate": "fragments",
+    "profile": "viewer-192-v1",
+    "purpose": "setup-smoke",
+    "status": "completed",
+    "qualified": false,
+    "samples": [
+      {
+        "operation": "load",
+        "durationMs": 578.5,
+        "drawCalls": 3,
+        "triangles": 240
+      },
+      {
+        "operation": "select",
+        "durationMs": 84.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "properties",
+        "durationMs": 0.5999999046325684,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "pick",
+        "durationMs": 3.1000001430511475,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "filter",
+        "durationMs": 195.29999995231628,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "section",
+        "durationMs": 240.29999995231628,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 355.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 449.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 462.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 465.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 349.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 467.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 458.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 467.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 464.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.7000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 464.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 452.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 361.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 335.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 367.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.7000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 462.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 450.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 368.69999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 448.40000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 334.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 366.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.89999985694885,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 465.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 350.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 369.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.60000014305115,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 464,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 351.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 460.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 467.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.60000014305115,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 465.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 366.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 461.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 355,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 465.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.30000019073486,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 455.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 472.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 463.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 354.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.10000014305115,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 451.19999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 450.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 360.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 354.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 462.10000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 464.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 479.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 464.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 448.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 464,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 464.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.7000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 368.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 466.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 460.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 466.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 365.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.19999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 367.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 450.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 352.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 350.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 366.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 350.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 353.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 466.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 461.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.30000019073486,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 366.19999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 353,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 367,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.40000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 464.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 350.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 353.69999980926514,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 462.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 355.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 459.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 464.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 454.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 359.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 448,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 462.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 463.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 355.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 452.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 457.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 447.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 463.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 448.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.10000014305115,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 464,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 352.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 368.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 335.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.7000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 466.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 365.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 369,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.40000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 369.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 353.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 456.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 469.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 462.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 466.10000014305115,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 462.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 369.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 464.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.60000014305115,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 350.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 337.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 350,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.89999985694885,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 349.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 461.89999985694885,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.10000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 369,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 367.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.39999985694885,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 461.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 465.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 350.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 368.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 464.10000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 464.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.40000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 465.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 468.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 459.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 352.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 334.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 461.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 467.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 335,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 462.69999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 350.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 336.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.19999980926514,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.10000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 465.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 367.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 461.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 353.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 353.10000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 350.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 367.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 368.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.40000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 335.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 336.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 367.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 461.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 464.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 354.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 335.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 465.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 353.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 367.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 366.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 367.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 464,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 334.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 350.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 350.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 350.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 368.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.69999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 466.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 335.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 367.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 368,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 464.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 366.30000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 464,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 460,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 356.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 352.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 368.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 335.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 456.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 469,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 337.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 367.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 465.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 367.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 351.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 368.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.30000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 350.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 455,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 366.80000019073486,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 349.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 334.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 368.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 465.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 465.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 462,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 467.10000014305115,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 452.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 349.10000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 349,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 350.5,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 353.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 461.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 367.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.09999990463257,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 351.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 354,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 350.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 464.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 383,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 464.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 368.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 352,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 464.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 465.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 336.40000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 462.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 466.40000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 461.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 463.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 352.2999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 461.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 339.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 459.69999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 353.30000019073486,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 451.69999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 459,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 464.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 463.7000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 450.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 352.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 461.39999985694885,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 357.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 349.80000019073486,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 459.69999980926514,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.2000000476837,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 465.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 365.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 353.2999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 369.5,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 366.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 463.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 463.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 350.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 336.09999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 358.60000014305115,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 461.39999985694885,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 365.39999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 462.30000019073486,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 352.7999999523163,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 352.89999985694885,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal",
+        "durationMs": 368.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "comparison",
+        "durationMs": 461.7999999523163,
+        "drawCalls": 8,
+        "triangles": 260
+      },
+      {
+        "operation": "comparison-exit",
+        "durationMs": 351.59999990463257,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "discard",
+        "durationMs": 368.90000009536743,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal-1",
+        "durationMs": 472.2000000476837,
+        "drawCalls": 4,
+        "triangles": 240
+      },
+      {
+        "operation": "proposal-10",
+        "durationMs": 433,
+        "drawCalls": 5,
+        "triangles": 240
+      }
+    ],
+    "checks": [
+      "load",
+      "renderer-readback",
+      "pick",
+      "filter",
+      "section",
+      "proposal",
+      "comparison",
+      "discard",
+      "accepted-immutable",
+      "stale-rejected"
+    ],
+    "frameIntervalsMs": [
+      92.29999995231628,
+      144.70000004768372,
+      79.40000009536743,
+      119.5,
+      96.20000004768372,
+      104.5,
+      86.89999985694885,
+      112,
+      96.60000014305115,
+      95.69999980926514,
+      120.80000019073486,
+      79.59999990463257,
+      112.40000009536743,
+      86.79999995231628,
+      121.39999985694885,
+      111.70000004768372,
+      102.60000014305115,
+      105.39999985694885,
+      87.40000009536743,
+      96.09999990463257,
+      105.29999995231628,
+      86.40000009536743,
+      112,
+      96.40000009536743,
+      120.89999985694885,
+      80.10000014305115,
+      127.39999985694885,
+      80.20000004768372,
+      112.20000004768372,
+      95.79999995231628
+    ],
+    "error": null,
+    "limitations": [
+      "Setup replay, not a scored engine comparison. No full-project or hardware qualification.",
+      "No current production Babylon baseline, native IFC conversion, streaming, instancing tuning, or automated memory qualification yet.",
+      "Renderer completion is followed by requestAnimationFrame; GPU presentation timing requires external tracing.",
+      "CPU, process/GPU memory, transfer shaping, long tasks, conversion equivalence, and shader fidelity need scored-run instrumentation.",
+      "Neutral diff/readback scans the input. Timings include those checks and must not be called isolated renderer performance.",
+      "Synthetic fixture cannot qualify a realistic project",
+      "Gross floor area is below 200,000 m²",
+      "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification",
+      "Proposal size 100 not run: insufficient fixture elements",
+      "Proposal size 1000 not run: insufficient fixture elements"
+    ],
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "hardwareConcurrency": 16,
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "viewport": [
+        1280,
+        800
+      ],
+      "devicePixelRatio": 1
+    }
+  },
+  "errors": [],
+  "browserVersion": "155.0.8059.80",
+  "summaries": {
+    "load": {
+      "count": 1,
+      "median": 578.5,
+      "p95": null,
+      "maximum": 578.5
+    },
+    "select": {
+      "count": 1,
+      "median": 84.09999990463257,
+      "p95": null,
+      "maximum": 84.09999990463257
+    },
+    "properties": {
+      "count": 1,
+      "median": 0.5999999046325684,
+      "p95": null,
+      "maximum": 0.5999999046325684
+    },
+    "pick": {
+      "count": 1,
+      "median": 3.1000001430511475,
+      "p95": null,
+      "maximum": 3.1000001430511475
+    },
+    "filter": {
+      "count": 1,
+      "median": 195.29999995231628,
+      "p95": null,
+      "maximum": 195.29999995231628
+    },
+    "section": {
+      "count": 1,
+      "median": 240.29999995231628,
+      "p95": null,
+      "maximum": 240.29999995231628
+    },
+    "proposal": {
+      "count": 100,
+      "median": 358.60000014305115,
+      "p95": 464.7999999523163,
+      "maximum": 467.90000009536743
+    },
+    "comparison": {
+      "count": 100,
+      "median": 463.60000014305115,
+      "p95": 466.90000009536743,
+      "maximum": 479.7999999523163
+    },
+    "comparison-exit": {
+      "count": 100,
+      "median": 357.7999999523163,
+      "p95": 465.2999999523163,
+      "maximum": 469
+    },
+    "discard": {
+      "count": 100,
+      "median": 354.5,
+      "p95": 465.5,
+      "maximum": 469.90000009536743
+    },
+    "proposal-1": {
+      "count": 1,
+      "median": 472.2000000476837,
+      "p95": null,
+      "maximum": 472.2000000476837
+    },
+    "proposal-10": {
+      "count": 1,
+      "median": 433,
+      "p95": null,
+      "maximum": 433
+    }
+  },
+  "frameSummary": {
+    "count": 30,
+    "median": 96.60000014305115,
+    "p95": null,
+    "maximum": 144.70000004768372
+  }
+}

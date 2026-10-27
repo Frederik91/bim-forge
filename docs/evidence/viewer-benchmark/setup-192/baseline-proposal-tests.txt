@@ -1,0 +1,58 @@
+✔ desk and bed requests from the same revision can both be accepted without revising either (852.2353ms)
+✔ a request finishing after an unrelated acceptance remains ready for review (644.3463ms)
+✔ accepting the bed before the desk preserves both independent changes and exposes only accepted ancestry (599.6858ms)
+✖ old needs-input tickets recover on opening without revising or rerunning the agent (631.0141ms)
+✔ simultaneous acceptance cannot overwrite work and a rejected race can retry the same decision (580.3106ms)
+✔ unrelated additions, removals and relationship edits are retained together (17.6898ms)
+✔ different object IDs still conflict when their combined geometry overlaps (2.5785ms)
+✔ a changed hosting relationship and a door edit must validate together (1.58ms)
+✔ restore refuses an applied revision that does not contain the reviewed delta (23.5747ms)
+✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1520.1767ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 8
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5292.6999
+
+✖ failing tests:
+
+test at demo\proposal-reconciliation.test.ts:120:1
+✖ old needs-input tickets recover on opening without revising or rerunning the agent (631.0141ms)
+  Error: EPERM, Permission denied: \\?\D:\Codex\temp\bim-reconcile-YmkrSE '\\?\D:\Codex\temp\bim-reconcile-YmkrSE'
+      at Object.rmSync (node:fs:1222:18)
+      at TestContext.<anonymous> (file:///D:/Codex/issue-192/baseline-check/demo/proposal-reconciliation.test.ts:122:20)
+      at TestHook.runInAsyncScope (node:async_hooks:227:14)
+      at TestHook.run (node:internal/test_runner/test:1325:25)
+      at TestHook.run (node:internal/test_runner/test:1669:18)
+      at TestHook.run (node:internal/util:581:20)
+      at Test.runHook (node:internal/test_runner/test:1212:20)
+      at after (node:internal/test_runner/test:1265:20)
+      at Test.run (node:internal/test_runner/test:1351:13)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    errno: 1,
+    code: 'EPERM',
+    path: '\\\\?\\D:\\Codex\\temp\\bim-reconcile-YmkrSE',
+    syscall: 'rm'
+  }
+
+test at demo\proposal-reconciliation.test.ts:206:1
+✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1520.1767ms)
+  Error: EPERM, Permission denied: \\?\D:\Codex\temp\bim-portable-accept-UVKsbz '\\?\D:\Codex\temp\bim-portable-accept-UVKsbz'
+      at Object.rmSync (node:fs:1222:18)
+      at TestContext.<anonymous> (file:///D:/Codex/issue-192/baseline-check/demo/proposal-reconciliation.test.ts:223:20)
+      at TestHook.runInAsyncScope (node:async_hooks:227:14)
+      at TestHook.run (node:internal/test_runner/test:1325:25)
+      at TestHook.run (node:internal/test_runner/test:1669:18)
+      at TestHook.run (node:internal/util:581:20)
+      at Test.runHook (node:internal/test_runner/test:1212:20)
+      at after (node:internal/test_runner/test:1265:20)
+      at Test.run (node:internal/test_runner/test:1351:13)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    errno: 1,
+    code: 'EPERM',
+    path: '\\\\?\\D:\\Codex\\temp\\bim-portable-accept-UVKsbz',
+    syscall: 'rm'
+  }
