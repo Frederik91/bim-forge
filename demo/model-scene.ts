@@ -405,6 +405,7 @@ export class ModelScene {
   }
 
   setMode(mode: RenderingMode): void {
+    if (mode !== this.mode) this.hover(null);
     this.mode = mode;
     this.scene.shadowsEnabled = mode === 'realistic';
     this.scene.imageProcessingConfiguration.toneMappingEnabled = mode === 'realistic';
@@ -437,6 +438,7 @@ export class ModelScene {
   }
 
   frame(focusId: string | null = this.focusId): void {
+    this.hover(null);
     this.focusId = focusId;
     if (!this.snapshot) return;
     const focused = spaces(this.snapshot).find((room) => room.id === focusId && (this.levelId === null || room.levelId === this.levelId));
@@ -465,15 +467,22 @@ export class ModelScene {
     this.camera.inertialPanningX = 0; this.camera.inertialPanningY = 0;
   }
 
-  setCutaway(enabled: boolean): void { this.cutaway = enabled; this.updateCutaway(); }
+  setCutaway(enabled: boolean): void {
+    if (enabled !== this.cutaway) this.hover(null);
+    this.cutaway = enabled; this.updateCutaway();
+  }
 
   setLevel(levelId: string | null): void {
     if (levelId === this.levelId) return;
     if (levelId !== null && this.snapshot && ![...levels(this.snapshot), ...(this.comparison ? levels(this.comparison) : [])].some((level) => level.id === levelId)) throw new Error('Unknown viewer level.');
+    this.hover(null);
     this.levelId = levelId; this.focusId = null; this.updateCutaway(); this.frame(null);
   }
 
-  setRoofVisible(visible: boolean): void { this.roofVisible = visible; this.updateCutaway(); }
+  setRoofVisible(visible: boolean): void {
+    if (visible !== this.roofVisible) this.hover(null);
+    this.roofVisible = visible; this.updateCutaway();
+  }
 
   private contextBounds(): Bounds {
     if (!this.snapshot) throw new Error('No model to frame.');
@@ -506,7 +515,7 @@ export class ModelScene {
   }
 
   objectAt(x: number, y: number): string | null {
-    const hit = this.scene.pick(x, y, (mesh) => mesh.isEnabled() && mesh.isVisible && this.pickParts.get(mesh.uniqueId)?.objectId != null);
+    const hit = this.scene.pick(x, y, (mesh) => mesh.isPickable && mesh.isEnabled() && mesh.isVisible && mesh.visibility > 0 && this.pickParts.get(mesh.uniqueId)?.objectId != null);
     return hit?.pickedMesh ? this.pickParts.get(hit.pickedMesh.uniqueId)?.objectId ?? null : null;
   }
 

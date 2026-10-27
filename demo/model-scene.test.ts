@@ -4,7 +4,8 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
 import { Vector3, Matrix } from '@babylonjs/core/Maths/math.vector.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
-import { ModelScene, entityAnchor, modelPoint, referenceFromHit, referencePosition } from './model-scene.ts';
+import { HOVER_COLOR, SELECTION_COLOR, ModelScene, entityAnchor, modelPoint, referenceFromHit, referencePosition } from './model-scene.ts';
+import { ViewerPointerInteraction } from './model-viewer.ts';
 import { RoomRepository, previewFurnishings, diffSnapshots } from '../src/room-model.ts';
 import { createHousePilotFixture } from '../src/house-pilot.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
@@ -433,4 +434,175 @@ test('explicit family reassignment preserves the original definition and reviews
   assert.ok(viewer.scene.meshes.some((mesh) => mesh.name === 'person-187-#bb6633'));
   assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('standing-person') || mesh.name.startsWith('revised-figure')), false);
   assert.equal(viewer.scene.meshes.some((mesh) => mesh.name.startsWith('before:person-165-')), false);
+});
+
+test('real picked IDs drive distinct purple hover and blue selection without mutating shared materials, geometry or model bytes', async (t) => {
+  const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
+  const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const repo = await RoomRepository.create();
+  const snapshot = previewFurnishings(repo.view(repo.head('main')).snapshot, { furnishings });
+  const saved = JSON.stringify(snapshot);
+  viewer.setModel(snapshot); viewer.setCutaway(true);
+  const meshes = [...viewer.scene.meshes];
+  const geometry = meshes.map(mesh => ({ mesh, positions: [...(mesh.getVerticesData('position') ?? [])], indices: [...(mesh.getIndices() ?? [])] }));
+  const color = (material: typeof meshes[number]['material']) => material instanceof StandardMaterial ? material.diffuseColor.toHexString()
+    : material instanceof PBRMaterial ? material.albedoColor.toHexString() : null;
+  for (const mode of ['basic', 'realistic'] satisfies ('basic' | 'realistic')[]) {
+    viewer.setMode(mode); viewer.scene.render();
+    const materials = meshes.map(mesh => ({ mesh, material: mesh.material, color: color(mesh.material) }));
+    const materialCount = viewer.scene.materials.length;
+    const screen = Vector3.Project(modelPoint(3.5, 3, .751), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+    const id = viewer.objectAt(screen.x, screen.y); assert.equal(id, 'desk-test'); assert.ok(id);
+    viewer.select('table-test'); viewer.hover(id); viewer.scene.render();
+    const desk = meshes.filter(mesh => mesh.name.startsWith('desk-test')); const table = meshes.filter(mesh => mesh.name.startsWith('table-test'));
+    assert.ok(desk.length && table.length);
+    assert.ok(desk.every(mesh => mesh.renderOverlay && mesh.renderOutline && mesh.overlayColor.toHexString().toLowerCase() === HOVER_COLOR && mesh.overlayAlpha === .18));
+    assert.ok(table.every(mesh => mesh.renderOverlay && mesh.outlineColor.toHexString().toLowerCase() === SELECTION_COLOR && mesh.overlayAlpha === .3));
+    assert.notEqual(desk[0].overlayColor.toHexString(), table[0].overlayColor.toHexString(), 'the actual mesh highlight colors differ');
+    assert.equal(meshes.find(mesh => mesh.name.startsWith('chair-test'))?.renderOverlay, false);
+    viewer.hover(null); viewer.scene.render();
+    assert.ok(desk.every(mesh => !mesh.renderOverlay && !mesh.renderOutline));
+    assert.ok(table.every(mesh => mesh.renderOverlay && mesh.renderOutline), 'clearing hover leaves selection intact');
+    viewer.hover('table-test'); viewer.scene.render();
+    assert.ok(table.every(mesh => mesh.overlayColor.toHexString().toLowerCase() === SELECTION_COLOR && mesh.outlineWidth === .025), 'selected wins when also hovered');
+    viewer.select(id); viewer.hover(null); viewer.scene.render();
+    assert.ok(desk.every(mesh => mesh.renderOverlay && mesh.overlayColor.toHexString().toLowerCase() === SELECTION_COLOR));
+    for (let i = 0; i < 12; i += 1) { viewer.hover('chair-test'); viewer.hover(null); }
+    for (const entry of materials) {
+      assert.equal(entry.mesh.material, entry.material); assert.equal(color(entry.mesh.material), entry.color);
+    }
+    assert.equal(viewer.scene.materials.length, materialCount, 'hover allocates no materials');
+  }
+  for (const entry of geometry) {
+    assert.deepEqual(entry.mesh.getVerticesData('position'), entry.positions); assert.deepEqual(entry.mesh.getIndices(), entry.indices);
+  }
+  assert.deepEqual(viewer.scene.meshes, meshes); assert.equal(JSON.stringify(snapshot), saved);
+});
+
+test('hover clears on model, level and view changes while the selected stable ID survives', (t) => {
+  const engine = new NullEngine(); const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const snapshot = viewerBuilding(); const saved = JSON.stringify(snapshot);
+  const revised = validateSnapshot({ ...snapshot, entities: snapshot.entities.map(item => item.id === 'ground-screen' ? { ...item, name: 'Revised screen' } : item) });
+  viewer.setModel(snapshot); viewer.setMode('basic'); viewer.setCutaway(false); viewer.select('ground-desk'); viewer.scene.render();
+  const selected = () => viewer.scene.meshes.filter(mesh => mesh.name.startsWith('ground-desk'));
+  const hovered = () => viewer.scene.meshes.filter(mesh => mesh.name.startsWith('ground-screen'));
+  assert.ok(hovered().length && selected().length);
+  const changes = [() => viewer.setMode('realistic'), () => viewer.setCutaway(true), () => viewer.setRoofVisible(false),
+    () => viewer.setLevel('attic'), () => viewer.setLevel('ground'), () => viewer.frame(null),
+    () => viewer.setModel(revised)];
+  for (const change of changes) {
+    viewer.hover('ground-screen'); assert.ok(hovered().every(mesh => mesh.renderOutline));
+    change(); viewer.scene.render();
+    assert.ok(hovered().every(mesh => !mesh.renderOverlay && !mesh.renderOutline));
+    assert.ok(selected().every(mesh => mesh.renderOverlay && mesh.overlayColor.toHexString().toLowerCase() === SELECTION_COLOR));
+  }
+  viewer.hover('ground-screen');
+  assert.equal(viewer.setModel(structuredClone(revised)), false);
+  assert.ok(hovered().every(mesh => mesh.renderOverlay), 'an unchanged poll preserves hover');
+  assert.equal(JSON.stringify(snapshot), saved);
+});
+
+test('picking excludes cutaway, hidden, transparent, unpickable, out-of-level and roof-hidden meshes', (t) => {
+  const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
+  const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  viewer.setModel(viewerBuilding()); viewer.setMode('basic'); viewer.setCutaway(false); viewer.setLevel('attic'); viewer.setRoofVisible(false); viewer.scene.render();
+  const desk = viewer.scene.meshes.filter(mesh => mesh.name.startsWith('attic-desk')); assert.ok(desk.length);
+  const point = Vector3.Project(modelPoint(1.5, 1, 3.751), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+  // Use an actual desk surface, avoiding dependencies on its fixture placement.
+  const top = desk.find(mesh => mesh.getBoundingInfo().boundingBox.maximumWorld.y > 3.7); assert.ok(top);
+  const box = top.getBoundingInfo().boundingBox;
+  const surface = Vector3.Project(new Vector3(box.maximumWorld.x - .1, box.maximumWorld.y, box.centerWorld.z), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+  assert.equal(viewer.objectAt(surface.x, surface.y), 'attic-desk');
+  for (const mesh of desk) mesh.isVisible = false;
+  assert.notEqual(viewer.objectAt(surface.x, surface.y), 'attic-desk');
+  for (const mesh of desk) { mesh.isVisible = true; mesh.visibility = 0; }
+  assert.notEqual(viewer.objectAt(surface.x, surface.y), 'attic-desk');
+  for (const mesh of desk) { mesh.visibility = 1; mesh.isPickable = false; }
+  assert.notEqual(viewer.objectAt(surface.x, surface.y), 'attic-desk');
+  for (const mesh of desk) { mesh.isPickable = true; mesh.setEnabled(false); }
+  assert.notEqual(viewer.objectAt(surface.x, surface.y), 'attic-desk');
+  viewer.setLevel('ground'); viewer.scene.render();
+  assert.ok(desk.every(mesh => !mesh.isEnabled()));
+  assert.notEqual(viewer.objectAt(surface.x, surface.y), 'attic-desk');
+  assert.notEqual(viewer.objectAt(point.x, point.y), 'house-roof');
+  viewer.setCutaway(true); viewer.scene.render();
+  const hiddenWalls = viewer.scene.meshes.filter(mesh => mesh.name.startsWith('ground-') && !mesh.isEnabled()); assert.ok(hiddenWalls.length);
+  for (const mesh of hiddenWalls) {
+    const centre = Vector3.Project(mesh.getBoundingInfo().boundingBox.centerWorld, Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+    const id = viewer.objectAt(centre.x, centre.y);
+    assert.ok(id === null || !mesh.name.startsWith(id + '-'), 'a disabled wall cannot be picked');
+  }
+});
+
+test('comparison ghost picking and highlights retain wireframes and removed evidence, then discard disposed mappings on replacement', async (t) => {
+  const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
+  const viewer = new ModelScene(engine); t.after(() => { viewer.dispose(); engine.dispose(); });
+  const repo = await RoomRepository.create(); const before = previewFurnishings(repo.view(repo.head('main')).snapshot, { furnishings });
+  const after = previewFurnishings(before, { furnishings: furnishings.filter(item => item.id !== 'plant-test').map(item => item.id === 'table-test' ? { ...item, position: [4.7, 3.3] } : item) });
+  const saved = JSON.stringify([before, after]);
+  viewer.setModel(after, before); viewer.setCutaway(true); viewer.scene.render();
+  const removed = viewer.scene.meshes.filter(mesh => mesh.name.startsWith('before:plant-test')); assert.ok(removed.length);
+  const moved = viewer.scene.meshes.filter(mesh => mesh.name.startsWith('before:table-test')); assert.ok(moved.length);
+  const material = removed[0].material; assert.ok(material instanceof StandardMaterial);
+  const color = material.diffuseColor.toHexString(); const count = viewer.scene.materials.length;
+  const surface = Vector3.Project(modelPoint(.7, 3.3, 1), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
+  assert.equal(viewer.objectAt(surface.x, surface.y), 'plant-test', 'removed evidence picks the original stable ID');
+  for (const mode of ['basic', 'realistic'] satisfies ('basic' | 'realistic')[]) {
+    viewer.setMode(mode); viewer.hover('plant-test'); viewer.scene.render();
+    assert.ok(removed.every(mesh => mesh.renderOutline && !mesh.renderOverlay && mesh.outlineColor.toHexString().toLowerCase() === HOVER_COLOR));
+    viewer.select('plant-test'); viewer.hover(null); viewer.scene.render();
+    assert.ok(removed.every(mesh => mesh.renderOutline && !mesh.renderOverlay && mesh.outlineColor.toHexString().toLowerCase() === SELECTION_COLOR));
+    assert.ok([...removed, ...moved].every(mesh => mesh.material instanceof StandardMaterial && mesh.material.wireframe));
+    assert.equal(removed[0].material, material); assert.equal(material.diffuseColor.toHexString(), color);
+  }
+  assert.equal(viewer.scene.materials.length, count);
+  assert.equal(viewer.scene.meshes.some(mesh => mesh.name.startsWith('before:desk-test')), false, 'unchanged comparison meshes are removed');
+  viewer.setModel(after); viewer.scene.render();
+  assert.ok([...removed, ...moved].every(mesh => mesh.isDisposed()));
+  assert.notEqual(viewer.objectAt(surface.x, surface.y), 'plant-test', 'disposed ghost mappings never intercept current picks');
+  assert.equal(viewer.scene.meshes.some(mesh => mesh.name.startsWith('before:')), false);
+  assert.equal(JSON.stringify([before, after]), saved);
+});
+
+function pointer(pointerId = 1, clientX = 100, clientY = 100, isPrimary = true, button = 0, buttons = 1) {
+  return { pointerId, clientX, clientY, isPrimary, button, buttons };
+}
+
+test('single primary pointer click allows small jitter, while out-and-back and release-only drags never select', () => {
+  const gesture = new ViewerPointerInteraction();
+  assert.equal(gesture.canHover, true); gesture.down(pointer()); assert.equal(gesture.canHover, false);
+  gesture.move(pointer(1, 103, 104)); assert.equal(gesture.up(pointer(1, 103, 104, true, 0, 0)), true);
+  assert.equal(gesture.canHover, true);
+  gesture.down(pointer()); gesture.move(pointer(1, 120)); gesture.move(pointer());
+  assert.equal(gesture.up(pointer(1, 100, 100, true, 0, 0)), false, 'returning to the start does not restore a click');
+  gesture.down(pointer()); assert.equal(gesture.up(pointer(1, 106, 100, true, 0, 0)), false);
+  assert.equal(gesture.up(pointer()), false, 'unpaired release is inert');
+});
+
+test('multi-pointer gestures cannot select regardless of release order or primary status', () => {
+  for (const first of [1, 2]) {
+    const gesture = new ViewerPointerInteraction(); gesture.down(pointer()); gesture.down(pointer(2, 110, 100, false));
+    assert.equal(gesture.up(pointer(first, 100, 100, first === 1, 0, 0)), false);
+    assert.equal(gesture.canHover, false);
+    const last = first === 1 ? 2 : 1; assert.equal(gesture.up(pointer(last, 100, 100, last === 1, 0, 0)), false);
+    assert.equal(gesture.canHover, true);
+    gesture.down(pointer()); assert.equal(gesture.up(pointer(1, 100, 100, true, 0, 0)), true, 'next independent click recovers');
+  }
+  const gesture = new ViewerPointerInteraction(); gesture.down(pointer(2, 100, 100, false));
+  assert.equal(gesture.up(pointer(2, 100, 100, false, 0, 0)), false);
+});
+
+test('cancellation, leaving, capture loss, view changes and non-primary buttons invalidate pending selection', () => {
+  const gesture = new ViewerPointerInteraction();
+  for (const cancel of [() => gesture.cancel(1), () => gesture.cancelClick(), () => gesture.reset()]) {
+    gesture.down(pointer()); cancel(); assert.equal(gesture.up(pointer(1, 100, 100, true, 0, 0)), false);
+    assert.equal(gesture.canHover, true);
+  }
+  for (const button of [1, 2]) {
+    gesture.down(pointer(1, 100, 100, true, button)); assert.equal(gesture.up(pointer(1, 100, 100, true, button, 0)), false);
+  }
+  gesture.down(pointer()); gesture.move(pointer(1, 100, 100, true, 0, 3));
+  assert.equal(gesture.up(pointer(1, 100, 100, true, 0, 0)), false, 'button chords cannot click');
+  gesture.down(pointer()); gesture.down(pointer(2, 100, 100, false)); gesture.cancel(2);
+  assert.equal(gesture.canHover, false); assert.equal(gesture.up(pointer(1, 100, 100, true, 0, 0)), false);
 });
