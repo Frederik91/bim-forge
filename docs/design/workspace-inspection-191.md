@@ -1,12 +1,13 @@
 # Model workspace inspection
 
-Issue #191 improves the deployed workspace in #190. It changes presentation and read-only navigation only. Selection, hover and hierarchy actions never author geometry or approve a request.
+Issue #191 improves the deployed workspace in #190. It changes presentation, read-only navigation and the placement of existing explicit proposal decisions. Selection, hover and hierarchy actions never author geometry or approve a request.
 
 ## Plan
 
 - Correct the request panel's flex height chain in `demo/request-chat.css`, retain independent history scrolling, pin the composer and follow new messages only when already near the end.
 - Add `demo/model-explorer.ts` with a pure stable-ID hierarchy projection, accessible expandable tree and read-only element properties. Update `demo/index.html`, `demo/room-app.ts` and `demo/workspace-shell.ts`; remove the replaced level/room dropdowns and handlers.
 - Extend `demo/model-scene.ts` and `demo/model-viewer.ts` with distinct selected/hover overlays, visible-element picking, pointer cursor, drag/cancel/leave handling and accessible selection feedback. Preserve camera drags and comparison evidence.
+- Display validated request activity by conversation turn, show working/offline/terminal feedback and bind inline proposal controls to the exact inspected message, request and revision. Keep the shared model visible and preserve unsent drafts across inspection and decisions. Return to the request model without leaving chat.
 - Verify pure hierarchy/property behavior and actual Babylon meshes under NullEngine, then real desktop/phone UI on an isolated server fixture with multiple levels and rooms. Check measured chat/input bounds, pointer clicks, hover clearing, room/level navigation, properties and unchanged accepted model/drafts. Build/test only in server containers.
 - Open a draft PR with source-bound evidence, then merge and deploy the tested result to the server preview under the maintainer's standing instruction. Retain a consistent private rollback snapshot and verify served assets, health, connection and preserved model/request data.
 
