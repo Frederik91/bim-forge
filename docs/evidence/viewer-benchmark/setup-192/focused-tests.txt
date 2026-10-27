@@ -1,0 +1,104 @@
+✔ fixture is deterministic and cannot qualify a realistic hospital by changing its area (10.1763ms)
+✔ input boundary rejects missing geometry, duplicate identities, invalid indices, and non-finite coordinates (17.5089ms)
+✔ proposal adds, moves, and removes exactly its declared elements without mutating the baseline (3.7994ms)
+✔ stale, duplicate, and invalid proposals leave accepted input intact (3.1737ms)
+✔ comparison retains removed and previous geometry and discard restores the exact base (8.5001ms)
+✔ renderer oracle catches lost IDs, duplicate IDs, and wrong movement (2.0983ms)
+✔ percentiles require enough samples and never combine missing values into zeros (0.1989ms)
+✔ result validator rejects a false completion or a qualification claim (0.4288ms)
+BJS - [06:37:54]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:54]: Babylon.js v9.32.0 - Null engine
+✔ real Babylon scene preserves every object, support elevation, camera and selection across modes without changing the model (118.2338ms)
+✔ walls have actual door and window gaps, cutaway affects visibility only, and replacement disposes old resources (31.1631ms)
+BJS - [06:37:54]: Babylon.js v9.32.0 - Null engine
+✔ ray destinations are generic, millimetre-bound floor/wall references and do not infer move/group operations (1.1334ms)
+BJS - [06:37:54]: Babylon.js v9.32.0 - Null engine
+✔ actual Babylon rays select visible desk geometry and mark floor points through cutaway walls (19.4448ms)
+✔ 3D delta retains before ghosts for moved and removed objects, solid additions and a stable camera without changing either revision (31.8171ms)
+✔ 3D delta includes opening placement and host geometry when only hosting relationships change (1.8709ms)
+BJS - [06:37:54]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+✔ derived support elevation and door-size gaps appear in the 3D delta even without changed relationship records (2.1378ms)
+✔ a residential floor renders shared walls once, frames a room without editing geometry and retains whole-floor deltas (129.4085ms)
+✔ legacy floor references stay visible on an isolated residential level without changing their wire shape or model (40.7054ms)
+✔ stacked geometry applies each floor elevation once, including supported furniture, openings and equipment (29.5232ms)
+✔ incoming stair footprints are real slab voids and ray picking preserves the selected floor (26.7752ms)
+✔ pitched roof solids and gable wall vertices meet the shared roof underside at eaves and ridge (42.5036ms)
+✔ level isolation and roof visibility compose with cutaway, framing and annotation visibility without rebuilding geometry (23.9334ms)
+✔ building floor annotations require explicit levels and wall annotations inherit the host elevation (2.0239ms)
+✔ level elevation and incoming stair changes produce derived object and slab-void deltas with before ghosts (53.1952ms)
+✔ roof changes derive clipped-wall deltas and flat roofs have physical thickness (25.1675ms)
+✔ before slab ghosts stay inspectable but cannot intercept a current-floor reference ray (33.599ms)
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+✔ generated families render exact instance heights and unrelated geometry in both modes without changing definitions (26.2168ms)
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+BJS - [06:37:55]: Babylon.js v9.32.0 - Null engine
+✔ resizing one generated instance retains its family, ghosts and isolated delta without changing another size of that family (17.6372ms)
+✔ room-owned generated instances follow their level exactly once, including anchors, ghosts and visibility (67.8008ms)
+✔ explicit family reassignment preserves the original definition and reviews the new definition without rendering it (16.0209ms)
+✔ desk and bed requests from the same revision can both be accepted without revising either (795.8646ms)
+✔ a request finishing after an unrelated acceptance remains ready for review (600.5992ms)
+✔ accepting the bed before the desk preserves both independent changes and exposes only accepted ancestry (546.7601ms)
+✖ old needs-input tickets recover on opening without revising or rerunning the agent (620.1872ms)
+✔ simultaneous acceptance cannot overwrite work and a rejected race can retry the same decision (573.107ms)
+✔ unrelated additions, removals and relationship edits are retained together (17.4684ms)
+✔ different object IDs still conflict when their combined geometry overlaps (2.7871ms)
+✔ a changed hosting relationship and a door edit must validate together (1.3806ms)
+✔ restore refuses an applied revision that does not contain the reviewed delta (24.1159ms)
+✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1520.4516ms)
+ℹ tests 39
+ℹ suites 0
+ℹ pass 37
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5109.4583
+
+✖ failing tests:
+
+test at demo\proposal-reconciliation.test.ts:120:1
+✖ old needs-input tickets recover on opening without revising or rerunning the agent (620.1872ms)
+  Error: EPERM, Permission denied: \\?\D:\Codex\temp\bim-reconcile-7sYsOU '\\?\D:\Codex\temp\bim-reconcile-7sYsOU'
+      at Object.rmSync (node:fs:1222:18)
+      at TestContext.<anonymous> (file:///D:/Codex/issue-192/bim-forge/demo/proposal-reconciliation.test.ts:122:20)
+      at TestHook.runInAsyncScope (node:async_hooks:227:14)
+      at TestHook.run (node:internal/test_runner/test:1325:25)
+      at TestHook.run (node:internal/test_runner/test:1669:18)
+      at TestHook.run (node:internal/util:581:20)
+      at Test.runHook (node:internal/test_runner/test:1212:20)
+      at after (node:internal/test_runner/test:1265:20)
+      at Test.run (node:internal/test_runner/test:1351:13)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    errno: 1,
+    code: 'EPERM',
+    path: '\\\\?\\D:\\Codex\\temp\\bim-reconcile-7sYsOU',
+    syscall: 'rm'
+  }
+
+test at demo\proposal-reconciliation.test.ts:206:1
+✖ portable history-limit refusal preserves accepted state and can recover by revising against the current head (1520.4516ms)
+  Error: EPERM, Permission denied: \\?\D:\Codex\temp\bim-portable-accept-uPG4wH '\\?\D:\Codex\temp\bim-portable-accept-uPG4wH'
+      at Object.rmSync (node:fs:1222:18)
+      at TestContext.<anonymous> (file:///D:/Codex/issue-192/bim-forge/demo/proposal-reconciliation.test.ts:223:20)
+      at TestHook.runInAsyncScope (node:async_hooks:227:14)
+      at TestHook.run (node:internal/test_runner/test:1325:25)
+      at TestHook.run (node:internal/test_runner/test:1669:18)
+      at TestHook.run (node:internal/util:581:20)
+      at Test.runHook (node:internal/test_runner/test:1212:20)
+      at after (node:internal/test_runner/test:1265:20)
+      at Test.run (node:internal/test_runner/test:1351:13)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    errno: 1,
+    code: 'EPERM',
+    path: '\\\\?\\D:\\Codex\\temp\\bim-portable-accept-uPG4wH',
+    syscall: 'rm'
+  }

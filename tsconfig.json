@@ -16,6 +16,6 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["demo/**/*.ts", "factory/**/*.ts", "scripts/**/*.ts", "src/**/*.ts"],
+  "include": ["benchmarks/**/*.ts", "demo/**/*.ts", "factory/**/*.ts", "scripts/**/*.ts", "src/**/*.ts"],
   "exclude": ["node_modules", "dist", "worktrees"]
 }
