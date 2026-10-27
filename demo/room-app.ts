@@ -286,11 +286,13 @@ let serverProjectText: string | null = null;
 let serverHeadRevisionId: string | null = null;
 let submission: { fingerprint: string; requestId: string } | null = null;
 let chatTicketId: string | null = null;
+let activeChatProposalMessageId: string | null = null;
 let chatVisual: ConversationVisual | null = null;
 let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
 let chatRefreshing = false;
 let newDraftId = 'new';
 const chatDrafts = new Map<string, ReturnType<typeof captureChatDraft>>();
+const chatInspectionOrigins = new Map<string, ReturnType<typeof captureChatDraft>>();
 let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
@@ -338,6 +340,8 @@ const scopeBuilder = new ModelScopeBuilder({ host: generic('model-scope-builder'
 const requestChat = new RequestChat(generic('request-chat-mount'), {
   answer: text => { ui['request-text'].value = text; ui['request-text'].focus(); composer.refresh(); updateControls(); },
   proposal: message => { void perform(() => openChatProposal(message)); },
+  decision: (action, messageId) => { void perform(() => decideChatProposal(action, messageId)); },
+  delta: messageId => { assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
   inspect: visual => { void perform(() => inspectChatVisual(visual)); },
 });
 const composer = new RequestComposer({ root: generic('request-composer'), form: ui['proposal-form'], input: ui['request-text'],
@@ -380,7 +384,7 @@ function captureChatDraft() {
   return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
-    invalid: invalidInput, reply: chatReply, submission, review: activeReview, reviewTicketId: activeTicketId,
+    invalid: invalidInput, reply: chatReply, submission, review: activeReview, reviewTicketId: activeTicketId, proposalMessageId: activeChatProposalMessageId,
     geometryValues: [ui['door-width'].value, ui['door-offset'].value, ui['wall-position'].value, ui['wall-length'].value],
     scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
     reconstructionScope: ui['reconstruction-scope'].value, updatedAt: Date.now() };
@@ -396,7 +400,7 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
   preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
   invalidInput = draft.invalid; chatReply = draft.reply; submission = draft.submission; newDraftId = draft.draftId;
-  activeReview = draft.review; activeTicketId = draft.reviewTicketId;
+  activeReview = draft.review; activeTicketId = draft.reviewTicketId; activeChatProposalMessageId = draft.proposalMessageId;
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
   ui['request-reconstruct'].checked = draft.reconstruction; ui['reconstruction-scope'].value = draft.reconstructionScope;
   scopeBuilder.restoreDraft(draft.scope); composer.setVisual(chatVisual); composer.refresh();
@@ -799,9 +803,10 @@ function updateControls() {
     || (repo !== null && requireRepository().reviewAt(selectedRevision)?.review.requestId === activeReview?.requestId);
   const ticket = backlogItems.find((item) => item.id === activeTicketId);
   ui['accept-proposal'].disabled = !writable || !activeTicketId || ticket?.state !== 'ready' || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || reviewState(activeReview) !== 'pending';
-  ui['reject-proposal'].disabled = !writable || !ticket || !['ready', 'needs-input', 'failed'].includes(ticket.state);
+  ui['reject-proposal'].disabled = !writable || !ticket || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || !['ready', 'needs-input', 'failed'].includes(ticket.state);
   const state = reviewState(activeReview);
   ui['request-revision'].disabled = !writable || !reviewMatches || (state !== 'pending' && state !== 'declined');
+  updateChatProposalCard();
   ui['project-form'].setAttribute('aria-busy', String(busy));
   ui['proposal-form'].setAttribute('aria-busy', String(busy));
   for (const historyButton of ui['history-list'].querySelectorAll('button')) historyButton.disabled = busy || dragging;
@@ -1150,6 +1155,18 @@ for (const tab of ['3d', 'properties'] satisfies ChangesTab[]) button(`changes-$
   changesTab = tab; renderComparison();
 });
 button('review-delta').addEventListener('click', () => { reviewDelta = !reviewDelta; modelView = '3d'; renderComparison(); });
+button('chat-proposal-delta').addEventListener('click', () => {
+  if (!activeChatProposalMessageId || busy) return;
+  assertChatProposal(activeChatProposalMessageId); reviewDelta = !reviewDelta; renderComparison(); updateControls();
+});
+button('chat-proposal-return').addEventListener('click', () => { void perform(async () => {
+  const origin = chatInspectionOrigins.get(currentChatKey());
+  const current = captureChatDraft();
+  if (origin) restoreChatDraft({ ...origin, text: current.text, name: current.name, visual: current.visual, reply: current.reply });
+  else if (repo) displayAccepted(await projects.read(repo.projectId));
+  activeChatProposalMessageId = null; inspectedComparison = null; render();
+  status('Request model restored. Your message and attachments are retained.');
+}); });
 ui['project-overview'].addEventListener('click', () => showPage('project'));
 button('explore-floor').addEventListener('click', () => openRoomRequest(null));
 ui['open-room'].addEventListener('click', () => {
@@ -1186,7 +1203,7 @@ ui['nav-request'].addEventListener('click', () => { showPage('request'); showReq
 for (const control of [ui['nav-backlog'], ui['open-backlog']]) control.addEventListener('click', () => {
   showPage('backlog'); void refreshBacklog();
 });
-ui['nav-review'].addEventListener('click', () => showPage('review'));
+ui['nav-review'].addEventListener('click', () => showPage(activeChatProposalMessageId && chatTicketId === activeTicketId ? 'request' : 'review'));
 ui['nav-history'].addEventListener('click', () => { showPage('history'); void loadServerHistory(); });
 function switchModelView(next: ModelView): void {
   if (!repo || modelView === next) return;
@@ -1382,7 +1399,7 @@ async function proposalJson(response: Response): Promise<unknown> {
 }
 
 function closeChat(): void {
-  chatTicketId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
+  chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
 }
 
 function displayedChatSnapshot(): ConversationVisual['snapshot'] {
@@ -1400,13 +1417,53 @@ function checkedChatVisual(): ConversationVisual | null {
   return chatVisual;
 }
 
+function chatActivity(value: unknown) {
+  if (!isRecord(value)) throw new Error('Missing chat activity.');
+  const events = new Map<string, ReturnType<typeof parseRequestActivity>[number]>();
+  for (const ticket of archivedTickets(value)) for (const event of parseRequestActivity(ticket.activity)) {
+    const key = `${event.requestId}:${event.attempt}:${event.sequence}`;
+    const existing = events.get(key);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(event)) throw new Error('Conflicting chat activity identity.');
+    events.set(key, event);
+  }
+  return [...events.values()].sort((a, b) => a.at - b.at || a.sequence - b.sequence);
+}
+
+function assertChatProposal(messageId: string): void {
+  const message = requestChat.conversation?.messages.find(item => item.id === messageId);
+  if (messageId !== activeChatProposalMessageId || chatTicketId !== activeTicketId || !activeReview
+    || message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== activeReview.requestId
+    || message.content.proposalRevisionId !== activeReview.proposalRevisionId) throw new Error('Inspect this exact proposal before deciding or comparing it.');
+}
+
+function updateChatProposalCard(): void {
+  const review = activeReview; const messageId = activeChatProposalMessageId;
+  if (!review?.proposalRevisionId || !messageId || chatTicketId !== activeTicketId) { requestChat.setProposalReview(null); return; }
+  const message = requestChat.conversation?.messages.find(item => item.id === messageId);
+  if (message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== review.requestId
+    || message.content.proposalRevisionId !== review.proposalRevisionId) { requestChat.setProposalReview(null); return; }
+  requestChat.setProposalReview({ messageId, requestId: review.requestId, proposalRevisionId: review.proposalRevisionId,
+    summary: review.summary, rationale: review.rationale, constraints: review.constraints, uncertainty: review.uncertainty,
+    status: generic('review-status').textContent ?? 'Proposal', canAccept: !ui['accept-proposal'].disabled,
+    canReject: !ui['reject-proposal'].disabled, canRevise: !ui['request-revision'].disabled, delta: reviewDelta });
+}
+
+async function decideChatProposal(action: 'accept' | 'reject' | 'revise', messageId: string): Promise<void> {
+  assertChatProposal(messageId);
+  if (action === 'revise') { ui['request-text'].focus(); status('Describe the refinement here. Your reply continues this conversation.'); return; }
+  const ticket = backlogItems.find(item => item.id === activeTicketId);
+  if (!ticket || !activeReview || ticket.request.requestId !== activeReview.requestId
+    || (action === 'accept' ? ticket.state !== 'ready' || reviewState(activeReview) !== 'pending' : !['ready', 'needs-input', 'failed'].includes(ticket.state))) throw new Error('This proposal is no longer eligible for that decision.');
+  await decideTicket(ticket.id, action, activeReview.requestId);
+}
+
 function showChatTicket(value: unknown): void {
   const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
-  chatTicketId = ticket.id;
+  chatTicketId = ticket.id; requestChat.setOffline(false);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
-    title: firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state] });
+    title: firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName), state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
 }
 
 async function openConversation(id: string, keepProposal = false): Promise<void> {
@@ -1451,7 +1508,7 @@ async function refreshConversation(): Promise<void> {
     if (!isRecord(value)) throw new Error('Missing conversation.');
     showChatTicket(value.ticket);
   } catch (error) {
-    if (chatTicketId === id) status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`);
+    if (chatTicketId === id) { requestChat.setOffline(true); status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`); }
   } finally { chatRefreshing = false; }
 }
 
@@ -1552,7 +1609,7 @@ function parseBacklogItem(value: unknown): BacklogItem {
   const cached = ticketScopes.get(requestId);
   const scope = cached?.projectId === value.projectId && cached.scope.baseRevisionId === baseRevisionId
     && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
-  const first = typeof value.title === 'string' ? value.title : conversationFromTicket(value).messages.find(message => message.kind === 'user')?.text ?? '';
+  const first = typeof value.title === 'string' ? value.title : Object.hasOwn(value, 'conversation') ? conversationFromTicket(value).messages.find(message => message.kind === 'user')?.text ?? '' : requiredText(value.request, 'instruction');
   if (!first.trim() || first.length > 1000) throw new Error('Invalid chat title.');
   return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
@@ -1730,7 +1787,8 @@ for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventL
 });
 
 async function openTicket(id: string, message?: ConversationMessage): Promise<void> {
-  if (!await discardRequest('Open this saved request and discard the unsent request?')) return;
+  if (chatTicketId !== id) await openConversation(id); else saveChatDraft();
+  if (!reviewRepository) chatInspectionOrigins.set(currentChatKey(), captureChatDraft());
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = parseBacklogItem(value.ticket);
@@ -1743,7 +1801,6 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   } });
   const proposed = await RoomRepository.restore(result.project);
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
-  clearRequestSources(); ui['request-text'].value = '';
   reviewRepository = proposed; activeTicketId = id; activeReview = { ...parseSourceContext(ticket.request), ...result.review };
   reviewDelta = result.status === 'ready'; modelView = '3d';
   if (ticket.state === 'completed' && ticket.request.requestId === activeReview.requestId) activeReview.decision = { status: 'accepted' };
@@ -1754,7 +1811,10 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   const context = requestContext(proposed.view(selectedRevision).snapshot, result.review.selectedObjectIds);
   activeLevelId = context.levelId; focusedRoomId = context.roomId;
   selectedObject = context.selectedId ?? selectedObject;
-  resetEditor(); render(); showPage('review');
+  showChatTicket(value.ticket);
+  const proposalMessage = message ?? requestChat.conversation?.messages.find(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === activeReview?.requestId && item.content.proposalRevisionId === activeReview?.proposalRevisionId);
+  activeChatProposalMessageId = proposalMessage?.id ?? null;
+  resetEditor(); render(); showPage('request');
   ui['ticket-history'].replaceChildren();
   if (Array.isArray(value.ticket.history)) for (const [index, archived] of value.ticket.history.entries()) {
     if (typeof archived !== 'string') throw new Error('Invalid request history.');
@@ -1769,6 +1829,7 @@ async function openTicket(id: string, message?: ConversationMessage): Promise<vo
   }
 }
 async function decideTicket(id: string, action: string, activityVersion: string | null = null): Promise<void> {
+  const keepChat = currentPage === 'request' && chatTicketId === id;
   const expectedRequestId = activityVersion ?? (activeTicketId === id && activeReview ? activeReview.requestId : backlogItems.find((item) => item.id === id)?.request.requestId);
   if (!expectedRequestId) throw new Error('Refresh the ticket before deciding.');
   const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}/decision`, {
@@ -1782,6 +1843,7 @@ async function decideTicket(id: string, action: string, activityVersion: string 
     renderReview(); showPage('backlog'); status('Proposal accepted. The server model and decision were saved together.');
   } else { showPage('backlog'); status(`Request ${action === 'retry' ? 'queued for another attempt' : action === 'reject' ? 'rejected' : 'cancelled'}.`); }
   await refreshBacklog();
+  if (keepChat) { await refreshConversation(); showPage('request'); status(action === 'accept' ? 'Proposal accepted. The model and decision are saved in this conversation.' : `Proposal ${action}. Continue this conversation below.`); }
 }
 ui['open-current-model'].addEventListener('click', () => {
   void perform(async () => {
@@ -2628,7 +2690,7 @@ ui['show-roof'].addEventListener('change', () => { roofVisible = ui['show-roof']
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
   const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
-  const comparison = inDeltaDialog || currentPage === 'review' && reviewDelta ? baseline : null;
+  const comparison = inDeltaDialog || (currentPage === 'review' || currentPage === 'request' && Boolean(reviewRepository) && Boolean(activeChatProposalMessageId)) && reviewDelta ? baseline : null;
   try {
     if (viewerFailed) {
       host.replaceChildren(element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty'));
@@ -2665,6 +2727,10 @@ function renderComparison(): void {
   if (comparisonLabel) comparisonLabel.textContent = reviewedRevision && reviewedRevision.comparisonBaseRevisionId !== review?.baseRevisionId
     ? 'Applied changes compared with the preceding accepted revision' : 'Compare with this proposal’s bound base';
   const isOriginal = selectedRevision === originalId;
+  const chatProposal = currentPage === 'request' && Boolean(reviewRepository) && Boolean(activeChatProposalMessageId);
+  generic('chat-proposal-tools').hidden = !chatProposal;
+  button('chat-proposal-delta').setAttribute('aria-pressed', String(reviewDelta));
+  button('chat-proposal-delta').textContent = reviewDelta ? 'Hide changes' : 'Show changes';
   renderRoomNavigation(selected);
   ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
   if (modelView === 'plan' && !(ui['changes-dialog'].open && changesTab === '3d')) {
