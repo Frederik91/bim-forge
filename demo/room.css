@@ -659,6 +659,12 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
   .workspace-stage .model-selection-caption { bottom: 8px; left: 8px; padding: 5px 8px; font-size: 10px; }
   .workspace-stage .drawing-card footer > span { display: none; }
   .workspace-stage .comparison-toolbar { padding: 5px 10px; font-size: 10px; }
+  .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="live"],
+  .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="proposal"] { grid-template-rows: minmax(180px, 1.3fr) minmax(0, 1.7fr); }
+  #chat-proposal-tools { flex-wrap: wrap; gap: 4px 8px; }
+  #chat-proposal-tools strong { flex: 1 1 140px; font-size: 10px; }
+  #chat-proposal-tools small { font-size: 8px; }
+  #chat-proposal-tools .button { min-height: 28px; padding: 4px 8px; font-size: 9px; }
   .workspace-stage .comparison-toolbar span { display: none; }
   .workspace-stage .delta-summary { max-height: 55px; padding: 6px 10px; }
   .workspace-status { min-height: 26px; padding: 5px 10px; }

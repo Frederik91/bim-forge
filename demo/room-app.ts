@@ -2823,9 +2823,11 @@ function renderComparison(): void {
     ? 'Applied changes compared with the preceding accepted revision' : 'Compare with this proposal’s bound base';
   const isOriginal = selectedRevision === originalId;
   const chatProposal = currentPage === 'request' && Boolean(reviewRepository) && Boolean(activeChatProposalMessageId);
+  generic('workspace-shell').dataset.chatModel = liveChatPreview ? 'live' : chatProposal ? 'proposal' : 'accepted';
   const paused = pausedChatPreviews.has(currentChatKey());
   generic('chat-proposal-tools').hidden = currentPage !== 'request' || !liveChatPreview && !chatProposal && !(chatTicketId && paused);
-  generic('chat-proposal-state').textContent = liveChatPreview ? 'Agent draft · changes may still be discarded' : chatProposal ? 'Proposed changes · awaiting your decision' : 'Showing request model';
+  generic('chat-proposal-state').textContent = liveChatPreview ? 'Live draft · tentative' : chatProposal ? 'Proposal · awaiting your decision' : 'Showing request model';
+  generic('chat-proposal-state').title = liveChatPreview ? 'Changes may still be discarded. Nothing is accepted while the agent works.' : 'Acceptance requires your explicit decision in chat.';
   const chatChanges = liveChatPreview || chatProposal ? modelChanges(comparison, selected) : [];
   generic('chat-proposal-changes').textContent = chatChanges.length ? `${chatChanges.filter(item => item.status === 'added').length} added · ${chatChanges.filter(item => item.status === 'modified').length} changed · ${chatChanges.filter(item => item.status === 'removed').length} removed` : '';
   button('chat-proposal-follow').hidden = !paused;
