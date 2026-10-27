@@ -226,6 +226,17 @@ export class RequestChat {
     for (const [label, text] of [['Summary', review.summary], ['Rationale', review.rationale], ['Constraints', review.constraints], ['Uncertainty', review.uncertainty]]) {
       details.append(node('dt', label), node('dd', text));
     }
+    if (review.target) details.append(node('dt', 'Design'), node('dd', review.target.target.kind === 'main'
+      ? 'Main design' : `Alternative ${review.target.target.id}`));
+    if (review.evidenceUses?.length) {
+      const choices = node('details'); choices.dataset.detailKey = `evidence:${message.id}`;
+      choices.append(node('summary', `Evidence choices for this proposal · ${review.evidenceUses.length}`),
+        node('p', 'These are design assumptions for your review. Conflicting source history remains unchanged.'));
+      for (const use of review.evidenceUses) choices.append(node('p', use.rationale),
+        node('small', `${use.subject.anchor.entityId} · ${use.subject.property.definitionId} · ${use.pin.entryId} · SHA-256 ${use.pin.hash}`));
+      const assumptions = node('dd'); assumptions.append(choices);
+      details.append(node('dt', 'Source assumptions'), assumptions);
+    }
     const actions = node('div', undefined, 'ticket-actions');
     const delta = this.#control(review.delta ? 'Hide changes' : 'View changes', () => {
       if (matchingProposalReview(message, this.#review)) this.#actions.delta(message.id);
@@ -249,6 +260,12 @@ export class RequestChat {
     if (message.kind === 'user') {
       item.append(node('p', message.text)); const sources = node('section');
       renderSourceContext(sources, this.#projectId, { sources: message.sources }, true); item.append(sources);
+      if (message.evidencePins?.length) {
+        const pins = node('details'); pins.dataset.detailKey = `evidence-pins:${message.id}`;
+        pins.append(node('summary', `Bound evidence records · ${message.evidencePins.length}`));
+        for (const pin of message.evidencePins) pins.append(node('p', `${pin.entryId} · SHA-256 ${pin.hash}`));
+        item.append(pins);
+      }
       if (message.visual) {
         const evidence = this.#visualEvidence(message.visual); evidence.dataset.detailKey = `visual:${message.id}`; item.append(evidence);
       }

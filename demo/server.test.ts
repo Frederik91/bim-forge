@@ -11,6 +11,10 @@ import type { DemoServerOptions } from './server.ts';
 import { RoomRepository, rectangleLayout, previewRectangle } from '../src/room-model.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
 import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
+import { syntheticResidentialFixture } from '../src/synthetic-residential-fixture.ts';
+import { evidenceAnchor } from './project-evidence-store.ts';
+import { parseDesignTarget } from '../src/design-targets.ts';
+import type { EvidenceEntry } from '../src/model-evidence.ts';
 
 interface TestResponse { status: number | undefined; headers: IncomingHttpHeaders; body: string }
 interface TestRequestOptions extends RequestOptions { body?: string }
@@ -60,6 +64,169 @@ async function listen(
     req.on('error', reject); req.end(body);
   });
 }
+
+async function projectApi(t: TestContext, options: Pick<DemoServerOptions, 'runtimeMode' | 'publicOrigin'> = {}) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-project-api-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const backlogFile = path.join(directory, 'queue.sqlite');
+  const request = await listen(t, null, null, { backlogFile, ...options });
+  const fixture = syntheticResidentialFixture();
+  const repository = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Generated project HTTP fixture', snapshot: fixture.snapshot });
+  const headers = options.publicOrigin ? { Host: new URL(options.publicOrigin).host, Origin: options.publicOrigin } : { Host: 'localhost', Origin: 'http://localhost' };
+  const post = (target: string, value: unknown) => request(target, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+  assert.equal((await post('/api/projects', { project: repository.serialize() })).status, 200);
+  return { request, repository, fixture, post, headers, backlogFile, endpoint: `/api/projects/${repository.projectId}` };
+}
+
+test('project source HTTP retention pages metadata and reuses private byte retrieval across restart', async t => {
+  const { request, repository, post, headers, endpoint, backlogFile } = await projectApi(t);
+  assert.deepEqual(jsonObject((await request(`${endpoint}/project-sources`, { headers })).body), { sources: [], next: null });
+  const sourceIds: string[] = [];
+  const bytes = 'Private synthetic project observation.';
+  for (let index = 0; index < 21; index++) {
+    const id = crypto.randomUUID(); sourceIds.push(id);
+    const uploaded = await request(`${endpoint}/sources/${id}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'text/plain', 'X-Source-Name': `measurement-${index}.txt` }, body: bytes });
+    assert.equal(uploaded.status, 201, uploaded.body);
+    const manifest = jsonObject(uploaded.body).source;
+    if (index === 0) {
+      for (const invalid of [manifest, {}, { source: manifest, extra: true }, { wrong: manifest }, { source: null }]) {
+        assert.equal((await post(`${endpoint}/project-sources`, invalid)).status, 400);
+      }
+      assert.deepEqual(jsonObject((await request(`${endpoint}/project-sources`, { headers })).body), { sources: [], next: null });
+    }
+    assert.equal((await post(`${endpoint}/project-sources`, { source: manifest })).status, 200);
+    if (index === 0) {
+      const retained = await post(`${endpoint}/project-sources`, { source: manifest });
+      assert.deepEqual(jsonObject(retained.body).source, manifest);
+    }
+  }
+  const page = jsonObject((await request(`${endpoint}/project-sources`, { headers })).body);
+  assert.ok(Array.isArray(page.sources)); assert.equal(page.sources.length, 20);
+  const sorted = sourceIds.sort(); assert.equal(page.next, sorted[19]);
+  assert.equal(JSON.stringify(page).includes(bytes), false); assert.equal(JSON.stringify(page).includes('"bytes"'), false);
+  const last = jsonObject((await request(`${endpoint}/project-sources?after=${page.next}`, { headers })).body);
+  assert.ok(Array.isArray(last.sources)); assert.equal(last.sources.length, 1); assert.equal(last.next, null);
+  const firstManifest = page.sources[0];
+  assert.ok(isRecord(firstManifest) && typeof firstManifest.id === 'string');
+  const source = await request(`${endpoint}/sources/${firstManifest.id}`, { headers });
+  assert.equal(source.status, 200); assert.equal(source.body, bytes); assert.equal(source.headers['cache-control'], 'no-store');
+  const other = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Other project', snapshot: repository.view(repository.root()).snapshot });
+  assert.equal((await post('/api/projects', { project: other.serialize() })).status, 200);
+  assert.equal((await request(`/api/projects/${other.projectId}/sources/${firstManifest.id}`, { headers })).status, 404);
+  assert.equal((await post(`/api/projects/${other.projectId}/project-sources`, { source: firstManifest })).status, 400);
+  assert.equal((await request(`/api/projects/${other.projectId}/project-sources?after=${firstManifest.id}`, { headers })).status, 400);
+  const fresh = await listen(t, null, null, { backlogFile });
+  assert.deepEqual(jsonObject((await fresh(`${endpoint}/project-sources`, { headers })).body), page);
+  assert.equal((await fresh(`${endpoint}/sources/${firstManifest.id}`, { headers })).body, bytes);
+  assert.equal(jsonObject((await request(endpoint, { headers })).body).project, repository.serialize());
+});
+
+test('project evidence HTTP appends immutable bounded pages with replay and private citations', async t => {
+  const { request, repository, fixture, post, headers, endpoint } = await projectApi(t);
+  const sourceId = crypto.randomUUID(); const bytes = fixture.sources.plan.text;
+  const upload = await request(`${endpoint}/sources/${sourceId}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'text/plain', 'X-Source-Name': 'synthetic-plan.txt' }, body: bytes });
+  assert.equal(upload.status, 201); const manifest = jsonObject(upload.body).source;
+  assert.ok(isRecord(manifest) && typeof manifest.sha256 === 'string');
+  const sourceHash = manifest.sha256;
+  assert.equal((await post(`${endpoint}/project-sources`, { source: manifest })).status, 200);
+  const anchor = evidenceAnchor(repository, repository.head('main'), fixture.sources.measurements[0].objectId);
+  const entry = (index: number): EvidenceEntry => ({ id: `http-claim-${index}`, anchor, property: { definitionId: 'geometry-thickness', valueKind: 'length' }, predecessor: null,
+    assertion: { kind: 'measured', value: { kind: 'length', value: .15, unit: 'm' }, citations: [{ sourceId, sha256: sourceHash, locator: 'Synthetic wall note, not a survey.' }] } });
+  assert.deepEqual(jsonObject((await request(`${endpoint}/evidence`, { headers })).body), { entries: [], next: null });
+  let pin: unknown;
+  for (let index = 0; index < 21; index++) {
+    const command = { commandId: `http-command-${index}`, entry: entry(index) };
+    const recorded = await post(`${endpoint}/evidence`, command); assert.equal(recorded.status, 200, recorded.body);
+    if (index === 0) {
+      pin = jsonObject(recorded.body).pin;
+      assert.deepEqual(jsonObject((await post(`${endpoint}/evidence`, command)).body).pin, pin);
+      assert.equal((await post(`${endpoint}/evidence`, { ...command, entry: { ...entry(index), assertion: { kind: 'unknown', reason: 'Changed command payload.' } } })).status, 400);
+    }
+  }
+  const page = jsonObject((await request(`${endpoint}/evidence`, { headers })).body);
+  assert.ok(Array.isArray(page.entries)); assert.equal(page.entries.length, 20); assert.ok(Number.isSafeInteger(page.next));
+  assert.deepEqual(page.entries[0], { entry: entry(0), pin }); assert.equal(JSON.stringify(page).includes(bytes), false);
+  const next = jsonObject((await request(`${endpoint}/evidence?after=${page.next}`, { headers })).body);
+  assert.ok(Array.isArray(next.entries)); assert.equal(next.entries.length, 1); assert.equal(next.next, null);
+  assert.deepEqual(jsonObject((await request(`${endpoint}/evidence?after=0`, { headers })).body), page);
+  const invalid = { ...entry(99), anchor: { ...anchor, bodyHash: '0'.repeat(64) } };
+  assert.equal((await post(`${endpoint}/evidence`, { commandId: 'invalid-anchor', entry: invalid })).status, 400);
+  assert.deepEqual(jsonObject((await request(`${endpoint}/evidence`, { headers })).body), page);
+  assert.equal(jsonObject((await request(endpoint, { headers })).body).project, repository.serialize());
+});
+
+test('baseline and alternative HTTP commands replay metadata with explicit target history and unchanged geometry', async t => {
+  const { request, repository, post, headers, endpoint, backlogFile } = await projectApi(t);
+  const command = { commandId: 'capture-as-is', name: 'As-is', from: repository.freezeDesignTarget({ kind: 'main' }) };
+  const response = await post(`${endpoint}/baselines`, command); assert.equal(response.status, 200, response.body);
+  const captured = jsonObject(response.body); const baseline = parseDesignTarget(captured.created);
+  assert.ok(baseline.kind === 'baseline' && typeof captured.project === 'string');
+  assert.deepEqual(Object.keys(captured).sort(), ['created', 'project']);
+  assert.deepEqual(jsonObject((await post(`${endpoint}/baselines`, command)).body), captured);
+  assert.equal((await post(`${endpoint}/baselines`, { ...command, name: 'Different name' })).status, 409);
+  const alternativeCommand = { commandId: 'fork-kitchen', name: 'Wider kitchen', baselineId: baseline.id };
+  const fork = await post(`${endpoint}/alternatives`, alternativeCommand); assert.equal(fork.status, 200, fork.body);
+  const forked = jsonObject(fork.body); const alternative = parseDesignTarget(forked.created);
+  assert.ok(alternative.kind === 'alternative' && typeof forked.project === 'string');
+  assert.deepEqual(Object.keys(forked).sort(), ['created', 'project']);
+  assert.deepEqual(jsonObject((await post(`${endpoint}/alternatives`, alternativeCommand)).body), forked);
+  assert.equal((await post(`${endpoint}/alternatives`, { ...alternativeCommand, name: 'Conflict' })).status, 409);
+  const restored = await RoomRepository.restore(forked.project);
+  assert.equal(restored.head('main'), repository.head('main'));
+  assert.deepEqual(restored.view(restored.freezeDesignTarget(alternative).revisionId).snapshot, repository.view(repository.head('main')).snapshot);
+  const legacy = jsonObject((await request(`${endpoint}/history`, { headers })).body);
+  assert.deepEqual(jsonObject((await request(`${endpoint}/history?target=main`, { headers })).body), legacy);
+  assert.deepEqual(jsonObject((await request(`${endpoint}/history?target=alternative&targetId=${alternative.id}`, { headers })).body), legacy);
+  assert.equal((await request(`${endpoint}/history?target=alternative&targetId=unknown-alternative`, { headers })).status, 400);
+  const fresh = await listen(t, null, null, { backlogFile });
+  assert.equal(jsonObject((await fresh(endpoint, { headers })).body).project, forked.project);
+  assert.deepEqual(jsonObject((await fresh(`${endpoint}/history?target=alternative&targetId=${alternative.id}`, { headers })).body), legacy);
+});
+
+test('project collection and target history HTTP queries reject malformed duplicate and unknown fields', async t => {
+  const { request, post, headers, endpoint } = await projectApi(t);
+  for (const resource of ['project-sources', 'evidence']) {
+    for (const query of ['?after=', '?after=bad', '?after=0&after=1', '?limit=1', '?unknown=x', '?after=0&unknown=x']) {
+      assert.equal((await request(`${endpoint}/${resource}${query}`, { headers })).status, 400, `${resource}${query}`);
+    }
+    assert.equal((await post(`${endpoint}/${resource}?after=0`, {})).status, 400);
+  }
+  for (const after of ['-1', '1.5', '1e2', '01', '9007199254740992', '%20', '%2B1']) {
+    assert.equal((await request(`${endpoint}/evidence?after=${after}`, { headers })).status, 400, after);
+  }
+  for (const query of ['?target=', '?target=baseline&targetId=baseline-x', '?target=alternative', '?targetId=alternative-x', '?target=main&targetId=x', '?target=main&target=main', '?target=alternative&targetId=a&targetId=b', '?target=bogus', '?limit=51', '?unknown=x']) {
+    assert.equal((await request(`${endpoint}/history${query}`, { headers })).status, 400, query);
+  }
+  for (const resource of ['project-sources', 'evidence', 'baselines', 'alternatives']) {
+    assert.equal((await request(`${endpoint}/${resource}`, { method: 'DELETE', headers })).status, 405);
+    assert.equal((await request(`/api/projects/${crypto.randomUUID()}/${resource}`, { headers })).status, 404);
+    assert.equal((await request(`/api/projects/%ZZ/${resource}`, { headers })).status, 400);
+    assert.equal((await post(`${endpoint}/${resource}?unknown=x`, {})).status, 400);
+  }
+  assert.equal((await request(`${endpoint}/baselines`, { headers })).status, 405);
+  assert.equal((await request(`${endpoint}/alternatives`, { headers })).status, 405);
+});
+
+test('project HTTP commands retain host origin content-type size and exact-payload guards', async t => {
+  const { request, repository, headers, post, endpoint } = await projectApi(t, { runtimeMode: 'remote', publicOrigin: 'https://preview.example:9443' });
+  for (const [resource, cap] of [['project-sources', 2048], ['evidence', 32 * 1024], ['baselines', 4096], ['alternatives', 4096]] satisfies [string, number][]) {
+    assert.equal((await request(`${endpoint}/${resource}`, { method: 'POST', headers: { Host: headers.Host, 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
+    assert.equal((await request(`${endpoint}/${resource}`, { method: 'POST', headers: { ...headers, Origin: 'https://attacker.example', 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
+    assert.equal((await request(`${endpoint}/${resource}`, { method: 'POST', headers: { ...headers, 'Sec-Fetch-Site': 'cross-site', 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
+    assert.equal((await request(`${endpoint}/${resource}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'text/plain' }, body: '{}' })).status, 400);
+    assert.equal((await request(`${endpoint}/${resource}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ oversized: 'x'.repeat(cap) }) })).status, 400);
+    assert.equal((await request(`${endpoint}/${resource}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: '{bad' })).status, 400);
+    assert.equal((await request(`${endpoint}/${resource}`, { headers: { ...headers, Host: 'attacker.example' } })).status, 403);
+    assert.equal((await post(`${endpoint}/${resource}`, { forged: true })).status, 400);
+  }
+  for (const resource of ['project-sources', 'evidence', 'history']) {
+    const response = await request(`${endpoint}/${resource}`, { headers });
+    assert.equal(response.status, 200); assert.equal(response.headers['cache-control'], 'no-store');
+    assert.equal(response.headers['x-content-type-options'], 'nosniff');
+    assert.equal((await request(`${endpoint}/${resource}`, { headers: { ...headers, Origin: 'https://attacker.example' } })).status, 400);
+  }
+  assert.equal(jsonObject((await request(endpoint, { headers })).body).project, repository.serialize());
+});
 
 test('local demo serves only explicit assets and exposes only the bounded proposal endpoint', async (t) => {
   const request = await listen(t);

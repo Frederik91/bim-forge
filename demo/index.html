@@ -20,6 +20,9 @@
         <button id="project-overview" class="button quiet" type="button" disabled>Overview</button>
         <button id="auth-menu" class="button connection-button" type="button" aria-label="ChatGPT connection settings"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
         <details class="workspace-file-menu"><summary>Project tools <span aria-hidden="true">⌄</span></summary><div>
+        <div id="design-views-mount"></div>
+        <button id="open-project-evidence" class="button quiet" type="button" disabled>Project evidence</button>
+        <button id="retry-synthetic-evidence" class="button quiet" type="button" hidden>Prepare generated evidence</button>
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
         <button id="export-project" class="button quiet" type="button" disabled>Export</button>
         <button id="import-project" class="button quiet" type="button" disabled>Import</button>
@@ -50,6 +53,7 @@
           <details id="element-inspector" class="element-inspector" open><summary>Element properties</summary><div id="element-properties"></div></details>
         </aside>
         <div class="workspace-stage" aria-label="Model workspace">
+          <div id="design-readonly-banner" class="design-readonly-banner" hidden><span>Fixed baseline · read only. Create an alternative to request changes.</span><button id="fork-selected-baseline" class="button outline" type="button">Create alternative…</button></div>
       <section id="request-page" class="workflow-page" data-request-pane="canvas" aria-labelledby="request-heading">
         <header class="page-heading">
           <div><p class="eyebrow">STEP 1 · REQUEST</p><h1 id="request-heading">What should change?</h1><p id="study-caption">Start a project to mark up the room and explain the outcome you need.</p></div>
@@ -78,6 +82,7 @@
         <aside id="workspace-context" class="workspace-context" aria-labelledby="workspace-context-heading">
           <div class="workspace-panel-heading"><div><p class="eyebrow">MODEL CONTEXT</p><h2 id="workspace-context-heading">Change request</h2></div><button id="workspace-context-close" class="icon-button" type="button" aria-label="Close context panel">×</button></div>
           <div id="workspace-context-content" class="workspace-context-content">
+          <section id="evidence-page" class="workflow-page" aria-label="Project evidence" hidden><div id="project-evidence-mount"></div></section>
           <section id="editor-panel" class="editor-panel request-pane chat-workspace" data-active="false" aria-label="Request chats">
             <div class="chat-toolbar"><button id="chat-switcher-button" class="button quiet" type="button" aria-expanded="false" aria-controls="chat-switcher">Chats <span id="chat-count">0</span> <span aria-hidden="true">⌄</span></button><button id="new-chat" class="button outline" type="button">+ New chat</button></div>
             <section id="chat-switcher" class="chat-switcher" aria-label="Project chats" hidden><label class="sr-only" for="chat-search">Search chats</label><input id="chat-search" type="search" placeholder="Search chats…" autocomplete="off"><div id="chat-list" class="chat-list"></div></section>
@@ -87,6 +92,7 @@
               <p id="editor-base" class="composer-binding">Open a model to start.</p>
               <div id="request-composer" class="request-composer">
                 <div id="composer-model-context" class="composer-model-context" aria-label="Attached model context" hidden></div>
+                <div id="request-evidence-context"></div>
                 <ul id="request-source-list" class="source-list composer-source-list" aria-label="Attached request sources"></ul>
                 <div class="composer-input-row">
                   <button id="composer-add" class="composer-icon" type="button" aria-label="Add files or context" aria-controls="composer-menu" aria-expanded="false" title="Add files or context" disabled>+</button>
@@ -194,6 +200,7 @@
               <ul id="review-assumptions"></ul>
             </section>
             <dl class="review-list"><div><dt>What changed</dt><dd id="review-summary"></dd></div><div><dt>Why this approach</dt><dd id="review-rationale"></dd></div><div><dt>Constraints respected</dt><dd id="review-constraints"></dd></div><div><dt>Uncertainty</dt><dd id="review-uncertainty"></dd></div><div class="review-binding"><dt>Bound evidence</dt><dd id="review-binding"></dd></div></dl>
+            <section id="review-evidence-uses" class="review-evidence-uses" aria-label="Evidence choices for human approval" hidden></section>
             <pre id="review-scope" class="scope-evidence" aria-label="Frozen target and dependency evidence" hidden></pre>
             <section id="review-sources" class="retained-sources" aria-label="Sources bound to this proposal" hidden></section>
             <p id="review-scale-note" class="source-scope-note" hidden>Check the AI’s levels, scale, dimensions, stair placement and roof assumptions against the attached sources. This is a concept model; the proposal still needs your acceptance.</p>
@@ -227,7 +234,7 @@
       <div class="modal-hero"><span class="brand-mark" aria-hidden="true">▱</span><p class="eyebrow">BIM FORGE · BUILDING STUDIES</p><h1 id="start-heading">Start your building study.</h1><p>Choose a starting model, mark up an object and describe the outcome. AI prepares a separate proposal for you to review.</p></div>
       <section class="saved-project-picker" aria-labelledby="saved-project-heading"><h2 id="saved-project-heading">Saved server projects</h2><p id="project-list-status" role="status" aria-live="polite">Reading saved projects…</p><label for="saved-projects">Project</label><select id="saved-projects" disabled></select><div class="project-picker-actions"><button id="open-saved-project" class="button primary" type="button" disabled>Open latest accepted model</button><button id="refresh-projects" class="button outline" type="button">Refresh projects</button><button id="import-server-project" class="button outline" type="button" disabled>Import project JSON</button></div></section>
       <section id="legacy-recovery" class="legacy-recovery" aria-labelledby="legacy-heading"><h2 id="legacy-heading">Browser recovery</h2><p id="legacy-status" role="status" aria-live="polite">Checking for an older browser project…</p><div class="project-picker-actions"><button id="transfer-legacy" class="button outline" type="button" disabled>Register browser project</button><button id="export-legacy" class="button outline" type="button" disabled>Export recovery bytes</button><button id="retry-legacy" class="text-button" type="button">Retry browser recovery</button></div></section>
-      <form id="project-form" class="start-form"><label for="project-template">Starting point</label><select id="project-template"><option value="house">Multi-storey house · basement, ground floor and attic</option><option value="residential">Residential ground floor · 8 rooms</option><option value="room">Single empty room</option></select><p class="editor-help">Start with a connected concept model, then ask the AI to adapt it. The multi-storey house includes stairs, floor slabs and a pitched roof.</p><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="My house study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create project <span aria-hidden="true">→</span></button></form>
+      <form id="project-form" class="start-form"><label for="project-template">Starting point</label><select id="project-template"><option value="house">Multi-storey house · basement, ground floor and attic</option><option value="residential">Residential ground floor · 8 rooms</option><option value="synthetic-residential">Synthetic residential · generated test data, NOT SURVEY</option><option value="room">Single empty room</option></select><p class="editor-help">Start with a connected concept model, then ask the AI to adapt it. The synthetic residential template includes generated sources and an intentional evidence contradiction; it is not surveyed data.</p><label for="project-name">Project name</label><input id="project-name" name="projectName" placeholder="My house study" maxlength="80" required disabled><button id="create-project" type="submit" class="button primary" disabled>Create project <span aria-hidden="true">→</span></button></form>
       <div class="or"><span>or</span></div>
       <button id="load-sample" class="button outline full" type="button" disabled>Open the House Pilot reference room</button>
       <button id="start-close" class="text-button modal-close" type="button" hidden>Return to current project</button>

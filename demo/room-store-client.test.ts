@@ -249,3 +249,69 @@ test('unavailable browser storage reports recovery access failure independently 
   const opened = await new ProjectClient(async () => json({ project: project.serialize() })).read(project.projectId);
   assert.equal(opened.serialize(), project.serialize());
 });
+
+test('design commands use same-origin server authority and restore the exact created baseline/alternative context', async () => {
+  const base = await RoomRepository.create('Design metadata client');
+  const fromFrozen = base.freezeDesignTarget({ kind: 'main' });
+  const captured = base.captureBaseline({ id: 'as-is', name: 'As-is', from: fromFrozen });
+  const forked = captured.forkAlternative({ id: 'study-a', name: 'Study A', baselineId: 'as-is' });
+  const requests: { path: string; body: unknown }[] = [];
+  const client = new ProjectClient(async (input, options) => {
+    assert.equal(options?.method, 'POST'); assert.equal(options?.cache, 'no-store');
+    const path = String(input); requests.push({ path, body: typeof options?.body === 'string' ? JSON.parse(options.body) : null });
+    return path.endsWith('/baselines') ? json({ project: captured.serialize(), created: { kind: 'baseline', id: 'as-is' } })
+      : json({ project: forked.serialize(), created: { kind: 'alternative', id: 'study-a' } });
+  });
+  const baseline = await client.capture({ project: base, name: 'As-is', commandId: 'capture-command', fromFrozen });
+  assert.equal(baseline.project.serialize(), captured.serialize()); assert.deepEqual(baseline.created, { kind: 'baseline', id: 'as-is' });
+  const alternative = await client.fork({ project: baseline.project, name: 'Study A', commandId: 'fork-command', baselineId: 'as-is' });
+  assert.equal(alternative.project.serialize(), forked.serialize());
+  assert.deepEqual(alternative.created, { kind: 'alternative', id: 'study-a' });
+  assert.deepEqual(requests, [
+    { path: `/api/projects/${base.projectId}/baselines`, body: { commandId: 'capture-command', name: 'As-is', from: fromFrozen } },
+    { path: `/api/projects/${base.projectId}/alternatives`, body: { commandId: 'fork-command', name: 'Study A', baselineId: 'as-is' } },
+  ]);
+  assert.equal(base.head('main'), alternative.project.head('main'));
+  assert.deepEqual(alternative.project.designView(alternative.created).snapshot, base.view(base.root()).snapshot);
+});
+
+test('design metadata responses reject wrong identity, original revision, target kind and frozen baseline relationship', async () => {
+  const base = await RoomRepository.create('Design validation'); const fromFrozen = base.freezeDesignTarget({ kind: 'main' });
+  const captured = base.captureBaseline({ id: 'as-is', name: 'As-is', from: fromFrozen });
+  const other = await RoomRepository.create('Other project');
+  const graph = base.view(base.root()).snapshot;
+  const replacement = await RoomRepository.createProject({ projectId: base.projectId, name: base.name,
+    snapshot: { ...graph, entities: graph.entities.map(item => item.id === 'door-entry' ? { ...item, name: 'Different original' } : item) } });
+  const values: unknown[] = [
+    { project: other.serialize(), created: { kind: 'baseline', id: 'as-is' } },
+    { project: replacement.serialize(), created: { kind: 'baseline', id: 'as-is' } },
+    { project: captured.serialize(), created: { kind: 'main' } },
+    { project: captured.serialize(), created: { kind: 'baseline', id: 'missing' } },
+    { project: captured.serialize(), created: { kind: 'alternative', id: 'as-is' } },
+    { project: '{bad', created: { kind: 'baseline', id: 'as-is' } },
+  ];
+  for (const value of values) await assert.rejects(new ProjectClient(async () => json(value)).capture({ project: base, name: 'As-is', commandId: 'capture', fromFrozen }));
+  await assert.rejects(new ProjectClient(async () => json({ project: captured.serialize(), created: { kind: 'baseline', id: 'as-is' } }))
+    .capture({ project: base, name: 'Different baseline name', commandId: 'capture', fromFrozen }), /different frozen source/);
+  await assert.rejects(new ProjectClient(async () => json({})).capture({ project: other, name: 'As-is', commandId: 'capture', fromFrozen }), /different project/);
+  const two = captured.captureBaseline({ id: 'another-base', name: 'Another', from: fromFrozen });
+  const wrongFork = two.forkAlternative({ id: 'wrong-fork', name: 'Study', baselineId: 'another-base' });
+  await assert.rejects(new ProjectClient(async () => json({ project: wrongFork.serialize(), created: { kind: 'alternative', id: 'wrong-fork' } }))
+    .fork({ project: two, name: 'Study', commandId: 'fork', baselineId: 'as-is' }), /different baseline/);
+});
+
+test('design history selects explicit main/alternative queries while legacy calls retain their original URL', async () => {
+  const base = await RoomRepository.create();
+  const withAlternative = base.captureBaseline({ id: 'as-is', name: 'As-is', from: base.freezeDesignTarget({ kind: 'main' }) })
+    .forkAlternative({ id: 'study-a', name: 'Study A', baselineId: 'as-is' });
+  const target = withAlternative.freezeDesignTarget({ kind: 'alternative', id: 'study-a' }).target;
+  const paths: string[] = [];
+  const client = new ProjectClient(async input => { paths.push(String(input)); return json({ entries: [], nextCursor: null }); });
+  await client.history(base.projectId); await client.history(base.projectId, null, 20, { kind: 'main' });
+  await client.history(base.projectId, null, 10, target);
+  const urls = paths.map(path => new URL(path, 'http://localhost'));
+  assert.equal(urls[0]?.searchParams.has('target'), false);
+  assert.equal(urls[1]?.searchParams.get('target'), 'main');
+  assert.equal(urls[2]?.searchParams.get('target'), 'alternative'); assert.equal(urls[2]?.searchParams.get('targetId'), 'study-a');
+  assert.equal(urls[2]?.searchParams.get('limit'), '10');
+});
