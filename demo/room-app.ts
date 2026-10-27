@@ -593,6 +593,7 @@ function reviewState(review: ActiveReview | null): ReviewState | null {
 }
 
 function showPage(name: PageName): void {
+  if (name !== 'request') { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; }
   if (name === 'review' && !activeReview) return;
   if ((name === 'project' || name === 'history') && !repo) return;
   currentPage = name;
@@ -1520,6 +1521,10 @@ async function decideChatProposal(action: 'accept' | 'reject' | 'revise', messag
 function showChatTicket(value: unknown): void {
   const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
+  if (liveChatPreview && (liveChatPreview.ticketId !== ticket.id || liveChatPreview.requestId !== ticket.request.requestId)) {
+    liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null;
+    renderComparison(); syncInspector();
+  }
   chatTicketId = ticket.id; requestChat.setOffline(false);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
