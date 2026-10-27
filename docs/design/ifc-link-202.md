@@ -57,9 +57,9 @@ node scripts/validate-policy.ts --changed-files experiments/ifc-link/link.py exp
 
 No dependency installation or image build is required. Tests create fresh synthetic IFCs through the existing W2 writer, add its unfamiliar bounded property, and fix the header timestamp. They do not read or modify earlier qualification outputs.
 
-## Source-bound server evidence
+## Initial source-bound server evidence
 
-Implementation source: `0e3d4b9d4286744fe88959d55f64c229590b03e2`, based on main `f59687e`. All three Python implementation/test files are unchanged by the later documentation commit. The successful run is `/ssd1/bim-forge-qualification/issue202-ifc-link-20261027-a03/`, from 2026-10-27 16:08:22 UTC to 16:08:45 UTC. It retains `source.bundle`, the detached clone, `run-a03.sh`, container inspect/final state, per-step logs, limits, checksums and generated artifacts under `evidence/`.
+Initial implementation source: `0e3d4b9d4286744fe88959d55f64c229590b03e2`, based on main `f59687e`. Documentation commit `723f66e` preserved all three Python files. The subsequent source-envelope fix and its exact verification sources are recorded below. The initial successful run is `/ssd1/bim-forge-qualification/issue202-ifc-link-20261027-a03/`, from 2026-10-27 16:08:22 UTC to 16:08:45 UTC. It retains `source.bundle`, the detached clone, `run-a03.sh`, container inspect/final state, per-step logs, limits, checksums and generated artifacts under `evidence/`.
 
 The retained image is `bim-qvm-tools:20261025`, ID `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`. The source and `/workspace/node_modules` are separate read-only mounts. Node dependencies come from `/ssd1/bim-forge-qualification/all-ready-195/final/dependencies`. Python comes from `/ssd1/bim-forge-qualification/qvm-20261025/python`; the read-only wheel directory is `/ssd1/bim-forge-qualification/qvm-20261025/w2-runs/w2-source-unit-c30979d-20261025-01/python-deps`. All 19 versions from `experiments/ifc/requirements.txt` matched. Evidence, cache, home and temporary files use this run's SSD directories. The worker runs as server UID/GID 1000, with no credential, application-data or database mount.
 
@@ -97,6 +97,8 @@ The interactive owner authorized ten total attempts per item; global factory lim
 | `issue202-ifc-link-20261027-a01` | `0e3d4b9` | Failed before tests: root UID with dropped capabilities could not write the UID-1000 evidence directory; exit 1, no OOM | Run worker as host UID/GID 1000 |
 | `issue202-ifc-link-20261027-a02` | `0e3d4b9` | Dependency check passed; root `tsc` was OOM-killed at the 1 GiB cap, exit 137, OOM true; link tests never ran | Raise this bounded worker to 2 GiB |
 | `issue202-ifc-link-20261027-a03` | `0e3d4b9` | All seven steps passed; exit 0, OOM false | Document evidence and publish draft for review |
+| `issue202-ifc-link-20261027-a04` | `e7cb8bd` | Expected red proof: one actual-geometry regression failed with `LinkError not raised`; dependency pins passed, exit 1, OOM false | Check source-space vertices before the occurrence transform |
+| `issue202-ifc-link-20261027-a05` | `297e0ea` | Root validation, scoped policy, 24 Python tests and retained rejection reproduction passed; exit 0, OOM false | Update draft #205 for parent review |
 
 No code fix or validator change was needed after either environment failure. Cgroup `memory.peak` on the successful job was 1,249,894,400 bytes, which covers root validation and every child command, not isolated converter memory or a capacity benchmark.
 
@@ -113,6 +115,56 @@ The bounded property's lower/upper values 2/12 are visible as typed raw values w
 | `geometry.json` | 8653 | `e4db9f1d5dbd618c8522cb1cf27a764e5943f9f2c1ece624f491cd809f2c1e21` |
 
 Manifest SHA-256: `df23b6746b29d8f89084c2c710df350a789cf5a20999fd1cacc78db70760279b`. Root validator log SHA-256: `12da7de0930f215cc493ec331a8affcf623f53062ea4ed065c7c3f0a117d403f`. Python test log SHA-256: `f71b577935b00be9ae9c8bd76cb8274895641a58cf16b54813c8c825e30d361f`.
+
+## Source-envelope regression and fix
+
+Independent review of #205 found that only local vertices and occurrence-space vertices were checked against the declared coordinate envelope. An occurrence translation could conceal out-of-envelope source geometry. The fix checks `source_points` against the existing inclusive +/-1e6-metre envelope before calculating `project_points`. The existing project-space check, placement guards and every cap remain unchanged. The review follow-up changes only `link.py`, `test_link.py` and this document; `fixture.py` is unchanged.
+
+`test_occurrence_translation_cannot_conceal_out_of_envelope_source_geometry` uses a real unrotated metre fixture and moves wall-b's local placement to X 999989 under the storey's X 10 translation. It measures actual kernel geometry at source X `999999..1000003`, then verifies that subtracting 999999 would produce occurrence X `0..4`. Import must raise `UNSAFE_GEOMETRY`, preserve both the input and retained original bytes, record a failed receipt and publish no manifest. No geometry mock is used in this regression.
+
+The red source is `e7cb8bd285672b9157a4b23f5d972db4bdb34794`, which adds the regression without changing the importer. In fresh run `/ssd1/bim-forge-qualification/issue202-ifc-link-20261027-a04/`, its source-coordinate and translated-coordinate assertions passed, followed by the expected failure `AssertionError: LinkError not raised`. The container exited 1 without OOM. The retained `evidence/red-regression.log` records one test and one failure. The cause was inspected before adding the two-line guard; this is intentional failing-before evidence, not a skipped check.
+
+The green source is `297e0eaae23687893de78992cfb9d3033f256a22`, with the exact same regression and the source-space guard. Fresh run `/ssd1/bim-forge-qualification/issue202-ifc-link-20261027-a05/` ran from 2026-10-27 16:26:23 UTC to 16:26:48 UTC. All 19 dependency pins matched, root `npm run validate` passed with 240 strict TypeScript sources, scoped policy passed for the four owned paths, and all 24 Python tests passed with no skips. A separate reproduction retained the deliberately unsafe original, failed output and measured result for inspection. The container exited 0 without OOM; tracked source was clean before and after both runs. This uses five total attempts out of the owner's ten-attempt budget, counting the expected red proof.
+
+Both runs use the same retained image, read-only source/dependency mounts and network-disabled 0.5 CPU / 2 GiB / 128-process / 300-second worker envelope as a03. Their exact setup scripts, source bundles/commit IDs, container metadata and logs are retained in their respective run directories. No installation, image build, live-data access or policy change occurred.
+
+Commands for the red proof and green checks, inside the isolated containers with the same `PY` and environment as above:
+
+```sh
+# a04: expected exit 1, LinkError not raised
+"$PY" -m unittest discover -s experiments/ifc-link -p 'test_*.py' -k occurrence_translation_cannot_conceal -v
+# a05: all commands exit 0
+npm run validate
+node scripts/validate-policy.ts --changed-files experiments/ifc-link/link.py experiments/ifc-link/fixture.py experiments/ifc-link/test_link.py docs/design/ifc-link-202.md
+"$PY" -m unittest discover -s experiments/ifc-link -p 'test_*.py' -v
+"$PY" /evidence/envelope-reproduce.py
+```
+
+The retained a05 `evidence/envelope-result.json` reports:
+
+```json
+{
+  "sourceXMetres": [999999.0, 1000003.0],
+  "occurrenceXMetres": [0.0, 4.0],
+  "error": "UNSAFE_GEOMETRY",
+  "detail": "Source geometry exceeds source coordinate envelope",
+  "manifestPresent": false,
+  "originalRetained": true,
+  "originalUnchanged": true,
+  "originalSha256": "d2c958825633a69254826ef2efffd9e66ed84aeeb237d7bdebf8d6c16e79a8fc"
+}
+```
+
+Inspect `a05/evidence/envelope-fixture/synthetic.ifc` and `a05/evidence/envelope-rejected/original.ifc` for the identical retained original, and `a05/evidence/envelope-rejected/failure.json` for the failure receipt. There is no `manifest.json` in that rejected output. The following hashes bind the evidence and verified Python files; later documentation-only commits do not change those Python files.
+
+| File | SHA-256 |
+| --- | --- |
+| `a04/evidence/red-regression.log` | `ed57beacfd8a04f9e07c9e365fb9b0a0358df189b6280fee55f98d3d604448df` |
+| `a05/evidence/validate.log` | `12da7de0930f215cc493ec331a8affcf623f53062ea4ed065c7c3f0a117d403f` |
+| `a05/evidence/link-unit.log` | `7fbe54d19b10a2b9f02be2eb3408b7d17080d96d6fcc411a46a889478e97659a` |
+| `a05/evidence/envelope-result.json` | `461fadeeeb82e568d8cf5db69a702ebfda37bfe20a54e9426ee968088c1b1fe9` |
+| Verified `experiments/ifc-link/link.py` | `7baae62915dfbfa1ddcaebfffcd4f54d4aeba8b0897f9c1210d4b3edf69d0989` |
+| Verified `experiments/ifc-link/test_link.py` | `b557428c2d241a763c73bd95e8306e96e142463e8d24f1713f74ed4a40cbfec1` |
 
 ## Parent integration boundary and remaining gaps
 
