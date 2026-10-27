@@ -21,7 +21,7 @@ const wallWorker: ModelWorker = {
       return { kind: 'propose', review: {
         summary: 'Move the partition 200 mm east.', rationale: 'Widen the living room in this alternative.',
         constraints: 'Keep the baseline and unrelated contents unchanged.', uncertainty: 'Synthetic concept geometry.',
-        intent: { interpretation: 'Move the shared partition east.', assumptions: [], certainty: .95, basis: ['Explicit fixture instruction.'] }
+        intent: { interpretation: 'Move the shared partition east.', assumptions: [], certainty: 95, basis: 'Explicit fixture instruction.' }
       }};
     ` });
     assert.equal(result.ok, true, JSON.stringify(result));
@@ -36,7 +36,7 @@ async function ready(queue: ChangeRequests, id: string) {
   while (Date.now() < deadline) {
     const ticket = queue.get(id);
     if (ticket.state === 'ready') return ticket;
-    assert.ok(ticket.state === 'queued' || ticket.state === 'working', JSON.stringify(ticket));
+    assert.ok(ticket.state === 'queued' || ticket.state === 'working', JSON.stringify({ state: ticket.state, error: ticket.error }));
     await new Promise(resolve => setTimeout(resolve, 20));
   }
   throw new Error('The design proposal did not become reviewable.');
@@ -126,7 +126,7 @@ const evidenceWorker: ModelWorker = {
       await model.previewWallShift({wallId:'wall-living-kitchen',offsetMetres:.2});
       return {kind:'propose',review:{summary:'Shift the shared wall 200 mm.',rationale:'Use the chosen plan claim as a reviewed design assumption.',
         constraints:'Preserve other designs and source history.',uncertainty:'Generated contradictory evidence; not a survey.',
-        evidenceUses:${JSON.stringify(uses)},intent:{interpretation:'Explore a partition shift.',assumptions:['Use the generated plan claim.'],certainty:.9,basis:['Selected source evidence.']}}};
+        evidenceUses:${JSON.stringify(uses)},intent:{interpretation:'Explore a partition shift.',assumptions:['Use the generated plan claim.'],certainty:90,basis:'Selected source evidence.'}}};
     ` });
     assert.equal(result.ok, true, JSON.stringify(result));
   },
