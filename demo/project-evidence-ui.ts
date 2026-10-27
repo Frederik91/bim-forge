@@ -8,6 +8,7 @@ import type { EvidenceHistoryRecord } from './project-evidence-client.ts';
 
 export interface ProjectEvidenceContext {
   projectId: string;
+  bindingId?: string;
   target: EvidenceEntry['anchor']['target'];
   revisionId: string;
   selectedObject: { id: string; name: string } | null;
@@ -62,32 +63,16 @@ export class ProjectEvidencePanel {
   async bind(context: ProjectEvidenceContext | null, reload = false): Promise<void> {
     if (this.#disposed) return;
     const previous = this.#context;
-    if (!reload && context && previous && context.projectId === previous.projectId && context.revisionId === previous.revisionId
+    if (!reload && context && previous && context.projectId === previous.projectId && context.bindingId === previous.bindingId && context.revisionId === previous.revisionId
         && targetLabel(context.target) === targetLabel(previous.target)) {
       this.#context = { ...context }; this.#render(); return;
     }
     this.#controller.abort(); this.#controller = new AbortController();
     this.#context = context ? { ...context } : null;
     this.#sources = page(); this.#evidence = page(); this.#chosenSources = []; this.#chosenPins = [];
-    this.#pending = null; this.#fileBusy = false; this.#contextBusy = true; this.#notice = '';
-    const signal = this.#controller.signal;
+    this.#pending = null; this.#fileBusy = false; this.#contextBusy = false; this.#notice = '';
     this.#render();
-    await Promise.all([
-      this.#clearComposer(signal),
-      ...(context ? [this.#loadSources(), this.#loadEvidence()] : []),
-    ]);
-  }
-  async #clearComposer(signal: AbortSignal): Promise<void> {
-    const context = this.#context;
-    const results = await Promise.allSettled([
-      Promise.resolve().then(() => { if (!signal.aborted) return this.#options.useSources([], context, signal); }),
-      Promise.resolve().then(() => { if (!signal.aborted) return this.#options.useEvidence([], context, signal); }),
-    ]);
-    if (!signal.aborted) {
-      this.#contextBusy = false;
-      if (results.some(result => result.status === 'rejected')) this.#notice = 'Could not clear the previous chat context. Clear it in the composer before sending.';
-      this.#render();
-    }
+    if (context) await Promise.all([this.#loadSources(), this.#loadEvidence()]);
   }
   dispose(): void {
     this.#controller.abort(); this.#disposed = true; this.#context = null;
@@ -248,7 +233,7 @@ export class ProjectEvidencePanel {
       panel.append(node('p', `Displaying ${context.projectId} · ${targetLabel(context.target)} · Revision ${context.revisionId}`),
         node('p', context.selectedObject ? `Current selection: ${context.selectedObject.name} (${context.selectedObject.id})` : 'Current selection: none'),
         node('p', 'Project-wide history, without selection filtering. Loaded records are not a current fact set.', 'source-scope-note'));
-      panel.append(this.#button('Refresh project history and clear chosen context', 'refresh', () => this.refresh(), this.#fileBusy || this.#contextBusy));
+      panel.append(this.#button('Refresh project history', 'refresh', () => this.refresh(), this.#fileBusy || this.#contextBusy));
       const sources = node('section'); sources.setAttribute('aria-label', 'Retained project sources'); sources.append(node('h3', 'Retained sources'));
       const list = node('ul', undefined, 'source-list');
       for (const source of this.#sources.items) {
