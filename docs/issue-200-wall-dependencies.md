@@ -129,3 +129,9 @@ The package test list is intentionally unchanged under this worker's ownership.
 The parent must run the focused test command explicitly when integrating it.
 No browser/device, ScriptBox, persistence, or aggregate 2D/3D qualification is
 claimed by this pure-module slice. No deployment was performed.
+
+Publication retry: the first push failed because Git's configured credential
+helpers selected `frte-aec` and attempted an unavailable password prompt.
+`gh auth status` and `gh api user` confirmed the active owner account `Frederik91`.
+A command-local credential helper and username override pushed successfully.
+No global Git configuration or stored credentials changed.
