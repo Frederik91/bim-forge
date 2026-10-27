@@ -4,6 +4,34 @@ import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { Type } from 'typebox';
 import { Check } from 'typebox/value';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+test('the runtime package includes every local server dependency in the image and build context', async () => {
+  const root = new URL('../', import.meta.url);
+  const dockerfile = await fs.readFile(new URL('deploy/preview/Dockerfile', root), 'utf8');
+  const context = (await fs.readFile(new URL('.dockerignore', root), 'utf8')).split(/\r?\n/)
+    .filter(line => line.startsWith('!')).map(line => line.slice(1));
+  const copied = [...dockerfile.matchAll(/^COPY\s+(?:--\S+\s+)*(.+)\s+\S+\s*$/gm)]
+    .flatMap(match => (match[1] ?? '').trim().split(/\s+/));
+  const pending = ['demo/server.ts']; const visited = new Set<string>();
+  while (pending.length) {
+    const name = pending.pop();
+    if (!name || visited.has(name)) continue;
+    visited.add(name);
+    assert.ok(copied.some(entry => name === entry || name.startsWith(entry.replace(/\/$/, '') + '/')), `Image omits server dependency ${name}`);
+    assert.ok(context.some(entry => entry === name || entry.endsWith('/**') && name.startsWith(entry.slice(0, -2))), `Build context omits server dependency ${name}`);
+    const url = new URL(name, root);
+    const source = await fs.readFile(url, 'utf8');
+    for (const match of source.matchAll(/\b(?:from\s*|import\s*(?:\(\s*)?)['"](\.[^'"]+\.ts)['"]/g)) {
+      const specifier = match[1]; if (!specifier) continue;
+      const dependency = path.relative(fileURLToPath(root), fileURLToPath(new URL(specifier, url))).replaceAll('\\', '/');
+      assert.ok(!dependency.startsWith('../'), 'Runtime dependencies must stay within the repository.');
+      pending.push(dependency);
+    }
+  }
+  assert.ok(visited.has('demo/project-evidence-store.ts'), 'Evidence retention participates in the real server dependency graph.');
+});
 
 test('the built preview is one complete hashed release with every referenced browser asset', async () => {
   const root = new URL('../dist/demo/', import.meta.url);
