@@ -593,6 +593,8 @@ function renderChatSwitcher(): void {
     state: stateLabels[ticket.state], at: ticket.updatedAt, draft: chatDrafts.has(`${projectId}:${ticket.id}`) || ticket.id === chatTicketId && requestDirty() }));
   const entries = [...drafts, ...tickets].sort((a, b) => b.at - a.at);
   generic('chat-count').textContent = String(entries.length);
+  const ready = backlogItems.filter(ticket => ticket.state === 'ready').length;
+  ui['open-backlog'].textContent = `Chats · ${entries.length}${ready ? ` · ${ready} ready` : ''}`;
   const signature = JSON.stringify([projectId, query, currentChatKey(), entries]); if (signature === chatListSignature) return; chatListSignature = signature;
   const host = generic('chat-list'); host.replaceChildren();
   for (const entry of entries.filter(entry => `${entry.title} ${entry.state}`.toLowerCase().includes(query))) {
@@ -2019,7 +2021,6 @@ function renderBacklog(): void {
   const ready = items.filter((item) => item.state === 'ready').length;
   const pending = items.filter((item) => item.state === 'queued' || item.state === 'working').length;
   ui['nav-backlog'].replaceChildren(element('span', '2'), element('b', 'Backlog'), element('small', `${ready} ready for review`));
-  ui['open-backlog'].textContent = `Chats · ${items.length}${ready ? ` · ${ready} ready` : ''}`;
   ui['backlog-summary'].textContent = `${items.length} requests · ${groups.review.length} need your attention · ${pending} active or waiting`;
   let empty = '';
   for (const tab of requestTabs) {
