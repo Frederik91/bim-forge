@@ -9,7 +9,7 @@ import path from 'node:path';
 import { RoomRepository, diffSnapshots } from '../src/room-model.ts';
 import { syntheticResidentialFixture } from '../src/synthetic-residential-fixture.ts';
 import { evidenceCanonical } from '../src/model-evidence.ts';
-import type { EvidenceEntry, EvidencePin, EvidenceSubject } from '../src/model-evidence.ts';
+import type { EvidenceEntry, EvidencePin, EvidenceReadSet, EvidenceSubject, EvidenceUse } from '../src/model-evidence.ts';
 import { RequestSourceStore } from './request-source-store.ts';
 import { ProjectEvidenceStore, evidenceAnchor, evidenceApplicable, evidenceHash } from './project-evidence-store.ts';
 
@@ -33,6 +33,305 @@ async function setup(t: TestContext, filename = ':memory:') {
   const freeze = (pins: EvidencePin[], subjects: EvidenceSubject[] = []) => store.freezeReadSet({ repository, revisionId: repository.head('main'), pins, subjects });
   return { db, sources, store, fixture, repository, source, bytes, entry, append, subject, freeze };
 }
+
+function reviewUse(readSet: EvidenceReadSet, pin: EvidencePin): EvidenceUse {
+  const subject = readSet.subjects[0]?.subject; assert.ok(subject);
+  return { pin, subject, rationale: 'Use this synthetic observation as the design assumption; human approval is required.' };
+}
+
+async function advanceTarget(repository: RoomRepository, target: EvidenceReadSet['target'], name: string, entityId = 'main-bed'): Promise<RoomRepository> {
+  const frozen = repository.freezeDesignTarget(target);
+  const snapshot = structuredClone(repository.view(frozen.revisionId).snapshot);
+  const entity = snapshot.entities.find(item => item.id === entityId); assert.ok(entity); entity.name = `Changed ${name}`;
+  const proposed = await repository.proposeReviewedModel({ name, from: frozen.revisionId, target: frozen, snapshot,
+    review: { requestId: `request-${name}`, selectedObjectIds: [entityId], instruction: 'Change only this synthetic entity name.',
+      summary: 'Deterministic unrelated entity change.', rationale: 'Exercise native target lineage.', constraints: 'Keep other bodies unchanged.',
+      uncertainty: 'Synthetic fixture.', worker: { provider: 'fixture', model: 'lineage-test', responseIds: [], usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+      toolCalls: [{ name: 'preview_furnishings', status: 'accepted', error: null }], validator: 'room-graph-v1' } });
+  return proposed.accept(name, { decisionId: `accept-${name}`, actor: 'engineer' }, frozen);
+}
+
+test('superseded consumed roots and inference bases fail strict/review checks while historical predecessors remain in closure', async t => {
+  const { store, repository, entry, append, freeze } = await setup(t);
+  const original = append(entry('root-original'));
+  const before = freeze([original]);
+  const inference = append({ ...entry('inference-root'), property: { definitionId: 'inference-value', valueKind: 'length' },
+    assertion: { kind: 'inferred', value: { kind: 'length', value: 1, unit: 'm' }, rationale: 'Consumes exact original basis.', basis: [original] } });
+  const corrected = append({ ...entry('root-corrected', .16), predecessor: original });
+  assert.equal(store.verifyReadSet({ repository, readSet: before }).ready, false);
+  const supersededRoot = freeze([original]);
+  assert.match(store.verifyReadSet({ repository, readSet: supersededRoot }).reasons.join(' '), /Superseded consumed evidence/);
+  assert.equal(store.verifyForReview({ repository, readSet: supersededRoot, uses: [] }).ready, false);
+  const supersededBasis = freeze([inference]);
+  assert.match(store.verifyReadSet({ repository, readSet: supersededBasis }).reasons.join(' '), /Superseded consumed evidence/);
+  assert.equal(store.verifyForReview({ repository, readSet: supersededBasis, uses: [] }).ready, false);
+  const correctedRead = freeze([corrected]);
+  assert.equal(store.verifyReadSet({ repository, readSet: correctedRead }).ready, true);
+  assert.deepEqual(new Set(store.bundleClosure({ repository, pins: [corrected] }).entries.map(item => item.pin.entryId)), new Set([original.entryId, corrected.entryId]));
+});
+
+test('sibling target claims stay isolated at shared root and after different body advances, including corrupt irrelevant sources', async t => {
+  const { db, sources, store, repository, entry } = await setup(t);
+  const a = { kind: 'alternative', id: 'study-a' } satisfies EvidenceReadSet['target'];
+  const b = { kind: 'alternative', id: 'study-b' } satisfies EvidenceReadSet['target'];
+  let latest = repository.captureBaseline({ id: 'as-is', name: 'As-is', from: repository.freezeDesignTarget({ kind: 'main' }) })
+    .forkAlternative({ id: a.id, name: 'Study A', baselineId: 'as-is' }).forkAlternative({ id: b.id, name: 'Study B', baselineId: 'as-is' });
+  const anchorA = evidenceAnchor(latest, repository.root(), 'wall-living-kitchen', a);
+  const subject: EvidenceSubject = { anchor: anchorA, property: entry('shape').property };
+  const frozen = store.freezeReadSet({ repository: latest, revisionId: repository.root(), target: a, pins: [], subjects: [subject] });
+  const sourceB = await sources.add({ projectId: repository.projectId, id: randomUUID(), name: 'sibling-b.txt', mediaType: 'text/plain',
+    bytes: Buffer.from('Private sibling B observation.'), signal: new AbortController().signal });
+  sources.retainProject(repository.projectId, sourceB);
+  const sibling = (id: string): EvidenceEntry => ({ ...entry(id),
+    anchor: evidenceAnchor(latest, latest.freezeDesignTarget(b).revisionId, 'wall-living-kitchen', b),
+    assertion: { kind: 'observed', value: { kind: 'length', value: .2, unit: 'm' }, citations: [{ sourceId: sourceB.id, sha256: sourceB.sha256, locator: 'Study B only.' }] } });
+  const first = store.append({ repository: latest, commandId: 'b-first', actor: 'engineer', entry: sibling('b-shared-root') });
+  assert.equal(store.verifyReadSet({ repository: latest, readSet: frozen }).ready, true);
+  assert.throws(() => store.freezeReadSet({ repository: latest, revisionId: repository.root(), target: a, pins: [first], subjects: [] }), /Inapplicable/);
+  latest = await advanceTarget(latest, b, 'different-wall-body', 'wall-living-kitchen');
+  store.append({ repository: latest, commandId: 'b-later', actor: 'engineer', entry: sibling('b-different-body') });
+  db.prepare('UPDATE request_source_blobs SET bytes=zeroblob(byte_length) WHERE id=?').run(sourceB.id);
+  assert.equal(store.verifyReadSet({ repository: latest, readSet: frozen }).ready, true);
+  assert.deepEqual(store.freezeReadSet({ repository: latest, revisionId: repository.root(), target: a, pins: [], subjects: [subject] }), frozen);
+  assert.deepEqual(store.reviewContext({ repository: latest, readSet: frozen }).entries, []);
+});
+
+test('a sibling resolution cannot resolve another target inherited conflict at the same native root', async t => {
+  const { store, repository, entry, append } = await setup(t);
+  const one = append(entry('parent-one')); const two = append(entry('parent-two', .2));
+  const a = { kind: 'alternative', id: 'study-a' } satisfies EvidenceReadSet['target'];
+  const b = { kind: 'alternative', id: 'study-b' } satisfies EvidenceReadSet['target'];
+  const latest = repository.captureBaseline({ id: 'root-pin', name: 'Root pin', from: repository.freezeDesignTarget({ kind: 'main' }) })
+    .forkAlternative({ id: a.id, name: 'Study A', baselineId: 'root-pin' }).forkAlternative({ id: b.id, name: 'Study B', baselineId: 'root-pin' });
+  const readSet = store.freezeReadSet({ repository: latest, revisionId: repository.root(), target: a, pins: [one, two], subjects: [] });
+  const before = store.verifyReadSet({ repository: latest, readSet }); assert.equal(before.ready, false);
+  store.append({ repository: latest, commandId: 'resolve-only-b', actor: 'engineer', entry: { ...entry('resolution-in-b'),
+    anchor: evidenceAnchor(latest, repository.root(), 'wall-living-kitchen', b),
+    assertion: { kind: 'resolution', candidateIds: [one.entryId, two.entryId], selectedEntryId: one.entryId, rationale: 'Only B selects parent-one.' } } });
+  assert.deepEqual(store.verifyReadSet({ repository: latest, readSet }), before);
+  assert.equal(store.verifyForReview({ repository: latest, readSet, uses: [reviewUse(readSet, one)] }).ready, true);
+  assert.ok(!store.reviewContext({ repository: latest, readSet }).entries.some(item => item.entry.id === 'resolution-in-b'));
+});
+
+test('same-destination later native ancestor facts invalidate old read sets after an unrelated bed change', async t => {
+  const { store, repository, entry } = await setup(t);
+  const originalAnchor = evidenceAnchor(repository, repository.root(), 'office-chair');
+  const chair: EvidenceEntry = { ...entry('chair-r'), anchor: originalAnchor, property: { definitionId: 'geometry-width', valueKind: 'length' } };
+  const original = store.append({ repository, commandId: 'chair-r', actor: 'engineer', entry: chair });
+  const readSet = store.freezeReadSet({ repository, revisionId: repository.root(), pins: [original], subjects: [] });
+  const latest = await advanceTarget(repository, { kind: 'main' }, 'bed-change');
+  assert.equal(store.verifyReadSet({ repository: latest, readSet }).ready, true);
+  const newer: EvidenceEntry = { ...chair, id: 'chair-r-two', anchor: evidenceAnchor(latest, latest.head('main'), 'office-chair') };
+  assert.equal(newer.anchor.bodyHash, originalAnchor.bodyHash); assert.notEqual(newer.anchor.revisionId, originalAnchor.revisionId);
+  store.append({ repository: latest, commandId: 'chair-r-two', actor: 'engineer', entry: newer });
+  assert.match(store.verifyReadSet({ repository: latest, readSet }).reasons.join(' '), /candidate set changed/);
+  assert.equal(store.verifyForReview({ repository: latest, readSet, uses: [reviewUse(readSet, original)] }).ready, false);
+});
+
+test('immutable baseline ancestry inherits only requested parent chain and caps parent target claims at fork revisions', async t => {
+  const { store, repository, entry, append } = await setup(t);
+  const parent = append(entry('main-before-fork'));
+  const a = { kind: 'alternative', id: 'parent-a' } satisfies EvidenceReadSet['target'];
+  const child = { kind: 'alternative', id: 'child-a' } satisfies EvidenceReadSet['target'];
+  let latest = repository.captureBaseline({ id: 'main-pin', name: 'Main pin', from: repository.freezeDesignTarget({ kind: 'main' }) })
+    .forkAlternative({ id: a.id, name: 'Parent A', baselineId: 'main-pin' });
+  const baseline = store.append({ repository: latest, commandId: 'baseline-fact', actor: 'engineer', entry: { ...entry('baseline-fact'),
+    anchor: evidenceAnchor(latest, repository.root(), 'wall-living-kitchen', { kind: 'baseline', id: 'main-pin' }) } });
+  const inherited = store.append({ repository: latest, commandId: 'a-before-fork', actor: 'engineer', entry: { ...entry('a-before-fork'),
+    anchor: evidenceAnchor(latest, repository.root(), 'wall-living-kitchen', a) } });
+  latest = latest.captureBaseline({ id: 'a-pin', name: 'A pin', from: latest.freezeDesignTarget(a) })
+    .forkAlternative({ id: child.id, name: 'Child A', baselineId: 'a-pin' });
+  const readSet = store.freezeReadSet({ repository: latest, revisionId: repository.root(), target: child, pins: [parent, baseline, inherited], subjects: [] });
+  assert.equal(store.verifyReadSet({ repository: latest, readSet }).ready, true);
+  latest = await advanceTarget(latest, a, 'parent-a-advance');
+  store.append({ repository: latest, commandId: 'a-after-fork', actor: 'engineer', entry: { ...entry('a-after-fork'),
+    anchor: evidenceAnchor(latest, latest.freezeDesignTarget(a).revisionId, 'wall-living-kitchen', a) } });
+  latest = await advanceTarget(latest, { kind: 'main' }, 'main-after-fork');
+  store.append({ repository: latest, commandId: 'main-after-fork', actor: 'engineer', entry: { ...entry('main-after-fork'),
+    anchor: evidenceAnchor(latest, latest.head('main'), 'wall-living-kitchen') } });
+  assert.equal(store.verifyReadSet({ repository: latest, readSet }).ready, true);
+  const ids = new Set(store.reviewContext({ repository: latest, readSet }).entries.map(item => item.entry.id));
+  assert.ok(ids.has(parent.entryId) && ids.has(baseline.entryId) && ids.has(inherited.entryId));
+  assert.ok(!ids.has('a-after-fork') && !ids.has('main-after-fork'));
+});
+
+test('explicit review use accepts an unchanged known conflict while strict validation and global originals remain unchanged', async t => {
+  const { db, store, repository, entry, append, freeze } = await setup(t);
+  const a = append(entry('chosen')); const b = append({ ...entry('competing'), assertion: { kind: 'assumed',
+    value: { kind: 'length', value: .2, unit: 'm' }, rationale: 'A competing synthetic assumption.', basis: [] } });
+  const readSet = freeze([a, b]); const originalReadSet = evidenceCanonical(readSet);
+  const originals = store.page({ projectId: repository.projectId }); const native = repository.serialize();
+  const use = reviewUse(readSet, a);
+  const strictBefore = store.verifyReadSet({ repository, readSet }); assert.equal(strictBefore.ready, false);
+  assert.equal(store.verifyForReview({ repository, readSet, uses: [] }).ready, false);
+  const readiness = store.verifyForReview({ repository, readSet, uses: [use] });
+  assert.equal(readiness.ready, true); assert.deepEqual(readiness.reasons, []);
+  assert.equal(readiness.warnings.length, 1); assert.match(readiness.warnings.join(' '), /human approval.*chosen.*Competing evidence remains unresolved/);
+  assert.ok(readiness.warnings[0]?.includes(use.rationale));
+  assert.deepEqual(store.verifyReadSet({ repository, readSet }), strictBefore);
+  assert.deepEqual(store.page({ projectId: repository.projectId }), originals);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM project_evidence_receipts').get()?.n, 2);
+  assert.equal(repository.serialize(), native); assert.equal(evidenceCanonical(readSet), originalReadSet);
+  // A source-backed observation and an assumption are both selectable without promoting either.
+  assert.equal(store.verifyForReview({ repository, readSet, uses: [reviewUse(readSet, b)] }).ready, true);
+  assert.equal(store.get({ projectId: repository.projectId, pin: b }).entry.assertion.kind, 'assumed');
+});
+
+test('review uses refuse new contradictions and changed absence sets after freeze while unrelated facts stay harmless', async t => {
+  const { store, repository, entry, append, freeze, subject } = await setup(t);
+  const absent = freeze([], [subject]);
+  assert.deepEqual(store.verifyForReview({ repository, readSet: absent, uses: [] }), { ready: true, reasons: [], warnings: [] });
+  const a = append(entry('chosen')); append(entry('competing', .2));
+  assert.equal(store.verifyForReview({ repository, readSet: absent, uses: [] }).ready, false);
+  const readSet = freeze([a]); const uses = [reviewUse(readSet, a)];
+  append({ ...entry('unrelated'), anchor: evidenceAnchor(repository, repository.root(), 'door-living-kitchen') });
+  assert.equal(store.verifyForReview({ repository, readSet, uses }).ready, true);
+  append(entry('new-contradiction', .25));
+  const readiness = store.verifyForReview({ repository, readSet, uses });
+  assert.equal(readiness.ready, false); assert.deepEqual(readiness.warnings, []);
+  assert.match(readiness.reasons.join(' '), /candidate set changed/);
+});
+
+test('review uses refuse duplicate logical choices, wrong hashes/subjects, unpinned facts and inactive corrected claims', async t => {
+  const { store, repository, entry, append, freeze } = await setup(t);
+  const a = append(entry('chosen')); const b = append(entry('other', .2));
+  const readSet = freeze([a]); const use = reviewUse(readSet, a);
+  for (const uses of [[use, { ...use, rationale: 'A second choice on the same subject.', pin: b }],
+    [{ ...use, pin: { ...a, hash: '0'.repeat(64) } }], [{ ...use, pin: b }],
+    [{ ...use, subject: { ...use.subject, property: { ...use.subject.property, definitionId: 'wrong-property' } } }],
+    [{ ...use, subject: { ...use.subject, anchor: { ...use.subject.anchor, revisionId: '0'.repeat(64) } } }]]) {
+    assert.equal(store.verifyForReview({ repository, readSet, uses }).ready, false);
+  }
+  const wrongRootHash: EvidenceReadSet = { ...readSet, pins: [{ ...a, hash: '0'.repeat(64) }] };
+  assert.equal(store.verifyForReview({ repository, readSet: wrongRootHash, uses: [{ ...use, pin: wrongRootHash.pins[0] ?? a }] }).ready, false);
+  append({ ...entry('correction', .16), predecessor: a });
+  const refrozen = freeze([a]);
+  assert.equal(store.verifyForReview({ repository, readSet: refrozen, uses: [reviewUse(refrozen, a)] }).ready, false);
+});
+
+test('review use does not waive corrupt/missing originals, missing entries, wrong-project or changed native anchors', async t => {
+  for (const failure of ['corrupt-source', 'missing-source', 'missing-pin', 'changed-anchor', 'wrong-project']) {
+    await t.test(failure, async inner => {
+      const { db, store, repository, source, entry, append, freeze } = await setup(inner);
+      const a = append(entry('chosen')); append(entry('competing', .2));
+      const readSet = freeze([a]); const uses = [reviewUse(readSet, a)];
+      let latest = repository;
+      if (failure === 'corrupt-source') db.prepare('UPDATE request_source_blobs SET bytes=zeroblob(byte_length) WHERE id=?').run(source.id);
+      if (failure === 'missing-source') {
+        db.prepare('DELETE FROM request_source_project_retention WHERE source_id=?').run(source.id);
+        db.prepare('DELETE FROM request_source_blobs WHERE id=?').run(source.id);
+      }
+      if (failure === 'missing-pin') db.prepare('DELETE FROM project_evidence_entries WHERE id=?').run(a.entryId);
+      if (failure === 'changed-anchor' || failure === 'wrong-project') {
+        const graph = repository.view(repository.root()).snapshot;
+        latest = await RoomRepository.createProject({ projectId: failure === 'wrong-project' ? randomUUID() : repository.projectId, name: 'Invalid review context',
+          snapshot: { ...graph, entities: graph.entities.map(entity => entity.id === entry('shape').anchor.entityId ? { ...entity, name: 'Changed body' } : entity) } });
+      }
+      const readiness = store.verifyForReview({ repository: latest, readSet, uses });
+      assert.equal(readiness.ready, false); assert.deepEqual(readiness.warnings, []);
+      assert.throws(() => store.reviewContext({ repository: latest, readSet }));
+    });
+  }
+});
+
+test('review uses cannot waive required unknown facts or contrary resolutions, even when conflicts are acknowledged', async t => {
+  const { store, repository, entry, append, freeze } = await setup(t);
+  const a = append(entry('chosen')); append(entry('competing', .2));
+  const unknown = append({ ...entry('unknown'), property: { definitionId: 'unknown-height', valueKind: 'length' },
+    assertion: { kind: 'unknown', reason: 'Height was not observed.' } });
+  const withUnknown = freeze([a, unknown]);
+  assert.equal(store.verifyForReview({ repository, readSet: withUnknown, uses: [reviewUse(withUnknown, a)] }).ready, false);
+  const inference = append({ ...entry('inference'), property: { definitionId: 'derived-unknown', valueKind: 'length' },
+    assertion: { kind: 'inferred', value: { kind: 'length', value: 1, unit: 'm' }, rationale: 'Unknown basis remains required.', basis: [unknown] } });
+  const withUnknownBasis = freeze([a, inference]);
+  assert.equal(store.verifyForReview({ repository, readSet: withUnknownBasis, uses: [reviewUse(withUnknownBasis, a)] }).ready, false);
+  append({ ...entry('resolution-a'), assertion: { kind: 'resolution', candidateIds: ['chosen', 'competing'], selectedEntryId: 'chosen', rationale: 'Pick chosen.' } });
+  append({ ...entry('resolution-b'), assertion: { kind: 'resolution', candidateIds: ['chosen', 'competing'], selectedEntryId: 'competing', rationale: 'Contrary choice.' } });
+  const resolutions = freeze([a]);
+  assert.equal(store.verifyReadSet({ repository, readSet: resolutions }).ready, false);
+  const readiness = store.verifyForReview({ repository, readSet: resolutions, uses: [reviewUse(resolutions, a)] });
+  assert.equal(readiness.ready, false); assert.match(readiness.reasons.join(' '), /Conflicting evidence resolutions/);
+  const context = store.reviewContext({ repository, readSet: resolutions });
+  assert.ok(context.issues.some(issue => issue.kind === 'conflicting-resolutions'));
+  assert.ok(context.entries.some(item => item.entry.id === 'resolution-b'));
+  append(entry('third', .25));
+  const partialResolutions = freeze([a]);
+  assert.equal(store.verifyForReview({ repository, readSet: partialResolutions, uses: [reviewUse(partialResolutions, a)] }).ready, false);
+});
+
+test('review context exposes unpinned competitors, unknowns and complete inference/correction dependencies as bounded data', async t => {
+  const { store, repository, source, entry, append, freeze } = await setup(t);
+  const a = append(entry('chosen')); const competing = append(entry('unpinned-competitor', .2));
+  const unknown = append({ ...entry('unknown'), property: { definitionId: 'unknown-property', valueKind: 'length' },
+    assertion: { kind: 'unknown', reason: 'Unknown observation remains visible to the model.' } });
+  const basisUnknown = append({ ...entry('old-basis'), property: { definitionId: 'basis-property', valueKind: 'length' },
+    assertion: { kind: 'unknown', reason: 'Historical basis was unknown.' } });
+  const basis = append({ ...entry('corrected-basis'), property: { definitionId: 'basis-property', valueKind: 'length' }, predecessor: basisUnknown });
+  const inference = append({ ...entry('inference'), property: { definitionId: 'inference-property', valueKind: 'length' },
+    assertion: { kind: 'inferred', value: { kind: 'length', value: 1, unit: 'm' }, rationale: 'Inference basis must be inspectable.', basis: [basis] } });
+  const readSet = freeze([a, inference, unknown]);
+  const context = store.reviewContext({ repository, readSet });
+  assert.equal(context.entries.length, 6);
+  assert.deepEqual(new Set(context.entries.map(item => item.pin.entryId)), new Set([a.entryId, competing.entryId, unknown.entryId,
+    basisUnknown.entryId, basis.entryId, inference.entryId]));
+  assert.ok(!readSet.pins.some(pin => pin.entryId === competing.entryId));
+  assert.ok(context.issues.some(issue => issue.kind === 'value-conflict'));
+  assert.ok(context.issues.some(issue => issue.kind === 'unknown-required' && issue.entryId === unknown.entryId));
+  assert.deepEqual(context.sources, [source]); assert.deepEqual(context.readSet, readSet);
+  assert.ok(!evidenceCanonical(context).includes('"bytes"')); assert.ok(Buffer.byteLength(evidenceCanonical(context)) <= 64 * 1024);
+  assert.equal(store.verifyReadSet({ repository, readSet }).ready, false);
+  assert.equal(store.verifyForReview({ repository, readSet, uses: [reviewUse(readSet, a)] }).ready, false);
+  assert.deepEqual(store.page({ projectId: repository.projectId }).entries.length, 6);
+});
+
+test('review context refuses signature drift and invalid dependencies, including unpinned competitor basis sources', async t => {
+  const { db, store, repository, source, entry, append, freeze } = await setup(t);
+  const a = append(entry('chosen')); const readSet = freeze([a]);
+  append(entry('new-competitor', .2));
+  assert.throws(() => store.reviewContext({ repository, readSet }), /candidate set changed/);
+  const fresh = freeze([a]);
+  const basis = append({ ...entry('outside-basis'), property: { definitionId: 'outside-property', valueKind: 'length' } });
+  append({ ...entry('inferred-competitor'), assertion: { kind: 'inferred', value: { kind: 'length', value: .3, unit: 'm' }, rationale: 'Competing inference.', basis: [basis] } });
+  const withInference = freeze([a]);
+  assert.ok(store.reviewContext({ repository, readSet: withInference }).entries.some(item => item.pin.entryId === basis.entryId));
+  db.prepare('DELETE FROM project_evidence_entries WHERE id=?').run(basis.entryId);
+  assert.throws(() => store.reviewContext({ repository, readSet: withInference }), /Missing/);
+  assert.throws(() => store.reviewContext({ repository, readSet: fresh }), /candidate set changed/);
+  db.prepare('UPDATE request_source_blobs SET bytes=zeroblob(byte_length) WHERE id=?').run(source.id);
+  assert.throws(() => store.reviewContext({ repository, readSet: withInference }), /integrity/);
+});
+
+test('review context contains 32 complete entries but fails explicitly instead of truncating entry33', async t => {
+  const { store, repository, entry, append, freeze, subject } = await setup(t);
+  for (let i = 0; i < 32; i++) append({ ...entry(`context-${i}`), assertion: { kind: 'unknown', reason: `Unknown synthetic input ${i}.` } });
+  const first = store.reviewContext({ repository, readSet: freeze([], [subject]) });
+  assert.equal(first.entries.length, 32);
+  append({ ...entry('context-33'), assertion: { kind: 'unknown', reason: 'Must not be silently omitted.' } });
+  assert.throws(() => store.reviewContext({ repository, readSet: freeze([], [subject]) }), /Narrow evidence context.*32 entries/);
+});
+
+test('review context admits exactly64KiB serialized and fails explicitly on a larger complete context', async t => {
+  const { store, repository, entry, append, freeze, subject } = await setup(t);
+  const entries: EvidenceEntry[] = Array.from({ length: 16 }, (_, index) => ({ ...entry(`byte-context-${index}`),
+    assertion: { kind: 'unknown', reason: 'x'.repeat(3000) } }));
+  const placeholder: EvidenceReadSet = { version: 1, projectId: repository.projectId, revisionId: repository.root(), pins: [],
+    target: { kind: 'main' }, subjects: [{ subject, signature: '0'.repeat(64) }] };
+  const planned = () => ({ entries: entries.map(value => ({ entry: value, pin: { entryId: value.id, hash: evidenceHash(value) } })),
+    readSet: placeholder, sources: [], issues: [] });
+  let remaining = 64 * 1024 - Buffer.byteLength(evidenceCanonical(planned()));
+  assert.ok(remaining > 0);
+  for (const value of entries) {
+    if (value.assertion.kind !== 'unknown') throw new Error('Expected unknown test input.');
+    const extra = Math.min(4096 - value.assertion.reason.length, remaining);
+    value.assertion.reason += 'x'.repeat(extra); remaining -= extra;
+  }
+  assert.equal(remaining, 0); assert.equal(Buffer.byteLength(evidenceCanonical(planned())), 64 * 1024);
+  for (const value of entries) append(value);
+  const context = store.reviewContext({ repository, readSet: freeze([], [subject]) });
+  assert.equal(Buffer.byteLength(evidenceCanonical(context)), 64 * 1024);
+  append({ ...entry('one-more-input'), assertion: { kind: 'unknown', reason: 'One more complete input exceeds the serialized limit.' } });
+  assert.throws(() => store.reviewContext({ repository, readSet: freeze([], [subject]) }), /Narrow evidence context.*64 KiB/);
+});
 
 test('retained synthetic evidence survives request expiry and exposes an inspectable provenance delta without changing geometry', async t => {
   const { db, sources, store, repository, source, bytes, entry, append, freeze } = await setup(t);

@@ -30,9 +30,18 @@ It also exports `parseEvidencePin`, `parseEvidenceEntry`, `parseEvidenceReadSet`
 `MAX_EVIDENCE_*` constants. It has no Node imports or Buffer dependency; native
 review/browser contracts can use its parsers.
 
+Proposal-local choices also export `EvidenceUseSchema`, `EvidenceUsesSchema`,
+`EvidenceUse`, `parseEvidenceUses` and `evidenceSubjectKey` from this module.
+`EvidenceUse` is `{pin: EvidencePin, subject: EvidenceSubject, rationale: string}`.
+`subject` is an exact frozen read-subject descriptor. The rationale must contain
+non-whitespace text and at most 4096 characters. The array admits at most 32 uses,
+with one choice per logical project/entity/property-definition, independent of
+revision, body hash or value kind. The parser copies plain data and rejects
+duplicate choices without needing database access.
+
 `EvidencePin` is `{entryId, hash}`. An entry contains `{id, anchor, property,
 predecessor, assertion}`. Anchors contain `{projectId, revisionId, entityId,
-bodyHash}`; properties contain `{definitionId, valueKind}`. Measured, observed and
+bodyHash, target: DesignTarget}`; properties contain `{definitionId, valueKind}`. Measured, observed and
 documented values require verified project-retained source citations. Inferences
 require rationale and pinned basis entries; assumptions require rationale and
 may state an empty basis. Unknown assertions carry a reason. Resolution entries
@@ -48,7 +57,7 @@ const evidence = new ProjectEvidenceStore(queueDatabase, existingSourceStore);
 // Explicit source admission; upload UUID, manifest and bytes stay unchanged.
 existingSourceStore.retainProject(projectId, originalSource);
 const pin = evidence.append({ repository, commandId, actor, entry });
-const readSet = evidence.freezeReadSet({ repository, revisionId, pins: [pin], subjects });
+const readSet = evidence.freezeReadSet({ repository, revisionId, target, pins: [pin], subjects });
 evidence.pinReadSet({ requestId, readSet });
 // Parent acceptance transaction, after asynchronous work and target/ticket fences:
 const readiness = evidence.verifyReadSet({ repository, readSet });
@@ -97,13 +106,95 @@ active value candidate. Adding another contradiction invalidates the old set;
 unrelated entity/property facts do not. Metres/millimetres and
 seconds/minutes/hours compare in normalized units without rewriting originals.
 
-An original exact revision/body and the selected revision's entity body must
-both match for applicability. The same unchanged entity body can remain usable
-at another revision; a changed/missing body cannot. Parent integration still
-owns target-head freshness, authorization and which consumed properties must
-be declared (including absent ones). Unknown pinned facts and inference bases
-block readiness. Historical unknowns preserved behind an explicit correction
-do not independently block its corrected value.
+Anchors require `target: DesignTarget`; read sets require
+`target: WritableDesignTarget`. These schemas import the parent's pure
+`src/design-target-contract.ts`, which has no repository dependency. Parsers do
+not infer a target for unbound data. `evidenceAnchor(repository, revisionId,
+entityId, target?)` and `freezeReadSet({..., target?})` default helper calls to main.
+No live evidence data needs a migration.
+
+Verification derives the current authoritative target head with
+`repository.freezeDesignTarget(readSet.target)`. A private walker reads validated
+native `persistence().designTargets` metadata. It follows at most 32 unique refs:
+the requested target head, its immutable baseline, the baseline's parent target
+capped at `baseline.from.revisionId`, and the parent's baseline chain to main.
+Cycles, missing refs and invalid ancestry fail. Baseline-tagged anchors match
+their exact immutable pin. Mutable-target anchors must be ancestors of their
+permitted target head/cap, with an original valid body matching the pinned read
+revision's entity body. Sibling target labels remain separate at a shared root
+even when entity bodies are equal. Candidate signatures and source checks omit
+ineligible sibling/future-parent claims. Explicit consumed dependencies remain
+verified. The store reads native authority without owning any target heads.
+
+This is not an exact-revision-only filter. A same-target claim anchored at R2
+after an unrelated bed change still invalidates a chair read set frozen at R
+when the chair body is unchanged. Inherited parent claims after an immutable
+fork cap remain excluded. Parent native review also binds `evidence.target` to
+the request target and enforces publication/cancellation fences.
+
+Superseded consumed root pins and inference bases fail readiness even after a
+fresh read-set freeze. Historical predecessor/resolution entries stay available
+in complete bundles without becoming consumed facts. Unknown required pins and
+bases also fail; historical unknowns behind an explicit correction do not
+independently block its corrected value.
+
+## Proposal-local choices for human review
+
+Strict `verifyReadSet` retains conflict refusal: a known unresolved value conflict makes
+it return `ready: false`. The separate
+`verifyForReview({repository, readSet, uses})` returns
+`{ready, reasons, warnings}`. It first checks exact signature freshness, complete
+source/dependency validity and anchor applicability through the shared private
+validation code. Issues have typed classifications; review policy does not match
+human-readable error text.
+
+A proposal may explicitly choose one current active applicable value claim for
+an unchanged known conflict. Its exact ID/hash must be a root pin in the frozen
+read set, and its logical subject must match the declared frozen subject. Each
+acknowledged conflict becomes a warning containing the selected entry, subject
+and rationale, with an explicit human-approval requirement. Both original claims
+and the global conflict remain unchanged. This does not append a resolution or
+promote an assumption to a measured, documented or accepted fact.
+
+New candidate entries after freeze, changed absence signatures, unknown required
+facts or inference bases, missing/corrupt sources or entries, invalid anchors,
+conflicting resolutions, inactive/replaced selections, wrong hashes/subjects and
+duplicate logical choices still fail. Conflicting active resolutions also fail
+when they cover only a subset of current candidates. Blocking failures return
+no assumption warnings. Empty uses follow strict conflict behavior.
+
+The parent hashes and displays `nativeReview.evidenceUses` before native review
+creation, then calls this review policy in its acceptance transaction alongside
+target/ticket/cancellation fences. Human approval remains the authority. This
+slice does not edit native review types, guest output, the queue or model-script.
+
+## Bounded evidence input for proposal generation
+
+`reviewContext({repository, readSet})` returns `EvidenceReviewContext`:
+`{entries: StoredEvidence[], readSet: EvidenceReadSet, sources: RequestSource[],
+issues: EvidenceContextIssue[]}`. These response types are exported from
+`demo/project-evidence-store.ts`. `StoredEvidence` contains `{entry, pin}`.
+Issues distinguish `value-conflict`, `unknown-required` and
+`conflicting-resolutions` with messages and subject/entry identity.
+
+The method validates exact unchanged read-subject signatures, source integrity,
+dependency closure and anchor applicability. It includes every applicable
+competing claim for the frozen subjects, even when that claim is not a root pin.
+Pinned dependencies and the visible competitors' correction/basis/resolution
+dependencies are complete. The parent does not enumerate project pages or query
+candidate tables. Known conflicts, unknowns and contrary resolutions can appear
+as generation data, while `verifyReadSet` and `verifyForReview` retain their
+separate acceptance policies. A chosen use still needs an exact root pin; context
+discovery does not expand the frozen read set or confer acceptance authority.
+
+The full response has hard limits of 32 entries and 64 KiB serialized UTF-8,
+including read-set and authorized source metadata. The domain exports
+`MAX_EVIDENCE_CONTEXT_ENTRIES` and `MAX_EVIDENCE_CONTEXT_BYTES`. Oversized context
+throws `Narrow evidence context` with the exceeded limit; no candidate is
+silently omitted. Missing/corrupt dependencies, invalid anchors or changed
+membership also fail. Raw source bytes are never included. Original files stay
+on the existing private source-input path; the parent may pass entries and the
+read set to `ModelProposalOptions.evidenceContext`.
 
 Closure returns pinned entries, correction/basis/resolution dependencies,
 authorized original-source metadata, and explicit missing dependencies. It
@@ -160,6 +251,8 @@ automations, merging, deploying or issue closing were used.
 | 1 | `residential197/evidence199-1`, `bim-evidence199-a1` | root validate; 22/22 focused tests | No failure. Review strengthened the lost-anchor receipt proof, browser-safe parser boundary, native kinds, resolutions and exact byte bounds. |
 | 2 | `residential197/evidence199-2`, `bim-evidence199-a2` | root validate; 27/27 focused tests | No failure. Qualified the initial evidence implementation at `aa7104c`. |
 | 3 | `residential197/evidence199-3`, `bim-evidence199-a3` | root validate; 28/28 focused tests | No failure. Added bounded retained-source metadata discovery. SQLite authorizer denied BLOB reads during listing; paging, isolation, cursor guards, expiry/restart and original integrity checks passed. |
+| 4 | `residential197/evidence199-4`, `bim-evidence199-a4` | root validate; 39/39 focused tests | No failure. Qualified explicit proposal review choices with strict conflict refusal unchanged. |
+| 5 | `residential197/evidence199-5`, `bim-evidence199-a5` | root validate; 43/43 focused tests | No failure. Qualified bounded complete generation context and exact32-entry/64KiB boundaries. Independent review then required consumed-pin supersession and target-lineage hardening before final handoff. |
 
 All slots are under `/ssd1/bim-forge-qualification/`. Clean source snapshots use
 the `d914ab4` archive for attempts 1/2 and `aa7104c` for attempt 3, plus owned-file
