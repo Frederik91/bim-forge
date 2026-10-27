@@ -1,4 +1,5 @@
 import type { RoomRepository, ModelSnapshot, ModelGraph } from '../src/room-model.ts';
+import type { WritableDesignTarget } from '../src/design-targets.ts';
 
 export interface RepositoryReference {
   readonly projectId: string;
@@ -38,7 +39,7 @@ export interface VersionedProjects {
   readItems(input: { reference: RepositoryReference; revisionId: string; entityIds: readonly string[]; relationshipIds: readonly string[] }): ModelGraph;
   graphSignature(input: { reference: RepositoryReference; revisionId: string }): string;
   current(projectId: string): RepositoryReference | null;
-  acceptedHead(projectId: string): string | null;
+  acceptedHead(projectId: string, target?: WritableDesignTarget): string | null;
   publish(input: {
     projectId: string;
     expectedDocumentId: string | null;
@@ -46,7 +47,15 @@ export interface VersionedProjects {
     origin: ProjectHistoryEntry['origin'];
     requestId: string | null;
     decisionId: string | null;
+    target?: WritableDesignTarget;
+    expectedTargetRevisionId?: string | null;
+  }): void;
+  /** Only immutable baseline/fork additions; no geometry, review or existing-head changes. */
+  publishMetadata(input: {
+    projectId: string;
+    expectedDocumentId: string;
+    reference: RepositoryReference;
   }): void;
   list(input: { limit: number }): readonly ProjectSummary[];
-  history(input: { projectId: string; before: string | null; limit: number }): ProjectHistoryPage;
+  history(input: { projectId: string; before: string | null; limit: number; target?: WritableDesignTarget }): ProjectHistoryPage;
 }

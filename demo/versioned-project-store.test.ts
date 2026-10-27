@@ -5,13 +5,15 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { RoomRepository } from '../src/room-model.ts';
+import { RoomRepository, identifier } from '../src/room-model.ts';
 import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
 import type { ModelSnapshot } from '../src/room-model.ts';
 import { VersionedProjectStore } from './versioned-project-store.ts';
+import type { EvidenceReadSet } from '../src/model-evidence.ts';
+import type { WritableDesignTarget } from '../src/design-targets.ts';
 import type { RepositoryReference } from './versioned-project-contract.ts';
 
-function count(db: DatabaseSync, table: 'bodies' | 'revisions' | 'documents' | 'reviews' | 'projects' | 'publications'): number {
+function count(db: DatabaseSync, table: 'bodies' | 'revisions' | 'documents' | 'reviews' | 'projects' | 'publications' | 'target_publications'): number {
   const row = db.prepare(`SELECT count(*) AS count FROM versioned_${table}`).get();
   if (!row || typeof row.count !== 'number') throw new Error('Missing count.');
   return row.count;
@@ -249,7 +251,7 @@ test('oversize typed persistence is refused before writes and preserves the acce
   const root = await RoomRepository.create(); const current = initial(store, root); const state = root.persistence();
   const before = [count(db, 'bodies'), count(db, 'revisions'), count(db, 'documents'), count(db, 'publications')];
   // Simulate a typed future repository mutator that omits a whole-document bound.
-  const oversized = Object.freeze({ ...state, name: '界'.repeat(90_000) });
+  const oversized = Object.freeze({ ...state, name: 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢'.repeat(90_000) });
   assert.ok(Buffer.byteLength(canonical(oversized)) > 256 * 1024);
   const invalid = new Proxy(root, { get(target, key): unknown {
     return key === 'persistence' ? () => oversized : Reflect.get(target, key);
@@ -293,4 +295,235 @@ test('immutable review evidence is stored once across reference documents and ac
   const row = db.prepare('SELECT body FROM versioned_reviews').get(); assert.ok(row && typeof row.body === 'string');
   assert.ok(row.body.includes('scriptExecutions')); assert.ok(!row.body.includes('"decision"'));
   assert.deepEqual(store.put(accepted), acceptedReference); assert.equal(count(db, 'reviews'), 1);
+});
+
+
+const targetMain = { kind: 'main' } satisfies WritableDesignTarget;
+const targetKitchen = { kind: 'alternative', id: identifier('kitchen') } satisfies WritableDesignTarget;
+const targetBedroom = { kind: 'alternative', id: identifier('bedroom') } satisfies WritableDesignTarget;
+
+async function targetFixture(store: VersionedProjectStore): Promise<{ repository: RoomRepository; reference: RepositoryReference }> {
+  const original = await RoomRepository.create(); const previous = initial(store, original);
+  const repository = original.captureBaseline({ id: 'as-is', name: 'As-is', from: original.freezeDesignTarget(targetMain) })
+    .forkAlternative({ id: 'kitchen', name: 'Kitchen', baselineId: 'as-is' })
+    .forkAlternative({ id: 'bedroom', name: 'Bedroom', baselineId: 'as-is' });
+  const reference = store.put(repository);
+  store.publishMetadata({ projectId: repository.projectId, expectedDocumentId: previous.documentId, reference });
+  return { repository, reference };
+}
+
+async function targetStudy(repository: RoomRepository, name: string, target: WritableDesignTarget, evidence?: EvidenceReadSet): Promise<RoomRepository> {
+  const frozen = repository.freezeDesignTarget(target); const snapshot = structuredClone(repository.view(frozen.revisionId).snapshot);
+  const door = snapshot.entities.find(item => item.type === 'Door'); assert.ok(door); door.name = name;
+  return repository.proposeReviewedModel({ name, from: frozen.revisionId, target: frozen, snapshot,
+    review: { requestId: `request-${name}`, selectedObjectIds: ['door-entry'], instruction: 'Prepare a target fixture.',
+      summary: 'Rename entry.', rationale: 'Prove target authority.', constraints: 'Retain siblings.', uncertainty: 'Synthetic fixture.',
+      worker: { provider: 'fixture', model: 'target-store', responseIds: [], usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+      toolCalls: [{ name: 'preview_furnishings', status: 'accepted', error: null }], validator: 'room-graph-v1', ...(evidence ? { evidence } : {}) } });
+}
+
+function publishTarget(store: VersionedProjectStore, repository: RoomRepository, previous: RepositoryReference,
+  name: string, target: WritableDesignTarget, expectedTargetRevisionId: string): RepositoryReference {
+  const reference = store.put(repository);
+  store.publish({ projectId: repository.projectId, reference, expectedDocumentId: previous.documentId,
+    target, expectedTargetRevisionId, origin: 'accepted', requestId: `request-${name}`, decisionId: `decision-${name}` });
+  return reference;
+}
+
+test('target metadata publication adds only immutable references without a geometry publication row', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store);
+  assert.equal(count(db, 'revisions'), 1); assert.equal(count(db, 'publications'), 1);
+  assert.equal(count(db, 'target_publications'), 1);
+  assert.equal(store.current(repository.projectId)?.documentId, reference.documentId);
+  assert.equal(store.acceptedHead(repository.projectId, targetKitchen), repository.root());
+  assert.deepEqual(store.history({ projectId: repository.projectId, target: targetKitchen, before: null, limit: 50 }),
+    store.history({ projectId: repository.projectId, before: null, limit: 50 }));
+  assert.throws(() => store.publishMetadata({ projectId: repository.projectId, reference, expectedDocumentId: reference.documentId }), /requires new/);
+  const proposal = await targetStudy(repository, 'metadata-bypass', targetKitchen);
+  const accepted = proposal.accept('metadata-bypass', { decisionId: 'decision-metadata-bypass', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  const staged = store.put(accepted);
+  assert.throws(() => store.publishMetadata({ projectId: repository.projectId, reference: staged, expectedDocumentId: reference.documentId }), /head changed|geometry or reviews/);
+  assert.equal(store.current(repository.projectId)?.documentId, reference.documentId);
+  assert.equal((await RoomRepository.restore(store.read(reference))).serialize(), repository.serialize());
+});
+
+test('target publication requires exact native decision, document and target CAS and preserves sibling heads', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store);
+  const frozen = repository.freezeDesignTarget(targetKitchen);
+  const proposed = await targetStudy(repository, 'target-accept', targetKitchen);
+  const accepted = proposed.accept('target-accept', { decisionId: 'decision-target-accept', actor: 'human' }, frozen);
+  const staged = store.put(accepted);
+  const input = { projectId: repository.projectId, reference: staged, expectedDocumentId: reference.documentId,
+    target: targetKitchen, expectedTargetRevisionId: frozen.revisionId, origin: 'accepted', requestId: 'request-target-accept', decisionId: 'decision-target-accept' } satisfies Parameters<VersionedProjectStore['publish']>[0];
+  assert.throws(() => store.publish({ ...input, expectedTargetRevisionId: 'a'.repeat(64) }), /target publication CAS/);
+  assert.throws(() => store.publish({ ...input, decisionId: 'forged' }), /exact native/);
+  assert.throws(() => store.publish({ ...input, requestId: 'forged' }), /exact native/);
+  assert.throws(() => store.publish({ ...input, target: targetMain }), /sibling target head changed/);
+  const pendingRef = store.put(proposed);
+  assert.throws(() => store.publish({ ...input, reference: pendingRef }), /must advance/);
+  assert.throws(() => store.publish({ projectId: repository.projectId, reference: staged, expectedDocumentId: reference.documentId,
+    origin: 'accepted', requestId: 'request-target-accept', decisionId: 'decision-target-accept' }), /explicit target CAS/);
+  store.publish(input);
+  assert.equal(store.acceptedHead(repository.projectId), repository.root());
+  assert.equal(store.acceptedHead(repository.projectId, targetBedroom), repository.root());
+  assert.equal(store.acceptedHead(repository.projectId, targetKitchen), proposed.head('target-accept'));
+  const history = store.history({ projectId: repository.projectId, target: targetKitchen, before: null, limit: 1 });
+  assert.equal(history.entries[0]?.decisionId, 'decision-target-accept'); assert.equal(history.entries[0]?.origin, 'accepted');
+  assert.equal(history.nextCursor, proposed.head('target-accept'));
+  assert.equal(store.history({ projectId: repository.projectId, target: targetKitchen, before: history.nextCursor, limit: 50 }).entries[0]?.origin, 'created');
+  assert.throws(() => store.history({ projectId: repository.projectId, target: targetBedroom, before: proposed.head('target-accept'), limit: 50 }), /cursor/);
+  assert.throws(() => store.publish(input), /CAS/);
+  assert.equal((await RoomRepository.restore(store.read(staged))).review('target-accept').decision.status, 'accepted');
+});
+
+test('target staging and shared-connection rollback preserve all previous heads and metadata atomically', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store); const originalDocuments = count(db, 'documents');
+  const proposed = await targetStudy(repository, 'rolled-back', targetKitchen);
+  const accepted = proposed.accept('rolled-back', { decisionId: 'decision-rolled-back', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  db.exec('BEGIN');
+  const staged = publishTarget(store, accepted, reference, 'rolled-back', targetKitchen, repository.root());
+  assert.deepEqual(store.current(repository.projectId), staged);
+  const nested = accepted.captureBaseline({ id: 'second-pin', name: 'Alternative pin', from: accepted.freezeDesignTarget(targetKitchen) })
+    .forkAlternative({ id: 'nested', name: 'Nested', baselineId: 'second-pin' });
+  const nestedRef = store.put(nested);
+  store.publishMetadata({ projectId: repository.projectId, expectedDocumentId: staged.documentId, reference: nestedRef });
+  db.exec('ROLLBACK');
+  assert.deepEqual(store.current(repository.projectId), reference);
+  assert.equal(store.acceptedHead(repository.projectId, targetKitchen), repository.root());
+  assert.equal(count(db, 'documents'), originalDocuments); assert.equal(count(db, 'revisions'), 1);
+  assert.throws(() => store.read(nestedRef), /missing/);
+  assert.equal(store.history({ projectId: repository.projectId, target: targetKitchen, before: null, limit: 50 }).entries.length, 1);
+});
+
+test('sibling publication races fail document CAS, then native reconciliation retains both heads across restart', async t => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'bim-target-restart-')); const filename = path.join(directory, 'targets.sqlite');
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const db = new DatabaseSync(filename); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store);
+  const a = await targetStudy(repository, 'kitchen-race', targetKitchen); const b = await targetStudy(repository, 'bedroom-race', targetBedroom);
+  const acceptedA = a.accept('kitchen-race', { decisionId: 'decision-kitchen-race', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  const first = publishTarget(store, acceptedA, reference, 'kitchen-race', targetKitchen, repository.root());
+  const staleB = b.accept('bedroom-race', { decisionId: 'decision-bedroom-race', actor: 'human' }, repository.freezeDesignTarget(targetBedroom));
+  assert.throws(() => publishTarget(store, staleB, reference, 'bedroom-race', targetBedroom, repository.root()), /CAS/);
+  const both = await acceptedA.acceptFrom(b, 'bedroom-race', { decisionId: 'decision-bedroom-race', actor: 'human' }, repository.freezeDesignTarget(targetBedroom));
+  const final = publishTarget(store, both, first, 'bedroom-race', targetBedroom, repository.root()); db.close();
+  const restartedDb = new DatabaseSync(filename); t.after(() => restartedDb.close()); const restarted = new VersionedProjectStore(restartedDb);
+  const restored = await RoomRepository.restore(restarted.read(final));
+  assert.equal(restored.review('kitchen-race').decision.status, 'accepted'); assert.equal(restored.review('bedroom-race').decision.status, 'accepted');
+  assert.equal(restarted.acceptedHead(repository.projectId), repository.root());
+  assert.equal(restarted.history({ projectId: repository.projectId, target: targetKitchen, before: null, limit: 50 }).entries[0]?.decisionId, 'decision-kitchen-race');
+  assert.equal(restarted.history({ projectId: repository.projectId, target: targetBedroom, before: null, limit: 50 }).entries[0]?.decisionId, 'decision-bedroom-race');
+});
+
+
+test('portable v3 import proves native alternative decisions and inherited history without a receipt ledger', async t => {
+  const sourceDb = new DatabaseSync(':memory:'); t.after(() => sourceDb.close()); const source = new VersionedProjectStore(sourceDb);
+  const { repository, reference } = await targetFixture(source);
+  const proposal = await targetStudy(repository, 'portable-accepted', targetKitchen);
+  const accepted = proposal.accept('portable-accepted', { decisionId: 'decision-portable-accepted', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  const published = publishTarget(source, accepted, reference, 'portable-accepted', targetKitchen, repository.root());
+  const portable = await RoomRepository.restore(source.read(published));
+  const nested = portable.captureBaseline({ id: 'portable-pin', name: 'Portable pin', from: portable.freezeDesignTarget(targetKitchen) })
+    .forkAlternative({ id: 'portable-fork', name: 'Portable fork', baselineId: 'portable-pin' });
+  const destinationDb = new DatabaseSync(':memory:'); t.after(() => destinationDb.close()); const destination = new VersionedProjectStore(destinationDb);
+  const imported = destination.put(nested);
+  destination.publish({ projectId: nested.projectId, reference: imported, expectedDocumentId: null, origin: 'imported',
+    requestId: null, decisionId: null, target: targetMain, expectedTargetRevisionId: null });
+  assert.equal((await RoomRepository.restore(destination.read(imported))).review('portable-accepted').decision.status, 'accepted');
+  const inherited = destination.history({ projectId: nested.projectId, target: { kind: 'alternative', id: identifier('portable-fork') }, before: null, limit: 50 });
+  assert.equal(inherited.entries[0]?.decisionId, 'decision-portable-accepted');
+  assert.equal(inherited.entries[0]?.origin, 'imported'); assert.equal(inherited.entries.length, 2);
+  assert.equal(destination.acceptedHead(nested.projectId), repository.root());
+});
+
+test('accepting an already stored pending revision still records its target-local human publication', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const original = await RoomRepository.create();
+  const repository = original.captureBaseline({ id: 'as-is', name: 'As-is', from: original.freezeDesignTarget(targetMain) })
+    .forkAlternative({ id: 'kitchen', name: 'Kitchen', baselineId: 'as-is' });
+  const proposed = await targetStudy(repository, 'already-stored', targetKitchen); const reference = store.put(proposed);
+  store.publish({ projectId: repository.projectId, reference, expectedDocumentId: null, origin: 'imported', requestId: null, decisionId: null,
+    target: targetMain, expectedTargetRevisionId: null });
+  const revisions = count(db, 'revisions');
+  const accepted = proposed.accept('already-stored', { decisionId: 'decision-already-stored', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  publishTarget(store, accepted, reference, 'already-stored', targetKitchen, repository.root());
+  assert.equal(count(db, 'revisions'), revisions);
+  assert.equal(store.history({ projectId: repository.projectId, target: targetKitchen, before: null, limit: 50 }).entries[0]?.decisionId, 'decision-already-stored');
+});
+
+test('publication preserves exact historical human decisions and immutable baseline bodies', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store);
+  const a = await targetStudy(repository, 'history-a', targetKitchen);
+  const first = a.accept('history-a', { decisionId: 'decision-history-a', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  const firstRef = publishTarget(store, first, reference, 'history-a', targetKitchen, repository.root());
+  const b = await targetStudy(first, 'history-b', targetBedroom);
+  const both = b.accept('history-b', { decisionId: 'decision-history-b', actor: 'human' }, first.freezeDesignTarget(targetBedroom));
+  const state = both.persistence(); assert.equal(state.version, 3);
+  if (state.version !== 3) throw new Error('Expected target envelope.');
+  const changed = await RoomRepository.restore(JSON.stringify({ ...state, reviews: state.reviews.map(review => review.proposalName === 'history-a'
+    ? { ...review, decision: { ...review.decision, actor: 'forged-actor' } } : review) }));
+  assert.throws(() => publishTarget(store, changed, firstRef, 'history-b', targetBedroom, repository.root()), /sibling human decision changed/);
+  const relabeled = await RoomRepository.restore(JSON.stringify({ ...state, designTargets: { ...state.designTargets,
+    baselines: state.designTargets.baselines.map(baseline => ({ ...baseline, name: 'Rewritten pin' })) } }));
+  assert.throws(() => publishTarget(store, relabeled, firstRef, 'history-b', targetBedroom, repository.root()), /immutable baseline changed/);
+  assert.deepEqual(store.current(repository.projectId), firstRef);
+});
+
+
+test('hash-valid v3 bundle with an externally claimed acceptance but pending native review fails closed', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store);
+  const proposal = await targetStudy(repository, 'bundle-proof', targetKitchen);
+  const accepted = proposal.accept('bundle-proof', { decisionId: 'decision-bundle-proof', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  const staged = store.put(accepted);
+  const row = db.prepare('SELECT manifest FROM versioned_documents WHERE project_id=? AND id=?').get(repository.projectId, staged.documentId);
+  assert.ok(row && typeof row.manifest === 'string'); const value: unknown = JSON.parse(row.manifest);
+  assert.ok(value && typeof value === 'object' && 'reviews' in value && Array.isArray(value.reviews));
+  const review: unknown = value.reviews[0]; assert.ok(review && typeof review === 'object');
+  Object.assign(review, { decision: { status: 'pending', decisionId: null, actor: null } });
+  const text = canonical(value); const documentId = hash(text);
+  db.prepare('INSERT INTO versioned_documents(project_id,id,manifest) VALUES(?,?,?)').run(repository.projectId, documentId, text);
+  assert.throws(() => store.read({ projectId: repository.projectId, documentId }), /native accepted review ancestry/);
+  assert.equal(store.current(repository.projectId)?.documentId, reference.documentId);
+});
+
+test('identical sibling geometry retains distinct target-local review decisions in publication history', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store);
+  const a = await targetStudy(repository, 'same-change', targetKitchen);
+  const frozenB = repository.freezeDesignTarget(targetBedroom); const originalReview = a.review('same-change');
+  const { requestId, proposalName, baseRevisionId, proposalRevisionId, decision, target, ...evidence } = originalReview;
+  const b = await repository.proposeReviewedModel({ name: 'same-bedroom', from: frozenB.revisionId, target: frozenB,
+    snapshot: a.view(a.head('same-change')).snapshot, review: { ...evidence, requestId: 'request-same-bedroom' } });
+  assert.equal(a.head('same-change'), b.head('same-bedroom'));
+  const acceptedA = a.accept('same-change', { decisionId: 'decision-same-change', actor: 'human' }, repository.freezeDesignTarget(targetKitchen));
+  const firstRef = publishTarget(store, acceptedA, reference, 'same-change', targetKitchen, repository.root());
+  const both = await acceptedA.acceptFrom(b, 'same-bedroom', { decisionId: 'decision-same-bedroom', actor: 'human' }, frozenB);
+  publishTarget(store, both, firstRef, 'same-bedroom', targetBedroom, repository.root());
+  assert.equal(store.history({ projectId: repository.projectId, target: targetKitchen, before: null, limit: 50 }).entries[0]?.decisionId, 'decision-same-change');
+  assert.equal(store.history({ projectId: repository.projectId, target: targetBedroom, before: null, limit: 50 }).entries[0]?.decisionId, 'decision-same-bedroom');
+});
+
+
+test('changed-only documents hash native evidence pins before decisions and retain explicit external dependencies on restart', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store); const frozen = repository.freezeDesignTarget(targetKitchen);
+  const evidence: EvidenceReadSet = { version: 1, projectId: repository.projectId, revisionId: frozen.revisionId, target: frozen.target,
+    pins: [{ entryId: 'authoritative-entry', hash: 'a'.repeat(64) }], subjects: [] };
+  const proposed = await targetStudy(repository, 'store-evidence', targetKitchen, evidence);
+  const pendingReference = store.put(proposed); const countBefore = count(db, 'reviews');
+  const accepted = proposed.accept('store-evidence', { decisionId: 'decision-store-evidence', actor: 'human' }, frozen);
+  const published = publishTarget(store, accepted, reference, 'store-evidence', targetKitchen, repository.root());
+  assert.equal(count(db, 'reviews'), countBefore);
+  assert.deepEqual((await RoomRepository.restore(store.read(pendingReference))).review('store-evidence').evidence, evidence);
+  const restored = await RoomRepository.restore(store.read(published));
+  assert.deepEqual(restored.review('store-evidence').evidence, evidence);
+  const state = restored.persistence(); assert.ok(state.version === 3);
+  assert.deepEqual(state.externalDependencies, { evidence: 'external', sourceBytes: 'external' });
+  const body = db.prepare('SELECT body FROM versioned_reviews').get(); assert.ok(body && typeof body.body === 'string');
+  assert.ok(body.body.includes('authoritative-entry'));
 });
