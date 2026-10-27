@@ -60,6 +60,26 @@ Other methods: `get({projectId,pin})`, `page({projectId,after?,limit?})`,
 `RequestSourceStore.retained(projectId,sourceId)` returns private verified metadata;
 existing `get` and `prepare` can read retained original bytes after upload expiry.
 
+`RequestSourceStore.projectPage({projectId, after, limit?})` returns
+`{sources: RequestSource[], next: string | null}`. `after` is `null` for the first
+page or the previous page's `next` UUID. `limit` defaults to 20 and must be an
+integer from 1 to 20. Sources are ordered by ascending lowercase UUID, with an
+exclusive cursor. A terminal or empty page returns `next: null`. Reusing a cursor
+repeats the same page while retained membership remains unchanged. New retention
+before the cursor appears on a refreshed first page; this is not a frozen export.
+
+Only explicit project-retained uploads appear, including after upload expiry.
+Request membership alone does not make an upload a project-library item. A
+non-null cursor must have valid upload UUID syntax and belong to this project's
+retained membership. Malformed, absent, unretained and foreign-project cursors
+all fail with `Invalid project source page cursor.` The query uses the composite
+`(project_id, source_id)` retention index, a metadata-only join and at most
+`limit + 1` rows. Each returned manifest is parsed independently, so the request
+attachment count and byte-aggregate limits do not truncate metadata discovery.
+Listing never selects BLOBs or runs preparation/content verification. Existing
+retention, `retained`, `get` and download paths still verify original bytes.
+The parent calls this API through its queue, without querying source tables.
+
 Append checks canonical payload and actor receipts before predecessor CAS or
 anchor freshness. An identical committed command can replay after a correction
 or after the original revision becomes unavailable. Changed payload/actor is
@@ -138,10 +158,12 @@ automations, merging, deploying or issue closing were used.
 | Attempt | Server slot/container | Result | Failure/root cause and next action |
 | --- | --- | --- | --- |
 | 1 | `residential197/evidence199-1`, `bim-evidence199-a1` | root validate; 22/22 focused tests | No failure. Review strengthened the lost-anchor receipt proof, browser-safe parser boundary, native kinds, resolutions and exact byte bounds. |
-| 2 | `residential197/evidence199-2`, `bim-evidence199-a2` | root validate; 27/27 focused tests | No failure. Final six implementation/test files match the source manifest below. |
+| 2 | `residential197/evidence199-2`, `bim-evidence199-a2` | root validate; 27/27 focused tests | No failure. Qualified the initial evidence implementation at `aa7104c`. |
+| 3 | `residential197/evidence199-3`, `bim-evidence199-a3` | root validate; 28/28 focused tests | No failure. Added bounded retained-source metadata discovery. SQLite authorizer denied BLOB reads during listing; paging, isolation, cursor guards, expiry/restart and original integrity checks passed. |
 
-Both slots are under `/ssd1/bim-forge-qualification/`. Clean source snapshots use
-the `d914ab4` archive plus owned-file overlays, mounted read-only. Dependencies:
+All slots are under `/ssd1/bim-forge-qualification/`. Clean source snapshots use
+the `d914ab4` archive for attempts 1/2 and `aa7104c` for attempt 3, plus owned-file
+overlays, mounted read-only. Dependencies:
 `/ssd1/bim-forge-qualification/all-ready-195/final/dependencies`, read-only. Image:
 `bim-qvm-tools:20261025`, ID
 `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`.
@@ -162,7 +184,7 @@ Final validator/test output:
 Strict TypeScript valid. 249 source file(s) checked.
 > tsc --noEmit
 Policy valid. 0 changed file(s) checked.
-tests 27; pass 27; fail 0; cancelled 0; skipped 0; todo 0
+tests 28; pass 28; fail 0; cancelled 0; skipped 0; todo 0
 ```
 
 The standard root validate policy command does not pass changed paths; its
@@ -170,11 +192,18 @@ reported zero is preserved above. All seven PR paths are within the explicit
 ownership and outside the policy denylist. `git diff --check` also passes.
 Logs/manifests are retained in each server slot and local `artifacts/private/`.
 
-Final archives (SHA-256):
+Attempt 2 archives (SHA-256), retained for the initial implementation:
 
 ```text
 99703cf0cc631276c43169a75423e0b354dd0e17cce3f273e41d9246545a938b source-base.tar
 71291b7e311563a42e676b704cf3fe16e366e9edf877596b53e9dcf2050ede0f evidence199-overlay-a2.tar
+```
+
+Final attempt 3 archives (SHA-256):
+
+```text
+e92148f068697b0918b8e85ab61fce1c3b5e18aa0c6b0bab4c132edc261af888 source-base-a3.tar
+601dfe6e8307d3b048ff0d46a16dea1beb0cbac9eee5f5f4accba3f8025aa228 evidence199-overlay-a3.tar
 ```
 
 Final qualified source files (SHA-256, exact bytes):
@@ -184,11 +213,15 @@ Final qualified source files (SHA-256, exact bytes):
 e54d088727ddd4ebaa5c513f98db70d1f00be0afe570421fa9c80f4c6eecf0cf src/model-evidence.test.ts
 0f8987b336357dbc53cf165170170ad85e2c34063682bb7839c200d674fdf70c demo/project-evidence-store.ts
 1e38c30a63e4dedc594d97569843b833a662775c6d94e89a8a6bd0e8ad44dbc6 demo/project-evidence-store.test.ts
-440f09ccb109cbea8e66db29df5b81dd8e3d586be7a336b0b2b29a8a645b6903 demo/request-source-store.ts
-e5a915d2e6f16f41527479ad46db8aa0b503428469eee463804d6a32e3635f6d demo/request-source-store.test.ts
+345f8cf19d1ac77755c81c98abdb1e7666402c490b41edc9117a2e5f430c1d35 demo/request-source-store.ts
+cb0cb01105fc20ffc9d829bbdad6ded04f82ef1d709ada0f769e4d70ab862c4a demo/request-source-store.test.ts
 ```
 
-Qualification covers this domain/store boundary. Package registration, complete
-queue/native-review transaction integration, UI/source inspection, browser build,
-full repository tests and portable private-bundle import remain parent work.
-No combined workflow, UI or engineering-survey qualification is claimed here.
+The source-discovery follow-up changes only the existing source store, its tests
+and this issue-specific note. Parent integration already contains the initial
+ledger. The parent independently qualifies queue/native-review wiring, package
+registration, UI, browser/full-suite behavior and private-bundle import. The
+review-read-set implementation is unchanged by this follow-up, including its
+same-subject comparison across exact native revision/body applicability checks.
+This qualification covers the domain/store boundary, without a claim about the
+combined workflow, UI or engineering-survey behavior.
