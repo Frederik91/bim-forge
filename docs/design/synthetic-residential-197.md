@@ -27,6 +27,20 @@ Native portable bounds remain 100-item arrays, 32 revisions and 256 KiB document
 
 The IFC exchange experiments retain explicit property preservation losses and unsupported mappings. The viewer benchmark has synthetic correctness evidence and no qualified engine winner. Retain original IFC bytes and source authority, and treat indexes/render artifacts as derived, replaceable data. Source lineage/revision, link occurrence, units and coordinate transforms are part of identity/context. IFC linking does not imply lossless native editing or hospital-scale qualification.
 
+## Early IFC linking
+
+Prioritize a read-only reference path alongside native authoring. The eventual user flow is attach an IFC, see asynchronous processing progress, inspect its spatial hierarchy/objects/properties, control visibility and reference selected objects in a request. Converting chosen objects into native authoring is a later reviewed operation with explicit mapping and loss evidence.
+
+The initial #202 prototype establishes the import/index/geometry artifact contract, failure diagnostics and resource boundaries. It must not claim the production UI already links arbitrary files. Production integration follows source-bound correctness and viewer checks.
+
+Keep the original IFC content-addressed and immutable. An update creates a new source revision; it cannot silently replace the pinned link used by an existing request. Multiple occurrences of the same source model require distinct occurrence IDs and transforms. IFC GlobalIds identify rooted source objects; namespace them with the source model and link context, and report duplicates or missing IDs. STEP numbers may locate records within one file but do not establish identity across exports.
+
+Engineering units, placements and map conversion remain explicit. Viewer origin offsets are presentation data rather than edits to source coordinates. Large reference models need bounded property/spatial queries and derived geometry loading independent of native portable history. A small successful fixture or a derived render format does not establish large-project performance.
+
+Do not automatically fetch external URLs embedded in IFC. Preserve source references as data; conversion runs without network access and render dependencies must be pinned/self-hosted. Unsupported classes, properties, relations and geometry must be visible in diagnostics rather than silently omitted from a completeness claim.
+
+Primary-source checks: buildingSMART defines rooted object [GlobalId](https://standards.buildingsmart.org/IFC/DEV/IFC4_3/HTML/lexical/IfcRoot.html) and explicit [map conversion](https://standards.buildingsmart.org/IFC/RELEASE/IFC4_3/HTML/lexical/IfcMapConversion.htm). That Open's [IFC loader implementation](https://github.com/ThatOpen/engine_components/blob/main/packages/core/src/fragments/IfcLoader/index.ts) exposes attribute/relationship selection, while its [Fragments implementation guide](https://github.com/ThatOpen/engine_fragment/blob/main/CONTRIBUTING.md) separates IFC conversion from its worker-backed runtime. These are candidate implementation inputs, not an engine-adoption decision.
+
 ## Architecture decision process
 
 - [x] Ground the current model, storage, source and workspace boundaries.
