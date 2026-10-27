@@ -25,7 +25,16 @@ const worker: ModelWorker = { identity: { provider: 'integration-fixture', model
   if (!input || typeof input !== 'object' || !('request' in input) || !input.request || typeof input.request !== 'object'
     || !('instruction' in input.request) || typeof input.request.instruction !== 'string') throw new Error('Fixture request missing.');
   await setTimeout(2500, undefined, { signal: session.signal });
-  const source = input.request.instruction.includes('1.2') ? `
+  const liveTable = input.request.instruction.toLowerCase().includes('live table');
+  const source = liveTable ? `
+    const inspected = await model.inspect();
+    const furnishings = inspected.model.entities.filter(item => item.type === 'Furniture' && item.id === 'level-ground-plant').map(item => {
+      if (item.type !== 'Furniture') throw new Error('Furniture required.');
+      return {id:item.id,type:item.type,name:item.name,kind:item.kind,position:item.position,width:item.width,depth:item.depth,height:item.height,rotationDeg:item.rotationDeg,supportId:item.supportId};
+    });
+    await model.previewRoomFurnishings({roomId:'level-ground-west',furnishings:[...furnishings,{id:'live-table',type:'Furniture',name:'Live draft table',kind:'table',position:[1,2],width:0.6,depth:0.6,height:0.6,rotationDeg:0,supportId:null}]});
+    return {kind:'propose',review:{summary:'Add the live draft table.',rationale:'Demonstrate a validated addition before the worker finishes.',constraints:'All other rooms and existing items remain unchanged.',uncertainty:'Disposable UI fixture.',intent:{interpretation:'Add one table.',assumptions:[],certainty:100,basis:'Explicit fixture instruction.'}}};
+  ` : input.request.instruction.includes('1.2') ? `
     await model.inspect();
     await model.previewParameters({edits:[{definitionId:'geometry-height',name:'Height',value:{kind:'length',value:1.2,unit:'m'}}]});
     return {kind:'propose',review:{summary:'Increase the selected plant height to 1.2 m.',
@@ -35,7 +44,8 @@ const worker: ModelWorker = { identity: { provider: 'integration-fixture', model
   ` : `await model.inspect(); return {kind:'clarify',question:'What height should this plant have?',options:['1.2 m','Keep current height']};`;
   const result = await session.executeTool('run_model_script', { language: 'typescript', source });
   if (!result.ok) throw new Error('Fixture ScriptBox operation failed.');
-  await setTimeout(2500, undefined, { signal: session.signal });
+  await setTimeout(liveTable ? 15000 : 2500, undefined, { signal: session.signal });
+  if (liveTable && input.request.instruction.toLowerCase().includes('discard')) throw new Error('Fixture provider failure after tentative preview.');
 } };
 const server = await createDemoServer({ backlogFile: file, modelWorker: worker });
 server.listen(19591, '127.0.0.1', () => console.log('Disposable workspace inspection fixture: 19591'));
