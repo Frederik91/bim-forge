@@ -1,6 +1,7 @@
 import { Type } from 'typebox';
 import type { Static } from 'typebox';
 import { Check } from 'typebox/value';
+import { DesignTargetSchema, WritableDesignTargetSchema } from './design-target-contract.ts';
 import { ModelParameterValueSchema, plainScopeData } from './model-scope-contract.ts';
 import type { ModelParameterValue } from './model-scope-contract.ts';
 
@@ -9,6 +10,8 @@ export const MAX_EVIDENCE_ENTRY_BYTES = 16 * 1024;
 export const MAX_EVIDENCE_PROJECT_BYTES = 4 * 1024 * 1024;
 export const MAX_EVIDENCE_PINS = 32;
 export const MAX_EVIDENCE_PAGE = 20;
+export const MAX_EVIDENCE_CONTEXT_ENTRIES = 32;
+export const MAX_EVIDENCE_CONTEXT_BYTES = 64 * 1024;
 const exact = { additionalProperties: false };
 const identity = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' });
 const entityId = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
@@ -17,7 +20,7 @@ const readable = Type.String({ minLength: 1, maxLength: 4096, pattern: '\\S' });
 const sourceId = Type.String({ pattern: '^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$' });
 export const EvidencePinSchema = Type.Object({ entryId: identity, hash }, exact);
 export type EvidencePin = Static<typeof EvidencePinSchema>;
-export const EvidenceAnchorSchema = Type.Object({ projectId: identity, revisionId: hash, entityId, bodyHash: hash }, exact);
+export const EvidenceAnchorSchema = Type.Object({ projectId: identity, revisionId: hash, entityId, bodyHash: hash, target: DesignTargetSchema }, exact);
 export type EvidenceAnchor = Static<typeof EvidenceAnchorSchema>;
 export const EvidencePropertySchema = Type.Object({ definitionId: entityId,
   valueKind: Type.Union([Type.Literal('length'), Type.Literal('angle'), Type.Literal('duration'),
@@ -43,10 +46,19 @@ export const EvidenceEntrySchema = Type.Object({ id: identity, anchor: EvidenceA
 export type EvidenceEntry = Static<typeof EvidenceEntrySchema>;
 export const EvidenceSubjectSchema = Type.Object({ anchor: EvidenceAnchorSchema, property: EvidencePropertySchema }, exact);
 export type EvidenceSubject = Static<typeof EvidenceSubjectSchema>;
-export const EvidenceReadSetSchema = Type.Object({ version: Type.Literal(1), projectId: identity, revisionId: hash,
+/** A proposal-local choice for human review, never a global claim resolution. */
+export const EvidenceUseSchema = Type.Object({ pin: EvidencePinSchema, subject: EvidenceSubjectSchema, rationale: readable }, exact);
+export type EvidenceUse = Static<typeof EvidenceUseSchema>;
+export const EvidenceUsesSchema = Type.Array(EvidenceUseSchema, { maxItems: MAX_EVIDENCE_PINS, uniqueItems: true });
+export const EvidenceReadSetSchema = Type.Object({ version: Type.Literal(1), projectId: identity, revisionId: hash, target: WritableDesignTargetSchema,
   pins: basis, subjects: Type.Array(Type.Object({ subject: EvidenceSubjectSchema, signature: hash }, exact),
     { maxItems: MAX_EVIDENCE_PINS, uniqueItems: true }) }, exact);
 export type EvidenceReadSet = Static<typeof EvidenceReadSetSchema>;
+
+export function evidenceSubjectKey(subject: EvidenceSubject): string {
+  return evidenceCanonical({ projectId: subject.anchor.projectId, entityId: subject.anchor.entityId,
+    definitionId: subject.property.definitionId });
+}
 
 export function evidenceCanonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(evidenceCanonical).join(',')}]`;
@@ -78,6 +90,13 @@ export function parseEvidenceReadSet(input: unknown): EvidenceReadSet {
     throw new Error('Invalid bounded evidence read set.');
   }
   if (new Set(value.subjects.map(item => evidenceCanonical(item.subject))).size !== value.subjects.length) throw new Error('Duplicate evidence subject.');
+  return value;
+}
+export function parseEvidenceUses(input: unknown): EvidenceUse[] {
+  const value = plainScopeData(input);
+  if (!Check(EvidenceUsesSchema, value)) throw new Error('Invalid bounded evidence uses.');
+  const subjects = value.map(use => evidenceSubjectKey(use.subject));
+  if (new Set(subjects).size !== subjects.length) throw new Error('Evidence uses require one choice per logical subject.');
   return value;
 }
 /** Compare compatible engineering values in metres/seconds, retaining original units in claims. */
