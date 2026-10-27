@@ -31,3 +31,11 @@ Three isolated workers supplied viewer interaction, hierarchy/property assertion
 - Raw combined evidence is retained privately at `/ssd1/bim-forge-qualification/workspace-191/`; worker evidence paths are recorded in the integration handbacks. Hover colors, before/after ghost picking, hidden geometry, gesture cancellation and material cleanup have executable Babylon/NullEngine coverage. Browser automation cannot independently move a hovering pointer without clicking; the live check covers actual mesh clicks and camera interaction.
 
 No persistent model schema, model authoring API, acceptance validator, permission or credential contract changes. Only an explicit bound decision can accept a proposal; replying, selecting and navigating cannot approve it. The existing accepted-history comparison fallback remains available for historical revisions without a request ticket.
+
+## Live chat draft follow-up
+
+The active chat should automatically show its latest tentative model as validated host operations complete, then keep showing the final proposal without a separate review-entry step. Explicit acceptance remains in chat. A user can pause following to inspect the accepted model or attach accepted evidence.
+
+Server ownership: `src/model-script.ts`, `src/model-proposal.ts`, `demo/change-requests.ts`, `demo/server.ts` and a typed `src/request-draft.ts` contract. Retain only one in-memory preview per active attempt, bound to ticket/request/base/attempt/sequence. Publish only host-validated staged snapshots. Clear them on rollback, cancellation, supersession, failure and completion. No persistence/schema or approval-authority changes.
+
+UI ownership: `demo/room-app.ts`, model toolbar and the isolated workspace fixture. Display the live snapshot separately from the accepted repository and unsent user draft. Highlight the delta, preserve camera interaction after first arrival, fence incomplete draft evidence from accepted/proposal attachment bindings, and automatically load the final validated proposal. Verify cross-chat isolation, draft rollback, read-only inspection and explicit acceptance in isolated server tests and browser UI.
