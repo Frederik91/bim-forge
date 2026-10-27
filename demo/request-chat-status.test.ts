@@ -3,7 +3,7 @@ import test from 'node:test';
 import { ACTIVITY_STAGES } from '../src/request-activity.ts';
 import type { RequestActivity } from '../src/request-activity.ts';
 import type { ConversationMessage, RequestConversation } from '../src/request-conversation.ts';
-import { canDecideProposal, chatRequestStatus, groupTurnActivity, matchingProposalReview, shouldFollowChat } from './request-chat-status.ts';
+import { anchoredChatScrollTop, canDecideProposal, chatDomKey, chatRequestStatus, groupTurnActivity, matchingProposalReview, shouldFollowChat, visibleChatAnchor } from './request-chat-status.ts';
 import type { RequestChatDecision, RequestChatProposalReview } from './request-chat-status.ts';
 import type { RequestState } from './change-requests.ts';
 
@@ -135,7 +135,7 @@ test('terminal and input states are displayed without inventing progress', () =>
   for (const [requestState, label] of expected) assert.deepEqual(chatRequestStatus({ requestState, offline: false, activity: [] }), { kind: 'idle', label, detail: '' });
 });
 
-const scroll = { previousConversationKey: 'project:ticket', nextConversationKey: 'project:ticket', scrollTop: 100, scrollHeight: 1000, clientHeight: 400 };
+const scroll = { previousConversationKey: 'project:ticket', nextConversationKey: 'project:ticket', scrollTop: 100, scrollHeight: 1000, clientHeight: 400, previouslyFollowing: false };
 
 test('new chats and conversation switches follow to the end', () => {
   assert.equal(shouldFollowChat({ ...scroll, previousConversationKey: null }), true);
@@ -153,4 +153,53 @@ test('polling, activity and review updates preserve manual scroll until the read
 
 test('short transcripts follow new content while already at the end', () => {
   assert.equal(shouldFollowChat({ ...scroll, scrollHeight: 250, scrollTop: 0 }), true);
+});
+
+test('hidden history retains follow intent rather than treating zero-sized manual readers as at the bottom', () => {
+  const hidden = { ...scroll, clientHeight: 0, scrollHeight: 0, scrollTop: 0 };
+  assert.equal(shouldFollowChat(hidden), false);
+  assert.equal(shouldFollowChat({ ...hidden, previouslyFollowing: true }), true);
+  assert.equal(shouldFollowChat({ ...hidden, nextConversationKey: 'project:new-chat' }), true);
+  assert.equal(shouldFollowChat({ ...scroll, previouslyFollowing: true }), false);
+});
+
+test('message-local keys isolate source details and controls without delimiter collisions', () => {
+  assert.notEqual(chatDomKey('turn-one', 'detail', 0), chatDomKey('turn-two', 'detail', 0));
+  assert.notEqual(chatDomKey('turn-one', 'detail', 0), chatDomKey('turn-one', 'control', 0));
+  assert.notEqual(chatDomKey('turn:control', 'control', 'delta'), chatDomKey('turn', 'control', 'control:delta'));
+  const savedOpenDetails = new Set([chatDomKey('turn-one', 'detail', 0), chatDomKey('turn-one', 'detail', 2)]);
+  assert.deepEqual([0, 1, 2].map(index => savedOpenDetails.has(chatDomKey('turn-one', 'detail', index))), [true, false, true]);
+  assert.equal(savedOpenDetails.has(chatDomKey('turn-two', 'detail', 0)), false);
+});
+
+test('the first intersecting message anchors a reader partway through a long turn', () => {
+  const messages = [{ messageId: 'earlier', top: 0, bottom: 100 }, { messageId: 'reading', top: 100, bottom: 450 },
+    { messageId: 'later', top: 480, bottom: 800 }];
+  assert.deepEqual(visibleChatAnchor(messages, { top: 125, bottom: 525 }), { messageId: 'reading', offset: -25 });
+  assert.deepEqual(visibleChatAnchor(messages, { top: 100, bottom: 500 }), { messageId: 'reading', offset: 0 });
+});
+
+test('messages fully outside the viewport never become reading anchors', () => {
+  const messages = [{ messageId: 'above', top: 0, bottom: 100 }, { messageId: 'below', top: 500, bottom: 800 }];
+  assert.equal(visibleChatAnchor(messages, { top: 100, bottom: 500 }), null);
+  assert.equal(visibleChatAnchor([], { top: 100, bottom: 500 }), null);
+});
+
+test('activity inserted above the viewport preserves the same message and visible offset', () => {
+  const anchor = visibleChatAnchor([{ messageId: 'reading', top: 80, bottom: 400 }], { top: 100, bottom: 500 });
+  assert.ok(anchor);
+  const nextScrollTop = anchoredChatScrollTop({ scrollTop: 300, previousOffset: anchor.offset, currentOffset: 130 });
+  assert.equal(nextScrollTop, 450);
+  assert.equal(130 - (nextScrollTop - 300), anchor.offset);
+});
+
+test('removing content above the reader compensates for browser scroll clamping', () => {
+  const nextScrollTop = anchoredChatScrollTop({ scrollTop: 120, previousOffset: -30, currentOffset: -60 });
+  assert.equal(nextScrollTop, 90);
+  assert.equal(-60 - (nextScrollTop - 120), -30);
+  assert.equal(anchoredChatScrollTop({ scrollTop: 10, previousOffset: 20, currentOffset: 0 }), 0);
+});
+
+test('unchanged message bounds do not move a manual reader', () => {
+  assert.equal(anchoredChatScrollTop({ scrollTop: 300, previousOffset: -25, currentOffset: -25 }), 300);
 });

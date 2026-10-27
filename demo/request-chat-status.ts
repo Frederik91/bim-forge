@@ -69,8 +69,24 @@ export function chatRequestStatus(input: {
 
 export function shouldFollowChat(input: {
   previousConversationKey: string | null; nextConversationKey: string | null;
-  scrollTop: number; scrollHeight: number; clientHeight: number;
+  scrollTop: number; scrollHeight: number; clientHeight: number; previouslyFollowing: boolean;
 }): boolean {
   return input.previousConversationKey !== input.nextConversationKey
-    || input.scrollHeight - input.clientHeight - input.scrollTop <= 24;
+    || (input.clientHeight === 0 ? input.previouslyFollowing : input.scrollHeight - input.clientHeight - input.scrollTop <= 24);
+}
+
+export function chatDomKey(messageId: string, kind: 'detail' | 'control', localKey: string | number): string {
+  return JSON.stringify([messageId, kind, localKey]);
+}
+
+export interface ChatMessageBounds { messageId: string; top: number; bottom: number }
+export interface ChatScrollAnchor { messageId: string; offset: number }
+
+export function visibleChatAnchor(messages: readonly ChatMessageBounds[], viewport: { top: number; bottom: number }): ChatScrollAnchor | null {
+  const visible = messages.find(message => message.bottom > viewport.top && message.top < viewport.bottom);
+  return visible ? { messageId: visible.messageId, offset: visible.top - viewport.top } : null;
+}
+
+export function anchoredChatScrollTop(input: { scrollTop: number; previousOffset: number; currentOffset: number }): number {
+  return Math.max(0, input.scrollTop + input.currentOffset - input.previousOffset);
 }

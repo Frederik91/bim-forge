@@ -5,7 +5,7 @@ import type { RequestActivity } from '../src/request-activity.ts';
 import type { RequestState } from './change-requests.ts';
 import { renderSourceContext } from './request-source-ui.ts';
 import { visualLabel } from './request-chat-evidence.ts';
-import { canDecideProposal, chatRequestStatus, groupTurnActivity, matchingProposalReview, shouldFollowChat } from './request-chat-status.ts';
+import { anchoredChatScrollTop, canDecideProposal, chatDomKey, chatRequestStatus, groupTurnActivity, matchingProposalReview, shouldFollowChat, visibleChatAnchor } from './request-chat-status.ts';
 import type { RequestChatDecision, RequestChatProposalReview } from './request-chat-status.ts';
 export type { RequestChatDecision, RequestChatProposalReview } from './request-chat-status.ts';
 
@@ -50,9 +50,19 @@ export class RequestChat {
   #disabled = false;
   #signature = '';
   #renderedConversationKey: string | null = null;
+  #following = true;
+  #pendingBottomFollow = false;
+  readonly #resizeObserver: ResizeObserver;
 
   constructor(host: HTMLElement, actions: RequestChatActions) {
     this.#host = host; this.#actions = actions;
+    this.#resizeObserver = new ResizeObserver(() => this.#finishBottomFollow());
+    this.#resizeObserver.observe(host);
+    host.addEventListener('scroll', () => {
+      if (!host.clientHeight) return;
+      this.#following = this.#atBottom();
+      if (!this.#following) this.#pendingBottomFollow = false;
+    });
     this.#render();
   }
 
@@ -72,10 +82,34 @@ export class RequestChat {
     for (const button of this.#host.querySelectorAll('button')) button.disabled = disabled || this.#offline;
   }
 
-  #control(text: string, action: () => void): HTMLButtonElement {
+  #control(text: string, action: () => void, key = text): HTMLButtonElement {
     const button = node('button', text, 'button outline'); button.type = 'button';
+    button.dataset.focusKey = key;
     button.addEventListener('click', () => { if (!button.disabled && !this.#disabled && !this.#offline) action(); });
     return button;
+  }
+
+  #atBottom(): boolean { return this.#host.scrollHeight - this.#host.clientHeight - this.#host.scrollTop <= 24; }
+
+  #finishBottomFollow(): void {
+    if (!this.#pendingBottomFollow || !this.#host.clientHeight) return;
+    this.#pendingBottomFollow = false;
+    this.#host.scrollTop = this.#host.scrollHeight;
+  }
+
+  #messageElements(): HTMLLIElement[] {
+    return Array.from(this.#host.querySelectorAll('li')).filter(item => item.dataset.messageId !== undefined);
+  }
+
+  #keyMessage(item: HTMLElement, messageId: string): void {
+    Array.from(item.querySelectorAll('details')).forEach((details, index) => {
+      details.dataset.detailKey ??= chatDomKey(messageId, 'detail', index);
+      const summary = details.querySelector('summary');
+      if (summary) summary.dataset.focusKey = `summary:${details.dataset.detailKey}`;
+    });
+    Array.from(item.querySelectorAll('button, a, summary')).forEach((control, index) => {
+      if (control instanceof HTMLElement) control.dataset.focusKey = chatDomKey(messageId, 'control', control.dataset.focusKey ?? `${control.tagName}:${index}`);
+    });
   }
 
   #render(): void {
@@ -84,8 +118,17 @@ export class RequestChat {
     this.#signature = signature;
     const scrollTop = this.#host.scrollTop;
     const nextConversationKey = this.#conversation ? `${this.#projectId}:${this.#conversation.ticketId}` : null;
+    const sameConversation = this.#renderedConversationKey === nextConversationKey;
     const follow = shouldFollowChat({ previousConversationKey: this.#renderedConversationKey, nextConversationKey,
-      scrollTop, scrollHeight: this.#host.scrollHeight, clientHeight: this.#host.clientHeight });
+      scrollTop, scrollHeight: this.#host.scrollHeight, clientHeight: this.#host.clientHeight, previouslyFollowing: this.#following });
+    const viewportTop = this.#host.getBoundingClientRect().top + this.#host.clientTop;
+    const anchor = !follow && this.#host.clientHeight ? visibleChatAnchor(this.#messageElements().map(item => {
+      const bounds = item.getBoundingClientRect(); return { messageId: item.dataset.messageId ?? '', top: bounds.top, bottom: bounds.bottom };
+    }), { top: viewportTop, bottom: viewportTop + this.#host.clientHeight }) : null;
+    const active = this.#host.ownerDocument.activeElement;
+    const focusInside = active instanceof HTMLElement && this.#host.contains(active);
+    const focusKey = focusInside ? active.dataset.focusKey : undefined;
+    const focusedMessageId = focusInside ? active.closest('[data-message-id]')?.getAttribute('data-message-id') : null;
     const expanded = new Set(Array.from(this.#host.querySelectorAll('details')).flatMap(details => details.open && details.dataset.detailKey ? [details.dataset.detailKey] : []));
     const root = node('section', undefined, 'request-chat'); root.id = 'request-chat';
     root.setAttribute('aria-label', 'Request conversation');
@@ -97,6 +140,7 @@ export class RequestChat {
       for (const message of this.#conversation.messages) {
         const item = this.#message(message);
         if (message.kind === 'user') item.append(this.#turnActivity(message, activity.get(message.requestId) ?? []));
+        this.#keyMessage(item, message.id);
         transcript.append(item);
       }
       root.append(transcript, this.#status(latestUser ? activity.get(latestUser.requestId) ?? [] : []),
@@ -109,10 +153,25 @@ export class RequestChat {
       if (this.#offline) root.append(this.#status([]));
     }
     this.#host.replaceChildren(root); this.setDisabled(this.#disabled);
-    if (this.#renderedConversationKey === nextConversationKey) {
+    if (sameConversation) {
       for (const details of root.querySelectorAll('details')) if (details.dataset.detailKey && expanded.has(details.dataset.detailKey)) details.open = true;
     }
-    this.#host.scrollTop = follow ? this.#host.scrollHeight : scrollTop;
+    if (focusInside && sameConversation) {
+      const target = Array.from(root.querySelectorAll('[data-focus-key]')).find(control => control instanceof HTMLElement && control.dataset.focusKey === focusKey);
+      if (target instanceof HTMLElement && !(target instanceof HTMLButtonElement && target.disabled)) target.focus({ preventScroll: true });
+      else {
+        const fallback = this.#messageElements().find(item => item.dataset.messageId === focusedMessageId) ?? root;
+        fallback.tabIndex = -1; fallback.focus({ preventScroll: true });
+      }
+    }
+    this.#following = follow;
+    this.#pendingBottomFollow = follow && nextConversationKey !== null;
+    if (this.#pendingBottomFollow) this.#finishBottomFollow();
+    else {
+      const anchored = anchor ? this.#messageElements().find(item => item.dataset.messageId === anchor.messageId) : undefined;
+      this.#host.scrollTop = anchor && anchored ? anchoredChatScrollTop({ scrollTop: this.#host.scrollTop, previousOffset: anchor.offset,
+        currentOffset: anchored.getBoundingClientRect().top - viewportTop }) : scrollTop;
+    }
     this.#renderedConversationKey = nextConversationKey;
   }
 
@@ -170,7 +229,7 @@ export class RequestChat {
     const actions = node('div', undefined, 'ticket-actions');
     const delta = this.#control(review.delta ? 'Hide changes' : 'View changes', () => {
       if (matchingProposalReview(message, this.#review)) this.#actions.delta(message.id);
-    });
+    }, 'delta');
     delta.setAttribute('aria-pressed', String(review.delta)); actions.append(delta);
     const decisions: readonly [RequestChatDecision, string][] = [['accept', 'Accept proposal'], ['reject', 'Reject proposal'], ['revise', 'Request revision']];
     for (const [action, label] of decisions) {
