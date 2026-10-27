@@ -92,7 +92,8 @@ export class ProjectEvidenceClient {
   constructor(fetcher: typeof fetch = fetch) { this.#fetch = fetcher; }
 
   async #request(path: string, maximum: number, signal?: AbortSignal, body?: unknown): Promise<unknown> {
-    const response = await this.#fetch(path, { method: body === undefined ? 'GET' : 'POST',
+    const request = this.#fetch;
+    const response = await request(path, { method: body === undefined ? 'GET' : 'POST',
       credentials: 'same-origin', redirect: 'error', cache: 'no-store',
       ...(signal ? { signal } : {}), ...(body === undefined ? {} : {
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

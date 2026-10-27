@@ -14,6 +14,15 @@ const entry: EvidenceEntry = { id: 'record-1', anchor: { projectId, entityId: 'w
 const pin = { entryId: entry.id, hash: 'd'.repeat(64) };
 const reply = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 
+test('the evidence client supports a browser fetch function without changing its receiver', async () => {
+  const request: typeof fetch = function(this: unknown, input) {
+    assert.equal(this, undefined, 'A fetch function must not receive the evidence client as its receiver.');
+    assert.equal(input, '/api/projects/project-211/project-sources');
+    return Promise.resolve(reply({ sources: [source], next: null }));
+  };
+  assert.deepEqual((await new ProjectEvidenceClient(request).sources(projectId)).sources, [source]);
+});
+
 test('20 retained descriptors are metadata, not a four-file / 12 MiB request group', () => {
   const sources = Array.from({ length: 20 }, (_, index) => ({ ...source, id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`, byteLength: MAX_SOURCE_BYTES }));
   assert.equal(parseSourceMetadataPage({ sources, next: sources.at(-1)?.id }).sources.length, 20);
