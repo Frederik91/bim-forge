@@ -140,6 +140,11 @@
   .request-options { margin-top: 3px; }
 }
 .request-chat-assumption { margin: 4px 0; font-size: 12px; line-height: 1.4; color: #66521b; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 900px) {
+  .chat-composer-form .composer-binding, .chat-composer-form .composer-help,
+  .chat-composer-form .composer-connection { display: none; }
+  .chat-composer-form .request-options:not([open]) { display: none; }
+}
 @media (max-width: 900px), (any-pointer: coarse) {
   .request-chat button, .request-chat .button, .request-chat summary, .request-chat a, .chat-toolbar .button,
   .chat-workspace button, .chat-workspace summary, .chat-workspace a,

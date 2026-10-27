@@ -189,6 +189,30 @@ test('workspace panels preserve the model through desktop resizing, collapse and
     }
   });
 
+  await t.test('a phone proposal leaves readable chat history and visible model geometry', async () => {
+    const page = await workspace(browser, { width: 390, height: 844 }, true);
+    try {
+      await page.evaluate(() => {
+        const shell = document.getElementById('workspace-shell'); if (shell) shell.dataset.chatModel = 'proposal';
+        const tools = document.getElementById('chat-proposal-tools'); if (tools) tools.hidden = false;
+        const selection = document.getElementById('selection-context'); if (selection) selection.hidden = false;
+        const transcript = document.createElement('section'); transcript.className = 'request-chat';
+        for (let index = 0; index < 30; index++) {
+          const message = document.createElement('p'); message.textContent = `Message ${index}: inspect this proposed model change.`; transcript.append(message);
+        }
+        document.getElementById('request-chat-mount')?.append(transcript);
+      });
+      await frame(page);
+      const history = await box(page, '#request-chat-mount');
+      const model = await box(page, '#workspace-test-canvas'); const panel = await box(page, '#workspace-context');
+      assert.ok(history.height >= 120, `Readable history was only ${history.height}px`);
+      assert.ok(Math.min(model.y + model.height, panel.y) - model.y >= 80, 'Model geometry remains visible above the chat');
+      assert.equal(await page.locator('#request-options').isVisible(), false, 'Advanced options start under the + menu');
+      assert.ok((await box(page, '#composer-add')).height >= 44);
+      await modelRemainsVisible(page, 390);
+    } finally { await page.context().close(); }
+  });
+
   await t.test('phone sheets exclude one another, keep touch targets and retain external inspector behavior', async () => {
     for (const width of [390, 320]) {
       const page = await workspace(browser, { width, height: 844 }, true);

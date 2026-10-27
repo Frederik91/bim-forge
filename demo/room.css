@@ -737,6 +737,28 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
 .selection-context :is(.button, button) { min-height: 32px; padding: 4px 8px; border-radius: 6px; font-size: 12px; }
 .selection-context > div:not(:first-child) { display: flex; flex-wrap: wrap; gap: 4px; }
 
+@media (max-width: 900px) {
+  .app-header { display: grid; grid-template-columns: 28px minmax(0, 1fr) 44px 96px; padding: 4px 8px; gap: 4px; }
+  .app-header .brand { grid-column: 1; grid-row: 1; min-width: 0; }
+  .app-header .project-identity { grid-column: 2; grid-row: 1; min-width: 0; }
+  .app-header .project-identity strong { font-size: 11px; }
+  .app-header .header-actions { display: contents; }
+  .app-header #auth-menu { grid-column: 3; grid-row: 1; width: 44px; }
+  .app-header .workspace-file-menu { grid-column: 4; grid-row: 1; }
+  .app-header #design-views-mount { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; }
+  #design-views-mount .design-workspace-switcher { width: 100%; min-width: 0; }
+  #design-views-mount .design-workspace-select { flex: 1; width: 0; min-width: 0; }
+  .workspace-shell[data-context="request"][data-context-open="true"],
+  .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="live"],
+  .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="proposal"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .selection-context > strong:first-child { display: none; }
+  #chat-proposal-tools { flex-wrap: nowrap; }
+  #chat-proposal-tools strong { flex: 1 1 auto; white-space: nowrap; }
+  #chat-proposal-changes { display: none; }
+  #chat-proposal-return { width: 44px; min-width: 44px; padding: 0; font-size: 0; }
+  #chat-proposal-return::before { content: '×'; font-size: 20px; }
+}
+
 @media (min-width: 901px) {
   .workbench .button, .workspace-file-menu .button, .design-workspace-dialog .button { min-height: 32px; padding: 4px 8px; border-radius: 6px; font-size: 12px; }
   .workbench :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select), .design-workspace-dialog :is(input, select) { min-height: 32px; padding: 4px 8px; border-radius: 6px; font-size: 13px; }
