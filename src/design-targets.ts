@@ -1,6 +1,8 @@
 import { identifier, projectIdentifier, revisionIdentifier } from './room-model.ts';
 import type { EntityId, ProjectId, RevisionId, BranchName } from './room-model.ts';
 import { plainScopeData } from './model-scope-contract.ts';
+import { Check } from 'typebox/value';
+import { DesignTargetSchema, FrozenDesignTargetSchema } from './design-target-contract.ts';
 
 export type WritableDesignTarget = { readonly kind: 'main' }
   | { readonly kind: 'alternative'; readonly id: EntityId };
@@ -51,13 +53,9 @@ function collection(value: unknown): unknown[] {
   return items;
 }
 export function parseDesignTarget(input: unknown): DesignTarget {
-  input = plainScopeData(input);
-  if (input !== null && typeof input === 'object' && 'kind' in input && input.kind === 'main') {
-    object(input, ['kind']);
-    return { kind: 'main' };
-  }
-  const value = object(input, ['kind', 'id']);
-  if (value.kind !== 'alternative' && value.kind !== 'baseline') throw new Error('Invalid design target kind.');
+  const value = plainScopeData(input);
+  if (!Check(DesignTargetSchema, value)) throw new Error('Invalid design target fields.');
+  if (value.kind === 'main') return { kind: 'main' };
   return { kind: value.kind, id: identifier(value.id) };
 }
 export function parseWritableDesignTarget(input: unknown): WritableDesignTarget {
@@ -66,7 +64,8 @@ export function parseWritableDesignTarget(input: unknown): WritableDesignTarget 
   return target;
 }
 export function parseFrozenDesignTarget(input: unknown): FrozenDesignTarget {
-  const value = object(input, ['projectId', 'target', 'revisionId']);
+  const value = plainScopeData(input);
+  if (!Check(FrozenDesignTargetSchema, value)) throw new Error('Invalid frozen design target fields.');
   return { projectId: projectIdentifier(value.projectId), target: parseWritableDesignTarget(value.target),
     revisionId: revisionIdentifier(value.revisionId) };
 }

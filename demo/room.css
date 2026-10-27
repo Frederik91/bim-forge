@@ -672,3 +672,17 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
   .workspace-concept { display: none; }
   .workspace-context .mobile-only { display: inline-flex; }
 }
+
+
+.design-workspace-dialog { width: min(38rem, calc(100vw - 2rem)); max-height: 88dvh; overflow: auto; }
+.design-workspace-dialog > * + * { margin-top: 1rem; }
+.design-workspace-dialog > p { color: var(--muted); }
+.design-workspace-list { display: grid; gap: .5rem; max-height: 34dvh; overflow: auto; }
+.design-workspace-choice { display: grid; gap: .2rem; width: 100%; padding: .8rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); text-align: left; }
+.design-workspace-choice small { color: var(--muted); }
+.design-workspace-choice:hover { border-color: var(--teal); background: #f3faf7; }
+.design-workspace-choice[aria-pressed="true"] { border-color: var(--teal); background: var(--mint); }
+.design-workspace-create { display: grid; gap: .7rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.design-workspace-create label { margin: 0; }
+.design-workspace-create input { margin-top: .35rem; }
+.design-workspace-create .button { justify-self: start; }
