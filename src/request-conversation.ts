@@ -3,6 +3,7 @@ import type { Static } from 'typebox';
 import { Check } from 'typebox/value';
 import { plainScopeData } from './model-scope-contract.ts';
 import { parseRequestSources } from './request-sources.ts';
+import { EvidencePinSchema, MAX_EVIDENCE_PINS, parseEvidencePin } from './model-evidence.ts';
 
 export const CONVERSATION_LIMITS = Object.freeze({ messages: 48, userTurns: 20, textCharacters: 1000, sourceFiles: 4, sourceBytes: 12 * 1024 * 1024 });
 const exact = { additionalProperties: false };
@@ -22,13 +23,15 @@ export const ConversationVisualSchema = Type.Object({
 }, exact);
 export type ConversationVisual = Static<typeof ConversationVisualSchema>;
 export const ConversationReplySchema = Type.Object({ messageId: id, expectedSequence: Type.Integer({ minimum: 0 }), baseRevisionId: revision,
-  text, sources: Type.Array(source, { maxItems: 4 }), visual: Type.Union([ConversationVisualSchema, Type.Null()]) }, exact);
+  text, sources: Type.Array(source, { maxItems: 4 }), visual: Type.Union([ConversationVisualSchema, Type.Null()]),
+  evidencePins: Type.Optional(Type.Array(EvidencePinSchema, { maxItems: MAX_EVIDENCE_PINS })) }, exact);
 export type ConversationReply = Static<typeof ConversationReplySchema>;
 export const ClarificationSchema = Type.Object({ question: text, options: Type.Array(Type.String({ minLength: 1, maxLength: 160 }), { maxItems: 6, uniqueItems: true }) }, exact);
 export type Clarification = Static<typeof ClarificationSchema>;
 const common = { id, sequence: Type.Integer({ minimum: 1 }), at: Type.Integer({ minimum: 0 }), requestId: id, baseRevisionId: revision };
 export const ConversationMessageSchema = Type.Union([
-  Type.Object({ ...common, kind: Type.Literal('user'), text, sources: Type.Array(source, { maxItems: 4 }), visual: Type.Union([ConversationVisualSchema, Type.Null()]) }, exact),
+  Type.Object({ ...common, kind: Type.Literal('user'), text, sources: Type.Array(source, { maxItems: 4 }), visual: Type.Union([ConversationVisualSchema, Type.Null()]),
+    evidencePins: Type.Optional(Type.Array(EvidencePinSchema, { maxItems: MAX_EVIDENCE_PINS })) }, exact),
   Type.Object({ ...common, kind: Type.Literal('assistant'), replyTo: id, content: Type.Union([
     Type.Object({ kind: Type.Literal('clarification'), ...ClarificationSchema.properties }, exact),
     Type.Object({ kind: Type.Literal('proposal'), text, proposalName: id, proposalRevisionId: revision }, exact),
@@ -40,16 +43,23 @@ export type ConversationMessage = Static<typeof ConversationMessageSchema>;
 export const RequestConversationSchema = Type.Object({ version: Type.Literal(1), ticketId: id, sequence: Type.Integer({ minimum: 0 }),
   messages: Type.Array(ConversationMessageSchema, { maxItems: 48 }) }, exact);
 export type RequestConversation = Static<typeof RequestConversationSchema>;
+function evidencePins(input: readonly Static<typeof EvidencePinSchema>[] | undefined): void {
+  if (!input) return;
+  input.forEach(parseEvidencePin);
+  if (new Set(input.map(pin => pin.entryId)).size !== input.length) throw new Error('Choose each evidence entry only once.');
+}
 export function parseConversationReply(input: unknown): ConversationReply {
   const value = plainScopeData(input);
   if (!Check(ConversationReplySchema, value)) throw new Error('Invalid conversation reply. Send text, immutable source references and snapshot-bound visual evidence.');
   if (value.sources.length) parseRequestSources(value.sources);
+  evidencePins(value.evidencePins);
   return value;
 }
 export function parseConversationMessage(input: unknown): ConversationMessage {
   const value = plainScopeData(input);
   if (!Check(ConversationMessageSchema, value)) throw new Error('Invalid stored conversation message.');
   if (value.kind === 'user' && value.sources.length) parseRequestSources(value.sources);
+  if (value.kind === 'user') evidencePins(value.evidencePins);
   return value;
 }
 export function parseRequestConversation(input: unknown): RequestConversation {
