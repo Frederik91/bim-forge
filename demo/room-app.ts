@@ -404,7 +404,7 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
   ui['request-reconstruct'].checked = draft.reconstruction; ui['reconstruction-scope'].value = draft.reconstructionScope;
   scopeBuilder.restoreDraft(draft.scope); composer.setVisual(chatVisual); composer.refresh();
-  render();
+  inspectedComparison = null; syncInspector(); render();
   for (const [index, control] of [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']].entries()) control.value = draft.geometryValues[index] ?? '';
 }
 
