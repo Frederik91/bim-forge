@@ -39,6 +39,29 @@ export type Model = Static<typeof ModelSchema>;
 export type Element = Model['elements'][number];
 export type Geometry = Model['geometries'][number];
 export type Vec3 = Element['position'];
+export const NativeManifestSchema = Type.Object({ version: Type.Literal(1), format: Type.Literal('fragments-3.6.0-raw'),
+  modelId: text, revision: text, sourceSha256: Type.String({ pattern: '^[a-f0-9]{64}$' }), sha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  preprocessorSha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  bytes: Type.Integer({ minimum: 1 }), elements: Type.Integer({ minimum: 1 }), triangles: Type.Integer({ minimum: 1 }),
+  disciplines: Type.Record(Type.String(), Type.Integer({ minimum: 1 })), preparationMs: Type.Number({ minimum: 0 }),
+  qualified: Type.Literal(false), grossFloorAreaM2: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+}, options);
+export const FragmentsInputSchema = Type.Union([Type.Object({ kind: Type.Literal('raw-edit') }, options),
+  Type.Object({ kind: Type.Literal('native'), manifest: NativeManifestSchema }, options)]);
+export type NativeManifest = Static<typeof NativeManifestSchema>;
+export function parseFragmentsInput(input: unknown): Static<typeof FragmentsInputSchema> {
+  if (!Check(FragmentsInputSchema, input)) throw new Error('Invalid Fragments input configuration');
+  return input;
+}
+export function assertNativeManifest(manifest: NativeManifest, model: Model, sourceSha256: string): void {
+  const disciplines = Object.fromEntries([...new Set(model.elements.map(item => item.discipline))].map(discipline =>
+    [discipline, model.elements.filter(item => item.discipline === discipline).length]));
+  const trianglesByGeometry = new Map(model.geometries.map(item => [item.id, item.indices.length / 3]));
+  const triangles = model.elements.reduce((sum, item) => sum + (trianglesByGeometry.get(item.geometryId) ?? 0), 0);
+  if (manifest.modelId !== model.id || manifest.revision !== model.revision || manifest.sourceSha256 !== sourceSha256 || manifest.triangles !== triangles
+    || manifest.elements !== model.elements.length || manifest.grossFloorAreaM2 !== model.grossFloorAreaM2
+    || JSON.stringify(Object.entries(manifest.disciplines).sort()) !== JSON.stringify(Object.entries(disciplines).sort())) throw new Error('Native Fragments input does not match the common model');
+}
 export const ProposalSchema = Type.Object({
   id: text, baseRevision: text, nextRevision: text,
   upsert: Type.Array(elementSchema), remove: Type.Array(text),
@@ -154,7 +177,7 @@ export function admission(model: Model): { qualified: boolean; reasons: string[]
 }
 
 export function assertReadback(model: Model, elements: Element[], actual: Readback[]): void {
-  if (elements.length !== actual.length || new Set(actual.map(item => item.id)).size !== actual.length) throw new Error('Renderer element count/identity mismatch');
+  if (elements.length !== actual.length || new Set(actual.map(item => item.id)).size !== actual.length) throw new Error('Renderer element count/identity mismatch: expected=' + elements.length + ' actual=' + actual.length + ' unique=' + new Set(actual.map(item => item.id)).size);
   const byId = new Map(actual.map(item => [item.id, item]));
   const geometryBounds = new Map(model.geometries.map(geometry => {
     const min: Vec3 = [Infinity, Infinity, Infinity]; const max: Vec3 = [-Infinity, -Infinity, -Infinity];

@@ -7,14 +7,14 @@ import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { admission, parseModel } from './contract.ts';
+import { admission, assertNativeManifest, parseFragmentsInput, parseModel } from './contract.ts';
 import { smokeModel } from './fixtures.ts';
 import { runCandidateProcess } from './runner-limits.ts';
 import type { Candidate } from './metrics.ts';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
-const known = new Set(['--candidate', '--dataset', '--output', '--channel', '--cycles', '--timeout-ms', '--elements', '--headed', '--serve']);
+const known = new Set(['--candidate', '--dataset', '--output', '--channel', '--cycles', '--timeout-ms', '--elements', '--headed', '--serve', '--fragments']);
 for (const argument of args.filter(item => item.startsWith('--'))) if (!known.has(argument)) throw new Error('Unknown option: ' + argument);
 function option(name: string, fallback: string): string {
   const index = args.indexOf(name); if (index === -1) return fallback;
@@ -41,6 +41,13 @@ await fs.mkdir(output, { recursive: false });
 const assets = path.join(output, 'assets'); await fs.mkdir(assets);
 const hash = (bytes: string | Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 const modelText = JSON.stringify(model);
+const nativePath = option('--fragments', '');
+const nativeBytes = nativePath ? await fs.readFile(path.resolve(nativePath)) : null;
+const fragmentsInput = parseFragmentsInput(nativePath ? { kind: 'native', manifest: JSON.parse(await fs.readFile(path.resolve(nativePath) + '.json', 'utf8')) } : { kind: 'raw-edit' });
+if (fragmentsInput.kind === 'native') {
+  assertNativeManifest(fragmentsInput.manifest, model, hash(modelText));
+  if (!nativeBytes || nativeBytes.length !== fragmentsInput.manifest.bytes || hash(nativeBytes) !== fragmentsInput.manifest.sha256) throw new Error('Native Fragments binary integrity mismatch');
+}
 const purpose = model.provenance.kind === 'synthetic' ? 'setup-smoke' : 'initial-local';
 const profile: unknown = JSON.parse(await fs.readFile(path.join(root, 'benchmarks/viewer/profile.json'), 'utf8'));
 const source = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
@@ -53,7 +60,7 @@ await fs.writeFile(path.join(output, 'run.json'), JSON.stringify({ version: 1, i
     grossFloorAreaM2: model.grossFloorAreaM2, provenance: model.provenance,
     disciplines: Object.fromEntries([...new Set(model.elements.map(item => item.discipline))].map(discipline =>
       [discipline, model.elements.filter(item => item.discipline === discipline).length])) },
-  profile, candidates, cycles, timeout, node: process.version, os: { platform: os.platform(), release: os.release(), arch: os.arch(),
+  profile, candidates, cycles, timeout, fragmentsInput, fragmentsLodMode: 'ALL_GEOMETRY', node: process.version, os: { platform: os.platform(), release: os.release(), arch: os.arch(),
     cpu: os.cpus()[0]?.model ?? 'unavailable', totalMemoryBytes: os.totalmem() },
   network: 'loopback, unshaped', memory: 'not-measured', status: 'started',
 }, null, 2) + '\n');
@@ -74,6 +81,9 @@ const server = createServer(async (request, response) => {
     const name = request.url?.split('?')[0]?.slice(1) ?? '';
     if (name === '' || name === 'index.html') { response.setHeader('Content-Type', 'text/html'); response.end(pageHtml); }
     else if (name === 'dataset.json') { response.setHeader('Content-Type', 'application/json'); response.end(modelText); }
+    else if (name === 'fragments-input.json') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(fragmentsInput)); }
+    else if (name === 'native.frag' && nativeBytes) { response.setHeader('Content-Type', 'application/octet-stream'); response.end(nativeBytes); }
+    else if (name === 'favicon.ico') { response.writeHead(204); response.end(); }
     else if (assetNames.has(name)) { response.setHeader('Content-Type', name.endsWith('.mjs') ? 'text/javascript' : 'application/json'); response.end(await fs.readFile(path.join(assets, name))); }
     else { response.writeHead(404); response.end(); }
   } catch (error) { response.writeHead(500); response.end('Benchmark asset failed'); process.stderr.write(String(error) + '\n'); }

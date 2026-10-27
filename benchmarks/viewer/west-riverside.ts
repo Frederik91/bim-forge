@@ -6,7 +6,10 @@ import { createHash } from 'node:crypto';
 import { Type } from 'typebox';
 import { Check } from 'typebox/value';
 import * as IFC from 'web-ifc';
-import { parseModel } from './contract.ts';
+import * as THREE from 'three';
+import { EditRequestType, EditUtils, GeomsFbUtils, RenderedFaces } from '@thatopen/fragments';
+import type { EditRequest } from '@thatopen/fragments';
+import { NativeManifestSchema, parseModel } from './contract.ts';
 import type { Camera, Geometry, Model, Vec3 } from './contract.ts';
 
 export const sourceRevision = '9ba471a3e38b353a81a1dc9ecb4aa56d2ce0a7fa';
@@ -28,6 +31,66 @@ const productSchema = Type.Object({ GlobalId: Type.Optional(valueSchema), Name: 
 const sourcesSchema = Type.Object({ sourceRevision: Type.Literal(sourceRevision), files: Type.Array(Type.Object({
   id: Type.String(), file: Type.String(), bytes: Type.Integer({ minimum: 1 }), sha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
 })) });
+
+export function nativeFragments(model: Model): Uint8Array {
+  const requests: EditRequest[] = [];
+  const geometries = new Map(model.geometries.map(item => [item.id, item]));
+  const representations = new Map<string, number>(); const materials = new Map<string, number>();
+  // Allocate deterministic native item IDs in source order; stable BIM IDs
+  // remain attributes and never depend on a renderer's numeric IDs.
+  let nextId = model.elements.length;
+  const identity = { position: [0, 0, 0], xDirection: [1, 0, 0], yDirection: [0, 1, 0] };
+  for (const [localId, item] of model.elements.entries()) {
+    const geometryKey = JSON.stringify([item.geometryId, item.scale]); let representation = representations.get(geometryKey);
+    if (representation === undefined) {
+      const geometry = geometries.get(item.geometryId); if (!geometry) throw new Error('Missing native source geometry');
+      const buffer = new THREE.BufferGeometry();
+      buffer.setAttribute('position', new THREE.Float32BufferAttribute(geometry.positions.map((value, index) => value * item.scale[index % 3]), 3));
+      buffer.setIndex(geometry.indices); buffer.computeVertexNormals();
+      const data = GeomsFbUtils.representationFromGeometry(buffer, undefined, { threshold: 0, precision: 1e6,
+        normalPrecision: 1e7, planePrecision: 1e3, faceThreshold: .6, forceTransparentSpaces: false });
+      buffer.dispose(); representation = nextId++; representations.set(geometryKey, representation);
+      requests.push({ type: EditRequestType.CREATE_REPRESENTATION, localId: representation, data });
+    }
+    const colorKey = item.color.join(','); let material = materials.get(colorKey);
+    if (material === undefined) {
+      material = nextId++; materials.set(colorKey, material);
+      requests.push({ type: EditRequestType.CREATE_MATERIAL, localId: material,
+        data: { r: item.color[0] * 255, g: item.color[1] * 255, b: item.color[2] * 255, a: 255, renderedFaces: RenderedFaces.TWO, stroke: 0 } });
+    }
+    const globalTransform = nextId++; const localTransform = nextId++; const sample = nextId++;
+    requests.push({ type: EditRequestType.CREATE_ITEM, localId,
+      data: { category: item.category, guid: item.id, data: { benchmarkId: { value: item.id },
+        ...Object.fromEntries(Object.entries(item.properties).map(([key, value]) => ['property:' + key, { value }])) } } });
+    requests.push({ type: EditRequestType.CREATE_GLOBAL_TRANSFORM, localId: globalTransform, data: { ...identity, position: item.position, itemId: localId } });
+    requests.push({ type: EditRequestType.CREATE_LOCAL_TRANSFORM, localId: localTransform, data: identity });
+    requests.push({ type: EditRequestType.CREATE_SAMPLE, localId: sample,
+      data: { item: globalTransform, material, representation, localTransform } });
+  }
+  requests.push({ type: EditRequestType.UPDATE_MAX_LOCAL_ID, localId: nextId });
+  const base = EditUtils.getModelFromBuffer(EditUtils.newModel({ raw: true }), true);
+  return EditUtils.edit(base, requests, { raw: true, delta: false }).model;
+}
+
+export async function prepareNative(input: string, output: string): Promise<void> {
+  const started = performance.now(); const text = await fs.readFile(input, 'utf8');
+  const preprocessorSha256 = hash(await fs.readFile(fileURLToPath(import.meta.url)));
+  const model = parseModel(JSON.parse(text), 'transfer');
+  const bytes = nativeFragments(model);
+  const trianglesByGeometry = new Map(model.geometries.map(geometry => [geometry.id, geometry.indices.length / 3]));
+  const manifest = { version: 1, format: 'fragments-3.6.0-raw', modelId: model.id, revision: model.revision,
+    preprocessorSha256,
+    sourceSha256: hash(JSON.stringify(model)), sha256: hash(bytes), bytes: bytes.length, elements: model.elements.length,
+    triangles: model.elements.reduce((total, item) => total + (trianglesByGeometry.get(item.geometryId) ?? 0), 0),
+    disciplines: Object.fromEntries([...new Set(model.elements.map(item => item.discipline))].map(discipline =>
+      [discipline, model.elements.filter(item => item.discipline === discipline).length])),
+    preparationMs: performance.now() - started, qualified: false, grossFloorAreaM2: model.grossFloorAreaM2 };
+  if (!Check(NativeManifestSchema, manifest)) throw new Error('Invalid native preprocessing manifest');
+  await fs.mkdir(path.dirname(output), { recursive: true });
+  await fs.writeFile(output, bytes, { flag: 'wx' });
+  await fs.writeFile(output + '.json', JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' });
+  process.stdout.write(JSON.stringify(manifest) + '\n');
+}
 
 export function transformedPositions(vertices: ArrayLike<number>, matrix: number[]): number[] {
   if (vertices.length % 6 || matrix.length !== 16 || matrix.some(value => !Number.isFinite(value))) throw new Error('Invalid IFC geometry transform');
@@ -177,5 +240,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const directory = path.resolve(process.argv[3] ?? 'artifacts/private/west-riverside/source');
   if (process.argv[2] === 'download') await downloadSources(directory);
   else if (process.argv[2] === 'convert') await convertSources(directory, path.resolve(process.argv[4] ?? 'artifacts/private/west-riverside/prepared/model.json'));
-  else throw new Error('Use west-riverside.ts download [directory] or convert [directory] [output-model.json]');
+  else if (process.argv[2] === 'native') await prepareNative(directory, path.resolve(process.argv[4] ?? 'artifacts/private/west-riverside/native/model.frag'));
+  else throw new Error('Use west-riverside.ts download [directory], convert [directory] [output-model.json], or native input-model.json output.frag');
 }

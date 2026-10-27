@@ -10,7 +10,11 @@ storage. The request does not establish redistribution rights or a measured
 is an initial local configuration check. Raw outcomes, source bindings,
 inventories, failures and private-artifact hashes are in [aggregate.json](aggregate.json).
 
-The final local replay completed in Babylon. Fragments did not finish its
+The [native follow-up](#native-follow-up-results) now completes both viewers'
+full replay with no page errors or invalid WebGL warnings. The original raw-edit
+failure below remains historical evidence, rather than the final native outcome.
+
+The initial raw-edit replay completed in Babylon. Fragments did not finish its
 initial load within the 600-second candidate lifecycle limit. Both received the
 same complete seven-discipline prepared input; full rendered-content correctness
 was established only for Babylon. Neither outcome qualifies an engine for #192.
@@ -122,7 +126,7 @@ could use the allocation correction. Preserve the cancellation separately from
 an engine failure. The timeout's underlying cause was not profiled; the completed
 rerun does not establish that allocation was its only cause.
 
-## Fragments load outcome
+## Historical raw-edit Fragments load outcome
 
 The second execution reached `start load` and timed out in `replay` after
 600,932 ms, with no completed load sample or full-input readback. The watchdog
@@ -174,6 +178,23 @@ file hashes and dependency versions still match the recorded run; only the
 package test scripts changed. Root validation and benchmark tests passed again.
 The historical run manifests remain bound to the measured source rather than
 being rewritten to claim a run on the integrated application.
+
+## Native preprocessing follow-up plan and implementation
+
+Investigate #192's raw-edit load timeout with phase timings and retained browser
+errors. `west-riverside.ts` will prepare a native `.frag` from the exact common
+render input, with a hash-bound manifest. `contract.ts` will validate that
+manifest. `adapters/fragments.ts` will load the binary and keep stable source
+part IDs while hydrating edit data only for changed parts. `runner.ts` will serve
+only the explicitly configured binary/manifest, record their hashes, and run
+both viewers against all seven disciplines. Keep preprocessing outside browser
+load timing and retain the raw-edit failure as an unsuccessful configuration.
+
+Acceptance evidence: native round-trip identity/transform/bounds and property
+tests, corruption/mismatched-input rejection, small real-Chrome replay, and full
+West Riverside replay with proposals/comparisons in both viewers. Root validation
+and the unchanged qualification gates must pass. Accepted production model delta
+remains zero; rights, area and conversion/coordination gaps remain open.
 
 ## Execution profile
 
@@ -249,3 +270,117 @@ inventory rather than treating that single conversion as a speed comparison.
 Sources: [IFC-Bench revision](https://huggingface.co/datasets/sylvainHellin/ifc-bench/tree/9ba471a3e38b353a81a1dc9ecb4aa56d2ce0a7fa/projects/west_riverside_hospital),
 [CC BY 3.0 terms](https://creativecommons.org/licenses/by/3.0/),
 [Autodesk source-model discussion](https://forums.autodesk.com/t5/revit-architecture-forum/revit-model-west-riverside-hospital-autodesk-courtesy/m-p/6701325).
+
+## Native implementation and diagnosis
+
+The full raw-edit diagnostic reaches `edit-committed` for 97,590 parts but never
+reaches `elements-created` before its 150-second lifecycle limit. The installed
+SDK commits edits and then calls `getElements`, which requests complete
+per-element geometry through `getElementsData`. This identifies the blocked
+boundary. Small 500- and 10,000-element synthetic canaries complete; they are
+not equivalent to materializing the real project's geometry. Exact peak memory
+and the split between worker computation, cloning and main-thread allocation
+remain unmeasured. Native load removes that hydration from browser open.
+
+`west-riverside.ts native input-model.json output.frag` builds a real raw
+FlatBuffers Fragments file through the pinned SDK's public APIs, outside the
+browser load timer. It uses the common tessellation, source part IDs, placement,
+properties and opaque material profile. This evaluates native format loading
+from the common render input, rather than the SDK's IFC importer. Raw triangle
+profiles avoid coplanar polygon merging. Float32 conversion and micrometre
+rounding still apply; engineering/IFC fidelity remains unqualified.
+
+The manifest binds the canonical input, binary hash/size, preprocessor-source
+hash, part/triangle counts and all seven discipline counts. The runner rejects
+a mismatched input or corrupted binary before starting a viewer. The browser
+verifies the binary again. An explicit native input never falls back to raw edits.
+
+A direct-edit native prototype paired delta geometry with incorrect benchmark
+IDs. This is a finding about this prototype and pinned SDK configuration, not
+a general claim about all native Fragments files. The adapter instead keeps
+the native base immutable and uses an initially empty, separate editable review
+model for changed parts. Discard restores original native parts. Ownership is
+explicit because numeric IDs overlap across models; stable BIM identities remain
+outside the renderer. Initial load does not retain hydrated geometry per part.
+
+Readback checks every active part's identity, transform, bounds and visibility
+from its actual geometry owner. Superseded original geometry must be hidden.
+The empty editing root's logical getters are not physical rendered geometry.
+Count, accepted-state and stale-proposal checks were not relaxed.
+
+### Rendering validation and configuration changes
+
+The first native replay completed script assertions but its trace recorded five
+WebGL `INVALID_OPERATION` warnings during the camera route. Treat it as failed
+rendering validation despite its historical completion marker. The runner now
+fails on these driver warnings. Resetting an empty review overlay releases unused
+edit resources, but did not alone remove the warnings in the second full replay.
+
+The earlier default-LOD overview reported fewer rendered triangles than Babylon.
+Independent decoding confirms 5,347,554 unique stored triangle profiles and
+15,334,885 instanced triangles, with 97,590 samples and 53,329 representations.
+The lower draw count was not a missing-input inventory. The final configuration
+selects `LodMode.ALL_GEOMETRY` for the native model and each runtime delta,
+retaining visibility/culling and disabling distance-based proxy geometry. Run
+manifests record that setting; prior default-LOD results remain separate.
+
+### Native reproduction
+
+After IFC conversion, use fresh output directories:
+
+```sh
+node --max-old-space-size=12288 benchmarks/viewer/west-riverside.ts native artifacts/private/west-riverside/prepared-v2/model.json artifacts/private/west-riverside/native/model.frag
+node --max-old-space-size=12288 benchmarks/viewer/runner.ts --dataset artifacts/private/west-riverside/prepared-v2/model.json --fragments artifacts/private/west-riverside/native/model.frag --channel chrome --cycles 1 --timeout-ms 600000 --output artifacts/private/west-riverside/native-run-new
+```
+
+The recorded raw native bundle is 223,062,424 bytes. Preparation took 50.9 seconds
+in a CPU-profiled diagnostic; this is not an uninstrumented throughput claim.
+Model files, screenshots, profiles, traces and intermediate failed prototypes
+remain private. Public evidence contains metadata, metrics, failures and hashes.
+
+## Native follow-up results
+
+Recorded run: `native-full-003`, with the same seven-discipline input SHA-256
+`99ca530d28d01f8a906af7b2ebb3cfa020af62226968c937fa3fcd4dbdd96a30`.
+Both complete their lifecycle under the unchanged 600-second candidate limit,
+with zero recorded page/console errors and zero invalid WebGL warnings. Both
+pass full identity/transform/bounds checks, picking/filtering/sectioning,
+proposal sizes 1/10/100/1,000, comparison entry/exit, discard, stale rejection,
+and the 30-waypoint camera route. The representative comparison has 97,592
+active records, including the two expected previous-state ghosts, in each viewer.
+
+| Observation, one final local execution each | Babylon | Native Fragments |
+| --- | ---: | ---: |
+| Renderer load, including initial camera | 4.604 s | 9.658 s |
+| Full identity/bounds readback | 0.276 s | 1.338 s |
+| Preview affecting 1,000 parts | 17.573 s | 23.825 s |
+| Enter representative comparison | 1.061 s | 7.002 s |
+| Median camera/update interval, 30 samples | 363.0 ms | 132.8 ms |
+| Overview draw calls | 97,590 | 1,575 |
+| Overview triangles reported by renderer | 15,334,885 | 9,394,586 |
+
+Load excludes common JSON fetch/parse/validation, adapter construction and native
+preprocessing. Update timings include common full-model validation, neutral diffs
+and correctness readback. Camera intervals are not GPU-presented FPS. There are
+too few samples for interaction p95s; this is not the five-cold/ten-warm scored
+profile, an exclusive host, or a primary-laptop qualification.
+
+Do not infer a winner from these columns. Rendered triangle counts still differ
+even with distance-based proxies disabled; culling/render-fidelity equivalence
+needs further investigation. Materials/lighting are not matched engineering
+fidelity. The native file contains all input triangles, but a stored inventory
+and world bounds do not by themselves prove every timed pixel has equal content.
+The wide comparison images remain byte-identical within each viewer. Automated
+render-state deltas pass; focused visible engineering-review cases remain open.
+
+Validation: root lint/typecheck/policy pass; benchmark tests pass 24 cases with
+one platform-specific skip. Codec tests decode every synthetic fixture triangle,
+placement and property, validate the native ID allocator, reject mismatched
+source/disciplines, and reject a corrupted native binary before browser launch.
+Two-cycle Chrome smoke acceptance passes on both candidates. The original
+Windows scene/proposal cleanup failures remain documented against their base.
+
+Accepted production model delta is zero. Licensing, physical-project identity,
+gross floor area, source conversion/coordination, full engineering edits, matched
+fidelity, repeated-session memory and primary-device evidence remain unresolved.
+`grossFloorAreaM2` stays `null`, all results stay `qualified: false`, and #192 stays open.

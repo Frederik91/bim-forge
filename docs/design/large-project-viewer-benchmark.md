@@ -13,6 +13,13 @@ uses all seven public IFC4 discipline exports locally. Its floor area and upstre
 release authorization remain unresolved. It is a separate, unqualified workload;
 the 200,000+ m² dataset admission and scored comparison remain open under #192.
 
+The native follow-up serializes that same common input into `.frag`, loads the
+immutable native base, and uses a separate editable review overlay. Both viewers
+complete the final full-geometry replay with strict WebGL-error checks. Earlier
+raw-edit stalls and default-LOD rendering failures remain in the linked evidence.
+Rendered workload/fidelity differences and dataset admission still prevent an
+engine recommendation.
+
 The implementation plan, commands, supported operations, measurement profile,
 and remaining scored work are in [the benchmark README](../../benchmarks/viewer/README.md).
 The [dataset checklist](../../benchmarks/viewer/dataset-requirements.md) identifies
