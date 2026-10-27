@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { Check } from 'typebox/value';
 import { RoomRepository } from './room-model.ts';
 import { syntheticResidentialFixture } from './synthetic-residential-fixture.ts';
-import { EvidencePinSchema, EvidenceReadSetSchema,
-  normalizedEvidenceValue, parseEvidenceEntry, parseEvidencePin, parseEvidenceReadSet } from './model-evidence.ts';
-import type { EvidenceEntry } from './model-evidence.ts';
+import { EvidencePinSchema, EvidenceReadSetSchema, EvidenceUseSchema, EvidenceUsesSchema,
+  normalizedEvidenceValue, parseEvidenceEntry, parseEvidencePin, parseEvidenceReadSet, parseEvidenceUses } from './model-evidence.ts';
+import type { EvidenceEntry, EvidenceUse } from './model-evidence.ts';
 import { evidenceAnchor, evidenceApplicable, evidenceHash } from '../demo/project-evidence-store.ts';
 
 test('claims preserve actual model parameter values and require distinct provenance', async () => {
@@ -43,7 +43,7 @@ test('review pins/read sets export strict serializable schemas and reject hidden
   const pin = { entryId: 'claim', hash: 'a'.repeat(64) };
   assert.equal(Check(EvidencePinSchema, pin), true);
   assert.deepEqual(parseEvidencePin(JSON.parse(JSON.stringify(pin))), pin);
-  const set = { version: 1, projectId: 'project', revisionId: 'b'.repeat(64), pins: [pin], subjects: [] };
+  const set = { version: 1, projectId: 'project', revisionId: 'b'.repeat(64), target: { kind: 'main' }, pins: [pin], subjects: [] };
   assert.equal(Check(EvidenceReadSetSchema, set), true);
   assert.deepEqual(parseEvidenceReadSet(JSON.parse(JSON.stringify(set))), set);
   assert.throws(() => parseEvidenceReadSet({ ...set, pins: [pin, pin] }), /Invalid/);
@@ -53,4 +53,29 @@ test('review pins/read sets export strict serializable schemas and reject hidden
   assert.throws(() => parseEvidencePin(getter), /accessor/);
   assert.equal(accessed, false);
   assert.throws(() => parseEvidencePin({ ...pin, hash: 'bad' }), /Invalid/);
+});
+
+test('proposal evidence uses are bounded serializable choices with one readable rationale per logical subject', () => {
+  const use: EvidenceUse = { pin: { entryId: 'chosen', hash: 'a'.repeat(64) },
+    subject: { anchor: { projectId: 'project', revisionId: 'b'.repeat(64), entityId: 'wall', bodyHash: 'c'.repeat(64), target: { kind: 'main' } },
+      property: { definitionId: 'geometry-thickness', valueKind: 'length' } }, rationale: 'Use the documented synthetic width for this design proposal.' };
+  assert.equal(Check(EvidenceUseSchema, use), true);
+  assert.equal(Check(EvidenceUsesSchema, [use]), true);
+  assert.deepEqual(parseEvidenceUses(JSON.parse(JSON.stringify([use]))), [use]);
+  assert.deepEqual(parseEvidenceUses([]), []);
+  for (const rationale of ['', ' \n\t ', 'x'.repeat(4097)]) assert.throws(() => parseEvidenceUses([{ ...use, rationale }]), /Invalid/);
+  assert.throws(() => parseEvidenceUses([{ ...use, hidden: true }]), /Invalid/);
+  assert.throws(() => parseEvidenceUses([{ ...use, pin: { ...use.pin, hash: 'bad' } }]), /Invalid/);
+  assert.throws(() => parseEvidenceUses([use, { ...use, rationale: 'Another logical choice.', pin: { ...use.pin, entryId: 'other' },
+    subject: { ...use.subject, anchor: { ...use.subject.anchor, revisionId: 'd'.repeat(64), bodyHash: 'e'.repeat(64) },
+      property: { ...use.subject.property, valueKind: 'number' } } }]), /one choice per logical subject/);
+  const bounded = Array.from({ length: 32 }, (_, index): EvidenceUse => ({ ...use,
+    pin: { ...use.pin, entryId: `choice-${index}` }, subject: { ...use.subject, anchor: { ...use.subject.anchor, entityId: `entity-${index}` } } }));
+  assert.equal(parseEvidenceUses(bounded).length, 32);
+  assert.throws(() => parseEvidenceUses([...bounded, { ...use, rationale: 'Overflow.' }]), /Invalid/);
+  const parsed = parseEvidenceUses([use]); const first = parsed[0]; assert.ok(first);
+  first.pin.entryId = 'mutated'; assert.equal(use.pin.entryId, 'chosen');
+  let accessed = false;
+  const accessor = Object.defineProperty({}, 'rationale', { enumerable: true, get() { accessed = true; return 'Hidden'; } });
+  assert.throws(() => parseEvidenceUses([accessor]), /accessor/); assert.equal(accessed, false);
 });
