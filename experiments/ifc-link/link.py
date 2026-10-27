@@ -255,6 +255,8 @@ def prepare(model, binding, transform, limits, checkpoint, progress):
             raise LinkError("UNSAFE_GEOMETRY", product.GlobalId)
         homogeneous = np.column_stack((points, np.ones(len(points))))
         source_points = (matrix @ homogeneous.T).T[:, :3]
+        if np.max(np.abs(source_points)) > 1e6:
+            raise LinkError("UNSAFE_GEOMETRY", "Source geometry exceeds source coordinate envelope")
         project_points = (transform @ matrix @ homogeneous.T).T[:, :3]
         if np.max(np.abs(project_points)) > 1e6:
             raise LinkError("UNSAFE_GEOMETRY", "Occurrence exceeds project coordinate envelope")
