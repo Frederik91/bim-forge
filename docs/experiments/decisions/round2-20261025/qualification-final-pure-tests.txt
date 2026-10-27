@@ -1,0 +1,12 @@
+✔ initial revision facts validate the exact load command, branch, hash and root link (6.536258ms)
+✔ accepted revision facts retain single-object command identities and reject wrong scopes (83.830267ms)
+✔ empty catalog categories match an observed inventory with no rows in those categories (1.652301ms)
+✔ a missing nonempty catalog category still differs from the observed inventory (0.261963ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3906.059948

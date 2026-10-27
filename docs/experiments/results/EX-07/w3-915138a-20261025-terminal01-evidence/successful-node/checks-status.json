@@ -1,0 +1,60 @@
+[
+  {
+    "name": "validate",
+    "command": [
+      "npm",
+      "run",
+      "validate"
+    ],
+    "exitStatus": 0
+  },
+  {
+    "name": "scoped-typecheck",
+    "command": [
+      "./node_modules/.bin/tsc",
+      "--project",
+      "experiments/regeneration/tsconfig.json"
+    ],
+    "exitStatus": 0
+  },
+  {
+    "name": "regeneration-tests",
+    "command": [
+      "node",
+      "--test",
+      "experiments/regeneration/evaluator.test.ts"
+    ],
+    "exitStatus": 0
+  },
+  {
+    "name": "contracts-tests",
+    "command": [
+      "npm",
+      "run",
+      "test:qualification-contracts"
+    ],
+    "exitStatus": 0
+  },
+  {
+    "name": "observations",
+    "command": [
+      "node",
+      "experiments/regeneration/run.ts",
+      "--out",
+      "/qualification/artifacts/w3-debug-final-915138a/node",
+      "--occt",
+      "/qualification/artifacts/w3-debug-attempt-3/occt/observations.json"
+    ],
+    "exitStatus": 0
+  },
+  {
+    "name": "observations-contract",
+    "command": [
+      "node",
+      "experiments/contracts/cli.ts",
+      "observations",
+      "/qualification/artifacts/w3-debug-final-915138a/node/observations.json"
+    ],
+    "exitStatus": 0
+  }
+]

@@ -39,6 +39,8 @@ Views and discipline workspaces project the same shared model; they are not mode
 
 The first implementation can be a modular monolith with clear interfaces. Split services only when a real deployment or scaling boundary appears.
 
+The [native computation proposal](design/native-computation.md) distinguishes inspected preview and experiment code from proposed geometry, spatial, and regeneration ownership under permanent resource limits. It keeps TypeScript orchestration and one authoritative versioned model, with explicit native data/budget contracts and measured migration gates. This is an unadopted proposal for issue #153, not a backend rewrite decision.
+
 ## Versioning semantics
 
 - Revisions are immutable and content-addressed where practical.
@@ -63,6 +65,12 @@ One logical model can span installations controlled by different companies. Each
 Deliver verified mirrors before collaboration between installations. Preserve stable entity identities, revision ancestry, artifacts, and review evidence across copies. Project governance defines acceptance authority independently of server ownership. Disconnected work can diverge and requires semantic reconciliation and applicable human review before shared acceptance.
 
 See [Independent project mirrors](project-mirrors.md) for the replication boundaries, delivery order, and two-installation acceptance scenarios. These are architecture requirements for future implementation.
+
+## Data model research
+
+The [versioned BIM data model research](research/versioned-bim-data-model.md) compares IFC, existing authoring systems, and versioned model platforms. It proposes qualification experiments for identity, relationship semantics, regeneration, concurrency, and storage before the persistence schema is adopted. Its recommendations remain proposals.
+
+The [current design candidate](design/versioned-model-candidate.md) records the suggestion being tested. The [qualification program](experiments/README.md) tracks experiment definitions, immutable run evidence, parallel execution streams, and the synthetic 200,000 m² hospital database benchmark. These records do not establish that the design is implemented or qualified.
 
 ## First vertical slice
 

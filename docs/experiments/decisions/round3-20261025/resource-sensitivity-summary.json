@@ -1,0 +1,687 @@
+{
+  "samples": [
+    {
+      "runId": "r3-resource-baseline-1",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 99.536728,
+      "clientCpuSeconds": 48.514105,
+      "clientPeakBytes": 221560832,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 48.539900289,
+      "publicationSeconds": 26.762295055000003,
+      "analyzeSeconds": 0.3442147029999906,
+      "wal_bytes": 835289536,
+      "wal_fpi": 51,
+      "wal_records": 3456624,
+      "wal_sync": 1254,
+      "wal_sync_time": 7816.7119999999995,
+      "wal_write_time": 276.30600000000004,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-cpu-1",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 109.027348,
+      "clientCpuSeconds": 53.137266,
+      "clientPeakBytes": 220045312,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 59.648103842,
+      "publicationSeconds": 27.31094240300001,
+      "analyzeSeconds": 0.2854328469999891,
+      "wal_bytes": 833592541,
+      "wal_fpi": 42,
+      "wal_records": 3469299,
+      "wal_sync": 1292,
+      "wal_sync_time": 11059.802999999985,
+      "wal_write_time": 169.8800000000001,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-memory-1",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 102.897379,
+      "clientCpuSeconds": 52.696485,
+      "clientPeakBytes": 226111488,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 54.711071238,
+      "publicationSeconds": 25.934889503000004,
+      "analyzeSeconds": 0.2863649319999968,
+      "wal_bytes": 840143963,
+      "wal_fpi": 44,
+      "wal_records": 3470882,
+      "wal_sync": 1282,
+      "wal_sync_time": 7177.453000000009,
+      "wal_write_time": 173.13799999999992,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-loader-cpu-1",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 102.78138,
+      "clientCpuSeconds": 51.974554,
+      "clientPeakBytes": 215068672,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 53.509785072,
+      "publicationSeconds": 28.732798545000005,
+      "analyzeSeconds": 0.3931210169999977,
+      "wal_bytes": 841091122,
+      "wal_fpi": 41,
+      "wal_records": 3471098,
+      "wal_sync": 1296,
+      "wal_sync_time": 7599.133999999991,
+      "wal_write_time": 237.12800000000016,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-cpu-2",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 109.053338,
+      "clientCpuSeconds": 45.597341,
+      "clientPeakBytes": 209817600,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 60.517744420999996,
+      "publicationSeconds": 26.180016823000006,
+      "analyzeSeconds": 0.2927220779999916,
+      "wal_bytes": 833437137,
+      "wal_fpi": 41,
+      "wal_records": 3466820,
+      "wal_sync": 1284,
+      "wal_sync_time": 24521.71099999998,
+      "wal_write_time": 251.67399999999998,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-memory-2",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 103.857975,
+      "clientCpuSeconds": 52.542969,
+      "clientPeakBytes": 218624000,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 55.458059547,
+      "publicationSeconds": 26.667535173999998,
+      "analyzeSeconds": 0.29228184000001056,
+      "wal_bytes": 840123167,
+      "wal_fpi": 41,
+      "wal_records": 3470912,
+      "wal_sync": 1274,
+      "wal_sync_time": 7699.445999999996,
+      "wal_write_time": 155.07000000000016,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-loader-cpu-2",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 109.214708,
+      "clientCpuSeconds": 44.870006,
+      "clientPeakBytes": 220835840,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 41.851589182999994,
+      "publicationSeconds": 27.074859431999997,
+      "analyzeSeconds": 0.3027883460000012,
+      "wal_bytes": 841112322,
+      "wal_fpi": 42,
+      "wal_records": 3471324,
+      "wal_sync": 1288,
+      "wal_sync_time": 9195.910000000003,
+      "wal_write_time": 196.67399999999998,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-baseline-2",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 103.909553,
+      "clientCpuSeconds": 49.994235,
+      "clientPeakBytes": 217169920,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 50.840924399,
+      "publicationSeconds": 28.688962993999994,
+      "analyzeSeconds": 0.3509807860000001,
+      "wal_bytes": 836100603,
+      "wal_fpi": 41,
+      "wal_records": 3470870,
+      "wal_sync": 1284,
+      "wal_sync_time": 7594.856,
+      "wal_write_time": 209.52299999999968,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-memory-3",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 102.815238,
+      "clientCpuSeconds": 52.285287,
+      "clientPeakBytes": 214937600,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 54.27627629,
+      "publicationSeconds": 26.287659196999993,
+      "analyzeSeconds": 0.29972516700001145,
+      "wal_bytes": 840121667,
+      "wal_fpi": 41,
+      "wal_records": 3470965,
+      "wal_sync": 1267,
+      "wal_sync_time": 7226.238000000012,
+      "wal_write_time": 159.28499999999985,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-loader-cpu-3",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 99.638902,
+      "clientCpuSeconds": 51.302371,
+      "clientPeakBytes": 236363776,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 52.304964611,
+      "publicationSeconds": 26.742178179000003,
+      "analyzeSeconds": 0.30887340399999813,
+      "wal_bytes": 841104542,
+      "wal_fpi": 42,
+      "wal_records": 3471190,
+      "wal_sync": 1289,
+      "wal_sync_time": 8803.360000000015,
+      "wal_write_time": 315.33600000000024,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-baseline-3",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 109.748458,
+      "clientCpuSeconds": 52.579079,
+      "clientPeakBytes": 216313856,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 60.304369582,
+      "publicationSeconds": 26.879194225999992,
+      "analyzeSeconds": 0.29072172400000273,
+      "wal_bytes": 836016578,
+      "wal_fpi": 42,
+      "wal_records": 3468947,
+      "wal_sync": 1301,
+      "wal_sync_time": 13655.260999999999,
+      "wal_write_time": 170.98199999999997,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-cpu-3",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 103.456283,
+      "clientCpuSeconds": 52.029003,
+      "clientPeakBytes": 222720000,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 54.111003355,
+      "publicationSeconds": 26.57348543,
+      "analyzeSeconds": 0.29330152500000256,
+      "wal_bytes": 833628607,
+      "wal_fpi": 40,
+      "wal_records": 3470419,
+      "wal_sync": 1288,
+      "wal_sync_time": 7926.401999999973,
+      "wal_write_time": 190.48999999999978,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-loader-cpu-4",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 99.468899,
+      "clientCpuSeconds": 50.994254,
+      "clientPeakBytes": 214900736,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 50.650291793,
+      "publicationSeconds": 27.491942256999994,
+      "analyzeSeconds": 0.2990717080000031,
+      "wal_bytes": 841101725,
+      "wal_fpi": 42,
+      "wal_records": 3471141,
+      "wal_sync": 1276,
+      "wal_sync_time": 7773.660999999993,
+      "wal_write_time": 239.1359999999995,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-baseline-4",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 126.960544,
+      "clientCpuSeconds": 55.471616,
+      "clientPeakBytes": 212197376,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 77.119791858,
+      "publicationSeconds": 27.169919487000005,
+      "analyzeSeconds": 0.361964718999996,
+      "wal_bytes": 837171192,
+      "wal_fpi": 44,
+      "wal_records": 3487990,
+      "wal_sync": 1325,
+      "wal_sync_time": 26741.91599999997,
+      "wal_write_time": 222.96500000000015,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-cpu-4",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 104.070236,
+      "clientCpuSeconds": 52.200423,
+      "clientPeakBytes": 208764928,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 53.621127322,
+      "publicationSeconds": 28.108629518999994,
+      "analyzeSeconds": 0.30133220900000013,
+      "wal_bytes": 832694663,
+      "wal_fpi": 27,
+      "wal_records": 3456191,
+      "wal_sync": 1271,
+      "wal_sync_time": 8725.925999999978,
+      "wal_write_time": 280.84200000000055,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-memory-4",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 100.385444,
+      "clientCpuSeconds": 50.560618,
+      "clientPeakBytes": 214540288,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 50.781980374,
+      "publicationSeconds": 27.034652125999994,
+      "analyzeSeconds": 0.3085130530000024,
+      "wal_bytes": 840132132,
+      "wal_fpi": 42,
+      "wal_records": 3471006,
+      "wal_sync": 1269,
+      "wal_sync_time": 8010.70199999999,
+      "wal_write_time": 154.3800000000001,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-baseline-5",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 121.090407,
+      "clientCpuSeconds": 51.982176,
+      "clientPeakBytes": 218042368,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 53.993625570999995,
+      "publicationSeconds": 27.787197714999994,
+      "analyzeSeconds": 0.2904887589999998,
+      "wal_bytes": 836100086,
+      "wal_fpi": 42,
+      "wal_records": 3470726,
+      "wal_sync": 1271,
+      "wal_sync_time": 8238.004000000015,
+      "wal_write_time": 266.89400000000023,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-cpu-5",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 108.726377,
+      "clientCpuSeconds": 52.963031,
+      "clientPeakBytes": 223977472,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 57.566504302,
+      "publicationSeconds": 28.888230562000004,
+      "analyzeSeconds": 0.4710076399999962,
+      "wal_bytes": 831642754,
+      "wal_fpi": 27,
+      "wal_records": 3438369,
+      "wal_sync": 1282,
+      "wal_sync_time": 9607.010999999999,
+      "wal_write_time": 199.19400000000041,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-db-memory-5",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 101.863223,
+      "clientCpuSeconds": 51.840442,
+      "clientPeakBytes": 210628608,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 53.878821939,
+      "publicationSeconds": 26.036874730000005,
+      "analyzeSeconds": 0.3151303729999927,
+      "wal_bytes": 841196902,
+      "wal_fpi": 43,
+      "wal_records": 3488921,
+      "wal_sync": 1300,
+      "wal_sync_time": 7099.450000000012,
+      "wal_write_time": 195.77099999999973,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    },
+    {
+      "runId": "r3-resource-loader-cpu-5",
+      "passed": true,
+      "sourceCommit": "d3160be232eabbb99e371b427c8bfb422b41d490",
+      "jobSeconds": 99.690415,
+      "clientCpuSeconds": 51.625938,
+      "clientPeakBytes": 215465984,
+      "checkpointWarnings": 0,
+      "ingestSeconds": 51.545391288,
+      "publicationSeconds": 27.191236906999997,
+      "analyzeSeconds": 0.3198947740000003,
+      "wal_bytes": 841104741,
+      "wal_fpi": 42,
+      "wal_records": 3471197,
+      "wal_sync": 1280,
+      "wal_sync_time": 8227.38500000001,
+      "wal_write_time": 194.47199999999975,
+      "checkpoints_req": 0,
+      "checkpoints_timed": 0,
+      "checkpoint_write_time": 0,
+      "checkpoint_sync_time": 0
+    }
+  ],
+  "summary": {
+    "baseline": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 109.748458,
+        "range": [
+          99.536728,
+          126.960544
+        ]
+      },
+      "ingestSeconds": {
+        "median": 53.993625570999995,
+        "range": [
+          48.539900289,
+          77.119791858
+        ]
+      },
+      "publicationSeconds": {
+        "median": 27.169919487000005,
+        "range": [
+          26.762295055000003,
+          28.688962993999994
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 51.982176,
+        "range": [
+          48.514105,
+          55.471616
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 217169920,
+        "range": [
+          212197376,
+          221560832
+        ]
+      },
+      "wal_bytes": {
+        "median": 836100086,
+        "range": [
+          835289536,
+          837171192
+        ]
+      },
+      "wal_sync": {
+        "median": 1284,
+        "range": [
+          1254,
+          1325
+        ]
+      },
+      "wal_sync_time": {
+        "median": 8238.004000000015,
+        "range": [
+          7594.856,
+          26741.91599999997
+        ]
+      }
+    },
+    "db-cpu": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 108.726377,
+        "range": [
+          103.456283,
+          109.053338
+        ]
+      },
+      "ingestSeconds": {
+        "median": 57.566504302,
+        "range": [
+          53.621127322,
+          60.517744420999996
+        ]
+      },
+      "publicationSeconds": {
+        "median": 27.31094240300001,
+        "range": [
+          26.180016823000006,
+          28.888230562000004
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 52.200423,
+        "range": [
+          45.597341,
+          53.137266
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 220045312,
+        "range": [
+          208764928,
+          223977472
+        ]
+      },
+      "wal_bytes": {
+        "median": 833437137,
+        "range": [
+          831642754,
+          833628607
+        ]
+      },
+      "wal_sync": {
+        "median": 1284,
+        "range": [
+          1271,
+          1292
+        ]
+      },
+      "wal_sync_time": {
+        "median": 9607.010999999999,
+        "range": [
+          7926.401999999973,
+          24521.71099999998
+        ]
+      }
+    },
+    "db-memory": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 102.815238,
+        "range": [
+          100.385444,
+          103.857975
+        ]
+      },
+      "ingestSeconds": {
+        "median": 54.27627629,
+        "range": [
+          50.781980374,
+          55.458059547
+        ]
+      },
+      "publicationSeconds": {
+        "median": 26.287659196999993,
+        "range": [
+          25.934889503000004,
+          27.034652125999994
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 52.285287,
+        "range": [
+          50.560618,
+          52.696485
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 214937600,
+        "range": [
+          210628608,
+          226111488
+        ]
+      },
+      "wal_bytes": {
+        "median": 840132132,
+        "range": [
+          840121667,
+          841196902
+        ]
+      },
+      "wal_sync": {
+        "median": 1274,
+        "range": [
+          1267,
+          1300
+        ]
+      },
+      "wal_sync_time": {
+        "median": 7226.238000000012,
+        "range": [
+          7099.450000000012,
+          8010.70199999999
+        ]
+      }
+    },
+    "loader-cpu": {
+      "n": 5,
+      "allFidelityPassed": true,
+      "jobSeconds": {
+        "median": 99.690415,
+        "range": [
+          99.468899,
+          109.214708
+        ]
+      },
+      "ingestSeconds": {
+        "median": 51.545391288,
+        "range": [
+          41.851589182999994,
+          53.509785072
+        ]
+      },
+      "publicationSeconds": {
+        "median": 27.191236906999997,
+        "range": [
+          26.742178179000003,
+          28.732798545000005
+        ]
+      },
+      "clientCpuSeconds": {
+        "median": 51.302371,
+        "range": [
+          44.870006,
+          51.974554
+        ]
+      },
+      "clientPeakBytes": {
+        "median": 215465984,
+        "range": [
+          214900736,
+          236363776
+        ]
+      },
+      "wal_bytes": {
+        "median": 841104542,
+        "range": [
+          841091122,
+          841112322
+        ]
+      },
+      "wal_sync": {
+        "median": 1288,
+        "range": [
+          1276,
+          1296
+        ]
+      },
+      "wal_sync_time": {
+        "median": 8227.38500000001,
+        "range": [
+          7599.133999999991,
+          9195.910000000003
+        ]
+      }
+    }
+  },
+  "scope": "Reduced resource sensitivity only; no full-model memory or hardware winner"
+}

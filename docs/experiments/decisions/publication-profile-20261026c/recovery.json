@@ -1,0 +1,146 @@
+{
+  "overallStatus": "ISSUES",
+  "profileWorkStatus": "PASS",
+  "launcherExitCode": 1,
+  "recordedAt": "2026-10-26T06:03:56.301866+00:00",
+  "leaseReleased": true,
+  "leaseId": "house161-profile-20261026c",
+  "measuredSource": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+  "harnessCommit": "de4762f48d33365ea499e229dfb71c00031711fe",
+  "readySealSha256": "dc4ba4a156edf1a79ff3b306665f7ccc67ee1a00275b9fd7805aa785996e9080",
+  "containers": {
+    "bim-issue162-profile-20261026a-pg": {
+      "id": "7914eda0a7a6f8cdad6b2074d136353f3e51bcbca37e33f095e4112ad6802ba2",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-26T05:58:45.324635704Z",
+        "FinishedAt": "2026-10-26T06:00:24.182401169Z"
+      },
+      "image": "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc",
+      "limits": {
+        "NanoCpus": 1500000000,
+        "Memory": 3221225472,
+        "MemorySwap": 3221225472,
+        "PortBindings": {}
+      },
+      "owner": "f786c17d-74dd-4653-92c6-a83c583c6d34"
+    },
+    "bim-issue162-profile-20261026a-client": {
+      "id": "e8316ca989df716c60ca2acc0816b676c447bf54d1a65dc5650b1d8a77b1a3ab",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-26T05:58:48.187616692Z",
+        "FinishedAt": "2026-10-26T06:00:22.150488254Z"
+      },
+      "image": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "limits": {
+        "NanoCpus": 1000000000,
+        "Memory": 1073741824,
+        "MemorySwap": 1073741824,
+        "PortBindings": {}
+      },
+      "owner": "f786c17d-74dd-4653-92c6-a83c583c6d34"
+    },
+    "bim-issue162-profile-20261026a-budget": {
+      "id": "8427c50f962b6aef549da8432896197e62d0229c7f76b7fc82a8ed7262c50896",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-26T05:58:41.852295004Z",
+        "FinishedAt": "2026-10-26T06:00:24.401269534Z"
+      },
+      "image": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "limits": {
+        "NanoCpus": 250000000,
+        "Memory": 268435456,
+        "MemorySwap": 268435456,
+        "PortBindings": {}
+      },
+      "owner": "f786c17d-74dd-4653-92c6-a83c583c6d34"
+    },
+    "bim-qvm-db": {
+      "id": "28c0471fd5ebaead5d81ac57ee1bcb0e2d036e6320be8e33033751059561c130",
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 828519,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-26T00:10:29.919839581Z",
+        "FinishedAt": "2026-10-25T17:54:19.009316089Z"
+      },
+      "image": "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc",
+      "limits": {
+        "NanoCpus": 1500000000,
+        "Memory": 3221225472,
+        "MemorySwap": 6442450944,
+        "PortBindings": {}
+      },
+      "owner": null
+    },
+    "bim-qvm-r3-db": {
+      "id": "f9de27ac9264129b88193d18d0b724a5d27afa7fc242a258827152ef35968d86",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-25T17:54:19.723420244Z",
+        "FinishedAt": "2026-10-26T00:10:29.656411276Z"
+      },
+      "image": "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc",
+      "limits": {
+        "NanoCpus": 1500000000,
+        "Memory": 3221225472,
+        "MemorySwap": 3221225472,
+        "PortBindings": {}
+      },
+      "owner": null
+    }
+  },
+  "watchdogPid": 1219186,
+  "watchdogProcessState": "absent",
+  "nativeTerminalFilePresent": false,
+  "nativeControllerDonePresent": false,
+  "finalizationFailure": "PermissionError overwriting client.stdout.log: client created it as root before host controller log collection. stop_owned() had already run. Finalization never reached terminal/done/evidence manifest writes.",
+  "watchdogOutcome": {
+    "unix": 1792994437.715079,
+    "error": "Budget stale or breached"
+  },
+  "evidenceKind": "Post hoc read-only collection, not the controller terminal record",
+  "datasetExecutions": 1,
+  "rerunPerformed": false,
+  "previewTouched": false
+}

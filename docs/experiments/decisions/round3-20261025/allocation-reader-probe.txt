@@ -1,0 +1,9 @@
+PASS real complete server-container allocation scan
+du: temporary file disappeared
+Allocation scan attempt 1 failed; no estimate accepted
+PASS transient failure requires a fresh successful complete scan
+PASS persistent fails closed without an estimate
+PASS malformed fails closed without an estimate
+PASS timeout fails closed without an estimate
+PASS actual missing directory fails closed
+Retained fixture: /qualification/round3/artifacts/allocation-reader-check/allocation-test.cql2ZB

@@ -1,0 +1,19 @@
+✔ level-full-dependent-delta (11.871374ms)
+✔ host-full-dependent-delta (4.315925ms)
+✔ fatal-atomic-rollback (4.539273ms)
+✔ pending-atomic-rollback (2.658491ms)
+✔ dependency-cycle-rejected (69.781379ms)
+✔ connectivity-cycle-allowed (2.325606ms)
+✔ missing-host-rejected (2.051897ms)
+✔ duplicate-entity-rejected (2.181042ms)
+✔ input-order-independent (2.424832ms)
+✔ typebox-input-boundary (0.866529ms)
+✔ observations enforce the frozen EX-07 protocol (1.050796ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 951.333183

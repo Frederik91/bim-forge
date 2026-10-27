@@ -1,0 +1,33 @@
+{
+  "runnerCommit": "49f363e940720903caed6171e2ea5b4ac3b358ee",
+  "admissionSource": "c0ad96765e8fee8088188894dc484f3a81704dda",
+  "actualScale": "reduced",
+  "records": 270205,
+  "fullSelectionTemplates": [
+    {
+      "caseId": "hot-space-members",
+      "wireField": "space_id",
+      "column": "container_id",
+      "targetId": "entity:0000000000000000046",
+      "expectedCount": 1352042,
+      "expectedSha256": "ce2944735406291470357d0829b62ad6dcd91cc3800bff41b926a09de0aa7b8d"
+    },
+    {
+      "caseId": "shared-type-members",
+      "wireField": "type_id",
+      "column": "type_id",
+      "targetId": "entity:0000000000000012246",
+      "expectedCount": 16000,
+      "expectedSha256": "9d404dfcd9625070019fd2fbf2a16828517dd97589283e057144ce4efd73184f"
+    },
+    {
+      "caseId": "system-members-including-ports",
+      "wireField": "system_id",
+      "column": "system_id",
+      "targetId": "entity:0000000000000010246",
+      "expectedCount": 2842,
+      "expectedSha256": "6f8c98ca95ca643a443c9a6a78a2fa5de32177865ef9d50a19fef05dc3b199de"
+    }
+  ],
+  "scope": "Actual immutable admission files validated without any database connection. This is no full qualification or performance pass."
+}

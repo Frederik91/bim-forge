@@ -1,0 +1,115 @@
+# Qualify an admitted hospital branch (#142)
+
+Plan: add only `qualification.ts`, `qualification.test.ts` and this guide. Reuse
+`Storage` and the fixed-template `verifySelections` oracle. Verify source-bound
+load fidelity, then sample reads and two durable metadata commits on one entity.
+Acceptance evidence is strict/root validation, rejection cases and a real PG15
+smoke run in a separate server database. Main owns full execution and final review.
+
+Import `runQualification` from `benchmarks/hospital/workloads/qualification.ts` in
+main's server-side driver. Pass the config below and a **new** output directory.
+Check the returned `passed`; a failed result must cause the caller to fail its job.
+No shared CLI changes are needed. `DATABASE_URL` and `QVM_EXECUTION_LEASE` must be
+explicit environment variables. One connection is active at a time, including
+reconnections after accepted commits. Main must grant the exclusive full-data
+slot and enforce the external resource/disk watchdog before invoking it.
+
+```json
+{
+  "runId": "main-supplied-unique-run",
+  "branch": "already-admitted-branch",
+  "scale": "full",
+  "sourceCommit": "<40 hex characters: prior admission source commit>",
+  "manifest": { "file": "/qualification/inputs/manifest.json", "sha256": "<exact source manifest SHA-256>" },
+  "admission": { "file": "/qualification/inputs/admission.json", "sha256": "<exact supplied admission SHA-256>" },
+  "priorAdmissionDir": "/qualification/artifacts/completed-load",
+  "priorSha256": {
+    "config.json": "<exact SHA-256>",
+    "load.json": "<exact SHA-256>",
+    "oracle.json": "<exact SHA-256>",
+    "property-values.json": "<exact SHA-256>",
+    "observations.json": "<exact SHA-256>",
+    "errors.json": "<exact SHA-256>"
+  },
+  "repeats": 3,
+  "pageSize": 50,
+  "maximumSelectionRows": 2000000,
+  "statementTimeoutMs": 30000,
+  "wallTimeMs": 900000
+}
+```
+
+Compute pins from the completed immutable artifacts before this run. The prior
+config must describe EX-13 `load-only`, W4 COPY or generator admission, the same
+branch, scale and source commit. Its load record must hash the exact admission
+bytes supplied here. Relocated mount paths are supported: content hashes bind
+the admission and its source manifest; its SQL is never executed. All table
+counts/hashes must match the manifest. Prior expected/actual fingerprint, kind
+counts and property counts must agree with the load and manifest. Both successful
+`source-query-oracle` and inventory-completion observations and empty errors are
+required. The completion label must match the parsed prior `execution.purpose`:
+`extended-initial-inventory` requires that exact label, and
+`resource-sensitivity-initial-inventory` requires its own exact label. Ordinary
+purposes, including legacy configs with no purpose, retain `initial-inventory`.
+Unknown or malformed purposes are rejected. Each required observation must be
+unique and successful; a different successful case cannot substitute for it.
+This continuation check preserves the distinct experiment label and cannot
+reclassify an extended completion as passing the original two-hour target.
+Full requires exactly 6,777,445 entities, 18,742,644 relationships and
+1,500,000 parameters at inventory fraction 1. `smoke` and `reduced` retain their actual manifest scale. Empty declared catalog categories represent no rows and are omitted when comparing observed counts; every positive count remains required. The full inventory gate is unchanged.
+
+The published head, initial-load revision payload and its hash must still match.
+The driver then performs independent space/type/system count and ordered-ID hash
+oracles before writes. It records page/detail/one-hop checksums and counts, edits
+one document with `qualificationRun`, reconnects to verify the accepted receipt,
+delta, current body and pinned history rows, then restores the original document
+through a second accepted commit and reconnects again. **The branch head advances
+twice.** Its initial revision and both subsequent deltas remain reviewable. Restoring the document reuses its original content hash.
+An interrupted run can leave the marker committed; retain its outputs and let
+main choose recovery. The runner refuses to restart from an advanced head.
+
+No schema initialization, import, branch creation, full fingerprint/property scan,
+full metrics, recursive historical reconstruction or full branch copies occur in
+the runner. Indexed history queries select at most three known revision rows.
+Selection reads are capped at 1,000 rows/page and the configured total per oracle;
+the configurable total may be at most 10,000,000. Reaching that cap before
+exhaustion fails. Interactive pages cap at 100, repeats
+at 5. A conservative SQL query upper bound is recorded (including transaction,
+configuration and receipt statements); concurrency is 1. Each statement has a
+timeout and an overall timer closes the connection at the deadline. The integrated `Storage.accept` validates scoped outgoing and incoming references inside its locked transaction. Initial imports retain the full graph validator. The driver preserves both contracts.
+
+Output retains exact admission, manifest and six prior artifact bytes with hashes,
+raw `samples.ndjson` including failed samples, independent `selections.json`,
+accepted proposals with before/after version IDs, bounded history rows, observations,
+errors and `result.json` with actual attempted/success/error and committed/verified
+change counts. Partial outputs remain after failure. Invalid config or an existing
+output directory throws before execution. A local pass describes these exploratory
+small samples only; main's combined review owns the terminal qualification status.
+
+Tests require a server container with the tools image, its dependencies, a fresh
+`qvm_w5_issue142_*` database, lease and `QVM142_ARTIFACT_ROOT`. Run root
+`npm run validate`, then the focused strict check and runner tests:
+
+```sh
+node_modules/.bin/tsc --ignoreConfig --noEmit --strict --noUncheckedIndexedAccess \
+  --exactOptionalPropertyTypes --module nodenext --target es2024 \
+  --allowImportingTsExtensions --skipLibCheck \
+  benchmarks/hospital/workloads/qualification.ts \
+  benchmarks/hospital/workloads/qualification.test.ts
+node --test benchmarks/hospital/workloads/qualification.test.ts
+```
+
+The test
+alone initializes/imports its six-record fixture and performs full scans of that
+fixture to create and independently check admission evidence. Failed and successful
+test artifacts are retained below the explicit artifact root.
+
+Server evidence on 25 October: source `78ce3e5b785e87132a3da6e0e46d7ff2ff6ca08d`
+passed root validation, the focused strict check and 12/12 tests against
+`qvm_w5_issue142_b`, with test client limited to 0.5 CPU / 1 GiB. Artifacts:
+`/ssd1/bim-forge-qualification/qvm-20261025/artifacts/issue142-runner-b`
+(`validate.log`, `strict-focused.log`, `tests.log`, and `fixtures/runner-*/`).
+Attempt A retains the corrected generic-return compiler error. Attempt B's
+`strict.log` retains the separate attempted whole-repository unchecked-index
+check: pre-existing viewer/product errors prevent that broader check. The root
+check and the stronger focused check both pass; no validators were changed.

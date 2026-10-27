@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-09",
+  "runId": "w6-pg-0247bdd-02-terminal-v1",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T12:05:27.832Z",
+  "finishedAt": "2026-10-25T12:05:45.629Z",
+  "hypothesis": "The disposable W5 candidate and governed W6 wrapper preserve immutable history, complete publication, retry receipts and review evidence through the declared recovery cases.",
+  "variant": "VM-C1; W5 PostgreSQL 15 candidate plus W6 portable packages and explicitly simulated discipline policy; tiny W0 fixture only.",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "path": "docs/experiments/registry.json",
+    "sha256": "c56ab9a7b13d404b76c0e63acef3c48fe4684061dd8f9ccbaa42a6e925802da3"
+  },
+  "implementation": {
+    "sourceCommit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "runnerCommit": "0247bdd381e565a9e885c62bbcbd85fbc3108c0d",
+    "validators": [
+      "W0 observation parser and evidence/Git verifier",
+      "W5 canonical hashes and PostgreSQL constraints",
+      "W6 case assertions and TypeBox boundaries"
+    ]
+  },
+  "dataset": {
+    "name": "W0 qvm-tiny-building-v1 with deterministic W6 changes",
+    "seed": "No random generator used.",
+    "manifestSha256": "65923d59dfc1014f2a4790113dee7c41dabf75fd0e5912f7303ddfe7efb3df7f"
+  },
+  "environment": {
+    "host": "fun-server; client 9bcfcf92062a",
+    "software": {
+      "node": "v24.22.1",
+      "postgres": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "fsync": "on",
+      "synchronous_commit": "on",
+      "full_page_writes": "on"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff"
+    ],
+    "cpuLimit": 0.5,
+    "memoryLimitBytes": 1610612736,
+    "diskBudgetBytes": null,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/artifacts/w6-0247bdd-postgres-02; independent qvm_w5_recovery databases and artifact roots.",
+    "cacheProcedure": "No shared cache flush; correctness execution only; no performance claim.",
+    "measurementSlot": "coordinator-authorized-w6-correctness-20261025"
+  },
+  "commands": [
+    "node experiments/recovery/postgres.ts /evidence/postgres-input.json /evidence/database-lease.json"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-09",
+      "caseId": "pinned-historical-query",
+      "expected": "Query the old accepted revision through its pinned reader before and after schema, dictionary, canonicalization and kernel changes; original model and representation bytes remain unchanged.",
+      "passed": false,
+      "observed": "Partial execution is recorded by postgres-history-format-dictionary-upgrade. A geometry-kernel upgrade has not executed, so the complete EX-09 assertion remains unqualified.",
+      "limitations": [
+        "No real old/new geometry engine is available in this runner. Version descriptor changes cannot substitute for executing an engine upgrade."
+      ]
+    },
+    {
+      "experimentId": "EX-09",
+      "caseId": "postgres-history-format-dictionary-upgrade",
+      "expected": "Change a real representation format, property dictionary and serialization while retaining exact old database bytes and querying them with pinned and upgraded readers.",
+      "observed": "Real PostgreSQL retained exact 89204cde3ac2770a3685a2fcabadfd1c23e8bd456d72b921b181bc1972adf124 bytes and canonical version 28f13d249b3ef98e0fcd1cfe7b3071e8342b3cdade4312b94bda1ac51a64fc9e after changing the representation shape, owner dictionary keys and serialization. Both the pinned v1 reader and upgraded reader reopened the historical model. No geometry kernel was executed.",
+      "passed": true,
+      "limitations": [
+        "This is a disposable W6 representation format over the W0 fixture. No production schema or geometry engine is migrated."
+      ]
+    }
+  ],
+  "observationsArtifact": "postgres/w6-pg-0247bdd-02/observations.json",
+  "coverage": [
+    {
+      "assertion": "Old immutable bytes and hashes remain retrievable.",
+      "caseIds": [
+        "postgres-history-format-dictionary-upgrade"
+      ],
+      "coverage": "covered"
+    },
+    {
+      "assertion": "Schema, dictionary, canonicalization and geometry-engine changes have pinned interpretation.",
+      "caseIds": [
+        "pinned-historical-query",
+        "postgres-history-format-dictionary-upgrade"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "An upgraded reader does not silently replace a historical accepted representation.",
+      "caseIds": [
+        "postgres-history-format-dictionary-upgrade"
+      ],
+      "coverage": "covered"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "MANIFEST.sha256",
+      "bytes": 86265,
+      "sha256": "486338154349660e799fb0e1decbefb66349a26cbafe39d71030722493dfd1a7",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-input.json",
+      "bytes": 300,
+      "sha256": "0e25221bd022dc88df362bf14c2e6b6a78636b09106c3fc412ad8bc46e5760a2",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "database-lease.json",
+      "bytes": 286,
+      "sha256": "bb8efc94163443ac26fba79210dc04aa8f592145b380130f54429430b3537b0f",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "database-post-run-state.txt",
+      "bytes": 72,
+      "sha256": "889615bb1ae62ca9309ae5e2c0281431aece396ee4bdc3494b96d8863ed1af9f",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-image-id.txt",
+      "bytes": 72,
+      "sha256": "3b40641dd3b5c804e2559d92a01d435ee68e2f6825361260b4820a640493440e",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "runner.exit-code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/source-bindings.json",
+      "bytes": 1770,
+      "sha256": "d38f391ef532884e29d4c073fcaeda3f356e27fcd200ced3290be66bd6f20bc8",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/environment.json",
+      "bytes": 645,
+      "sha256": "44aaa7992d9479e78584a37c832e7739ace87c0dba094285fab0505e41750423",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/execution-input.json",
+      "bytes": 704,
+      "sha256": "37272b8a61921d98f6dc5dc0b810a7563078737163031206537cdf8c50f4342a",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/observations.json",
+      "bytes": 6073,
+      "sha256": "4943184977e3d910ae8cb062764a0cee516eb3299bffd6489e24ea6c14261e7c",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/history-original.json",
+      "bytes": 2714,
+      "sha256": "89204cde3ac2770a3685a2fcabadfd1c23e8bd456d72b921b181bc1972adf124",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/history-upgraded.json",
+      "bytes": 5101,
+      "sha256": "3e5d532f17763f52ea0cf9046a095582ed88d27b81107eaa2bd96d07604c6e15",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/history-query-evidence.json",
+      "bytes": 12276,
+      "sha256": "1b76b6dc067216ac491c5272342e189d3d81b77144b3ea4cfbd4b1a576836de9",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres/w6-pg-0247bdd-02/final-source.json",
+      "bytes": 609022,
+      "sha256": "ee5e3d951c8154d04425f06aa6291b9f8bee9003fa2db64e4267b31eecd1481d",
+      "mediaType": "application/json"
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "Terminal interpretation is retrospective; no database or correctness test was rerun to prepare this record.",
+    "Times use retained source-binding and final-observation file mtimes as execution bounds, not instrumented process timings.",
+    "Client limits were 0.5 CPU and 1536 MiB. Separate databases and artifact roots used one PostgreSQL server and test role.",
+    "No real old/new geometry engine is available in this runner. Version descriptor changes cannot substitute for executing an engine upgrade.",
+    "This is a disposable W6 representation format over the W0 fixture. No production schema or geometry engine is migrated.",
+    "No numeric disk budget was recorded in the correctness execution lease. diskBudgetBytes is null; this inconclusive record does not establish a budgeted qualification pass."
+  ],
+  "decisionImplications": [
+    "No registry update, architecture adoption or review approval is implied.",
+    "EX-09 lacks a real geometry-engine upgrade; EX-12 does not qualify independent identity/key services or a multi-parent/network synchronization service.",
+    "W7 must assess scope and limitations against the exact assertion coverage."
+  ]
+}

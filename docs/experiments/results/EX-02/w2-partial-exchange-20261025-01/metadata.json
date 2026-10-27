@@ -1,0 +1,33 @@
+{
+  "sourceCommit": "be6e71b2cc641d669de9f2e57dec49623744100a",
+  "latestSourceCommit": "c30979d640a22ef8b4dc83f7307e111cd5d6546a",
+  "preparationStartedAt": "2026-10-25T11:51:11Z",
+  "downstreamStartedAt": "2026-10-25T12:07:02Z",
+  "downstreamFinishedAt": "2026-10-25T12:07:04Z",
+  "imageDigest": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+  "diskBudgetBytes": 1073741824,
+  "diskBudgetProcedure": "1 GiB is the evidence-packaging budget declared and checked at finalization. The original preparation had no recorded W2 disk budget; this value is not a historical enforced run quota.",
+  "latestRootValidate": "passed",
+  "latestScopedTypecheck": "passed",
+  "latestNativeTests": 3,
+  "latestPythonTests": 8,
+  "preparationRerun": false,
+  "latestFullIfcPreparationValidated": false,
+  "commands": [
+    "Historical source be6e71b: npm run validate",
+    "Historical source be6e71b: ./node_modules/.bin/tsc --project experiments/ifc/tsconfig.json --noEmit",
+    "Historical source be6e71b: node --test experiments/ifc/native.test.ts",
+    "Historical source be6e71b: /qualification/python/bin/python -m unittest discover -s experiments/ifc -p test_*.py -v",
+    "Historical source be6e71b: node experiments/ifc/native.ts generate /qualification/w2-runs/w2-debug-be6e71b-ifc-attempt2-inputs",
+    "Historical, already executed once: /qualification/python/bin/python experiments/ifc/run.py prepare --inputs /qualification/w2-runs/w2-debug-be6e71b-ifc-attempt2-inputs --output /qualification/w2-runs/w2-debug-be6e71b-ifc-attempt2 --source-commit be6e71b2cc641d669de9f2e57dec49623744100a",
+    "Distinct downstream task: sha256/byte-size verification of 74 retained artifacts, then copy to /qualification/w2-runs/w2-downstream-be6e71b-20261025-01",
+    "Historical runner, distinct downstream: node experiments/ifc/native.ts import-properties /qualification/w2-runs/w2-downstream-be6e71b-20261025-01/inputs/rotated-mm-r1.json /qualification/w2-runs/w2-downstream-be6e71b-20261025-01/property-inventory.json /qualification/w2-runs/w2-downstream-be6e71b-20261025-01/native-roundtrip.json",
+    "Historical runner, distinct downstream: node experiments/ifc/native.ts import-properties /qualification/w2-runs/w2-downstream-be6e71b-20261025-01/inputs/rotated-mm-r1.json /qualification/w2-runs/w2-downstream-be6e71b-20261025-01/bounded-property-inventory.json /qualification/w2-runs/w2-downstream-be6e71b-20261025-01/bounded-native-roundtrip.json",
+    "Historical runner, distinct downstream: /qualification/python/bin/python experiments/ifc/run.py roundtrip --inputs /qualification/w2-runs/w2-downstream-be6e71b-20261025-01/inputs --output /qualification/w2-runs/w2-downstream-be6e71b-20261025-01",
+    "Latest source c30979d640a22ef8b4dc83f7307e111cd5d6546a: PYTHONPATH=/qualification/w2-runs/w2-source-unit-c30979d-20261025-01/python-deps /qualification/python/bin/python -m pip install --only-binary=:all: --target /qualification/w2-runs/w2-source-unit-c30979d-20261025-01/python-deps -r experiments/ifc/requirements.txt",
+    "Latest source c30979d640a22ef8b4dc83f7307e111cd5d6546a: npm run validate",
+    "Latest source c30979d640a22ef8b4dc83f7307e111cd5d6546a: ./node_modules/.bin/tsc --project experiments/ifc/tsconfig.json --noEmit",
+    "Latest source c30979d640a22ef8b4dc83f7307e111cd5d6546a: node --test experiments/ifc/native.test.ts",
+    "Latest source c30979d640a22ef8b4dc83f7307e111cd5d6546a: PYTHONPATH=/qualification/w2-runs/w2-source-unit-c30979d-20261025-01/python-deps /qualification/python/bin/python -m unittest discover -s experiments/ifc -p test_*.py -v"
+  ]
+}

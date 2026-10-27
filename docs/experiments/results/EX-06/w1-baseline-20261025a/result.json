@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-06",
+  "runId": "w1-baseline-20261025a",
+  "executionStatus": "completed",
+  "conclusion": "failed",
+  "startedAt": "2026-10-25T11:52:46Z",
+  "finishedAt": "2026-10-25T11:52:51Z",
+  "hypothesis": "Does the existing native baseline satisfy the declared EX-06 assertions?",
+  "variant": "baseline-room-model",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/experiments/registry.json",
+    "sha256": "c56ab9a7b13d404b76c0e63acef3c48fe4684061dd8f9ccbaa42a6e925802da3"
+  },
+  "implementation": {
+    "sourceCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "runnerCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "validators": [
+      "strict-TypeScript",
+      "W1 behavior tests",
+      "qualification-contract-v1@fb61d97"
+    ]
+  },
+  "dataset": {
+    "name": "W1 deterministic native room and asset fixtures",
+    "seed": "not-randomized",
+    "manifestSha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f"
+  },
+  "environment": {
+    "host": "192.168.1.17",
+    "software": {
+      "node": "v24.22.1"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1610612736,
+    "diskBudgetBytes": 1073741824,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/artifacts",
+    "cacheProcedure": "not a performance measurement",
+    "measurementSlot": "w1-baseline-correctness-20261025a"
+  },
+  "commands": [
+    "node --test experiments/semantic/semantic.test.ts",
+    "node experiments/semantic/cli.ts --artifacts /qualification/artifacts/w1-baseline-20261025a/data"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-06",
+      "caseId": "declared-independent-metadata-fields",
+      "expected": "A declared rule permits cosmetic name plus classification edits only when dimensions, placement, support, and dependencies stay unchanged.",
+      "observed": "{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"Conflicting changes to chair-one. Revise this proposal against the current model.\"}}",
+      "passed": false,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Rule is a proposed bounded oracle, not an installed product rule. Baseline conservatively conflicts at entity granularity.",
+        "General typed metadata properties are not represented by this native schema."
+      ]
+    },
+    {
+      "experimentId": "EX-06",
+      "caseId": "divergent-same-property",
+      "expected": "Two divergent names on one object conflict and preserve the accepted value.",
+      "observed": "{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"Conflicting changes to chair-one. Revise this proposal against the current model.\"}}",
+      "passed": true,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence."
+      ]
+    },
+    {
+      "experimentId": "EX-06",
+      "caseId": "units-and-dependent-values",
+      "expected": "Units cannot merge as text; individually valid authored heights must recheck the dependent clearance after combination.",
+      "observed": "{\"dependency\":{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"The combined changes fail model validation: Furniture must fit below the room ceiling.. Revise this proposal against the current model.\"}},\"units\":{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"Unsupported model snapshot.\"}}}",
+      "passed": true,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Only canonical native metres and a ceiling inequality are tested; dictionary units and derived property regeneration are absent."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Declared independent metadata edits preserve both values.",
+      "caseIds": [
+        "declared-independent-metadata-fields"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Divergent changes to the same meaning conflict.",
+      "caseIds": [
+        "divergent-same-property"
+      ],
+      "coverage": "covered"
+    },
+    {
+      "assertion": "Units, authored inputs and dependent derived values cannot merge as independent text fields.",
+      "caseIds": [
+        "units-and-dependent-values"
+      ],
+      "coverage": "partial"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "w1-baseline-20261025a/data/raw.json",
+      "sha256": "38ef2a5601ce2d69bd7e84392780ed880d64913e91d2a6f1562d35a3b4442325",
+      "bytes": 343378,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/coverage.json",
+      "sha256": "07f03cc978709a45ae03159db04d66cf5dca3b642917114016a7d7ea8e0b8ee0",
+      "bytes": 4039,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/manifest.json",
+      "sha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f",
+      "bytes": 1454,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/observations.json",
+      "sha256": "3f50435205e2919e5d85ee565007fe3ccf9385488e659850849ece9eb01eeb0b",
+      "bytes": 69099,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/tests.log",
+      "sha256": "6a2dc7497752b519008eee656c291b1b352a5a5b3e093aaaca19a83f165f2467",
+      "bytes": 884,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/started-at.txt",
+      "sha256": "9315a458a0ad8e07178c1ac689e07ef7622429efe307cf7bf82aa3e2a47b3ffe",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/finished-at.txt",
+      "sha256": "e11db90a59a432ef5edab7af1f02a1afea17e042e444a36efa66e436497582d7",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    }
+  ],
+  "observationsArtifact": "w1-baseline-20261025a/observations.json",
+  "errors": [],
+  "limitations": [
+    "Baseline-only execution of the existing native model. This does not qualify an unimplemented VM-C1 candidate.",
+    "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+    "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+    "General typed metadata properties are not represented by this native schema.",
+    "Only canonical native metres and a ceiling inequality are tested; dictionary units and derived property regeneration are absent.",
+    "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+    "Rule is a proposed bounded oracle, not an installed product rule. Baseline conservatively conflicts at entity granularity."
+  ],
+  "decisionImplications": [
+    "Retain supported baseline behavior and actual counterexamples. Evaluate the isolated candidate against the same assertions before adoption."
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-03",
+  "runId": "w1-baseline-20261025a",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T11:52:46Z",
+  "finishedAt": "2026-10-25T11:52:51Z",
+  "hypothesis": "Does the existing native baseline satisfy the declared EX-03 assertions?",
+  "variant": "baseline-room-model",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "path": "docs/experiments/registry.json",
+    "sha256": "c56ab9a7b13d404b76c0e63acef3c48fe4684061dd8f9ccbaa42a6e925802da3"
+  },
+  "implementation": {
+    "sourceCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "runnerCommit": "57cf0d2d9fce36266b72f5b11b3330f260f07041",
+    "validators": [
+      "strict-TypeScript",
+      "W1 behavior tests",
+      "qualification-contract-v1@fb61d97"
+    ]
+  },
+  "dataset": {
+    "name": "W1 deterministic native room and asset fixtures",
+    "seed": "not-randomized",
+    "manifestSha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f"
+  },
+  "environment": {
+    "host": "192.168.1.17",
+    "software": {
+      "node": "v24.22.1"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1610612736,
+    "diskBudgetBytes": 1073741824,
+    "storage": "/ssd1/bim-forge-qualification/qvm-20261025/artifacts",
+    "cacheProcedure": "not a performance measurement",
+    "measurementSlot": "w1-baseline-correctness-20261025a"
+  },
+  "commands": [
+    "node --test experiments/semantic/semantic.test.ts",
+    "node experiments/semantic/cli.ts --artifacts /qualification/artifacts/w1-baseline-20261025a/data"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-03",
+      "caseId": "occurrence-edit-isolation",
+      "expected": "Resize one occurrence without changing the shared family, other occurrence, or old snapshot.",
+      "observed": "{\"entities\":{\"added\":[],\"removed\":[],\"modified\":[{\"id\":\"person-187\",\"before\":{\"familyId\":\"standing-person\",\"id\":\"person-187\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"},\"after\":{\"familyId\":\"standing-person\",\"id\":\"person-187\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.9},\"type\":\"AssetInstance\"}}]},\"relationships\":{\"added\":[],\"removed\":[],\"modified\":[]}}",
+      "passed": true,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Asset family recipes stand in for existing shared definitions; general typed property dictionaries are absent."
+      ]
+    },
+    {
+      "experimentId": "EX-03",
+      "caseId": "explicit-family-fork-scope",
+      "expected": "In-place family rewrite is rejected; explicit new family ID rebinds exactly the declared instances.",
+      "observed": "{\"rewrite\":{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"Family IDs are immutable across repository history. Register a new family ID.\"}},\"affected\":[\"person-187\",\"person-165\"],\"typeDelta\":{\"entities\":{\"added\":[{\"description\":\"AI-authored conceptual standing figure from normalized primitives; no anatomical or ergonomic certification.\",\"id\":\"standing-person-revised\",\"name\":\"Revised shared family\",\"parts\":[{\"color\":\"#507a92\",\"id\":\"torso\",\"kind\":\"box\",\"min\":[0.2,0.2,0.35],\"size\":[0.6,0.6,0.4]},{\"color\":\"#c99d7e\",\"id\":\"head\",\"kind\":\"ellipsoid\",\"min\":[0.3,0.2,0.75],\"size\":[0.4,0.6,0.25]},{\"color\":\"#507a92\",\"id\":\"left-arm\",\"kind\":\"cylinder\",\"min\":[0,0.35,0.35],\"size\":[0.2,0.3,0.4]},{\"color\":\"#507a92\",\"id\":\"right-arm\",\"kind\":\"cylinder\",\"min\":[0.8,0.35,0.35],\"size\":[0.2,0.3,0.4]},{\"color\":\"#334454\",\"id\":\"left-leg\",\"kind\":\"box\",\"min\":[0.2,0,0],\"size\":[0.25,1,0.35]},{\"color\":\"#334454\",\"id\":\"right-leg\",\"kind\":\"box\",\"min\":[0.55,0,0],\"size\":[0.25,1,0.35]}],\"type\":\"AssetFamily\"}],\"removed\":[],\"modified\":[{\"id\":\"person-165\",\"before\":{\"familyId\":\"standing-person\",\"id\":\"person-165\",\"name\":\"Person 1.65 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[2,2.2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.65},\"type\":\"AssetInstance\"},\"after\":{\"familyId\":\"standing-person-revised\",\"id\":\"person-165\",\"name\":\"Person 1.65 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[2,2.2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.65},\"type\":\"AssetInstance\"}},{\"id\":\"person-187\",\"before\":{\"familyId\":\"standing-person\",\"id\":\"person-187\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"},\"after\":{\"familyId\":\"standing-person-revised\",\"id\":\"person-187\",\"name\":\"Person 1.87 m\",\"placement\":{\"kind\":\"single-room\"},\"position\":[1,2],\"rotationDeg\":0,\"size\":{\"width\":0.5,\"depth\":0.3,\"height\":1.87},\"type\":\"AssetInstance\"}}]},\"relationships\":{\"added\":[],\"removed\":[],\"modified\":[]}}}",
+      "passed": true,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "The declared affected list is built from fixture membership and compared with the actual delta; no product-level type-edit declaration protocol exists.",
+        "Immutable recipes and explicit rebinds qualify this narrow path only; shared property sets and content deduplication remain unqualified."
+      ]
+    },
+    {
+      "experimentId": "EX-03",
+      "caseId": "general-shared-properties-not-covered",
+      "expected": "Shared property definitions retain units and dictionary versions, and content deduplication permits isolated future edits.",
+      "observed": "{\"propertyDefinitionInput\":{\"kind\":\"rejected\",\"error\":{\"name\":\"Error\",\"message\":\"Asset family requires exact fields and one to sixteen bounded primitives.\"}}}",
+      "passed": false,
+      "limitations": [
+        "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+        "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+        "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+        "Baseline family schema rejects general property definitions. Asset recipe isolation does not qualify shared property dictionaries or deduplication."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "An occurrence edit leaves other instances and shared definitions unchanged.",
+      "caseIds": [
+        "occurrence-edit-isolation"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "An explicit type edit lists all affected instances.",
+      "caseIds": [
+        "explicit-family-fork-scope"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Content deduplication does not couple future edits.",
+      "caseIds": [
+        "general-shared-properties-not-covered"
+      ],
+      "coverage": "not-covered"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "w1-baseline-20261025a/data/raw.json",
+      "sha256": "38ef2a5601ce2d69bd7e84392780ed880d64913e91d2a6f1562d35a3b4442325",
+      "bytes": 343378,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/coverage.json",
+      "sha256": "07f03cc978709a45ae03159db04d66cf5dca3b642917114016a7d7ea8e0b8ee0",
+      "bytes": 4039,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/data/manifest.json",
+      "sha256": "da2e3d9c85d9fba26e62e4e9d18c64d4f0aa6c0ebcb6a952d834fd0b63d4ce0f",
+      "bytes": 1454,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/observations.json",
+      "sha256": "3f50435205e2919e5d85ee565007fe3ccf9385488e659850849ece9eb01eeb0b",
+      "bytes": 69099,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "w1-baseline-20261025a/tests.log",
+      "sha256": "6a2dc7497752b519008eee656c291b1b352a5a5b3e093aaaca19a83f165f2467",
+      "bytes": 884,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/started-at.txt",
+      "sha256": "9315a458a0ad8e07178c1ac689e07ef7622429efe307cf7bf82aa3e2a47b3ffe",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "w1-baseline-20261025a/finished-at.txt",
+      "sha256": "e11db90a59a432ef5edab7af1f02a1afea17e042e444a36efa66e436497582d7",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    }
+  ],
+  "observationsArtifact": "w1-baseline-20261025a/observations.json",
+  "errors": [],
+  "limitations": [
+    "Baseline-only execution of the existing native model. This does not qualify an unimplemented VM-C1 candidate.",
+    "Asset family recipes stand in for existing shared definitions; general typed property dictionaries are absent.",
+    "Baseline family schema rejects general property definitions. Asset recipe isolation does not qualify shared property dictionaries or deduplication.",
+    "Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.",
+    "Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.",
+    "Immutable recipes and explicit rebinds qualify this narrow path only; shared property sets and content deduplication remain unqualified.",
+    "Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.",
+    "The declared affected list is built from fixture membership and compared with the actual delta; no product-level type-edit declaration protocol exists."
+  ],
+  "decisionImplications": [
+    "Retain supported baseline behavior and actual counterexamples. Evaluate the isolated candidate against the same assertions before adoption."
+  ]
+}

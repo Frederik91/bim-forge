@@ -17,6 +17,8 @@ PostgreSQL is the source of truth for transactional metadata and queryable BIM i
 
 Use JSONB for extensible IFC/native properties, but keep identifiers, ownership, type, revision, and high-value relationship fields relational. Add a graph database only if measured traversal workloads justify the operational cost.
 
+The [native computation proposal](design/native-computation.md) keeps native worker indexes and kernel caches as bounded projections of pinned model inputs. It proposes artifact/array boundaries without a second authoritative graph and separates measured ingestion/PostgreSQL limits from unmeasured Rust benefits. The proposal does not adopt a new persistence implementation.
+
 ## Object storage stores
 
 - original IFC/native uploads;

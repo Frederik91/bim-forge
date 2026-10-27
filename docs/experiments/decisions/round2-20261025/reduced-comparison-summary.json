@@ -1,0 +1,282 @@
+{
+  "samples": [
+    {
+      "variant": "a",
+      "repeat": 1,
+      "phasesMs": {
+        "ingest": 75296.37496,
+        "publication": 27689.887554999994,
+        "analyze": 2135.837612999996
+      },
+      "jobElapsedSeconds": 136.0,
+      "clientCpuSeconds": 81.674971,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "a",
+      "repeat": 2,
+      "phasesMs": {
+        "ingest": 83107.799874,
+        "publication": 25646.826539999995,
+        "analyze": 1732.7610180000047
+      },
+      "jobElapsedSeconds": 138.0,
+      "clientCpuSeconds": 85.282859,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "a",
+      "repeat": 3,
+      "phasesMs": {
+        "ingest": 90737.419036,
+        "publication": 26252.90957799999,
+        "analyze": 1710.3881099999999
+      },
+      "jobElapsedSeconds": 150.0,
+      "clientCpuSeconds": 87.346545,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "a",
+      "repeat": 4,
+      "phasesMs": {
+        "ingest": 80488.598322,
+        "publication": 27049.085443999997,
+        "analyze": 1868.7456559999991
+      },
+      "jobElapsedSeconds": 138.0,
+      "clientCpuSeconds": 84.447748,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "a",
+      "repeat": 5,
+      "phasesMs": {
+        "ingest": 81827.717302,
+        "publication": 26458.279462000006,
+        "analyze": 1716.7099089999974
+      },
+      "jobElapsedSeconds": 138.0,
+      "clientCpuSeconds": 85.387294,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "b",
+      "repeat": 1,
+      "phasesMs": {
+        "ingest": 60339.362037,
+        "publication": 27021.970002999995,
+        "analyze": 2223.837115000002
+      },
+      "jobElapsedSeconds": 113.0,
+      "clientCpuSeconds": 57.170706,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "b",
+      "repeat": 2,
+      "phasesMs": {
+        "ingest": 61741.884753000006,
+        "publication": 27149.597691999996,
+        "analyze": 1756.7592609999992
+      },
+      "jobElapsedSeconds": 112.0,
+      "clientCpuSeconds": 57.95487,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "b",
+      "repeat": 3,
+      "phasesMs": {
+        "ingest": 62401.314787,
+        "publication": 27431.140632999995,
+        "analyze": 1890.0981210000027
+      },
+      "jobElapsedSeconds": 115.0,
+      "clientCpuSeconds": 58.583498,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "b",
+      "repeat": 4,
+      "phasesMs": {
+        "ingest": 79272.89572,
+        "publication": 27331.69307699999,
+        "analyze": 1708.364426
+      },
+      "jobElapsedSeconds": 131.0,
+      "clientCpuSeconds": 60.196916,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    },
+    {
+      "variant": "b",
+      "repeat": 5,
+      "phasesMs": {
+        "ingest": 61782.911308,
+        "publication": 27390.006249,
+        "analyze": 1934.7044129999995
+      },
+      "jobElapsedSeconds": 113.0,
+      "clientCpuSeconds": 58.284393,
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      },
+      "canonicalBytes": 348694156,
+      "propertyCounts": {
+        "entities": 1452336,
+        "relationships": 34800,
+        "parameters": 75000
+      }
+    }
+  ],
+  "summary": {
+    "a": {
+      "ingestSeconds": {
+        "median": 81.82771730200001,
+        "min": 75.29637496,
+        "max": 90.737419036
+      },
+      "publicationSeconds": {
+        "median": 26.458279462000007,
+        "min": 25.646826539999996,
+        "max": 27.689887554999995
+      },
+      "analyzeSeconds": {
+        "median": 1.7327610180000046,
+        "min": 1.7103881099999998,
+        "max": 2.135837612999996
+      },
+      "clientCpuSeconds": {
+        "median": 85.282859,
+        "min": 81.674971,
+        "max": 87.346545
+      },
+      "jobElapsedSeconds": {
+        "median": 138.0,
+        "min": 136.0,
+        "max": 150.0
+      }
+    },
+    "b": {
+      "ingestSeconds": {
+        "median": 61.782911308,
+        "min": 60.339362037,
+        "max": 79.27289572
+      },
+      "publicationSeconds": {
+        "median": 27.33169307699999,
+        "min": 27.021970002999996,
+        "max": 27.431140632999995
+      },
+      "analyzeSeconds": {
+        "median": 1.8900981210000027,
+        "min": 1.7083644260000002,
+        "max": 2.223837115000002
+      },
+      "clientCpuSeconds": {
+        "median": 58.284393,
+        "min": 57.170706,
+        "max": 60.196916
+      },
+      "jobElapsedSeconds": {
+        "median": 113.0,
+        "min": 112.0,
+        "max": 131.0
+      }
+    }
+  },
+  "errors": [],
+  "scope": "Five alternating fresh reduced admissions per variant; no full-scale throughput extrapolation."
+}

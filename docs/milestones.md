@@ -14,6 +14,8 @@ Goal: import a small IFC fixture, represent entities and relationships, create i
 
 Exit evidence: repeatable fixture tests, revision history, branch isolation, and a human-readable model delta.
 
+The [versioned model qualification program](experiments/README.md) records the proposed persistence design and experiments before schema adoption. It includes identity, exchange, concurrency, regeneration, recovery, and a detailed synthetic hospital database workload. Initial experiment status is not run.
+
 ## M2 — Query and observation surface
 
 Goal: expose read-only project/model queries, snapshots, relationships, and validation findings through a stable API.

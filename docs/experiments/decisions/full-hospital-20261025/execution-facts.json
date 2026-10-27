@@ -1,0 +1,163 @@
+{
+  "jobStartedAt": "2026-10-25T12:25:42Z",
+  "jobFinishedAt": "2026-10-25T14:25:46Z",
+  "outerWaitExitCode": 124,
+  "containerExitCode": null,
+  "containerOOMKilled": false,
+  "postgresOomKillObserved": false,
+  "budgetStopObserved": false,
+  "executionStatus": "timed-out",
+  "expectedVersionRecords": 27020089,
+  "postRunState": {
+    "tables": [
+      {
+        "name": "revisions",
+        "heapBytes": 0,
+        "indexBytes": 16384,
+        "toastBytes": 8192,
+        "totalBytes": 24576
+      },
+      {
+        "name": "branches",
+        "heapBytes": 0,
+        "indexBytes": 8192,
+        "toastBytes": 8192,
+        "totalBytes": 16384
+      },
+      {
+        "name": "changes",
+        "heapBytes": 0,
+        "indexBytes": 16384,
+        "toastBytes": 8192,
+        "totalBytes": 24576
+      },
+      {
+        "name": "versions",
+        "heapBytes": 12344803328,
+        "indexBytes": 1693794304,
+        "toastBytes": 10924457984,
+        "totalBytes": 24966471680
+      },
+      {
+        "name": "visibility",
+        "heapBytes": 0,
+        "indexBytes": 57344,
+        "toastBytes": 8192,
+        "totalBytes": 65536
+      },
+      {
+        "name": "receipts",
+        "heapBytes": 0,
+        "indexBytes": 16384,
+        "toastBytes": 8192,
+        "totalBytes": 24576
+      },
+      {
+        "name": "snapshots",
+        "heapBytes": 0,
+        "indexBytes": 8192,
+        "toastBytes": 8192,
+        "totalBytes": 16384
+      },
+      {
+        "name": "meta",
+        "heapBytes": 8192,
+        "indexBytes": 16384,
+        "toastBytes": 8192,
+        "totalBytes": 32768
+      }
+    ],
+    "walLsn": "11/BF672170",
+    "changes": 0,
+    "version": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "branches": [],
+    "receipts": 0,
+    "settings": {
+      "fsync": "on",
+      "work_mem": "8192",
+      "shared_buffers": "32768",
+      "max_connections": "80",
+      "full_page_writes": "on",
+      "synchronous_commit": "on",
+      "maintenance_work_mem": "262144",
+      "max_parallel_workers_per_gather": "1"
+    },
+    "versions": 13602755,
+    "revisions": 0,
+    "visibility": 0,
+    "collectedAt": "2026-10-25T14:28:12.449139+00:00",
+    "databaseBytes": 24974684975,
+    "versionsByKind": {
+      "bed": 5000,
+      "desk": 20000,
+      "door": 25000,
+      "pump": 5000,
+      "roof": 200,
+      "site": 1,
+      "slab": 10000,
+      "stud": 1400000,
+      "wall": 80000,
+      "zone": 200,
+      "chair": 60000,
+      "level": 40,
+      "space": 10000,
+      "valve": 100000,
+      "sensor": 80000,
+      "switch": 40000,
+      "system": 2000,
+      "window": 15000,
+      "cabinet": 30000,
+      "circuit": 50000,
+      "building": 4,
+      "hostedBy": 1665000,
+      "terminal": 80000,
+      "equipment": 30000,
+      "luminaire": 140000,
+      "instanceOf": 2157866,
+      "containedIn": 2412444,
+      "ductFitting": 240000,
+      "ductSegment": 180000,
+      "pipeFitting": 300000,
+      "pipeSegment": 250000,
+      "supportedBy": 590000,
+      "cableSegment": 300000,
+      "connectionPort": 3000000,
+      "typeDefinition": 5000,
+      "electricalPanel": 5000,
+      "otherFurnishing": 35000,
+      "electricalOutlet": 180000,
+      "containmentSegment": 100000
+    },
+    "clusterWalBytes": 1073741824
+  },
+  "originalInitialInventoryPassed": false,
+  "originalSourceQueryOraclePassed": false,
+  "memoryEvents": {
+    "postgres-memory-events-before-publication.txt": {
+      "low": 0,
+      "high": 0,
+      "max": 121893,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0
+    },
+    "postgres-memory-events-after.txt": {
+      "low": 0,
+      "high": 0,
+      "max": 339111,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0
+    },
+    "client-memory-events-during-ingest.txt": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0
+    }
+  },
+  "stateInspectionStartedAt": "2026-10-25T14:28:11Z",
+  "stateInspectionFinishedAt": "2026-10-25T14:29:15Z"
+}

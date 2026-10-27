@@ -1,0 +1,694 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "hospital-reduced-20261025d-qualification",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T17:15:44Z",
+  "finishedAt": "2026-10-25T17:15:48Z",
+  "hypothesis": "The admitted reduced inventory supports exact independent space/type/system oracles and bounded reads plus two durable single-object metadata changes under the declared limits.",
+  "variant": "VM-C1 corrected catalog-frequency reader and bounded read-only metadata inspection",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "runnerCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "validators": [
+      "Exact preserved admission/config/table/body/property hashes and revision payload before queries",
+      "Independent ordered numeric-ID selection hashes and counts from W4",
+      "Actual body/version checks, reconnect/replay, exact delta and pinned initial entity history",
+      "Separate read-only bounded receipt/parent/delta/body inspection",
+      "Corrected reader root/strict/four pure regressions; original storage/runner PostgreSQL cases remain bound to c0ad967"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1 reduced",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca"
+  },
+  "environment": {
+    "host": "192.168.1.17; existing services active",
+    "software": {
+      "node": "24.22.1",
+      "postgresql": "15.14",
+      "admissionSource": "c0ad96765e8fee8088188894dc484f3a81704dda",
+      "qualificationSource": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "postgresCpuLimit": "1.5",
+      "postgresMemoryLimitBytes": "3221225472"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "Retained admitted reduced branch in the private SSD-backed qualification PostgreSQL cluster; no branch copy.",
+    "cacheProcedure": "Independent selection oracles and explicit bounded page/one-hop warmup before read samples; host caches unchanged. No cold-cache claim.",
+    "measurementSlot": "Separate exclusive bounded database stage after the full initial-load hold ended; later inspector is separately timestamped and outside operation samples."
+  },
+  "commands": [
+    "bash /ssd1/bim-forge-qualification/qvm-20261025/start-round2-reduced-qualification.sh",
+    "node /app/round2-qualification-entry.ts <pinned-config> <fresh-output-directory>",
+    "bash /ssd1/bim-forge-qualification/qvm-20261025/capture-round2-stage.sh reduced"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "preserved-admission",
+      "passed": true,
+      "expected": "Bounded qualification check completes with fidelity",
+      "observed": "{\"revisionId\":\"0d78509363231c0f12f4e316fbd0c35576096909e72d09b1b35ed1296934c821\",\"priorSha256\":{\"config.json\":\"20cada88a06758a14b62a82c6c5e41770564848d83ba6e3f01581162954788a9\",\"load.json\":\"6b5de628342942c83265b14362b924d611828c473e0636bc7c6d9655e09a66ee\",\"oracle.json\":\"e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24\",\"property-values.json\":\"d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f\",\"observations.json\":\"570779efda6f8107f33380f325d2e30e8e2943b82b3d2bda9039e7dd36331ba5\",\"errors.json\":\"37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570\"}}",
+      "limitations": [
+        "Exploratory small sample, concurrency 1; no full history/branch/client matrix or combined qualification verdict."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "hot-space-members",
+      "expected": "count=13522; SHA-256 of ascending decimal numeric IDs plus LF=eb4b0fab4abfe4b783e7ae8bc84598184ba1aee26a68ef4472bc670b193e1a2a",
+      "observed": "{\"count\":13522,\"sha256\":\"eb4b0fab4abfe4b783e7ae8bc84598184ba1aee26a68ef4472bc670b193e1a2a\",\"complete\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "shared-type-members",
+      "expected": "count=160; SHA-256 of ascending decimal numeric IDs plus LF=ac7fc98c417007e94c2e40ceca7788d8cae284ad7c6fb3c31f703be0b2d5614a",
+      "observed": "{\"count\":160,\"sha256\":\"ac7fc98c417007e94c2e40ceca7788d8cae284ad7c6fb3c31f703be0b2d5614a\",\"complete\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "system-members-including-ports",
+      "expected": "count=2779; SHA-256 of ascending decimal numeric IDs plus LF=7bdfc9951d56d468ad8594b95aafc045a6afe3410872308368836c39d8d50f29",
+      "observed": "{\"count\":2779,\"sha256\":\"7bdfc9951d56d468ad8594b95aafc045a6afe3410872308368836c39d8d50f29\",\"complete\":true}",
+      "passed": true,
+      "limitations": []
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "interactive-samples",
+      "passed": true,
+      "expected": "Bounded qualification check completes with fidelity",
+      "observed": "5 samples per operation; errors=0",
+      "limitations": [
+        "Exploratory small sample, concurrency 1; no full history/branch/client matrix or combined qualification verdict."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "durable-change-0",
+      "passed": true,
+      "expected": "Bounded qualification check completes with fidelity",
+      "observed": "{\"head\":\"ad074f682aa3fbed2afdfcc03e205c9fa93ac6c4dd0de2b72b0d4fb8e88ac15e\",\"version\":\"78bb69ff161861609fccb06bd859d0adbb30e704f5678eb379af1e98ce3894af\",\"deltaCount\":1,\"historyCount\":2}",
+      "limitations": [
+        "Exploratory small sample, concurrency 1; no full history/branch/client matrix or combined qualification verdict."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "durable-change-1",
+      "passed": true,
+      "expected": "Bounded qualification check completes with fidelity",
+      "observed": "{\"head\":\"3127240c3a0415fe18d5138081e9f7d1428d312e1c655af463c16996d7ace716\",\"version\":\"8e184772f2b0f9cd9c027e4fe2c14f278a2285792a648e078070bc4d34751e8a\",\"deltaCount\":1,\"historyCount\":3}",
+      "limitations": [
+        "Exploratory small sample, concurrency 1; no full history/branch/client matrix or combined qualification verdict."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-bounded-metadata-state",
+      "expected": "Two durable metadata commits preserve the initial revision, exact command receipts, point deltas and original/restored body hashes.",
+      "observed": "{\"verified\":true,\"readCountsVerified\":true,\"changesVerified\":true,\"inspectionExitCode\":\"0\"}",
+      "passed": true,
+      "limitations": [
+        "Point metadata inspection does not qualify general historical reconstruction or semantic/engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-synthetic-scope",
+      "expected": "Database-only synthetic and bounded-sample scope remains explicit.",
+      "observed": "reduced admitted inventory; concurrency1, n5 per read, two metadata accepts; no full history/client sweep, geometry or real hospital qualification.",
+      "passed": true,
+      "limitations": [
+        "This is a scope assertion, not an engineering/performance pass."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-exploratory-detail",
+      "expected": "Every observed bounded detail call completes without error and within the predeclared 300 ms exploratory target.",
+      "observed": "{\"n\":5,\"elapsedMs\":[2.312791999999945,1.9653589999999213,1.9249230000000352,3.836459999999988,2.0822990000000345],\"errors\":0,\"targetMs\":300}",
+      "passed": true,
+      "limitations": [
+        "Small observed samples do not qualify tail latency, offered-load capacity or product SLOs."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-exploratory-page",
+      "expected": "Every observed bounded page call completes without error and within the predeclared 1000 ms exploratory target.",
+      "observed": "{\"n\":5,\"elapsedMs\":[16.759490000000028,23.28421199999991,13.904839999999922,14.883710999999948,17.487894000000097],\"errors\":0,\"targetMs\":1000}",
+      "passed": true,
+      "limitations": [
+        "Small observed samples do not qualify tail latency, offered-load capacity or product SLOs."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-exploratory-one-hop",
+      "expected": "Every observed bounded one-hop call completes without error and within the predeclared 1000 ms exploratory target.",
+      "observed": "{\"n\":5,\"elapsedMs\":[1.3144600000000537,0.7072889999999461,0.6647020000000339,1.1315539999999373,0.7197300000000268],\"errors\":0,\"targetMs\":1000}",
+      "passed": true,
+      "limitations": [
+        "Small observed samples do not qualify tail latency, offered-load capacity or product SLOs."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-exploratory-accepted-change",
+      "expected": "Every observed bounded accepted-change call completes without error and within the predeclared 4000 ms exploratory target.",
+      "observed": "{\"n\":2,\"elapsedMs\":[43.40640700000006,11.591621000000032],\"errors\":0,\"targetMs\":4000}",
+      "passed": true,
+      "limitations": [
+        "Small observed samples do not qualify tail latency, offered-load capacity or product SLOs."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "coverage": "partial",
+      "caseIds": [
+        "preserved-admission",
+        "hot-space-members",
+        "shared-type-members",
+        "system-members-including-ports",
+        "interactive-samples",
+        "durable-change-0",
+        "durable-change-1",
+        "coordinator-bounded-metadata-state",
+        "coordinator-synthetic-scope",
+        "coordinator-exploratory-detail",
+        "coordinator-exploratory-page",
+        "coordinator-exploratory-one-hop",
+        "coordinator-exploratory-accepted-change"
+      ]
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "coverage": "partial",
+      "caseIds": [
+        "preserved-admission",
+        "hot-space-members",
+        "shared-type-members",
+        "system-members-including-ports",
+        "interactive-samples",
+        "durable-change-0",
+        "durable-change-1",
+        "coordinator-bounded-metadata-state",
+        "coordinator-synthetic-scope",
+        "coordinator-exploratory-detail",
+        "coordinator-exploratory-page",
+        "coordinator-exploratory-one-hop",
+        "coordinator-exploratory-accepted-change"
+      ]
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "coverage": "partial",
+      "caseIds": [
+        "preserved-admission",
+        "hot-space-members",
+        "shared-type-members",
+        "system-members-including-ports",
+        "interactive-samples",
+        "durable-change-0",
+        "durable-change-1",
+        "coordinator-bounded-metadata-state",
+        "coordinator-synthetic-scope",
+        "coordinator-exploratory-detail",
+        "coordinator-exploratory-page",
+        "coordinator-exploratory-one-hop",
+        "coordinator-exploratory-accepted-change"
+      ]
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "coverage": "partial",
+      "caseIds": [
+        "preserved-admission",
+        "hot-space-members",
+        "shared-type-members",
+        "system-members-including-ports",
+        "interactive-samples",
+        "durable-change-0",
+        "durable-change-1",
+        "coordinator-bounded-metadata-state",
+        "coordinator-synthetic-scope",
+        "coordinator-exploratory-detail",
+        "coordinator-exploratory-page",
+        "coordinator-exploratory-one-hop",
+        "coordinator-exploratory-accepted-change"
+      ]
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "coverage": "covered",
+      "caseIds": [
+        "coordinator-synthetic-scope"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "budget-container-id.txt",
+      "sha256": "21942c8ead67d0b460043c08133f8cb08bbc0ed902c1587ea6ba9e4740a9c5ac",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "budget-monitor-stopped.txt",
+      "sha256": "5a1aaf521fbb7f300ef8fdad106e4ebf9da0cff655f808b06e6a7e91b686594f",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-container-after.json",
+      "sha256": "4c9053bde2fedddf17c61f62bde622330f9d2ed4a81faa529b4374d79a4b6b7a",
+      "bytes": 10844,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "client-container-before.json",
+      "sha256": "cbbb54fca9b2b4b051169ea4ef58c4f91087ed05a2e9e3232125734204dd7f6c",
+      "bytes": 11041,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "client-cpu-stat.txt",
+      "sha256": "37202b67d9e6897bc325a3dcc949cd9928978090ec354865392eb89e032649bc",
+      "bytes": 160,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-memory-peak-bytes.txt",
+      "sha256": "5ec7e749bd701ea72e356996f58c1cca72e98de08c6bdaf7aa4290f7ebec6b17",
+      "bytes": 9,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "container-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "container-id.txt",
+      "sha256": "f0ffe4b3aea597ee928d326a26ffc3de4d766bda846e36c11d66028d3764384b",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "enforcer-pid.txt",
+      "sha256": "0e3ee70c0962708ece6a73331db40e306158e7f166331ba64ae479703f31f782",
+      "bytes": 8,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "enforcer.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "execution-facts.json",
+      "sha256": "36dd92cc72e846d0b29f6b51ac217fe34a8173693295c3b4a7ca258d5e3ef692",
+      "bytes": 458,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "host-diskstats.log",
+      "sha256": "e6ef10b07b7eebcf353fd3998c37d2e89cf1c9894b772740dae29bf786efc599",
+      "bytes": 1822,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "inspection-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "inspection-finished-at.txt",
+      "sha256": "78a211b38ba25364ecb560afac0a70c0760c97b7c93461be1a5ec01dcdc90282",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "inspection-started-at.txt",
+      "sha256": "487517c2a71fc7fa41d184fefd1c5a33ef80e48efb9a0d752eca0dd4954e30ee",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "inspection-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "inspection-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "job-finished-at.txt",
+      "sha256": "f4968a26470038db8ac5085cde9628e6d96885c3474405fe01bfac402334efa9",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "job-started-at.txt",
+      "sha256": "8a52b2fc4038665e64a2c96b2f981290a8e9d19b0d145aabc7ffff244b2c8b20",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "metadata-facts.json",
+      "sha256": "1a6ee5cdfd8563ded244233a2e256a40e33b754a58693aaa20ffe9fd94bc2e31",
+      "bytes": 220180,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "orchestration/capture-round2-stage.sh",
+      "sha256": "e02093d12d6a1231d987da397ee2dd582ced65c2a8316ee1cc0d54091d1fba8c",
+      "bytes": 3750,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/collect-round2-stage.py",
+      "sha256": "9fea8e3901ff594858dfd05532a8c09989d6da0b614a10510439440883850441",
+      "bytes": 9685,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/prepare-round2-qual.py",
+      "sha256": "4b115454fa01271eea210bbb7eeeba5a928cb8fbb833de5ca329151752397699",
+      "bytes": 1084,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/prepare-round2-reduced-qual.py",
+      "sha256": "2d63d6f0752be26f8988655a3eb704a327730b8a333c1250399f0a63ed8adc48",
+      "bytes": 943,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/round2-inspection-entry.ts",
+      "sha256": "9f54bcfa60502c607b11b64ed3b9b4697712756ae574595068c0d8d1a1f78f15",
+      "bytes": 1382,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/round2-qualification-entry.ts",
+      "sha256": "3bc62170915ebd6df2a18f7b23a0d3b5d53cc6ecb60a307a01a1fc8dbc327dd2",
+      "bytes": 475,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/round2-stop-stage-clients.sql",
+      "sha256": "edbd7c4e872579269e3bc773a357a3f32bab13444b5516ccba7eef29a0f94d50",
+      "bytes": 388,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/start-round2-qualification.sh",
+      "sha256": "b4688f6bcd55b938b6cc0f7374cdfa0b0e0abe2e0c355e144dea3538c4d6bd5a",
+      "bytes": 2789,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/start-round2-reduced-qualification.sh",
+      "sha256": "50c94759a1477b8e699a8c1dbfd4873c6915065e99e21bf31537c1ab7b0ca6f5",
+      "bytes": 2806,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration.sha256",
+      "sha256": "cbc366c83f565e9695074dee52ab07db6b845b5fd7ea8fb4ddc1b817cbdf08df",
+      "bytes": 1823,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "outer-wait-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "owned-backend-termination.csv",
+      "sha256": "0472f28d98cf56375ab53ad21f659ca3edb7130e8b04cf37e877195289d0efff",
+      "bytes": 35,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "owned-database-clients.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-container-before.json",
+      "sha256": "2b931bac6ce926526df89a594f861c407276392b8a943d2e79dce55f67e760ae",
+      "bytes": 10357,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-container-final.json",
+      "sha256": "2b931bac6ce926526df89a594f861c407276392b8a943d2e79dce55f67e760ae",
+      "bytes": 10357,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-memory-events-after.txt",
+      "sha256": "e240d8fcd15698255528ba1029e8238f42f0f62c003eeac54646b8bc089989e4",
+      "bytes": 58,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-stage.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "qualification-config.json",
+      "sha256": "7c19515b93af4e6ddd8eaae991c3e5555ec9490459e438b93b3cc8f9d11ecb51",
+      "bytes": 1322,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "resources-pid.txt",
+      "sha256": "f74b49d49a6102aaadc6b3f2db03a5bf24333f8e736026eba3091d3246c85738",
+      "bytes": 8,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "resources.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "resources.ndjson",
+      "sha256": "18df62d0b0624316911bb70b598449e7f6f4ab4e5809401adcb3ab4f2a336d61",
+      "bytes": 518,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "run/accepted-0.json",
+      "sha256": "53b09b055febde5e3b3e3f4960555152fbca19f7dac310a96c2e2b445bb7261a",
+      "bytes": 40071,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/accepted-1.json",
+      "sha256": "76e863fb044e9afab053c884729b55dbcf1bb855adbdc265b214471714f5834b",
+      "bytes": 39997,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/config.json",
+      "sha256": "7c19515b93af4e6ddd8eaae991c3e5555ec9490459e438b93b3cc8f9d11ecb51",
+      "bytes": 1322,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/history-0.json",
+      "sha256": "87089c87b163250652cbae2381777f46da5596a4cfdb6b55b0d6a2d57e24d102",
+      "bytes": 473,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/history-1.json",
+      "sha256": "b60cc9dbea12c114aa70139fb9e9c6864479c468e4139f584f6edb9d19f6d4c7",
+      "bytes": 739,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/observations.json",
+      "sha256": "3572ab4cddfa9ce6d91516921d27ff1ede196d4da274ac9f57377ea0097a91e8",
+      "bytes": 3581,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/prior-config.json",
+      "sha256": "20cada88a06758a14b62a82c6c5e41770564848d83ba6e3f01581162954788a9",
+      "bytes": 2035,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/prior-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/prior-load.json",
+      "sha256": "6b5de628342942c83265b14362b924d611828c473e0636bc7c6d9655e09a66ee",
+      "bytes": 2070,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/prior-observations.json",
+      "sha256": "570779efda6f8107f33380f325d2e30e8e2943b82b3d2bda9039e7dd36331ba5",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/prior-oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/prior-property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/result.json",
+      "sha256": "180bd6ae0f193e14b4f51043662ba62be620dc2d0f508dfefea9af7690bacb69",
+      "bytes": 4425,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/retained-sha256.json",
+      "sha256": "054caaf61089a926b51fb636374f2514cdb1100f78b6c9f11aca4d8fabd609aa",
+      "bytes": 993,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/samples.ndjson",
+      "sha256": "430de5ccc1e97473d2419d83c980949909a09c2d5dcafbed5895ddf975892f97",
+      "bytes": 3121,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "run/selections.json",
+      "sha256": "4fa7ca91ca139a3bcefdb076e7cba235799e325d5c52ac9c7ef361c7dc7a28e9",
+      "bytes": 3253,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "shared-budget.ndjson",
+      "sha256": "5c26e763ed9122b215ceab32fa57a0cf1cc841788eb7ac3b10132c10dab23782",
+      "bytes": 127,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "stdout.json",
+      "sha256": "636019457f7a1c284f7004a092754a11f0305d9ceb52a1d8799831f1c8430307",
+      "bytes": 3764,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "terminal-observations.json",
+      "sha256": "f1ee9d3eb2cf3e170a27dce1507432f02663d01426b0858f5e7172fbb868d6bb",
+      "bytes": 6662,
+      "mediaType": "application/json"
+    }
+  ],
+  "observationsArtifact": "terminal-observations.json",
+  "errors": [],
+  "limitations": [
+    "Synthetic metadata and bounded single-object changes do not qualify geometry, discipline approval, real hospital completeness or production adoption.",
+    "Five read samples and two acceptance calls do not qualify tail latency or paced concurrent capacity.",
+    "Bounded per-entity history does not qualify full historical reconstruction, deep full-model aging or multi-parent lineage.",
+    "The inspector reads only selected point metadata and bodies; the runner independently checks exact one-object deltas.",
+    "The reduced stage is additional real-data validation and never substitutes for a failed full trial."
+  ],
+  "decisionImplications": [
+    "Retain actual initial-load and bounded-stage outcomes separately.",
+    "Preserve unchanged source/body/schema validators and all failed attempts.",
+    "Further full history, contention, authority and geometry coverage is required before overall adoption."
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "template",
+  "experimentId": "EX-XX",
+  "runId": null,
+  "executionStatus": "not-run",
+  "conclusion": "not-run",
+  "startedAt": null,
+  "finishedAt": null,
+  "hypothesis": null,
+  "variant": null,
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": null,
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": null
+  },
+  "definition": {
+    "commit": null,
+    "path": "docs/experiments/registry.json",
+    "sha256": null
+  },
+  "implementation": {
+    "sourceCommit": null,
+    "runnerCommit": null,
+    "validators": []
+  },
+  "dataset": {
+    "name": null,
+    "seed": null,
+    "manifestSha256": null
+  },
+  "environment": {
+    "host": null,
+    "software": {},
+    "imageDigests": [],
+    "cpuLimit": null,
+    "memoryLimitBytes": null,
+    "diskBudgetBytes": null,
+    "storage": null,
+    "cacheProcedure": null,
+    "measurementSlot": null
+  },
+  "commands": [],
+  "observations": [],
+  "coverage": [],
+  "errors": [],
+  "evidence": [],
+  "observationsArtifact": null,
+  "limitations": [],
+  "decisionImplications": []
+}

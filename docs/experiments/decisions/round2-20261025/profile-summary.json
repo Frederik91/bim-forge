@@ -1,0 +1,133 @@
+{
+  "profile": "artifacts/round2-final-reduced-profile/profile/CPU.20261025.151025.26.0.001.cpuprofile",
+  "samples": 94514,
+  "topSelf": [
+    {
+      "count": 59787,
+      "fraction": 0.6325729521552362,
+      "function": "(idle)",
+      "url": "",
+      "line": -1
+    },
+    {
+      "count": 2133,
+      "fraction": 0.02256808515140614,
+      "function": "(garbage collector)",
+      "url": "",
+      "line": -1
+    },
+    {
+      "count": 1560,
+      "fraction": 0.01650549124997355,
+      "function": "parseRow",
+      "url": "file:///qualification/node-storage/node_modules/pg/lib/result.js",
+      "line": 62
+    },
+    {
+      "count": 1345,
+      "fraction": 0.014230695981547707,
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62
+    },
+    {
+      "count": 1300,
+      "fraction": 0.013754576041644625,
+      "function": "update",
+      "url": "node:internal/crypto/hash",
+      "line": 185
+    },
+    {
+      "count": 1261,
+      "fraction": 0.013341938760395286,
+      "function": "json",
+      "url": "file:///app/experiments/storage/w4.ts",
+      "line": 35
+    },
+    {
+      "count": 1067,
+      "fraction": 0.011289332797257549,
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62
+    },
+    {
+      "count": 933,
+      "fraction": 0.009871553420657257,
+      "function": "",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 65
+    },
+    {
+      "count": 909,
+      "fraction": 0.00961762278604228,
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62
+    },
+    {
+      "count": 887,
+      "fraction": 0.009384853037645217,
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62
+    },
+    {
+      "count": 870,
+      "fraction": 0.00920498550479294,
+      "function": "PreparedEntity",
+      "url": "file:///app/experiments/storage/prepared.ts",
+      "line": 13
+    },
+    {
+      "count": 861,
+      "fraction": 0.009109761516812325,
+      "function": "update",
+      "url": "node:internal/crypto/hash",
+      "line": 185
+    },
+    {
+      "count": 802,
+      "fraction": 0.008485515373383837,
+      "function": "",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 65
+    },
+    {
+      "count": 772,
+      "fraction": 0.008168102080115116,
+      "function": "load",
+      "url": "file:///app/experiments/storage/load.ts",
+      "line": 51
+    },
+    {
+      "count": 764,
+      "fraction": 0.008083458535243455,
+      "function": "w4Generator",
+      "url": "file:///app/experiments/storage/w4.ts",
+      "line": 116
+    },
+    {
+      "count": 714,
+      "fraction": 0.007554436379795586,
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62
+    },
+    {
+      "count": 661,
+      "fraction": 0.006993672895020843,
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62
+    },
+    {
+      "count": 592,
+      "fraction": 0.006263622320502782,
+      "function": "canonical",
+      "url": "file:///app/experiments/storage/contract.ts",
+      "line": 62
+    }
+  ],
+  "scope": "Separate profiled reduced admission; wall duration is not a comparison sample."
+}

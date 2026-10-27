@@ -1,0 +1,17 @@
+
+> bim-forge@0.1.0 test:qualification-contracts
+> node --test experiments/contracts/contract.test.ts
+
+✔ the tiny building preserves two distinct chair occurrences and valid shared relationships (21.86459ms)
+✔ draft templates and missing evidence cannot become terminal qualification runs (3.232082ms)
+✔ binding a repository with a trailing separator resolves to the same committed bytes (69.086298ms)
+✔ publication verifies exact bindings and artifacts and never overwrites an existing run (122.94786ms)
+✔ missing assertions, failed observations and partial coverage cannot be reported passed (85.880751ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1131.629066

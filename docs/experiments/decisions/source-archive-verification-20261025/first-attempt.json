@@ -1,0 +1,109 @@
+[
+  {
+    "id": "EX-01/w1-baseline-20261025a",
+    "passed": true
+  },
+  {
+    "id": "EX-01/w1-candidate-20261025b",
+    "passed": false,
+    "error": "Error: Command failed: git -c safe.directory=/app cat-file -e 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\nfatal: Not a valid object name 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\n"
+  },
+  {
+    "id": "EX-02/w2-exchange-review-20261025-02",
+    "passed": true
+  },
+  {
+    "id": "EX-02/w2-partial-exchange-20261025-01",
+    "passed": true
+  },
+  {
+    "id": "EX-03/w1-baseline-20261025a",
+    "passed": true
+  },
+  {
+    "id": "EX-03/w1-ex03-shared-20261025c",
+    "passed": true
+  },
+  {
+    "id": "EX-04/w1-baseline-20261025a",
+    "passed": true
+  },
+  {
+    "id": "EX-04/w1-candidate-20261025b",
+    "passed": false,
+    "error": "Error: Command failed: git -c safe.directory=/app cat-file -e 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\nfatal: Not a valid object name 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\n"
+  },
+  {
+    "id": "EX-05/w1-baseline-20261025a",
+    "passed": true
+  },
+  {
+    "id": "EX-05/w1-candidate-20261025b",
+    "passed": false,
+    "error": "Error: Command failed: git -c safe.directory=/app cat-file -e 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\nfatal: Not a valid object name 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\n"
+  },
+  {
+    "id": "EX-06/w1-baseline-20261025a",
+    "passed": true
+  },
+  {
+    "id": "EX-06/w1-candidate-20261025b",
+    "passed": false,
+    "error": "Error: Command failed: git -c safe.directory=/app cat-file -e 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\nfatal: Not a valid object name 2a0d4020073faab30f7046b66a2e478cce022f00^{commit}\n"
+  },
+  {
+    "id": "EX-07/w3-915138a-20261025-terminal01",
+    "passed": true
+  },
+  {
+    "id": "EX-08/w2-coordinates-review-20261025-02",
+    "passed": true
+  },
+  {
+    "id": "EX-08/w2-partial-coordinates-20261025-01",
+    "passed": true
+  },
+  {
+    "id": "EX-09/w6-pg-0247bdd-02-terminal-v1",
+    "passed": false,
+    "error": "Error: Command failed: git -c safe.directory=/app cat-file -e 0247bdd381e565a9e885c62bbcbd85fbc3108c0d^{commit}\nfatal: Not a valid object name 0247bdd381e565a9e885c62bbcbd85fbc3108c0d^{commit}\n"
+  },
+  {
+    "id": "EX-10/native-history-20261025b",
+    "passed": true
+  },
+  {
+    "id": "EX-11/w6-pg-0247bdd-02-terminal-v1",
+    "passed": false,
+    "error": "Error: Command failed: git -c safe.directory=/app cat-file -e 0247bdd381e565a9e885c62bbcbd85fbc3108c0d^{commit}\nfatal: Not a valid object name 0247bdd381e565a9e885c62bbcbd85fbc3108c0d^{commit}\n"
+  },
+  {
+    "id": "EX-12/w6-pg-0247bdd-02-terminal-v1",
+    "passed": false,
+    "error": "Error: Command failed: git -c safe.directory=/app cat-file -e 0247bdd381e565a9e885c62bbcbd85fbc3108c0d^{commit}\nfatal: Not a valid object name 0247bdd381e565a9e885c62bbcbd85fbc3108c0d^{commit}\n"
+  },
+  {
+    "id": "EX-13/hospital-reduced-20261025b",
+    "passed": true
+  },
+  {
+    "id": "EX-13/hospital-reduced-20261025c",
+    "passed": true
+  },
+  {
+    "id": "EX-13/hospital-smoke-20261025a",
+    "passed": true
+  },
+  {
+    "id": "EX-13/hospital-smoke-20261025b",
+    "passed": true
+  },
+  {
+    "id": "EX-13/hospital-smoke-20261025c",
+    "passed": true
+  },
+  {
+    "id": "EX-13/w4-full-manifest-20261025a",
+    "passed": true
+  }
+]
