@@ -1,10 +1,10 @@
 import { levels, entityLevel } from '../src/building-levels.ts';
 import { entitySpace } from '../src/floor-plan.ts';
-import type { Entity, ModelGraph } from '../src/room-model.ts';
+import type { ModelGraph } from '../src/room-model.ts';
 
 export type ModelNode = { kind: 'project' | 'level' | 'room' | 'element' | 'group'; id: string; name: string; detail: string; children: ModelNode[] };
 export function modelHierarchy(graph: ModelGraph, name: string): ModelNode {
-  const root: ModelNode = { kind: 'project', id: 'project-root', name, detail: 'Whole model', children: [] };
+  const root: ModelNode = { kind: 'project', id: '$project', name, detail: 'Whole model', children: [] };
   const storeys = levels(graph);
   const byId = new Map<string, ModelNode>();
   for (const level of storeys) {
@@ -50,7 +50,7 @@ export function elementProperties(graph: ModelGraph, id: string): { name: string
     const identity = typeof value === 'string' ? graph.entities.find(item => item.id === value) : null;
     const text = identity ? identity.name : value === null ? 'None' : typeof value === 'number'
       ? `${value}${['width', 'depth', 'height', 'thickness', 'elevation', 'sillHeight'].includes(key) ? ' m' : key === 'rotationDeg' ? '°' : ''}`
-      : typeof value === 'string' ? value : JSON.stringify(value);
+      : typeof value === 'string' ? value : JSON.stringify(value) ?? 'Not set';
     rows.push([label, text]);
   }
   for (const link of graph.relationships.filter(link => link.source === id || link.target === id)) {
