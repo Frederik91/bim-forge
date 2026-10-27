@@ -385,7 +385,7 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
 function assertEvidenceDestination(context: ProjectEvidenceContext | null, signal: AbortSignal): void {
   signal.throwIfAborted();
   if (!repo || busy || selectedDesignTarget.kind === 'baseline' || !context || context.projectId !== repo.projectId
-      || context.bindingId !== currentChatKey() || designKey(context.target) !== designKey(selectedDesignTarget)
+      || context.bindingId !== currentChatKey() || designKey(parseDesignTarget(context.target)) !== designKey(selectedDesignTarget)
       || context.revisionId !== selectedDesignHead()) throw new Error('Reopen project evidence from the chat and design you want to use.');
 }
 const evidencePanel = new ProjectEvidencePanel(generic('project-evidence-mount'), {
@@ -443,7 +443,11 @@ function renderEvidenceContext(): void {
 function designKey(target: DesignTarget): string { return target.kind === 'main' ? 'main' : `${target.kind}:${target.id}`; }
 function selectedDesignView(project: RoomRepository = repo ?? requireRepository()) { return project.designView(selectedDesignTarget); }
 function selectedDesignHead(project: RoomRepository = repo ?? requireRepository()): string { return selectedDesignView(project).revisionId; }
-function designLabel(project: RoomRepository = repo ?? requireRepository()): string { return selectedDesignView(project).target.kind === 'baseline' ? `${selectedDesignView(project).name} · read only` : selectedDesignView(project).name; }
+function designLabel(project: RoomRepository = repo ?? requireRepository()): string {
+  const view = project.designTargets().find(item => designKey(item.target) === designKey(selectedDesignTarget));
+  if (!view) throw new Error('The selected design is unavailable. Reopen the project.');
+  return view.target.kind === 'baseline' ? `${view.name} · read only` : view.name;
+}
 function branchHead(project: RoomRepository, branch: string): string { return branch === 'main' ? selectedDesignHead(project) : project.head(branch); }
 function targetMatches(target?: FrozenDesignTarget): boolean { return designKey(target?.target ?? { kind: 'main' }) === designKey(selectedDesignTarget); }
 function selectedReviewAt(project: RoomRepository, revisionId: string) {

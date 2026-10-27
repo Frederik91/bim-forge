@@ -770,7 +770,9 @@ export class ChangeRequests {
     }
     if (current.root() !== repository.root()) throw new BacklogConflict('This project identity belongs to a different model.');
     const selectedHead = bound.target ? current.freezeDesignTarget(bound.target.target).revisionId : current.head('main');
-    if (selectedHead !== (bound.target?.revisionId ?? repository.head('main'))) throw new BacklogConflict('The selected design changed. Reopen that design before submitting.');
+    if (selectedHead !== (bound.target?.revisionId ?? repository.head('main'))) throw new BacklogConflict(bound.target
+      ? 'The selected design changed. Reopen that design before submitting.'
+      : 'The accepted server model changed. Reopen the latest server project before submitting.');
     if (bound.scope && !isDeepStrictEqual(current.view(bound.baseRevisionId).snapshot, bound.base.snapshot)) {
       throw new BacklogConflict('The scoped request base is not the authoritative server revision.');
     }
