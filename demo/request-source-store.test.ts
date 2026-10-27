@@ -124,6 +124,32 @@ test('memberships share the ticket transaction; expiry preserves bound sources a
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM request_source_blobs').get()?.count, 1);
 });
 
+test('explicit project retention extends expiry and read/prepare eligibility without request binding or rekeying', async (t) => {
+  const { db, store } = setup(t);
+  const bytes = Buffer.from('Original project observation.');
+  const source = await upload(store, bytes);
+  const abandoned = await upload(store, Buffer.from('Unretained abandoned upload.'));
+  assert.throws(() => store.retained(project, source.id), /not retained/);
+  assert.throws(() => store.retainProject(otherProject, source), /Unknown/);
+  assert.throws(() => store.retainProject(project, { ...source, sha256: '0'.repeat(64) }), /immutable/);
+  assert.deepEqual(store.retainProject(project, source), source);
+  assert.deepEqual(store.retainProject(project, source), source);
+  const manifest = db.prepare('SELECT manifest FROM request_source_identities WHERE id=?').get(source.id)?.manifest;
+  db.prepare('UPDATE request_source_blobs SET created_at=?').run(Date.now() - 48 * 60 * 60 * 1000);
+  const reopened = new RequestSourceStore(db);
+  assert.deepEqual(reopened.get(project, source.id), { source, bytes });
+  assert.deepEqual(reopened.retained(project, source.id), source);
+  assert.throws(() => reopened.get(project, abandoned.id), /expired/);
+  assert.throws(() => reopened.retainProject(project, abandoned), /expired/);
+  assert.throws(() => reopened.retained(otherProject, source.id), /not retained/);
+  const prepared = await reopened.prepare(project, [source], signal());
+  assert.deepEqual(prepared.documents, [{ sourceId: source.id, text: bytes.toString('utf8') }]);
+  await prepared.dispose();
+  assert.equal(db.prepare('SELECT manifest FROM request_source_identities WHERE id=?').get(source.id)?.manifest, manifest);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_source_bindings').get()?.n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_source_blobs').get()?.n, 1);
+});
+
 test('source bytes and request memberships survive SQLite close and reopen', async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'bim-source-store-test-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));

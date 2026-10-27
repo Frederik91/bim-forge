@@ -220,7 +220,10 @@ export class RequestSourceStore {
       CREATE TABLE IF NOT EXISTS request_source_memberships (
         request_id TEXT NOT NULL REFERENCES request_source_bindings(request_id),
         source_id TEXT NOT NULL REFERENCES request_source_blobs(id), PRIMARY KEY(request_id, source_id));
-      CREATE INDEX IF NOT EXISTS request_source_member ON request_source_memberships(source_id);`);
+      CREATE INDEX IF NOT EXISTS request_source_member ON request_source_memberships(source_id);
+      CREATE TABLE IF NOT EXISTS request_source_project_retention (
+        source_id TEXT PRIMARY KEY REFERENCES request_source_blobs(id), project_id TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS request_source_retained_project ON request_source_project_retention(project_id);`);
     this.#write(() => this.#expire());
   }
 
@@ -234,12 +237,14 @@ export class RequestSourceStore {
   }
   #expire(): void {
     this.#db.prepare(`DELETE FROM request_source_blobs WHERE created_at <= ?
-      AND NOT EXISTS (SELECT 1 FROM request_source_memberships WHERE source_id = request_source_blobs.id)`)
+      AND NOT EXISTS (SELECT 1 FROM request_source_memberships WHERE source_id = request_source_blobs.id)
+      AND NOT EXISTS (SELECT 1 FROM request_source_project_retention WHERE source_id = request_source_blobs.id AND project_id = request_source_blobs.project_id)`)
       .run(Date.now() - UPLOAD_LIFETIME_MS);
   }
   #read(projectId: string, id: string): StoredSource {
     const row = this.#db.prepare(`SELECT * FROM request_source_blobs WHERE project_id = ? AND id = ?
-      AND (created_at > ? OR EXISTS (SELECT 1 FROM request_source_memberships WHERE source_id = request_source_blobs.id))`)
+      AND (created_at > ? OR EXISTS (SELECT 1 FROM request_source_memberships WHERE source_id = request_source_blobs.id)
+        OR EXISTS (SELECT 1 FROM request_source_project_retention WHERE source_id = request_source_blobs.id AND project_id = request_source_blobs.project_id))`)
       .get(identity(projectId), identity(id), Date.now() - UPLOAD_LIFETIME_MS);
     if (!row || !(row.bytes instanceof Uint8Array)) throw new Error('Unknown or expired project source.');
     const [source] = parseRequestSources([{ id: row.id, name: row.name, mediaType: row.media_type, byteLength: row.byte_length, sha256: row.sha256 }]);
@@ -322,6 +327,24 @@ export class RequestSourceStore {
   get(projectId: string, id: string): { source: RequestSource; bytes: Buffer } {
     const { source, bytes } = this.#read(projectId, id);
     return { source, bytes };
+  }
+
+  /** Explicit durable project admission; original identity, manifest and bytes never change. */
+  retainProject(projectId: string, source: RequestSource): RequestSource {
+    return this.#write(() => {
+      this.assert(projectId, [source]);
+      this.#db.prepare('INSERT INTO request_source_project_retention(source_id, project_id) VALUES(?,?) ON CONFLICT(source_id) DO NOTHING')
+        .run(source.id, projectId);
+      return this.retained(projectId, source.id);
+    });
+  }
+
+  /** Private authorized metadata only, verified against the sole original byte authority. */
+  retained(projectId: string, id: string): RequestSource {
+    const row = this.#db.prepare('SELECT source_id FROM request_source_project_retention WHERE project_id = ? AND source_id = ?')
+      .get(identity(projectId), identity(id));
+    if (!row) throw new Error('Source is not retained by this project.');
+    return this.#read(projectId, id).source;
   }
 
   async prepare(projectId: string, sources: readonly RequestSource[], signal: AbortSignal): Promise<PreparedRequestSources> {
