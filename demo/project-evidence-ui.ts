@@ -34,6 +34,21 @@ function targetLabel(target: ProjectEvidenceContext['target']): string {
 }
 function message(error: unknown): string { return error instanceof Error ? error.message : 'Project evidence is unavailable. Retry shortly.'; }
 function page<T, Cursor>(): PageState<T, Cursor> { return { items: [], next: null, loaded: false, loading: false, error: '' }; }
+function propertyLabel(id: string): string {
+  const label = id.replace(/[-_:]+/g, ' '); return label.charAt(0).toUpperCase() + label.slice(1);
+}
+function claimLabel(assertion: EvidenceEntry['assertion']): string {
+  if (!('value' in assertion)) return assertion.kind === 'unknown' ? 'Value unknown' : 'Recorded choice';
+  const value = assertion.value;
+  switch (value.kind) {
+    case 'length': case 'duration': return `${value.value} ${value.unit}`;
+    case 'angle': return `${value.value}°`;
+    case 'number': return String(value.value);
+    case 'boolean': return value.value ? 'Yes' : 'No';
+    case 'text': return value.value || '(empty text)';
+    default: { const exhaustive: never = value; return exhaustive; }
+  }
+}
 
 /** Presentation of loaded history and explicit chat context. Parent owns model authority. */
 export class ProjectEvidencePanel {
@@ -162,11 +177,12 @@ export class ProjectEvidencePanel {
       host.append(this.#button(state.error ? `Retry ${noun}` : `Load more ${noun}`, `more-${noun}`, load, state.loading));
     }
   }
-  #choice(label: string, key: string, checked: boolean, choose: (checked: boolean) => void): HTMLElement {
+  #choice(label: string, key: string, checked: boolean, choose: (checked: boolean) => void, visibleLabel = label): HTMLElement {
     const wrapper = node('label', undefined, 'source-actions'); const input = node('input'); input.type = 'checkbox';
     input.checked = checked; input.disabled = this.#contextBusy; input.dataset.evidenceKey = key;
+    input.setAttribute('aria-label', label);
     input.addEventListener('change', () => { void this.#act(() => choose(input.checked)); });
-    wrapper.append(input, node('span', label)); return wrapper;
+    wrapper.append(input, node('span', visibleLabel)); return wrapper;
   }
   #sourceLink(projectId: string, sourceId: string, label: string): HTMLAnchorElement {
     const link = node('a', label, 'source-download'); link.href = privateSourceHref(projectId, sourceId); return link;
@@ -186,37 +202,43 @@ export class ProjectEvidencePanel {
     const { entry, pin } = record; const card = node('li', undefined, 'source-item card'); card.tabIndex = -1; card.dataset.entryId = entry.id;
     const copy = node('div', undefined, 'source-copy');
     const displayName = context.entityName?.(entry.anchor.entityId);
-    copy.append(node('h4', `${entry.id} · ${entry.assertion.kind} · ${entry.property.definitionId}`),
-      node('p', 'Historical record; current applicability and acceptance are not established.'),
+    const assertion = entry.assertion;
+    copy.append(node('h4', `${displayName || entry.anchor.entityId} · ${propertyLabel(entry.property.definitionId)}`),
+      node('p', `${claimLabel(assertion)} · ${assertion.kind}`),
+      node('p', 'Historical record; current applicability and acceptance are not established.'));
+    const provenance = node('details', undefined, 'source-reference');
+    provenance.append(node('summary', 'Provenance and history'), node('p', `Record ${entry.id} · Property ${entry.property.definitionId}`),
       node('p', `Anchor object ${entry.anchor.entityId}${displayName ? ` · Current display name: ${displayName}` : ''}`),
       node('p', `Project ${entry.anchor.projectId} · Target ${targetLabel(entry.anchor.target)}`),
       node('p', `Revision ${entry.anchor.revisionId} · Body SHA-256 ${entry.anchor.bodyHash}`),
       node('p', `Record SHA-256 ${pin.hash} · Value kind ${entry.property.valueKind}`));
-    const assertion = entry.assertion;
-    if ('value' in assertion) copy.append(node('p', `Claimed value: ${JSON.stringify(assertion.value)}`));
-    if ('rationale' in assertion) copy.append(node('p', `Rationale: ${assertion.rationale}`));
-    if (assertion.kind === 'unknown') copy.append(node('p', `Unknown: ${assertion.reason}`));
+    if ('value' in assertion) provenance.append(node('p', `Raw claimed value: ${JSON.stringify(assertion.value)}`));
+    if ('rationale' in assertion) provenance.append(node('p', `Rationale: ${assertion.rationale}`));
+    if (assertion.kind === 'unknown') provenance.append(node('p', `Unknown: ${assertion.reason}`));
     if ('citations' in assertion) for (const citation of assertion.citations) {
       const source = this.#sources.items.find(item => item.id === citation.sourceId && item.sha256 === citation.sha256);
-      const details = node('p', `Citation: ${citation.locator} · Source SHA-256 ${citation.sha256} · `);
-      details.append(this.#sourceLink(context.projectId, citation.sourceId, source?.name ?? citation.sourceId));
-      if (!source) details.append(node('small', 'Source metadata not loaded or hash differs; authorized download may be unavailable.'));
-      copy.append(details);
+      const citationCopy = node('p');
+      citationCopy.append(this.#sourceLink(context.projectId, citation.sourceId, source?.name ?? 'Source file (metadata not loaded)'),
+        node('span', ` · ${citation.locator.length > 240 ? `${citation.locator.slice(0, 240)}…` : citation.locator}`));
+      if (!source) citationCopy.append(node('small', 'Source metadata not loaded or hash differs; authorized download may be unavailable.'));
+      copy.append(citationCopy);
+      provenance.append(node('p', `Citation: ${citation.locator} · Source ${citation.sourceId} · Source SHA-256 ${citation.sha256}`));
     }
-    if (entry.predecessor) copy.append(node('strong', 'Corrects record'), this.#reference(entry.predecessor.entryId, entry.predecessor.hash));
+    if (entry.predecessor) provenance.append(node('strong', 'Corrects record'), this.#reference(entry.predecessor.entryId, entry.predecessor.hash));
     for (const correction of this.#evidence.items.filter(item => item.entry.predecessor?.entryId === entry.id && item.entry.predecessor.hash === pin.hash)) {
-      copy.append(node('strong', 'Correction in loaded history'), this.#reference(correction.entry.id, correction.pin.hash));
+      provenance.append(node('strong', 'Correction in loaded history'), this.#reference(correction.entry.id, correction.pin.hash));
     }
-    if ('basis' in assertion) for (const basis of assertion.basis) copy.append(node('strong', 'Basis'), this.#reference(basis.entryId, basis.hash));
+    if ('basis' in assertion) for (const basis of assertion.basis) provenance.append(node('strong', 'Basis'), this.#reference(basis.entryId, basis.hash));
     if (assertion.kind === 'resolution') {
-      copy.append(node('p', `Recorded resolution selected ${assertion.selectedEntryId}; no automatic global resolution is performed.`));
-      for (const id of assertion.candidateIds) copy.append(this.#reference(id));
+      provenance.append(node('p', `Recorded resolution selected ${assertion.selectedEntryId}; no automatic global resolution is performed.`));
+      for (const id of assertion.candidateIds) provenance.append(this.#reference(id));
     }
+    copy.append(provenance);
     const actions = node('div', undefined, 'source-actions');
     actions.append(this.#choice(`Choose record ${entry.id} for chat`, `pin-${entry.id}`, this.#chosenPins.some(item => item.entryId === pin.entryId), checked => {
       if (checked && this.#chosenPins.length >= MAX_EVIDENCE_PINS) throw new Error('Choose at most 32 evidence pins for chat.');
       this.#chosenPins = checked ? [...this.#chosenPins, pin] : this.#chosenPins.filter(item => item.entryId !== pin.entryId); this.#render();
-    }));
+    }, 'Choose record for chat'));
     if (this.#options.selectEntity) actions.append(this.#button('Inspect anchor object', `anchor-${entry.id}`, () => this.#options.selectEntity?.(structuredClone(entry.anchor))));
     card.append(copy, actions); return card;
   }
@@ -230,16 +252,20 @@ export class ProjectEvidencePanel {
     const context = this.#context;
     if (!context) panel.append(node('p', 'Choose a project to inspect retained sources and evidence history.', 'source-scope-note'));
     else {
-      panel.append(node('p', `Displaying ${context.projectId} · ${targetLabel(context.target)} · Revision ${context.revisionId}`),
-        node('p', context.selectedObject ? `Current selection: ${context.selectedObject.name} (${context.selectedObject.id})` : 'Current selection: none'),
+      const displayed = node('details', undefined, 'source-reference');
+      displayed.append(node('summary', 'Displayed context'), node('p', `Displaying ${context.projectId} · ${targetLabel(context.target)} · Revision ${context.revisionId}`));
+      panel.append(node('p', context.selectedObject ? `Current selection: ${context.selectedObject.name} (${context.selectedObject.id})` : 'Current selection: none'),
         node('p', 'Project-wide history, without selection filtering. Loaded records are not a current fact set.', 'source-scope-note'));
+      panel.append(displayed);
       panel.append(this.#button('Refresh project history', 'refresh', () => this.refresh(), this.#fileBusy || this.#contextBusy));
       const sources = node('section'); sources.setAttribute('aria-label', 'Retained project sources'); sources.append(node('h3', 'Retained sources'));
       const list = node('ul', undefined, 'source-list');
       for (const source of this.#sources.items) {
         const item = node('li', undefined, 'source-item'); const copy = node('div', undefined, 'source-copy');
         const link = this.#sourceLink(context.projectId, source.id, source.name); link.download = source.name;
-        copy.append(link, node('small', `${source.mediaType} · ${source.byteLength} bytes · ${source.id}`), node('p', `SHA-256 ${source.sha256}`));
+        const details = node('details', undefined, 'source-reference');
+        details.append(node('summary', 'Details'), node('p', `Source ${source.id}`), node('p', `SHA-256 ${source.sha256}`));
+        copy.append(link, node('small', `${source.mediaType} · ${source.byteLength} bytes`), details);
         item.append(copy, this.#choice(`Choose ${source.name} for chat`, `source-${source.id}`, this.#chosenSources.some(item => item.id === source.id), checked => {
           this.#chosenSources = checked ? parseRequestSources([...this.#chosenSources, source]) : this.#chosenSources.filter(item => item.id !== source.id); this.#render();
         })); list.append(item);

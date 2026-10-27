@@ -36,12 +36,12 @@ Selection-only updates preserve loading.
 `selectedSourceDescriptors` / `selectedEvidencePins` expose chosen chat context.
 No viewer, model cache, fact editing or automatic resolution. Client exposes append.
 
-Parent owns mounts, styles, server and combined browser qualification. Project
-history is unfiltered; `entityName` labels the current display. Records show exact
-anchors, target, revision/body hash, provenance, citations and correction/basis/
-resolution references. Loaded-page links imply neither completeness nor current
-truth. Downloads use private same-origin project/UUID routes; locators stay text.
-Upload precedes explicit Retain; retention retries reuse the uploaded descriptor.
+Parent owns mounts/styles/server/browser checks. Unfiltered history shows current
+entity name (or ID), readable property/value, assertion kind and citation filename/
+locator. Native collapsed 'Provenance and history' retains ALL IDs, targets,
+hashes, raw values and history refs; source IDs/hashes live in native 'Details'.
+No completeness/current-truth claim. Downloads use private project/UUID routes;
+locators stay text. Upload precedes explicit Retain; retries reuse the descriptor.
 
 Parent CSS snippet:
 
@@ -55,9 +55,8 @@ Parent CSS snippet:
 
 ## Plan and qualification ledger
 
-Own client/panel/tests, this note and shared upload helper in
-`demo/request-source-ui.ts`. Check codecs, paging, hostile text/links,
-upload/retain separation, stale bindings, errors/retry and callback selection.
+Own client/panel/tests/doc and `demo/request-source-ui.ts` upload helper.
+Check codecs, paging, safe text/links, retention and chat binding/callbacks.
 
 Ten total qualification attempts including setup authorized for this item.
 Only `/ssd1/bim-forge-qualification/residential197/evidence-ui211-aN`, unique
@@ -74,19 +73,19 @@ or installs; validators remain unchanged.
 | 5 | Scoped policy; 20/20 tests and browser bundling passed. |
 | 6 | At parent adf5dbf: root validate, scoped policy (6 files), 20/20 tests passed. |
 | 7 | Ownership correction: no implicit composer calls; bindingId aborts old chat work. Root validate, scoped policy, 22/22 tests passed. |
+| 8 | Readable cards, collapsed native provenance/source details: root validate, scoped policy, 23/23 tests passed. |
 
 Code handoff: `acac4c3`, integrated by parent as `ef56f1a`. No model delta.
-DOM harness and browser bundling do not qualify
-real-browser layout, keyboard, touch or the combined workspace.
+DOM/bundle checks do not qualify browser layout, keyboard/touch or workspace integration.
 
 ```text
 Strict TypeScript valid. 262 source file(s) checked.
 tsc --noEmit: exit 0
-Policy valid. 0 changed file(s) checked.  [root default]
-Policy valid. 6 changed file(s) checked.  [explicit scope]
-tests 22; pass 22; fail 0; skipped 0
+Policy valid. 0 changed file(s) checked.
+Policy valid. 6 changed file(s) checked.
+tests 23; pass 23; fail 0; skipped 0
 ```
 
-Runner, source hashes and output: slot `evidence-ui211-a7` files
+Runner, source hashes and output: slot `evidence-ui211-a8` files
 `run.sh`, `manifest.txt`, `qualification.log`. Slots use the SSD prefix above;
-containers `bim-evidence-ui211-aN`. Seven of ten attempts consumed.
+containers `bim-evidence-ui211-aN`. Eight of ten attempts consumed.

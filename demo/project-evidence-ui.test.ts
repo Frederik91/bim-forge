@@ -6,6 +6,7 @@ import type { ProjectEvidenceContext } from './project-evidence-ui.ts';
 import { ProjectEvidenceClient } from './project-evidence-client.ts';
 import type { EvidenceEntry, EvidencePin } from '../src/model-evidence.ts';
 import type { RequestSource } from '../src/request-sources.ts';
+import type { ModelParameterValue } from '../src/model-scope-contract.ts';
 
 // Deliberately limited DOM boundary. Browser layout/keyboard integration belongs
 // to the parent; these tests run real panel handlers and real transport codecs.
@@ -54,9 +55,13 @@ function button(mount: TestElement, label: string): TestElement {
   assert.ok(result, `Missing button: ${label}`); return result;
 }
 function choose(mount: TestElement, label: string, checked = true): void {
-  const wrapper = mount.all().find(element => element.tagName === 'LABEL' && element.textContent.trim() === label);
+  const wrapper = mount.all().find(element => element.tagName === 'LABEL' && (element.textContent.trim() === label
+    || element.children.some(child => child.getAttribute('aria-label') === label)));
   const input = wrapper?.children.find(element => element.tagName === 'INPUT'); assert.ok(input, `Missing checkbox: ${label}`);
   input.checked = checked; input.focus(); input.trigger('change');
+}
+function primaryText(element: TestElement): string {
+  return element.tagName === 'DETAILS' ? '' : element.children.length ? element.children.map(primaryText).join(' ') : element.textContent;
 }
 async function until(predicate: () => boolean): Promise<void> {
   for (let index = 0; index < 200; index++) { if (predicate()) return; await new Promise<void>(resolve => setTimeout(resolve, 0)); }
@@ -92,6 +97,21 @@ test('panel behavior at the DOM boundary; no browser layout or touch qualificati
     }), useSources: values => { chosenSources.push(structuredClone([...values])); },
       useEvidence: values => { chosenPins.push(structuredClone([...values])); }, selectEntity: anchor => { anchors.push(anchor); } });
     await panel.show(context);
+    const card = root.all().find(element => element.dataset.entryId === entry.id); assert.ok(card);
+    const provenance = card.all().find(element => element.tagName === 'DETAILS'); assert.ok(provenance);
+    assert.equal(provenance.children[0]?.tagName, 'SUMMARY'); assert.equal(provenance.children[0]?.textContent, 'Provenance and history');
+    assert.equal(provenance.getAttribute('open'), null, 'Native details starts collapsed.');
+    assert.match(primaryText(card), /Displayed wall · Geometry thickness.*150 mm · documented/);
+    for (const identity of [entry.id, entry.anchor.projectId, entry.anchor.revisionId, entry.anchor.bodyHash, pin.hash, source.id, source.sha256]) {
+      assert.ok(provenance.textContent.includes(identity)); assert.ok(!primaryText(card).includes(identity));
+    }
+    assert.ok(provenance.textContent.includes(JSON.stringify(entry.assertion.kind === 'documented' ? entry.assertion.value : null)));
+    const sourceCard = root.all().find(element => element.tagName === 'LI' && !element.dataset.entryId); assert.ok(sourceCard);
+    const sourceDetails = sourceCard.all().find(element => element.tagName === 'DETAILS'); assert.ok(sourceDetails);
+    assert.equal(sourceDetails.children[0]?.tagName, 'SUMMARY'); assert.equal(sourceDetails.children[0]?.textContent, 'Details');
+    assert.equal(sourceDetails.getAttribute('open'), null); assert.match(primaryText(sourceCard), /text\/plain · 4 bytes/);
+    assert.ok(!primaryText(sourceCard).includes(source.id)); assert.ok(!primaryText(sourceCard).includes(source.sha256));
+    assert.ok(sourceDetails.textContent.includes(source.id)); assert.ok(sourceDetails.textContent.includes(source.sha256));
     assert.match(root.textContent, /Current selection: <script>Current wall<\/script>/);
     assert.match(root.textContent, /Historical record; current applicability and acceptance are not established/);
     assert.ok(root.all().filter(element => element.tagName === 'A').every(link => link.href === `/api/projects/${context.projectId}/sources/${source.id}`));
@@ -107,6 +127,33 @@ test('panel behavior at the DOM boundary; no browser layout or touch qualificati
     button(root, 'Inspect anchor object').trigger('click'); assert.deepEqual(anchors, [entry.anchor]);
     assert.ok(requests.includes('/api/projects/project-211/evidence?after=1'));
     assert.ok(requests.every(url => !url.includes('/sources/')), 'listing never fetches blobs or previews'); panel.dispose();
+  });
+
+  await t.test('typed claim summaries are readable and raw values stay under native provenance details', async () => {
+    const host = mount(); const root = tree(host);
+    const values: { value: ModelParameterValue; label: string }[] = [
+      { value: { kind: 'length', value: 5, unit: 'm' }, label: '5 m' },
+      { value: { kind: 'angle', value: 45, unit: 'deg' }, label: '45°' },
+      { value: { kind: 'duration', value: 2, unit: 'h' }, label: '2 h' },
+      { value: { kind: 'number', value: 0 }, label: '0' },
+      { value: { kind: 'boolean', value: false }, label: 'No' },
+      { value: { kind: 'text', value: '<script>survey note</script>' }, label: '<script>survey note</script>' },
+    ];
+    const entries = values.map(({ value }, index) => ({ entry: { ...entry, id: `value-${index}`,
+      property: { definitionId: 'fixture-value', valueKind: value.kind },
+      assertion: { kind: 'assumed', value, rationale: 'Display fixture only.', basis: [] } } satisfies EvidenceEntry,
+    pin: { ...pin, entryId: `value-${index}` } }));
+    const panel = new ProjectEvidencePanel(host, { client: new ProjectEvidenceClient(async input => reply(String(input).endsWith('/project-sources')
+      ? { sources: [], next: null } : { entries, next: null })), useSources: () => {}, useEvidence: () => {} });
+    await panel.show({ ...context, entityName: () => undefined });
+    for (const [index, fixture] of values.entries()) {
+      const card = root.all().find(element => element.dataset.entryId === `value-${index}`); assert.ok(card);
+      assert.ok(primaryText(card).includes(`wall-north · Fixture value`)); assert.ok(primaryText(card).includes(`${fixture.label} · assumed`));
+      assert.ok(!primaryText(card).includes('"kind"'));
+      const details = card.all().find(element => element.tagName === 'DETAILS'); assert.ok(details);
+      assert.ok(details.textContent.includes(JSON.stringify(fixture.value))); assert.equal(details.getAttribute('open'), null);
+    }
+    assert.equal(root.all().filter(element => element.tagName === 'SCRIPT').length, 0); panel.dispose();
   });
 
   await t.test('missing and busy errors retry independently; binding aborts stale work and clears panel choices', async () => {
