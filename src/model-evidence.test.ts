@@ -15,6 +15,9 @@ test('claims preserve actual model parameter values and require distinct provena
     property: { definitionId: 'geometry-thickness', valueKind: 'length' }, predecessor: null,
     assertion: { kind: 'assumed', value: { kind: 'length', value: 150, unit: 'mm' }, rationale: 'Synthetic assumption; not surveyed.', basis: [] } };
   assert.deepEqual(parseEvidenceEntry(entry), entry);
+  const { target: originTarget, ...unboundAnchor } = entry.anchor;
+  assert.deepEqual(originTarget, { kind: 'main' });
+  assert.throws(() => parseEvidenceEntry({ ...entry, anchor: unboundAnchor }), /Invalid/);
   assert.equal(evidenceApplicable(repository, entry.anchor, repository.head('main')), true);
   assert.equal(evidenceApplicable(repository, { ...entry.anchor, bodyHash: '0'.repeat(64) }, repository.head('main')), false);
   assert.throws(() => parseEvidenceEntry({ ...entry, assertion: { kind: 'measured', value: entry.assertion.kind === 'assumed' ? entry.assertion.value : null, citations: [] } }), /Invalid/);
@@ -46,6 +49,10 @@ test('review pins/read sets export strict serializable schemas and reject hidden
   const set = { version: 1, projectId: 'project', revisionId: 'b'.repeat(64), target: { kind: 'main' }, pins: [pin], subjects: [] };
   assert.equal(Check(EvidenceReadSetSchema, set), true);
   assert.deepEqual(parseEvidenceReadSet(JSON.parse(JSON.stringify(set))), set);
+  const { target, ...unboundReadSet } = set;
+  assert.deepEqual(target, { kind: 'main' });
+  assert.throws(() => parseEvidenceReadSet(unboundReadSet), /Invalid/);
+  assert.throws(() => parseEvidenceReadSet({ ...set, target: { kind: 'baseline', id: 'immutable' } }), /Invalid/);
   assert.throws(() => parseEvidenceReadSet({ ...set, pins: [pin, pin] }), /Invalid/);
   assert.throws(() => parseEvidenceReadSet({ ...set, hidden: true }), /Invalid/);
   let accessed = false;
