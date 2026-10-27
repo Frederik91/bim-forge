@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-25T18:22:54.159492+00:00",
+  "ownedStopped": true,
+  "ownedBackendAbsent": true,
+  "unrelatedClientAndBackendSurvived": true,
+  "elapsedSeconds": 20.282455646432936,
+  "scope": "Correctness probe, not model admission"
+}

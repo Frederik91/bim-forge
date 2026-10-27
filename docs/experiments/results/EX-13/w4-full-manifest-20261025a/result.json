@@ -1,0 +1,360 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "w4-full-manifest-20261025a",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T12:08:14Z",
+  "finishedAt": "2026-10-25T12:17:01Z",
+  "hypothesis": "The full seeded hospital generator can produce the declared inventory, exact logical property cohorts, typed graph counts and query oracles with bounded memory. This generator-only run cannot establish all EX-13 database assertions.",
+  "variant": "VM-C1 synthetic initial revision, full hospital profile, standalone manifest production without SQL backend execution.",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "c83375e44c92ebd206dff4da002b334b54e2da62",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "c83375e44c92ebd206dff4da002b334b54e2da62",
+    "path": "docs/experiments/registry.json",
+    "sha256": "c56ab9a7b13d404b76c0e63acef3c48fe4684061dd8f9ccbaa42a6e925802da3"
+  },
+  "implementation": {
+    "sourceCommit": "c83375e44c92ebd206dff4da002b334b54e2da62",
+    "runnerCommit": "c83375e44c92ebd206dff4da002b334b54e2da62",
+    "validators": [
+      "Pinned generator manifest checks reconcile per-kind incoming/outgoing degree sums with streamed edge counts.",
+      "Earlier isolated correction-source validation: npm run validate, scoped tsc, seven generator tests. These checks were not rerun during full generation.",
+      "Metadata publication uses W0 writer a98b6cd with exact observation artifact, Git bindings and evidence hashes."
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1/full",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "efd1ef057d1f4513b0b89cf380c1fcd6cf0bdc31bd468ce466d3302734484737"
+  },
+  "environment": {
+    "host": "fun-server",
+    "software": {
+      "node": "v24.22.1",
+      "typebox": "1.4.3, pinned by source package manifest",
+      "generator": "c83375e44c92ebd206dff4da002b334b54e2da62",
+      "metadataWriter": "a98b6cd49c637f40dd7431196bd98349bcc4a466",
+      "time": "GNU Time version string UNKNOWN; exact executable hash and version output are retained.",
+      "observations": "Generator-only observations derived after execution from retained manifest, exit status and GNU time output."
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "Private durable evidence root /qualification/artifacts/hospital-full-manifest-20261025a on /ssd1. The 200 GiB cap covered the shared qualification root; watchdog also required 100 GiB data and 4 GiB host-root reserves. Evidence paths are relative to this root; raw-artifacts.tar.gz preserves the listed raw files for review.",
+    "cacheProcedure": "No cache flush or cold-cache claim. Pure generation overlapped other qualification clients; no database writes or comparative workload ran in this container.",
+    "measurementSlot": "Coordinator-authorized full manifest admission job only, 2026-10-25T12:08:14Z to 12:17:01Z; one CPU, one GiB, networking disabled, two-hour timeout."
+  },
+  "commands": [
+    "bash /qualification/sources/w4-debug/full-manifest-run.sh (retained launcher, Docker image/mounts and hashes are evidence)",
+    "cp -R /source/. /app/; git -c safe.directory=/app checkout --detach c83375e44c92ebd206dff4da002b334b54e2da62",
+    "timeout --signal=TERM --kill-after=10s <remaining-of-7200-seconds>s /usr/bin/time -v -o time-v.txt node benchmarks/hospital/generator/cli.ts --scale full --table manifest"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "w4-full-generated-counts",
+      "expected": "Full profile inventory and logical typed property count match exact declared cohort allocation; valid topology determines relation count without padding.",
+      "observed": "Full manifest: 6,777,445 entities across 35 kinds, 18,742,644 relationships within target tolerance, 1,500,000 parameters and 145,118,512 logical properties. Includes 3,000,000 ports and 1,400,000 studs.",
+      "passed": true,
+      "limitations": [
+        "Synthetic inventory, bounds, source references and artifact URIs do not qualify real hospital inventory, engineering geometry, IFC fidelity or regeneration.",
+        "This job generated a manifest only. No full database load, SQL constraint validation, history replay, traffic, durability, recovery or approval test ran in this job.",
+        "Independent endpoint, duplicate-edge, COPY round-trip and repeatability checks passed at smoke scale. Full generation reconciled aggregate degrees and hashed every generated table row; it did not independently reload all full rows.",
+        "Generation overlapped other qualification jobs. Elapsed time and process RSS are admission metadata, not isolated comparative performance or end-to-end service measurements.",
+        "Only initial revision 1 is materialized. History, branches, conflicts and delta recipes require W5 execution. External materialized artifact bytes are zero; payload compression/deduplication statistics are bounded samples."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "w4-full-degree-reconciliation",
+      "expected": "For each relationship kind, sum of generated incoming and outgoing degrees equals the streamed relationship count.",
+      "observed": "createManifest completed without its degree-reconciliation assertion failing; exact degree histograms and relationship counts are in manifest.json. Independent per-endpoint smoke checks passed earlier.",
+      "passed": true,
+      "limitations": [
+        "Synthetic inventory, bounds, source references and artifact URIs do not qualify real hospital inventory, engineering geometry, IFC fidelity or regeneration.",
+        "This job generated a manifest only. No full database load, SQL constraint validation, history replay, traffic, durability, recovery or approval test ran in this job.",
+        "Independent endpoint, duplicate-edge, COPY round-trip and repeatability checks passed at smoke scale. Full generation reconciled aggregate degrees and hashed every generated table row; it did not independently reload all full rows.",
+        "Generation overlapped other qualification jobs. Elapsed time and process RSS are admission metadata, not isolated comparative performance or end-to-end service measurements.",
+        "Only initial revision 1 is materialized. History, branches, conflicts and delta recipes require W5 execution. External materialized artifact bytes are zero; payload compression/deduplication statistics are bounded samples."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "w4-full-generator-resource-envelope",
+      "expected": "Manifest generation completes within two hours under a 1 CPU / 1 GiB container limit while honoring budget stop and shared reserves.",
+      "observed": "Exit 0, stderr empty, no OOM and no budget stop. GNU time elapsed 8:41.13, user 514.67 s, system 0.96 s, maximum process RSS 181,612 KiB. Shared watchdog sampled every 20 seconds.",
+      "passed": true,
+      "limitations": [
+        "Synthetic inventory, bounds, source references and artifact URIs do not qualify real hospital inventory, engineering geometry, IFC fidelity or regeneration.",
+        "This job generated a manifest only. No full database load, SQL constraint validation, history replay, traffic, durability, recovery or approval test ran in this job.",
+        "Independent endpoint, duplicate-edge, COPY round-trip and repeatability checks passed at smoke scale. Full generation reconciled aggregate degrees and hashed every generated table row; it did not independently reload all full rows.",
+        "Generation overlapped other qualification jobs. Elapsed time and process RSS are admission metadata, not isolated comparative performance or end-to-end service measurements.",
+        "Only initial revision 1 is materialized. History, branches, conflicts and delta recipes require W5 execution. External materialized artifact bytes are zero; payload compression/deduplication statistics are bounded samples."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "w4-synthetic-claim-boundary",
+      "expected": "Generated results explicitly retain the synthetic claim boundary and separate external reference metadata from materialized artifact bytes.",
+      "observed": "Manifest claim and limitations remain explicit: 100,000 external artifact references, zero materialized external artifact bytes, synthetic proxies and initial-revision metadata only.",
+      "passed": true,
+      "limitations": [
+        "Synthetic inventory, bounds, source references and artifact URIs do not qualify real hospital inventory, engineering geometry, IFC fidelity or regeneration.",
+        "This job generated a manifest only. No full database load, SQL constraint validation, history replay, traffic, durability, recovery or approval test ran in this job.",
+        "Independent endpoint, duplicate-edge, COPY round-trip and repeatability checks passed at smoke scale. Full generation reconciled aggregate degrees and hashed every generated table row; it did not independently reload all full rows.",
+        "Generation overlapped other qualification jobs. Elapsed time and process RSS are admission metadata, not isolated comparative performance or end-to-end service measurements.",
+        "Only initial revision 1 is materialized. History, branches, conflicts and delta recipes require W5 execution. External materialized artifact bytes are zero; payload compression/deduplication statistics are bounded samples."
+      ]
+    }
+  ],
+  "observationsArtifact": "observations.json",
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "caseIds": [
+        "w4-full-generated-counts",
+        "w4-full-degree-reconciliation"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "caseIds": [
+        "w4-full-generated-counts"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "caseIds": [],
+      "coverage": "not-covered"
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "caseIds": [
+        "w4-full-generator-resource-envelope"
+      ],
+      "coverage": "partial"
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "caseIds": [
+        "w4-synthetic-claim-boundary"
+      ],
+      "coverage": "covered"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "manifest.json",
+      "bytes": 292604,
+      "sha256": "efd1ef057d1f4513b0b89cf380c1fcd6cf0bdc31bd468ce466d3302734484737",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "manifest.sha256",
+      "bytes": 138,
+      "sha256": "10622eabae374de5c454eea3be723512a2f3a550413f2259542c085296a776d5",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "time-v.txt",
+      "bytes": 800,
+      "sha256": "82dd1322abec93b65cfd20512c73fa60768b4b48e050c83607c271b147dc1995",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "started-at.txt",
+      "bytes": 21,
+      "sha256": "f34ca862ae1b2a873d860673eabc727fdaebe98b632a74f36e077fdb69be71e6",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "generation-started-at.txt",
+      "bytes": 21,
+      "sha256": "1f91d1d77a643f5dfee56f5f448fd96ab8362053261a4a302f5d5d25f011b0dc",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "finished-at.txt",
+      "bytes": 21,
+      "sha256": "592a91a846d7a43a8cb4d530443cc0308d3d368071e4c9a905e0c73842c36475",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "image.json",
+      "bytes": 3672,
+      "sha256": "9e3ee56a67b12595e766637d0b187780a34cde9abd0e9e5ef0dffd6613fe1727",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "container.json",
+      "bytes": 8950,
+      "sha256": "fb5ed0a8a04966d7adbe1cc60a12cb89140b5f888be95b734d8154df1b1913ed",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "command.txt",
+      "bytes": 72,
+      "sha256": "92fd96ce72399df60ce82d50e5ca5778e1be1169681f9f7b17b9116432e0cdff",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "requested-source-commit.txt",
+      "bytes": 41,
+      "sha256": "e8f264a2d6b008f5d56d572a4d73812625f6a80d5ba65385f9eb268ae678b9b3",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "source-commit.txt",
+      "bytes": 41,
+      "sha256": "e8f264a2d6b008f5d56d572a4d73812625f6a80d5ba65385f9eb268ae678b9b3",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "source-status.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "source-sha256.txt",
+      "bytes": 845,
+      "sha256": "b8017f928919c8e8ff9d7522dd8574b28e7d40651c06da4b9143377cd70b93b0",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "source-checkout.log",
+      "bytes": 546,
+      "sha256": "5ee9958a39c00252cdcd7e30ace81779de4cadcc127dd1faa8fc128ea4dd92bd",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "shared-budget.ndjson",
+      "bytes": 3528,
+      "sha256": "6cf66c9f2f38ad6d8635d559111790d334f170508fa1c203605f9e597f63b0bf",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "node-version.txt",
+      "bytes": 9,
+      "sha256": "249baf635bb43877fcb9422efa1a4904b702d0ddf14d3949b7cd0950d5229c81",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "time-version.txt",
+      "bytes": 336,
+      "sha256": "a3b64288a651d40a18a243c43c871f7ae2886baa58b7e3c64a1061bfd651245f",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "time-executable.sha256",
+      "bytes": 80,
+      "sha256": "53657e86cac996a537975f1d42d31ff35e26d2eb8ec42bd97be2291124f2f840",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "runner.sh",
+      "bytes": 2924,
+      "sha256": "ced3cee7beaad7ac4525bb9bce3d24aa925e05c77dd44b76a50d21f487ee1ae2",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "runner.sha256",
+      "bytes": 162,
+      "sha256": "19e1c4300cf55349cdb266d1a1eddd5f72c3073c9e255d12543729009637453d",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "observations.json",
+      "bytes": 6034,
+      "sha256": "44032b5d09575603d0809953504f81ab8c089f3de0548f3f5ae0f05693e96d87",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "coordinator-handoff.json",
+      "bytes": 4905,
+      "sha256": "f6941e4e2a4f4fc7fe8e5351e153878d9d8e4bb7925d6a3df384006504ced35d",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "prior-failures.md",
+      "bytes": 1790,
+      "sha256": "224f6fe4e7017d04824ce2dc89f5895865e252658bccc2336c6269757395e225",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "publisher.ts",
+      "bytes": 9248,
+      "sha256": "92999fc757b5f8dcf2e03cbcda8b247502b010255cf70f8aa5f1b534c185b936",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "contract-bindings.json",
+      "bytes": 586,
+      "sha256": "036bbcc4a69307ecec83eae711593c3df07016d8452980cfcc97184c4a2df032",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "contract-snapshot/schema.ts",
+      "bytes": 5112,
+      "sha256": "11b39cff4b1025451a334ce9fd7f4aa0c2aa6bab2d225f1b4e3148c065bb1a6a",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "contract-snapshot/records.ts",
+      "bytes": 5455,
+      "sha256": "49fa656f960f443932e624444c4ffeafbeaaed873392274e8715bf966f149b41",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "contract-snapshot/cli.ts",
+      "bytes": 1318,
+      "sha256": "303baab39081cb6b45dccac2c7a19b931faa0863a128e98672a6727efeb83271",
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "raw-artifacts.tar.gz",
+      "bytes": 43355,
+      "sha256": "b2e44a14761b91fce91f430318fe779d6db161247865b559e8c9e6369898c11c",
+      "mediaType": "application/gzip"
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "This is an inconclusive EX-13 generator contribution. Database admission, full SQL integrity, history, query/delta execution, traffic, durability, recovery and approval evidence remain separate coordinator/W5 work.",
+    "Independent endpoint, duplicate and COPY round-trip checks ran at smoke scale earlier. Full generation checked aggregate degrees and hashed all emitted rows without loading them into a second system.",
+    "Synthetic bounds, inventory, source references and external URIs do not qualify real hospital inventory, rendering, clashes, IFC fidelity or geometry regeneration.",
+    "Only initial revision 1 is materialized; external artifact bytes are zero. Payload compression/deduplication uses bounded samples.",
+    "GNU time reports 8:41.13 and 181612 KiB maximum process RSS. These are generation admission metadata under overlapping activity, not isolated comparative performance or whole-service peak memory.",
+    "Earlier rounding and boundary-test failures remain documented in prior-failures.md. Their complete raw console output is in the task transcript, not a retained standalone log; no failed-run timestamps or terminal record were invented.",
+    "The archive in this result directory retains the raw evidence. Extract it into an evidence root, retain the archive itself there too, and verify with W0 a98b6cd. No human acceptance, registry update or merge approval is recorded here."
+  ],
+  "decisionImplications": [
+    "The actual full input has 6777445 entities, 18742644 relationships, 1500000 parameters and 145118512 logical property values; generation hashes are available for independent loader comparison.",
+    "Keep the EX-13 qualification conclusion inconclusive until missing database assertions have their own reviewed evidence. Do not infer production schema adoption from this producer run.",
+    "Preserve existing smoke/reduced failures and retries; this unique run supplements them and replaces none of their files."
+  ]
+}

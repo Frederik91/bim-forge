@@ -1,0 +1,142 @@
+{
+  "completeInitialAdmission": false,
+  "runnerAdmissionPassed": false,
+  "expectedVersionRecords": 27020089,
+  "stateInspectionPassed": true,
+  "originalTwoHourTarget": "Separate extended purpose; original failed trials remain unchanged.",
+  "elapsedSeconds": 14675.96905,
+  "postRunState": {
+    "tables": [
+      {
+        "name": "revisions",
+        "heapBytes": 8192,
+        "indexBytes": 32768,
+        "toastBytes": 8192,
+        "totalBytes": 49152
+      },
+      {
+        "name": "branches",
+        "heapBytes": 8192,
+        "indexBytes": 16384,
+        "toastBytes": 8192,
+        "totalBytes": 32768
+      },
+      {
+        "name": "changes",
+        "heapBytes": 5321826304,
+        "indexBytes": 7383752704,
+        "toastBytes": 8192,
+        "totalBytes": 12706930688
+      },
+      {
+        "name": "versions",
+        "heapBytes": 20788011008,
+        "indexBytes": 3364020224,
+        "toastBytes": 10924539904,
+        "totalBytes": 35082280960
+      },
+      {
+        "name": "visibility",
+        "heapBytes": 355000320,
+        "indexBytes": 824950784,
+        "toastBytes": 8192,
+        "totalBytes": 1180082176
+      },
+      {
+        "name": "receipts",
+        "heapBytes": 0,
+        "indexBytes": 16384,
+        "toastBytes": 8192,
+        "totalBytes": 24576
+      },
+      {
+        "name": "snapshots",
+        "heapBytes": 0,
+        "indexBytes": 8192,
+        "toastBytes": 8192,
+        "totalBytes": 16384
+      },
+      {
+        "name": "meta",
+        "heapBytes": 8192,
+        "indexBytes": 16384,
+        "toastBytes": 8192,
+        "totalBytes": 32768
+      }
+    ],
+    "walLsn": "22/C80BC000",
+    "changes": 0,
+    "version": "PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "branches": [],
+    "receipts": 0,
+    "settings": {
+      "fsync": "on",
+      "work_mem": "8192",
+      "shared_buffers": "32768",
+      "max_connections": "80",
+      "full_page_writes": "on",
+      "synchronous_commit": "on",
+      "maintenance_work_mem": "262144",
+      "max_parallel_workers_per_gather": "1"
+    },
+    "versions": 27020089,
+    "revisions": 0,
+    "visibility": 0,
+    "collectedAt": "2026-10-26T00:01:20.980392+00:00",
+    "databaseBytes": 48977482543,
+    "versionsByKind": {
+      "bed": 5000,
+      "desk": 20000,
+      "door": 25000,
+      "pump": 5000,
+      "roof": 200,
+      "site": 1,
+      "slab": 10000,
+      "stud": 1400000,
+      "wall": 80000,
+      "zone": 200,
+      "chair": 60000,
+      "level": 40,
+      "space": 10000,
+      "valve": 100000,
+      "sensor": 80000,
+      "switch": 40000,
+      "system": 2000,
+      "window": 15000,
+      "cabinet": 30000,
+      "circuit": 50000,
+      "hasPort": 3000000,
+      "building": 4,
+      "hostedBy": 1745000,
+      "terminal": 80000,
+      "equipment": 30000,
+      "luminaire": 140000,
+      "instanceOf": 3760200,
+      "provenance": 100000,
+      "boundsSpace": 160000,
+      "connectedTo": 1500000,
+      "containedIn": 3777444,
+      "ductFitting": 240000,
+      "ductSegment": 180000,
+      "pipeFitting": 300000,
+      "pipeSegment": 250000,
+      "supportedBy": 1020000,
+      "cableSegment": 300000,
+      "connectionPort": 3000000,
+      "memberOfSystem": 2080000,
+      "typeDefinition": 5000,
+      "electricalPanel": 5000,
+      "externalBinding": 100000,
+      "otherFurnishing": 35000,
+      "electricalOutlet": 180000,
+      "parameter:recipe": 300000,
+      "containmentSegment": 100000,
+      "parameterDependsOn": 1500000,
+      "parameter:dimension": 379401,
+      "parameter:hostOffset": 220599,
+      "parameter:typeReference": 300000,
+      "parameter:dependencyInput": 300000
+    },
+    "clusterWalBytes": 2835349504
+  }
+}

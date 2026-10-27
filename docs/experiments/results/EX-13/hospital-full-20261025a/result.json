@@ -1,0 +1,620 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "hospital-full-20261025a",
+  "executionStatus": "timed-out",
+  "conclusion": "failed",
+  "startedAt": "2026-10-25T12:25:42Z",
+  "finishedAt": "2026-10-25T14:25:46Z",
+  "hypothesis": "The pinned single-client version-store implementation admits the detailed full hospital inventory, publishes it and verifies complete source fidelity within the initial two-hour resource envelope.",
+  "variant": "VM-C1 PostgreSQL initial full inventory; original duplicate-document transport at 612dd75",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "runnerCommit": "612dd75192d4605096efd3ed52f02c4abd913de1",
+    "validators": [
+      "npm run validate at pinned source before full launch",
+      "24 combined contract/generator/storage/envelope/boundary tests in preflight",
+      "W4 exact-byte producer hashes and row counts when a table is fully consumed",
+      "Full source/database body fingerprint and logical-property oracle only when its original passed observation exists"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1 full; 6777445 entities, 18742644 relationships, 1500000 parameters",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "efd1ef057d1f4513b0b89cf380c1fcd6cf0bdc31bd468ce466d3302734484737"
+  },
+  "environment": {
+    "host": "192.168.1.17 / e125163518d2",
+    "software": {
+      "node": "v24.22.1",
+      "postgresql": "15.14",
+      "postgresCpuLimit": "1.5",
+      "postgresMemoryLimitBytes": "3221225472"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "Fresh isolated qvm_w5_hospital_20261025a database on the SSD-backed private qualification PostgreSQL cluster.",
+    "cacheProcedure": "Initial streaming import; host/OS caches unchanged and existing services active. No cold-cache claim. Load-only returns before page/historical warmup.",
+    "measurementSlot": "Exclusive qualification database load; no concurrent qualification DB jobs. Metadata-only validation and existing host services remained active."
+  },
+  "commands": [
+    "bash /ssd1/bim-forge-qualification/qvm-20261025/start-full.sh",
+    "node experiments/storage/cli.ts workload /qualification/artifacts/hospital-full-20261025a/config.json /qualification/artifacts/hospital-full-20261025a/run",
+    "bash /ssd1/bim-forge-qualification/qvm-20261025/capture-full-final-v2.sh"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "execution-failure",
+      "expected": "Admitted workload completes",
+      "observed": "Predeclared load wall-time limit exceeded",
+      "passed": false,
+      "limitations": [
+        "Failed behavior is retained as evidence."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-full-execution-envelope",
+      "expected": "The complete full inventory, publication and independent source/readback oracle finish inside the predeclared envelope.",
+      "observed": "{\"jobStartedAt\":\"2026-10-25T12:25:42Z\",\"jobFinishedAt\":\"2026-10-25T14:25:46Z\",\"outerWaitExitCode\":124,\"containerExitCode\":null,\"containerOOMKilled\":false,\"postgresOomKillObserved\":false,\"budgetStopObserved\":false,\"executionStatus\":\"timed-out\",\"expectedVersionRecords\":27020089,\"postRunState\":{\"tables\":[{\"name\":\"revisions\",\"heapBytes\":0,\"indexBytes\":16384,\"toastBytes\":8192,\"totalBytes\":24576},{\"name\":\"branches\",\"heapBytes\":0,\"indexBytes\":8192,\"toastBytes\":8192,\"totalBytes\":16384},{\"name\":\"changes\",\"heapBytes\":0,\"indexBytes\":16384,\"toastBytes\":8192,\"totalBytes\":24576},{\"name\":\"versions\",\"heapBytes\":12344803328,\"indexBytes\":1693794304,\"toastBytes\":10924457984,\"totalBytes\":24966471680},{\"name\":\"visibility\",\"heapBytes\":0,\"indexBytes\":57344,\"toastBytes\":8192,\"totalBytes\":65536},{\"name\":\"receipts\",\"heapBytes\":0,\"indexBytes\":16384,\"toastBytes\":8192,\"totalBytes\":24576},{\"name\":\"snapshots\",\"heapBytes\":0,\"indexBytes\":8192,\"toastBytes\":8192,\"totalBytes\":16384},{\"name\":\"meta\",\"heapBytes\":8192,\"indexBytes\":16384,\"toastBytes\":8192,\"totalBytes\":32768}],\"walLsn\":\"11/BF672170\",\"changes\":0,\"version\":\"PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit\",\"branches\":[],\"receipts\":0,\"settings\":{\"fsync\":\"on\",\"work_mem\":\"8192\",\"shared_buffers\":\"32768\",\"max_connections\":\"80\",\"full_page_writes\":\"on\",\"synchronous_commit\":\"on\",\"maintenance_work_mem\":\"262144\",\"max_parallel_workers_per_gather\":\"1\"},\"versions\":13602755,\"revisions\":0,\"visibility\":0,\"collectedAt\":\"2026-10-25T14:28:12.449139+00:00\",\"databaseBytes\":24974684975,\"versionsByKind\":{\"bed\":5000,\"desk\":20000,\"door\":25000,\"pump\":5000,\"roof\":200,\"site\":1,\"slab\":10000,\"stud\":1400000,\"wall\":80000,\"zone\":200,\"chair\":60000,\"level\":40,\"space\":10000,\"valve\":100000,\"sensor\":80000,\"switch\":40000,\"system\":2000,\"window\":15000,\"cabinet\":30000,\"circuit\":50000,\"building\":4,\"hostedBy\":1665000,\"terminal\":80000,\"equipment\":30000,\"luminaire\":140000,\"instanceOf\":2157866,\"containedIn\":2412444,\"ductFitting\":240000,\"ductSegment\":180000,\"pipeFitting\":300000,\"pipeSegment\":250000,\"supportedBy\":590000,\"cableSegment\":300000,\"connectionPort\":3000000,\"typeDefinition\":5000,\"electricalPanel\":5000,\"otherFurnishing\":35000,\"electricalOutlet\":180000,\"containmentSegment\":100000},\"clusterWalBytes\":1073741824},\"originalInitialInventoryPassed\":false,\"originalSourceQueryOraclePassed\":false,\"memoryEvents\":{\"postgres-memory-events-before-publication.txt\":{\"low\":0,\"high\":0,\"max\":121893,\"oom\":0,\"oom_kill\":0,\"oom_group_kill\":0},\"postgres-memory-events-after.txt\":{\"low\":0,\"high\":0,\"max\":339111,\"oom\":0,\"oom_kill\":0,\"oom_group_kill\":0},\"client-memory-events-during-ingest.txt\":{\"low\":0,\"high\":0,\"max\":0,\"oom\":0,\"oom_kill\":0,\"oom_group_kill\":0}},\"stateInspectionStartedAt\":\"2026-10-25T14:28:11Z\",\"stateInspectionFinishedAt\":\"2026-10-25T14:29:15Z\"}",
+      "passed": false,
+      "limitations": [
+        "Post-run state inspection is separately timestamped and outside measured load duration."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-synthetic-database-scope",
+      "expected": "Synthetic database measurements retain their declared scope.",
+      "observed": "Seeded inventory metadata only; no real hospital, rendering, geometry, engineering approval or full history/client matrix is qualified.",
+      "passed": true,
+      "limitations": [
+        "This is a scope assertion, not a model-operation or performance pass."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "coverage": "partial",
+      "caseIds": [
+        "execution-failure",
+        "coordinator-full-execution-envelope",
+        "coordinator-synthetic-database-scope"
+      ]
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "coverage": "partial",
+      "caseIds": [
+        "execution-failure",
+        "coordinator-full-execution-envelope",
+        "coordinator-synthetic-database-scope"
+      ]
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "coverage": "partial",
+      "caseIds": [
+        "execution-failure",
+        "coordinator-full-execution-envelope",
+        "coordinator-synthetic-database-scope"
+      ]
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "coverage": "partial",
+      "caseIds": [
+        "execution-failure",
+        "coordinator-full-execution-envelope",
+        "coordinator-synthetic-database-scope"
+      ]
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "coverage": "covered",
+      "caseIds": [
+        "coordinator-synthetic-database-scope"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "admission.json",
+      "sha256": "4603937c1f906d67d7d77d5f3111e1df9731b82e81699fa321f99f6c06849ba9",
+      "bytes": 835,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "budget-container-id.txt",
+      "sha256": "4faebb69b50c7f81ca664f6a4a0cafd0c6861cb870ee63e7fe3c07069335613a",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "budget-monitor-stopped.txt",
+      "sha256": "3a982e0b04f6e18d3ca638fbb91a6d5eece81f45c0c564e04997105e71d524b9",
+      "bytes": 20,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-container-after.json",
+      "sha256": "9155c306a2ad3dcbb045628b7169ffb5460383d1822ecbeb07ddd488afcf73c4",
+      "bytes": 10642,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "client-container-before.json",
+      "sha256": "d75f360ce03faf3faaeebdc5a84d2e02453322d2c3d444b60b16adcf6c2777c1",
+      "bytes": 10838,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "client-cpu-stat.txt",
+      "sha256": "2c30328b5a8fb469cef67f8c035e115473613dd960b010f038ac24ca8dc78f6e",
+      "bytes": 180,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-memory-events-during-ingest.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-memory-peak-before-stop.txt",
+      "sha256": "1598e990b6bad4fc600367a1650dcd286b0774f83aa834f61c6369122a5cfd2a",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "client-memory-peak-bytes.txt",
+      "sha256": "1598e990b6bad4fc600367a1650dcd286b0774f83aa834f61c6369122a5cfd2a",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "config.json",
+      "sha256": "46d1e5862a080eff12331b480920c7c82aab7ad91abcf45a2fff26a3afe53383",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "container-exit-code.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "container-id.txt",
+      "sha256": "89bf499d506871782cc807084cb099c4cdb924328879120e808bcc630be8c287",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "dataset-manifest.json",
+      "sha256": "efd1ef057d1f4513b0b89cf380c1fcd6cf0bdc31bd468ce466d3302734484737",
+      "bytes": 292604,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "enforcer-pid.txt",
+      "sha256": "0f8f0277c086a876c054361d9ea9efff8cf463e43fc1d290d231ece4588dde91",
+      "bytes": 8,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "enforcer.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "execution-facts.json",
+      "sha256": "243a7394342a8867378fb9c70d6578b3cd37ec1a47d7124bf21f462a19e58d7f",
+      "bytes": 4064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "final-state-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "final-state.json",
+      "sha256": "2109b073f0767008fb26623e90e14d58305741815c2c9303de6e3add1c271a5d",
+      "bytes": 2206,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "finalization-inputs.sha256",
+      "sha256": "0bef0d153f8805e0a4b78882ca01de4b070f309b2af313cd4d60a90a3892672b",
+      "bytes": 352,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "host-diskstats.log",
+      "sha256": "389ed1c9054bcb63eab4c7da2032df3cc26d95371813fbebdc76a2a7cf5d6959",
+      "bytes": 583981,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "job-finished-at.txt",
+      "sha256": "68b7e7a2196570231faabba4823c666a2a29786e6ac04acdbf8901d68fb33886",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "job-started-at.txt",
+      "sha256": "5ffe5d2dc5ef3f3bd6994f8ceb4134e603e3f7f624ead03df9ae6828333ab26f",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "memory-events-snapshot-at.txt",
+      "sha256": "948bbfbc7e97d8439f00b89a682b18d5eff7bd88b9bb23372ec0cdea9eb2a752",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "node-dependency-lock.json",
+      "sha256": "481c7c77fb9428329a6f89875392a2439420f57f23ddc31979d6d2894b5c3ce6",
+      "bytes": 6633,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "orchestration/capture-full-final-v2.sh",
+      "sha256": "dfd30f32559cfd732821eec6ec6c312bbaa5a786850f890f572138dcfac652c5",
+      "bytes": 1952,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/capture-full-final.sh",
+      "sha256": "f0911889fe72fc8aea1b59a8d831a85aff9332cfc5201d6ffc610f46e1685c0b",
+      "bytes": 1650,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/collect-full-terminal-v2.py",
+      "sha256": "3327573bd2b7804cbea068fd4ac94a0340d26d9ba9a611a6106282d1b34b6d4d",
+      "bytes": 9333,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/collect-full-terminal-v3.py",
+      "sha256": "faad74669df9d71c1060b13cf62c7bab46f83f17399e7e5e682b89da2a49ffcc",
+      "bytes": 9336,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/collect-full-terminal.py",
+      "sha256": "ff387493cc8785f6e3d03a331a1b9848a9112b7993a3cfebe38226a6a4934632",
+      "bytes": 9208,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/enforcer-full.sh",
+      "sha256": "7f887c5b3692d3872119486f1a314259838571dcd073195bfa25997d9d3d9043",
+      "bytes": 670,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/full-final-state.sql",
+      "sha256": "5670020e99964f4a584508e5580ee4147c71514e74aa999e84e96036e6affe4b",
+      "bytes": 1456,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/full-load.sh",
+      "sha256": "aa0c4d548e6ff8111fd28940399297bbc9d1c9e24dcdcda68fcd16fca2011ff4",
+      "bytes": 2802,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/full-owned-clients.sql",
+      "sha256": "07a6f5cd744716e7e71ed0bde32333f428074ed7e74680a410ee42db49d6517b",
+      "bytes": 321,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/full-resources.sh",
+      "sha256": "d11bde52ba185dbfc569bfe2a32fd613cfe232c684845ce9c7fc08791bb7367d",
+      "bytes": 493,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/full-stop-owned-clients.sql",
+      "sha256": "7f00dea85a554109c4964895ab23547aebff1d978e7a7085b9b5cb383ccb04bc",
+      "bytes": 376,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/prepare-full.py",
+      "sha256": "37137453136902414af1e0d87a43bab075af505e93bcbd4f8bbc4f3c0fe12ca4",
+      "bytes": 1539,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/start-full.sh",
+      "sha256": "9af343e9a46c93284d9191fadc7130a6142e3dc096c4aaef59f259210efb55da",
+      "bytes": 632,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration/watchdog-full.sh",
+      "sha256": "56f205e0e57d1687dbb09eddcb69a3b7629d2afab085936150560d62fb1373a7",
+      "bytes": 650,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "orchestration.sha256",
+      "sha256": "dfc8dca2d2b3bc1ca35d2de77538d535dceb1a06f04668b42952b00dae13d1be",
+      "bytes": 2493,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "outer-wait-exit-code.txt",
+      "sha256": "ca2ebdf97d7469496b1f4b78958f9dc8447efdcb623953fee7b6996b762f6fff",
+      "bytes": 4,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "owned-backend-termination.csv",
+      "sha256": "818f469f95257f6e0aa115f7f265915128cf1c9943ffa13ac2dee28ead2d582d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "owned-database-clients.json",
+      "sha256": "eccade61cd74768c3c82de5e56ba8311eb9666f977d1a273298817e2c877c645",
+      "bytes": 571,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-container-after.json",
+      "sha256": "2b931bac6ce926526df89a594f861c407276392b8a943d2e79dce55f67e760ae",
+      "bytes": 10357,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-container-before.json",
+      "sha256": "2b931bac6ce926526df89a594f861c407276392b8a943d2e79dce55f67e760ae",
+      "bytes": 10357,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-container-final.json",
+      "sha256": "2b931bac6ce926526df89a594f861c407276392b8a943d2e79dce55f67e760ae",
+      "bytes": 10357,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-image.json",
+      "sha256": "c7d0ce5cf14a2963b074118886fbacf9c473faea897d7148478f3c4358a213c3",
+      "bytes": 4806,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "postgres-memory-events-after.txt",
+      "sha256": "b743eadf96a90cc1434ae20cd8ecc3cf0c19b817b40425d73814a0d6384bcad4",
+      "bytes": 58,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-memory-events-before-publication.txt",
+      "sha256": "1af80d51882d452acf90516e0664c89beb09f343d86074624b88a72c7e998157",
+      "bytes": 58,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-memory-peak-after.txt",
+      "sha256": "6ad9351e4ec50ae69f1764a7bc2f6aac9b47a5a881bd0830e9396c0960b61eb5",
+      "bytes": 11,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-memory-peak-before-publication.txt",
+      "sha256": "dc6e3b21081b83f687b6560ce25db23ee3e59591114c3a61fd0148100e712138",
+      "bytes": 11,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-run.log",
+      "sha256": "e4bc7a5825ceb446b30377d9097db2a148bf495d01772854aad65084c6a9c656",
+      "bytes": 55538,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "previous-budget-monitor-stopped.txt",
+      "sha256": "90de104e91947ae40635ac7c495b81ef7497834481d05073f3f57df5ce532fbd",
+      "bytes": 15,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "process-phases.log",
+      "sha256": "3cfe7f78fc5cc135c24dd56cec6f1e26cc97a0bce522007a27252ce8957e2951",
+      "bytes": 7485,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "resources-pid.txt",
+      "sha256": "68b3699e19170c5df3a98013b660adc157924e8f8815e90be8d56028aa4b4448",
+      "bytes": 8,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "resources.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "resources.ndjson",
+      "sha256": "b1b84a2426617f6861c0372d5030a657025cbf1aa18bf67109be157e9ce7805a",
+      "bytes": 160476,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "run/artifact-checksums.json",
+      "sha256": "d9ac0a7ffb0ead7009ad0c1407b2fc34ff0bf5df703d897361219cc2cf492407",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/config.json",
+      "sha256": "46d1e5862a080eff12331b480920c7c82aab7ad91abcf45a2fff26a3afe53383",
+      "bytes": 1987,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/environment.json",
+      "sha256": "563b1c52528c6afdf248f9beaccd695c6330a3555f3349cd847d8c0a02c3db83",
+      "bytes": 38736,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/errors.json",
+      "sha256": "bdea2f207559e0360a2899fb4e80d4536cfc1969436294bb9cc109724c904d4f",
+      "bytes": 50,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/execution-envelope.json",
+      "sha256": "4eef1930cb2e67be253b540ac1676b08aacd3441d74f820649238510f7b2c888",
+      "bytes": 1241,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/metrics-before.json",
+      "sha256": "5c11ec12c9e5617a4e609a24c681c2f5f5a10c0e96bec70c7907c67172a8d51a",
+      "bytes": 16390,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/observations.json",
+      "sha256": "3391fe83f999815ebba99311c437e618ec42acd49b4f0aded62c463d86110851",
+      "bytes": 281,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "shared-budget.ndjson",
+      "sha256": "b404c02bce6f9ca41eeb5aac06f04bd11c0dda257e42921e99e59b0a9d0c233d",
+      "bytes": 43612,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "source-commit.txt",
+      "sha256": "4ab7d119577650a1011d7760db67b462762ba8f1643349b914d940c6be98b878",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "state-inspection-finished-at.txt",
+      "sha256": "c5f8e79fdabf844703d74323c7174d85db821fc4aa0600e9a7d243b43e23aa07",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "state-inspection-started-at.txt",
+      "sha256": "d9b2e12075660dce3a7c5662ccfa6a35ffe09fe76d000af2f5472e870207c52d",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "stdout.json",
+      "sha256": "3391fe83f999815ebba99311c437e618ec42acd49b4f0aded62c463d86110851",
+      "bytes": 281,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "stopped-container.txt",
+      "sha256": "ff6af0c343170752d78d99edbb392b08e9e101dfb16e1c091600745a42b9cd4c",
+      "bytes": 17,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "terminal-observations.json",
+      "sha256": "ba63675a81dfcde7500fd55a873d7ce661299fc4dc2379e0a0532b68eb6ff6bf",
+      "bytes": 4281,
+      "mediaType": "application/json"
+    }
+  ],
+  "observationsArtifact": "terminal-observations.json",
+  "errors": [
+    "Predeclared load wall-time limit exceeded",
+    "The external predeclared two-hour full-load wall limit expired; the coordinator stopped the measured client."
+  ],
+  "limitations": [
+    "This result applies to runner 612dd75 and its declared CPU/RAM/time limits, not a general PostgreSQL, JavaScript or architecture-capacity limit.",
+    "The active run retained duplicate document transport; the later lossless transport-byte fix was not used by this trial. Repeated canonicalization remains a code-review optimization hypothesis.",
+    "The load-only config retains a query-workload cache label, but the actual execution did not perform the later page/historical warmup. Actual cache procedure is recorded here.",
+    "Post-run state collection is outside the load duration; exact staged record counts do not establish accepted-model completeness when publication/source-oracle evidence is missing.",
+    "Full working-set latency, bounded updates, deep history, branch/churn/client sweeps, geometry/rendering and real-hospital completeness remain unqualified by this initial-load run."
+  ],
+  "decisionImplications": [
+    "Retain failed/limited execution and its last complete model state; do not silently substitute a smaller dataset.",
+    "Interpret measured limits by pipeline phase and resource counters before selecting a storage layout or language.",
+    "Any subsequent optimized or resumed attempt needs a new run ID, declared envelope and complete source/readback oracles."
+  ]
+}

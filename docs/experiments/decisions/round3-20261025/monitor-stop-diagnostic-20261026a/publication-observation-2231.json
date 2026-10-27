@@ -1,0 +1,1 @@
+{"at": "2026-10-25T22:31:24.392199+00:00", "wait": "DataFileRead", "query": "INSERT INTO qvm_storage.changes SELECT $1,entity_id,version_id FROM w5_load_stage", "state": "active", "queryAge": "00:38:54.713466", "waitType": "IO", "application": "r3-hospital-full-20261025a"}

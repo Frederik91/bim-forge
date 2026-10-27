@@ -1,0 +1,2093 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "prepared-comparison-20261025c",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T14:45:48Z",
+  "finishedAt": "2026-10-25T15:07:53Z",
+  "hypothesis": "The prepared-record bulk path reduces client work while preserving the complete reduced inventory across five alternating fresh admissions per variant.",
+  "variant": "Control1146065 versus prepared76b0bbf; ten physical initial-admission jobs in one declared comparison",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "76b0bbfc7736f9516721024f0017a8942392803f",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "76b0bbfc7736f9516721024f0017a8942392803f",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "76b0bbfc7736f9516721024f0017a8942392803f",
+    "runnerCommit": "76b0bbfc7736f9516721024f0017a8942392803f",
+    "validators": [
+      "Exact W4 producer byte/hash/count gates",
+      "Complete source/database fingerprints, kind counts, properties and stored-body/version identity checks in every sample",
+      "Source-bound server root/strict/22 storage and five W0 tests at prepared source before execution"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1 reduced;270205 records",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca"
+  },
+  "environment": {
+    "host": "192.168.1.17; existing services active",
+    "software": {
+      "node": "24.22.1",
+      "postgresql": "15.14",
+      "controlSource": "1146065ebabab93bdaef932402fb796b9f82cc4e",
+      "preparedSource": "76b0bbfc7736f9516721024f0017a8942392803f",
+      "postgresCpuLimit": "1.5",
+      "postgresMemoryLimitBytes": "3221225472"
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "Fresh qvm_w5_r2c_* database for every sample on the isolated SSD-backed qualification cluster.",
+    "cacheProcedure": "Host caches unchanged; alternating a1,b1 through a5,b5. No cold-cache claim.",
+    "measurementSlot": "Exclusive database comparison. Worker DB work finished before starting; no concurrent qualification benchmark."
+  },
+  "commands": [
+    "bash /ssd1/bim-forge-qualification/qvm-20261025/compare-r2c.sh",
+    "node experiments/storage/cli.ts workload <sample-config.json> <fresh-run-directory>"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-a-1-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":75296.37496,\"publication\":27689.887554999994,\"analyze\":2135.837612999996}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-a-2-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":83107.799874,\"publication\":25646.826539999995,\"analyze\":1732.7610180000047}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-a-3-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":90737.419036,\"publication\":26252.90957799999,\"analyze\":1710.3881099999999}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-a-4-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":80488.598322,\"publication\":27049.085443999997,\"analyze\":1868.7456559999991}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-a-5-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":81827.717302,\"publication\":26458.279462000006,\"analyze\":1716.7099089999974}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-b-1-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":60339.362037,\"publication\":27021.970002999995,\"analyze\":2223.837115000002}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-b-2-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":61741.884753000006,\"publication\":27149.597691999996,\"analyze\":1756.7592609999992}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-b-3-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":62401.314787,\"publication\":27431.140632999995,\"analyze\":1890.0981210000027}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-b-4-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":79272.89572,\"publication\":27331.69307699999,\"analyze\":1708.364426}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r2c-reduced-b-5-fidelity",
+      "expected": "A fresh reduced admission retains 270205 source records with complete readback/count/property oracles.",
+      "observed": "{\"verified\":true,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"propertyCounts\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":61782.911308,\"publication\":27390.006249,\"analyze\":1934.7044129999995}}",
+      "passed": true,
+      "limitations": [
+        "This is a reduced initial admission, not the full hospital or its history/client matrix."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-synthetic-scope",
+      "expected": "Database-only synthetic scope remains explicit.",
+      "observed": "No geometry, rendering, real hospital completeness or engineering approval is qualified.",
+      "passed": true,
+      "limitations": [
+        "Scope assertion only."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "coverage": "partial",
+      "caseIds": [
+        "r2c-reduced-a-1-fidelity",
+        "r2c-reduced-a-2-fidelity",
+        "r2c-reduced-a-3-fidelity",
+        "r2c-reduced-a-4-fidelity",
+        "r2c-reduced-a-5-fidelity",
+        "r2c-reduced-b-1-fidelity",
+        "r2c-reduced-b-2-fidelity",
+        "r2c-reduced-b-3-fidelity",
+        "r2c-reduced-b-4-fidelity",
+        "r2c-reduced-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "coverage": "partial",
+      "caseIds": [
+        "r2c-reduced-a-1-fidelity",
+        "r2c-reduced-a-2-fidelity",
+        "r2c-reduced-a-3-fidelity",
+        "r2c-reduced-a-4-fidelity",
+        "r2c-reduced-a-5-fidelity",
+        "r2c-reduced-b-1-fidelity",
+        "r2c-reduced-b-2-fidelity",
+        "r2c-reduced-b-3-fidelity",
+        "r2c-reduced-b-4-fidelity",
+        "r2c-reduced-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "coverage": "partial",
+      "caseIds": [
+        "r2c-reduced-a-1-fidelity",
+        "r2c-reduced-a-2-fidelity",
+        "r2c-reduced-a-3-fidelity",
+        "r2c-reduced-a-4-fidelity",
+        "r2c-reduced-a-5-fidelity",
+        "r2c-reduced-b-1-fidelity",
+        "r2c-reduced-b-2-fidelity",
+        "r2c-reduced-b-3-fidelity",
+        "r2c-reduced-b-4-fidelity",
+        "r2c-reduced-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "coverage": "partial",
+      "caseIds": [
+        "r2c-reduced-a-1-fidelity",
+        "r2c-reduced-a-2-fidelity",
+        "r2c-reduced-a-3-fidelity",
+        "r2c-reduced-a-4-fidelity",
+        "r2c-reduced-a-5-fidelity",
+        "r2c-reduced-b-1-fidelity",
+        "r2c-reduced-b-2-fidelity",
+        "r2c-reduced-b-3-fidelity",
+        "r2c-reduced-b-4-fidelity",
+        "r2c-reduced-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "coverage": "covered",
+      "caseIds": [
+        "coordinator-synthetic-scope"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "completed-at.txt",
+      "sha256": "c2906577ceea6f446a2b8b2d3b99fd1d3da6706289d55e7a69bcbb407117e672",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "host-load-before.txt",
+      "sha256": "c8ae561d7e6de41c31ab635adf4d8175374f0275e4fd3a1a9149e3dd3d4a44e9",
+      "bytes": 71,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "postgres-container.json",
+      "sha256": "2b931bac6ce926526df89a594f861c407276392b8a943d2e79dce55f67e760ae",
+      "bytes": 10357,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/client-container-after.json",
+      "sha256": "f44f97a90f9aa3257a2c0db351c82206aff6c8d10771504cd981bbbaac4201ef",
+      "bytes": 10571,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/client-cpu-stat.txt",
+      "sha256": "8bf132e755dc21cd0a115ba7f9f2b71252861c2f3f285df3466b60b00b5baef2",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/client-memory-peak.txt",
+      "sha256": "63752e90994ddeb84a0882de4f6bacdf07f1492a6c74dc576b49b322bcde3afc",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/config.json",
+      "sha256": "3600c2a8c830064d0a3b2630cde2dbd27083b6bedcc767bd480ae0d92ff0a70e",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/job-finished-at.txt",
+      "sha256": "e61a9de74d5d8cefb1ac5c5dd1d1b3b6033366e35dbcf7a2532b4258439bd6d2",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/job-started-at.txt",
+      "sha256": "dd456e9314475eab572d0cb9c225658a58af5f668807600981769356724779cf",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/artifact-checksums.json",
+      "sha256": "798e7b5c1e9e1e85b519eca823bba370f6076b33aea6c32a573cdbed14f7c37a",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/config.json",
+      "sha256": "3600c2a8c830064d0a3b2630cde2dbd27083b6bedcc767bd480ae0d92ff0a70e",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/environment.json",
+      "sha256": "0071bd41eb81e89f04c92f7886448ded3f2182398d7d2593f32e2d5199d5b916",
+      "bytes": 37533,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/execution-envelope.json",
+      "sha256": "ad214a84e2e064cd9b37f914b21e84b64b89243098c9e60b8e15f0ceb7ee518e",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/load.json",
+      "sha256": "2264eff82b6b30a33aa46ea572d4de096b7fa22747610066776de2d27127706b",
+      "bytes": 2062,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/metrics-before.json",
+      "sha256": "7d282780dc74db805c34137570ea3dd79b4f808ad39bbaecff2053d61caba54a",
+      "bytes": 16581,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/metrics-loaded.json",
+      "sha256": "f632fcbcfb51929298e0cccbec1a2bee1c9d87b01428ca63e8380bd661a98ead",
+      "bytes": 16708,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/observations.json",
+      "sha256": "85863f96137c0d361dee1dee8d8bd5148145f1a7daf87d71f5dd76b8d65f2ed3",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-a-1/source-commit.txt",
+      "sha256": "75e8e7a311d6b31fbe0076821d329397b5e76515abdd8d20339a863a974a8e9d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-1/stdout.json",
+      "sha256": "85863f96137c0d361dee1dee8d8bd5148145f1a7daf87d71f5dd76b8d65f2ed3",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/client-container-after.json",
+      "sha256": "31f1bab86cdc6b348499d18b7c27e6433c995ded8d9261ff8d59e2143e12d38d",
+      "bytes": 10570,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/client-cpu-stat.txt",
+      "sha256": "17fab321de9513e9bd69e83e4f67d7136dbc4aeac2e2958b7037ad2364188a77",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/client-memory-peak.txt",
+      "sha256": "e2672e544c0b9f9af77a85599cdeb5450475b8fb90d5a0743fafd33047f98372",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/config.json",
+      "sha256": "917efa760ed717f5c0f6081aafb6382bbd501549b337042bd901284bedf17595",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/job-finished-at.txt",
+      "sha256": "e31d09c073e2d91a8bee160651c522de7151ed0d97176a41920c8b67be00e7d6",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/job-started-at.txt",
+      "sha256": "3b3e6d518bcb1aeb1b37fc15d4c7661d03e1b259c63449160bddd790551f6786",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/artifact-checksums.json",
+      "sha256": "3c1b3293f65b8d41d892493467d476bd4ed1ee7e9d7f0c0d901666fae5bbd195",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/config.json",
+      "sha256": "917efa760ed717f5c0f6081aafb6382bbd501549b337042bd901284bedf17595",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/environment.json",
+      "sha256": "4f10927da424ed052217638846936e168ad8142cfd38383e0fc7d1f3aea427e6",
+      "bytes": 37343,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/execution-envelope.json",
+      "sha256": "d2ef6e858f43a8b4a20d7e6f0cbbd28d446289cce68f8e6fec0e98eb165b7e94",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/load.json",
+      "sha256": "46f29b001cd89aa859a05441aceebbec0024e3cd170de378e91554256e788d81",
+      "bytes": 2064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/metrics-before.json",
+      "sha256": "270bb600377eaffd48206916646198866d3cac91a2815ea679ec0fb448d11f7c",
+      "bytes": 16581,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/metrics-loaded.json",
+      "sha256": "f2700ee5dba4cf31c6b51dfc4d4ae329d09d52f099bf582cb46b0521873559de",
+      "bytes": 16709,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/observations.json",
+      "sha256": "8ef73ebe0e11176ea158f261c37e34bd89ef0a26a3993d8cf6f2e28fc745f6f1",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-a-2/source-commit.txt",
+      "sha256": "75e8e7a311d6b31fbe0076821d329397b5e76515abdd8d20339a863a974a8e9d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-2/stdout.json",
+      "sha256": "8ef73ebe0e11176ea158f261c37e34bd89ef0a26a3993d8cf6f2e28fc745f6f1",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/client-container-after.json",
+      "sha256": "09fd68d4ad5eeb7f2f299460a966732942953bb9e803980d1f042f1d60198c77",
+      "bytes": 10571,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/client-cpu-stat.txt",
+      "sha256": "cc8befb7df6a47b75cc19477f1b56c53060ad1b93aa0522d06d3e929e2d23c66",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/client-memory-peak.txt",
+      "sha256": "3ec7326c9fbe2837bb7f2e8c129ede343b12a2e53657ed03460ee2c3ce8f7fcb",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/config.json",
+      "sha256": "67c563db170c464bbd2652ae2ffebc8a711cb98885b5e92a58fa37a383183305",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/job-finished-at.txt",
+      "sha256": "070681600b15c31b80b5e39be245779ec601865d0b05d83ba2b0f8f7d477d108",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/job-started-at.txt",
+      "sha256": "e9d68a8e53a79905df349dd9d4c75636a93365896b17be01839307596b9de866",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/artifact-checksums.json",
+      "sha256": "4dc86da03ffbdd84e950791fbeda45e6fb8984c66e41038055efc6bd18638b9c",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/config.json",
+      "sha256": "67c563db170c464bbd2652ae2ffebc8a711cb98885b5e92a58fa37a383183305",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/environment.json",
+      "sha256": "814270c18c3b7852f017e5dce2beb71ef8aceb9006873952f5ecc3cf5ccca91a",
+      "bytes": 37533,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/execution-envelope.json",
+      "sha256": "c4f4d33e87465b454ae509cf3e9a9096bca66fce67b5a0ab575d7091639c3750",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/load.json",
+      "sha256": "7eb2149d12388ce479a20a3fa5743607ff887b98de2418eb259d975db546e993",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/metrics-before.json",
+      "sha256": "ae00252e35dafb7a39366517424fea1aaaa796abe5f0809ee5331c8dfbd946ac",
+      "bytes": 16583,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/metrics-loaded.json",
+      "sha256": "82edcd54f562dfd124513cf2fbe72f23e7d7a63572d280cc544a2da5578ef260",
+      "bytes": 16709,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/observations.json",
+      "sha256": "82af00e5e79375a22b6102984b1f2865cc0505bfe1c29b12646e32c91c090a3c",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-a-3/source-commit.txt",
+      "sha256": "75e8e7a311d6b31fbe0076821d329397b5e76515abdd8d20339a863a974a8e9d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-3/stdout.json",
+      "sha256": "82af00e5e79375a22b6102984b1f2865cc0505bfe1c29b12646e32c91c090a3c",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/client-container-after.json",
+      "sha256": "2ad19865a065f1d3a41d475a7b631399f42a016e41f574a511b33873f91bcf92",
+      "bytes": 10571,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/client-cpu-stat.txt",
+      "sha256": "eb6d80e9e6049be668248a2666d48e30bbfd129e7adce8bc208f6a9780e8d4d2",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/client-memory-peak.txt",
+      "sha256": "288d2aa96134722d24b634570745328b5a71e1650beb0feecb14da7fda339e42",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/config.json",
+      "sha256": "70c5eddfb56a50b69a777cca7a86f778a98be3ef88901cdfdf5515b886fe692b",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/job-finished-at.txt",
+      "sha256": "490ccb62985aa4cd0c19c88dba75bc662e672bbd9de73bde34343d0b8dfc59da",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/job-started-at.txt",
+      "sha256": "e7a2a735888883bc46945390d8cf1276c45ba75bc2008cb1da1826702c3e24c7",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/artifact-checksums.json",
+      "sha256": "1feae68a3d930c8ae37de6d94cab57c50a4df575b42ce34d6b7c1587c6aaf249",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/config.json",
+      "sha256": "70c5eddfb56a50b69a777cca7a86f778a98be3ef88901cdfdf5515b886fe692b",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/environment.json",
+      "sha256": "076a9ac9f399b394243665a9e4d7fe14dd7655014ec131c07efa54fa5d3a9fc1",
+      "bytes": 37533,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/execution-envelope.json",
+      "sha256": "c4306cc9d95d916ef764f0c97616f31ab1b59debec1fb8404d301d99463d9886",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/load.json",
+      "sha256": "ae6e7feb5da2913f3dca01831bc92126d663fbc394ecbb9026cd3d73e524844c",
+      "bytes": 2064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/metrics-before.json",
+      "sha256": "293f6482ec9a937c646f50fa55218ac04e361eada2d17864caded40eec2352a7",
+      "bytes": 16581,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/metrics-loaded.json",
+      "sha256": "f1c60034ee8048a8e76aba23c199e7e3682d4a5d36d500013f17c973146bbbb3",
+      "bytes": 16709,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/observations.json",
+      "sha256": "7cb096c1927f3b5a52493166d1dc8334cf000154fea38f81334448cc2571868c",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-a-4/source-commit.txt",
+      "sha256": "75e8e7a311d6b31fbe0076821d329397b5e76515abdd8d20339a863a974a8e9d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-4/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-4/stdout.json",
+      "sha256": "7cb096c1927f3b5a52493166d1dc8334cf000154fea38f81334448cc2571868c",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/client-container-after.json",
+      "sha256": "20f50ae9b525af974bede57a18c41bd9bbdf94add1459312e68cb66396f462af",
+      "bytes": 10571,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/client-cpu-stat.txt",
+      "sha256": "e19b9e556ca10e99c205d3380a64b87542a91b3897c3829db205d24812e0ccfd",
+      "bytes": 169,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/client-memory-peak.txt",
+      "sha256": "8e7eba18b8c919683d4bb5f3bd52a8932117b7762eee109c6282350ea28cda04",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/config.json",
+      "sha256": "25d3609c6648a51af8d6b67a38dd674407d59066d93c95ada5c3cf1993708c05",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/job-finished-at.txt",
+      "sha256": "ce00e9def2ad468870760a64e43f6c3092e0160640d12ed79b5bfdfc7ec8f7a2",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/job-started-at.txt",
+      "sha256": "ae5b88f09de7976159168b6ee199735a0f77ba7670e56154190075d056bf5d4c",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/artifact-checksums.json",
+      "sha256": "114c6743e3993a61365d9844d6fe576b45f2913ee03a5cf28011458fd4ad415c",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/config.json",
+      "sha256": "25d3609c6648a51af8d6b67a38dd674407d59066d93c95ada5c3cf1993708c05",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/environment.json",
+      "sha256": "35da23feb9be71e08fa285c0d8438c103744a8ccf7cc24a952f13044f0d37333",
+      "bytes": 37343,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/execution-envelope.json",
+      "sha256": "c8b541d4f0f0d9c486e05b4881a13bb46509ac6441e08928b0546bf723ff17f7",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/load.json",
+      "sha256": "6907ea384678409df950d4976f3dfa100cc02b612838027c078aba2a19ebdb04",
+      "bytes": 2064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/metrics-before.json",
+      "sha256": "84f4b4b11611229a734716190935d56b74fe3858f8a7ea9c96f6c1304f31666f",
+      "bytes": 16582,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/metrics-loaded.json",
+      "sha256": "2022715300d51efcf7fe48be6d32b50ba865943a0806e990a0f84f9f341c6c28",
+      "bytes": 16709,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/observations.json",
+      "sha256": "69a57bfca29d4baeb881c735873eb463482cca1b8e877af68f2a16c60b9e9af5",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-a-5/source-commit.txt",
+      "sha256": "75e8e7a311d6b31fbe0076821d329397b5e76515abdd8d20339a863a974a8e9d",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-a-5/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-a-5/stdout.json",
+      "sha256": "69a57bfca29d4baeb881c735873eb463482cca1b8e877af68f2a16c60b9e9af5",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/client-container-after.json",
+      "sha256": "2da1de7c28f6811fa74fbdbfa53ebba8c0aa64a1810c1baa564b25895e3eb9cd",
+      "bytes": 10543,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/client-cpu-stat.txt",
+      "sha256": "2baa0e817383a35847cadde75a09842666ff887f94e28e3fe541d7e571e53934",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/client-memory-peak.txt",
+      "sha256": "a2f53b28b85a416f089cce8e2dd548e8b813aca7eef86a78d377040bd21b2b74",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/config.json",
+      "sha256": "fb5c1b46377271e70c9ead4fbd0d687ac445970ef13fc55e172fb9cd5722b3c3",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/job-finished-at.txt",
+      "sha256": "45af26d662ce8e06472c8752c8585aca15d2696c7de552c2e83039502bbd88b1",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/job-started-at.txt",
+      "sha256": "58ef1b2a6fcd7d23660dc4079163ea14d88a4a0b78e04257db1b34b65f1104d9",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/artifact-checksums.json",
+      "sha256": "a23042897aae911d4b0850066635d5221844cb14d4f013e9ef2e508b8a366189",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/config.json",
+      "sha256": "fb5c1b46377271e70c9ead4fbd0d687ac445970ef13fc55e172fb9cd5722b3c3",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/environment.json",
+      "sha256": "4bd10538e06a0995cfdf860134983a3a9a6d28fef023a8698ef9c043019c373e",
+      "bytes": 37533,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/execution-envelope.json",
+      "sha256": "b1e54c51115d8c232337dfaac43a48336d755e934195d5f36f41f50245d1d8b3",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/load.json",
+      "sha256": "cb83ce8a05551f682c0bd269bb274d9d111bae1814902699acf737bae0294d0c",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/metrics-before.json",
+      "sha256": "a5d3ad5035b7461aa8edd8fdf69cd3db5179067be8b024ab4d7994bbec08fa6d",
+      "bytes": 16580,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/metrics-loaded.json",
+      "sha256": "7d93e4a7297c8aa05c4e827c6e3ce3b6d853a19dd14f0c1f0dc854c52813b418",
+      "bytes": 16705,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/observations.json",
+      "sha256": "b1ffbf94b05fdaeec26766efae84fc32bd3137066171d7c5b07d58415a232077",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-b-1/source-commit.txt",
+      "sha256": "71fa04fa38e5b12ce2f309da9c8564d5355a0cbc82e1e6541326594dcae277a9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-1/stdout.json",
+      "sha256": "b1ffbf94b05fdaeec26766efae84fc32bd3137066171d7c5b07d58415a232077",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/client-container-after.json",
+      "sha256": "d7549658d72d532af45c73f2988e079e786907c9f2e6004da60839b753f569ef",
+      "bytes": 10543,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/client-cpu-stat.txt",
+      "sha256": "4b782a4e16ae5a56e9b0096eb7cee42fecb2b286a109d11d3f1151e8a00c4e39",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/client-memory-peak.txt",
+      "sha256": "f1e89e928c23111f021e86dc790f60a77ba8308d38a46aba295ed08627b6562f",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/config.json",
+      "sha256": "85eb244caac6e8ccd44d7febf4ea2f2cce67f06d1fec1f08b12a841d188048fc",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/job-finished-at.txt",
+      "sha256": "38c454ac977e95216ab1af9bf4a204d3bbb8c926882d938e060f31ccd1e0f124",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/job-started-at.txt",
+      "sha256": "fd98ee65a472cbe6d1e6de9bde6b24ad933d67c3de769b2172f585a47da5b46b",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/artifact-checksums.json",
+      "sha256": "3bf192006b9bf3048c9dc0946f1115fab1458aa2dc1fcb65ab486cff312fd47b",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/config.json",
+      "sha256": "85eb244caac6e8ccd44d7febf4ea2f2cce67f06d1fec1f08b12a841d188048fc",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/environment.json",
+      "sha256": "22a06e44622dd0415af9149cd64c72c585d4614c4ecedd7243fb9abbbfb13afa",
+      "bytes": 37533,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/execution-envelope.json",
+      "sha256": "674ef910a3613af950d821e5b9109f4ad43e9e71b1a9997c0289d825471149c5",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/load.json",
+      "sha256": "dd4b3ac41390bdf7b160eba47f7e7c9a9797642ec1bfefe86ed98fb716428988",
+      "bytes": 2070,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/metrics-before.json",
+      "sha256": "81a38ddcea09486f7d7dc101947c00a18ecca308ad90cf564602ca05cdb89031",
+      "bytes": 16581,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/metrics-loaded.json",
+      "sha256": "c23bf2e2b6d035b828c976942ab9a1dac0af8ef2a88772e54a6d057431ec7399",
+      "bytes": 16705,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/observations.json",
+      "sha256": "6e1f415c2beebbbe820ddba18b544d95b7c4b8e26f1102c8e22156354eab8ad6",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-b-2/source-commit.txt",
+      "sha256": "71fa04fa38e5b12ce2f309da9c8564d5355a0cbc82e1e6541326594dcae277a9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-2/stdout.json",
+      "sha256": "6e1f415c2beebbbe820ddba18b544d95b7c4b8e26f1102c8e22156354eab8ad6",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/client-container-after.json",
+      "sha256": "34e62c0d38943d6bd1368c2a598a46ebb794e32282103b43f43ab985739dc6fc",
+      "bytes": 10543,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/client-cpu-stat.txt",
+      "sha256": "574c8bdcae3dc223964d690282f5bb42036d0482cfaf073be745b133d5792610",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/client-memory-peak.txt",
+      "sha256": "061d735bef3a8fb68f0e0fe87ba502f2a4ff2fec4caf9c62dfd937c0f8842607",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/config.json",
+      "sha256": "ca458d4636de46e4effebeb34fd7d65e1a5fc9629137272f1f8693c8d0cd9855",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/job-finished-at.txt",
+      "sha256": "f9e710d16b30ba24b9e4829f7f34d71af3fca6dcb78a57b641669f037d8eac76",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/job-started-at.txt",
+      "sha256": "f7c785f3ac4daa3a9a38c2492402e5cba4ea7ab276daf681c1205d8a24b2498f",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/artifact-checksums.json",
+      "sha256": "a075b27c8ecb50bc9f90d5d428d706b9df86f6e54d04515b4918d994f393e3f0",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/config.json",
+      "sha256": "ca458d4636de46e4effebeb34fd7d65e1a5fc9629137272f1f8693c8d0cd9855",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/environment.json",
+      "sha256": "1968b48ae9a8e8a4eabbb1269eedb43be02f576bdc4e98b21fcc16e9e50f04df",
+      "bytes": 37533,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/execution-envelope.json",
+      "sha256": "c745c515dd9a57839ad6e50266f8c7ee0d700ef7fedf3d2bf5c8277557a64e24",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/load.json",
+      "sha256": "bdb3ff92f5e243c7704ebab4cd86726aa1da16f71d89a6a05fae4696ac965fb7",
+      "bytes": 2064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/metrics-before.json",
+      "sha256": "181fda936181389a293d937de5b60ca3e522b735e62063fbcbae2ef8929d5e62",
+      "bytes": 16582,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/metrics-loaded.json",
+      "sha256": "a02147fbb5a3c045b46ae03c69d2083738e46ce38b5aced6273a81a8096aa6a7",
+      "bytes": 16704,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/observations.json",
+      "sha256": "ef5ba41ea14405f3cb760cf1db2ad98bb479bca8421930b6494405167544c67a",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-b-3/source-commit.txt",
+      "sha256": "71fa04fa38e5b12ce2f309da9c8564d5355a0cbc82e1e6541326594dcae277a9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-3/stdout.json",
+      "sha256": "ef5ba41ea14405f3cb760cf1db2ad98bb479bca8421930b6494405167544c67a",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/client-container-after.json",
+      "sha256": "2cb06979c534d3e0fc44fdf3f05a5fb425b6e161e58573ac29ac2879b8f0e6ad",
+      "bytes": 10543,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/client-cpu-stat.txt",
+      "sha256": "c2aebe5b8552bb1657c5d6018d56689ac1c55c8c049173ea4834010f27be7b8b",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/client-memory-peak.txt",
+      "sha256": "7cc97951621400d09596f0b910e6550e6beb7f7b67d25fe8fd1deb11e9091b36",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/config.json",
+      "sha256": "daf70cf5aa04e613c37bc0a4658d0c3da6fbc49eccc183735984c032b6e95c3c",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/job-finished-at.txt",
+      "sha256": "0143591b4e48402795e3202bbeea810be543fb27eb81a08d1235733964920391",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/job-started-at.txt",
+      "sha256": "e4ab1d2e00a9f34845fe71e41b9ef2e2dbd3e4d3320aaa7f365b2819ed6521a1",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/artifact-checksums.json",
+      "sha256": "93b22df80d62d5cd8fd7f04c6df03aca5d135219450bf934822a2aa2108aa4e7",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/config.json",
+      "sha256": "daf70cf5aa04e613c37bc0a4658d0c3da6fbc49eccc183735984c032b6e95c3c",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/environment.json",
+      "sha256": "f4d3b683f0cff71ce4d8b49e24fa79eaa6db255446a3bcb12afe0dddad8be2ae",
+      "bytes": 37343,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/execution-envelope.json",
+      "sha256": "540645f8b161ba0d711c26d8551dac22e2985d628f94cb8bdab846092d79fe4d",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/load.json",
+      "sha256": "e4d01745bc1e8e08dd49b449c7e97e9be2ab414e60cb4fcd53af4d328825c1f7",
+      "bytes": 2055,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/metrics-before.json",
+      "sha256": "bac469ff2c644532ddb8a9d66a54693213711ef100301700938d7b5708961c88",
+      "bytes": 16581,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/metrics-loaded.json",
+      "sha256": "e8704f4ff518829dc5d85202f78e6e6dd9ac74dcd99bb8f5385d67978f471107",
+      "bytes": 20235,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/observations.json",
+      "sha256": "4b517a74997ff38861d1cc37baf0e6e0995b240a1ee4ed8ff9300c20a766445b",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-b-4/source-commit.txt",
+      "sha256": "71fa04fa38e5b12ce2f309da9c8564d5355a0cbc82e1e6541326594dcae277a9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-4/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-4/stdout.json",
+      "sha256": "4b517a74997ff38861d1cc37baf0e6e0995b240a1ee4ed8ff9300c20a766445b",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/admission.json",
+      "sha256": "26d232dd0f328ff5029ad921e227920ac42e59645c66daed4d07d856b851d37f",
+      "bytes": 826,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/client-container-after.json",
+      "sha256": "804cf4af989a87cd8d22803ed5758d24baec792c665451cf6f0d767c80d43cfb",
+      "bytes": 10542,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/client-cpu-stat.txt",
+      "sha256": "6b69f0c74e9057b35e450c66a19cbfa4b22720f4b8f27138c9b2079fe058199a",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/client-memory-peak.txt",
+      "sha256": "40be44de5bc090b16abb2608bd512130a673e33401666e14580bc1b05093b054",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/config.json",
+      "sha256": "014638b9b73fea87de14e3abe5a9ab8a15d882ab26357104f53be0da1ad55a22",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/job-finished-at.txt",
+      "sha256": "c2906577ceea6f446a2b8b2d3b99fd1d3da6706289d55e7a69bcbb407117e672",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/job-started-at.txt",
+      "sha256": "bc023b98258a74bded4092c47c4e790fdf02c71ddaa6600609e0360a443028b3",
+      "bytes": 21,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/outer-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/artifact-checksums.json",
+      "sha256": "a5e167c875bf93c4e94dabce81036ae322080cdf0c806fd853658b5d47111f79",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/config.json",
+      "sha256": "014638b9b73fea87de14e3abe5a9ab8a15d882ab26357104f53be0da1ad55a22",
+      "bytes": 2026,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/environment.json",
+      "sha256": "cc8afd53c2984bfb92b2cdd831c5c080c742edd7b60b3b3bf08f6e36328de138",
+      "bytes": 37146,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/execution-envelope.json",
+      "sha256": "6be72743dd64a17f3ca52ab16e0a395545fbdb4db71a33058f392c75c11ccf45",
+      "bytes": 1247,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/load.json",
+      "sha256": "9db9b82c5aee3094fb0eb36c4d814721e75a9ed2d17fc099f209c4d9013c0b81",
+      "bytes": 2058,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/metrics-before.json",
+      "sha256": "b41e62941198158dec754b4e78b663572dabfe1c24a239da7b5d6e59ea015099",
+      "bytes": 16581,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/metrics-loaded.json",
+      "sha256": "cbb8d7fa4673e9069ecad0a54ba73793b2849ae0323f74c7e4d9c3ebfeed3861",
+      "bytes": 16704,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/observations.json",
+      "sha256": "544e717f609ed4450e03fae6c364e058d5b2d97c73bf3a3690918e158a06b198",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r2c-reduced-b-5/source-commit.txt",
+      "sha256": "71fa04fa38e5b12ce2f309da9c8564d5355a0cbc82e1e6541326594dcae277a9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r2c-reduced-b-5/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r2c-reduced-b-5/stdout.json",
+      "sha256": "544e717f609ed4450e03fae6c364e058d5b2d97c73bf3a3690918e158a06b198",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "shared-budget.ndjson",
+      "sha256": "9573832523a119b6de7ace0608177ee840db2a9c073f8979dda9e58bb61480c7",
+      "bytes": 1460,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "f5d46db47a7360d96edad9c8184189a2beee1e4bed592ec4b3a1059e901ec0bc",
+      "bytes": 7924,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "terminal-observations.json",
+      "sha256": "e21ae7d806e072a3e0d2b55203a108849065c6233295f00edda70b257bcd9240",
+      "bytes": 7985,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "provenance/collect-r2-comparison.py",
+      "sha256": "b8d2b537592d02e86abd4f2a060adf6a087c031394435d5949e4d9bd2f550a47",
+      "bytes": 6417,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "provenance/compare-r2c.sh",
+      "sha256": "748bc39c866f20caafad9f04c52b304ecee3dfbdbdf6a2e88079c17558afa3d7",
+      "bytes": 3182,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "provenance/contracts.log",
+      "sha256": "8d2d2ffbf9d9ee1f1a1d7a9d6d66b18f24f1c6896c775561c76c566fff7e141a",
+      "bytes": 735,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "provenance/declaration-time-note.json",
+      "sha256": "585c3d04ebd0e23072ea15b46a5215535ef429dfd786cbeaeb08c07cff14adc0",
+      "bytes": 325,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "provenance/r2-measurement-decision.json",
+      "sha256": "c52bce752ff33b89eca08f78813e60dc9fb4f195523b78b8dbccead4e1e67cd4",
+      "bytes": 1325,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "provenance/round2-prepare.py",
+      "sha256": "78c251d43750d86740ce8e021f892664c7a483e9b3efe8409f11a3b011edcb44",
+      "bytes": 1790,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "provenance/tests.log",
+      "sha256": "1fefe1a0debc7c60e9c9f375fedb2ebd0d31303a309875744a6a23ec8fb6288e",
+      "bytes": 2552,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "provenance/typecheck.log",
+      "sha256": "154abbc2a2bacb2b7d78dfdf45e78935f52bf4de41795b736fc62b2ed0a0c98d",
+      "bytes": 125,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "provenance/validate.log",
+      "sha256": "cc3e7e7c8f64a5424241e52b4e96479cb886558b2fb3f1b16ee9895895d513e9",
+      "bytes": 302,
+      "mediaType": "text/plain"
+    }
+  ],
+  "observationsArtifact": "terminal-observations.json",
+  "errors": [],
+  "limitations": [
+    "Ten reduced admissions are one comparison, not ten full-capacity qualifications.",
+    "Job durations have one-second timestamp granularity; raw loader phases and cgroup CPU retain finer measurements.",
+    "Host services and filesystem caches remained active; no database/language architecture winner is selected.",
+    "Aggregate allocation was checked before every sample and reserves during loader checkpoints; the full trial has a separate continuous watchdog.",
+    "The new full-reference plan and COPY literal-span changes are later source c0ad967, outside this prepared76 comparison.",
+    "No full history, branch/client sweep, paced offered load, rendering or engineering qualification is established."
+  ],
+  "decisionImplications": [
+    "The prepared path preserves the tested source/body contract and reduces measured client CPU at reduced scale.",
+    "Use the separately validated final source and a fresh full run to evaluate actual full admission; do not extrapolate reduced throughput."
+  ]
+}

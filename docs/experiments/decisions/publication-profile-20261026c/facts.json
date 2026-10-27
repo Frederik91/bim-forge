@@ -1,0 +1,500 @@
+{
+  "activitySamples": 83,
+  "budget": {
+    "breaches": 0,
+    "firstAt": "2026-10-26T05:58:44.900760+00:00",
+    "lastAt": "2026-10-26T06:00:22.306958+00:00",
+    "maxAdditionalBytes": 1904033792,
+    "maxAggregateBytes": 157631528960,
+    "maxCollectionSeconds": 2.891380399465561,
+    "minHostAvailableMemoryBytes": 7430459392,
+    "minRootAvailableBytes": 6224891904,
+    "minSsdAvailableBytes": 655470063616,
+    "samples": 47
+  },
+  "canonicalSourceBytes": 348694156,
+  "comparisonPerformed": false,
+  "containers": {
+    "bim-issue162-profile-20261026a-budget": {
+      "id": "8427c50f962b6aef549da8432896197e62d0229c7f76b7fc82a8ed7262c50896",
+      "image": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "limits": {
+        "Memory": 268435456,
+        "MemorySwap": 268435456,
+        "NanoCpus": 250000000,
+        "PortBindings": {}
+      },
+      "owner": "f786c17d-74dd-4653-92c6-a83c583c6d34",
+      "state": {
+        "Dead": false,
+        "Error": "",
+        "ExitCode": 137,
+        "FinishedAt": "2026-10-26T06:00:24.401269534Z",
+        "OOMKilled": false,
+        "Paused": false,
+        "Pid": 0,
+        "Restarting": false,
+        "Running": false,
+        "StartedAt": "2026-10-26T05:58:41.852295004Z",
+        "Status": "exited"
+      }
+    },
+    "bim-issue162-profile-20261026a-client": {
+      "id": "e8316ca989df716c60ca2acc0816b676c447bf54d1a65dc5650b1d8a77b1a3ab",
+      "image": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "limits": {
+        "Memory": 1073741824,
+        "MemorySwap": 1073741824,
+        "NanoCpus": 1000000000,
+        "PortBindings": {}
+      },
+      "owner": "f786c17d-74dd-4653-92c6-a83c583c6d34",
+      "state": {
+        "Dead": false,
+        "Error": "",
+        "ExitCode": 0,
+        "FinishedAt": "2026-10-26T06:00:22.150488254Z",
+        "OOMKilled": false,
+        "Paused": false,
+        "Pid": 0,
+        "Restarting": false,
+        "Running": false,
+        "StartedAt": "2026-10-26T05:58:48.187616692Z",
+        "Status": "exited"
+      }
+    },
+    "bim-issue162-profile-20261026a-pg": {
+      "id": "7914eda0a7a6f8cdad6b2074d136353f3e51bcbca37e33f095e4112ad6802ba2",
+      "image": "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc",
+      "limits": {
+        "Memory": 3221225472,
+        "MemorySwap": 3221225472,
+        "NanoCpus": 1500000000,
+        "PortBindings": {}
+      },
+      "owner": "f786c17d-74dd-4653-92c6-a83c583c6d34",
+      "state": {
+        "Dead": false,
+        "Error": "",
+        "ExitCode": 0,
+        "FinishedAt": "2026-10-26T06:00:24.182401169Z",
+        "OOMKilled": false,
+        "Paused": false,
+        "Pid": 0,
+        "Restarting": false,
+        "Running": false,
+        "StartedAt": "2026-10-26T05:58:45.324635704Z",
+        "Status": "exited"
+      }
+    },
+    "bim-qvm-db": {
+      "id": "28c0471fd5ebaead5d81ac57ee1bcb0e2d036e6320be8e33033751059561c130",
+      "image": "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc",
+      "limits": {
+        "Memory": 3221225472,
+        "MemorySwap": 6442450944,
+        "NanoCpus": 1500000000,
+        "PortBindings": {}
+      },
+      "owner": null,
+      "state": {
+        "Dead": false,
+        "Error": "",
+        "ExitCode": 0,
+        "FinishedAt": "2026-10-25T17:54:19.009316089Z",
+        "OOMKilled": false,
+        "Paused": false,
+        "Pid": 828519,
+        "Restarting": false,
+        "Running": true,
+        "StartedAt": "2026-10-26T00:10:29.919839581Z",
+        "Status": "running"
+      }
+    },
+    "bim-qvm-r3-db": {
+      "id": "f9de27ac9264129b88193d18d0b724a5d27afa7fc242a258827152ef35968d86",
+      "image": "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc",
+      "limits": {
+        "Memory": 3221225472,
+        "MemorySwap": 3221225472,
+        "NanoCpus": 1500000000,
+        "PortBindings": {}
+      },
+      "owner": null,
+      "state": {
+        "Dead": false,
+        "Error": "",
+        "ExitCode": 0,
+        "FinishedAt": "2026-10-26T00:10:29.656411276Z",
+        "OOMKilled": false,
+        "Paused": false,
+        "Pid": 0,
+        "Restarting": false,
+        "Running": false,
+        "StartedAt": "2026-10-25T17:54:19.723420244Z",
+        "Status": "exited"
+      }
+    }
+  },
+  "counts": {
+    "changes": 270205,
+    "receipts": 1,
+    "revisions": 1,
+    "versions": 270205,
+    "visibility": 270205
+  },
+  "datasetExecutions": 1,
+  "finalizationFailure": "PermissionError overwriting client.stdout.log: client created it as root before host controller log collection. stop_owned() had already run. Finalization never reached terminal/done/evidence manifest writes.",
+  "fingerprint": {
+    "count": 270205,
+    "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+    "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+  },
+  "fullAdmissionPerformed": false,
+  "harnessCommit": "de4762f48d33365ea499e229dfb71c00031711fe",
+  "instrumentedLoadPhasesMs": {
+    "analyze": 306.319782999999,
+    "ingest": 44181.574694,
+    "publication": 29591.623998999996
+  },
+  "jobFinished": {
+    "unix": 1792994422.9376936
+  },
+  "jobStart": {
+    "deadline": 1792994807.933596,
+    "start": 1792994327.9335954
+  },
+  "lease": {
+    "created": 1792994321.457276,
+    "expiry": 1792995210.0,
+    "lease": "house161-profile-20261026c",
+    "measuredSource": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+    "nonce": "f786c17d-74dd-4653-92c6-a83c583c6d34",
+    "oldClusterStates": {
+      "bim-qvm-db": "running",
+      "bim-qvm-r3-db": "exited"
+    },
+    "start": 1792994310.0
+  },
+  "maxActivityGapSeconds": 1.3170762062072754,
+  "measuredSource": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+  "nativeControllerDonePresent": false,
+  "nativeTerminalPresent": false,
+  "originalRunnerErrors": [],
+  "overallStatus": "ISSUES",
+  "phaseBoundaryWindowsMsIncludingCollection": {
+    "analyze-changes": 302.0000457763672,
+    "analyze-stage": 284.9998474121094,
+    "analyze-versions": 853.9998531341553,
+    "analyze-visibility": 621.999979019165,
+    "changes": 9144.000053405762,
+    "head": 6.000041961669922,
+    "receipt": 3.999948501586914,
+    "references": 512.0000839233398,
+    "visibility": 18118.000030517578
+  },
+  "plans": {
+    "changes": {
+      "afterTriggerTotalMs": 4089.407,
+      "inputActualRows": 270205,
+      "inputActualTotalMs": 57.165,
+      "inputNode": "Seq Scan",
+      "mainPlanActualTotalMs": 5004.591,
+      "tempReadBlocks": 0,
+      "tempWrittenBlocks": 0,
+      "topActualRows": 0,
+      "topNode": "ModifyTable",
+      "triggers": [
+        {
+          "Calls": 270205,
+          "Constraint Name": "changes_revision_id_fkey",
+          "Relation": "changes",
+          "Time": 1495.094,
+          "Trigger Name": "RI_ConstraintTrigger_c_16435"
+        },
+        {
+          "Calls": 270205,
+          "Constraint Name": "changes_version_id_fkey",
+          "Relation": "changes",
+          "Time": 2594.313,
+          "Trigger Name": "RI_ConstraintTrigger_c_16440"
+        }
+      ]
+    },
+    "references": {
+      "mainPlanActualTotalMs": 504.832,
+      "tempReadBlocks": 0,
+      "tempWrittenBlocks": 0,
+      "topActualRows": 0,
+      "topNode": "Limit",
+      "triggers": []
+    },
+    "visibility": {
+      "afterTriggerTotalMs": 4208.125,
+      "inputActualRows": 270205,
+      "inputActualTotalMs": 416.848,
+      "inputNode": "Hash Join",
+      "mainPlanActualTotalMs": 13859.564,
+      "tempReadBlocks": 7842,
+      "tempWrittenBlocks": 7842,
+      "topActualRows": 0,
+      "topNode": "ModifyTable",
+      "triggers": [
+        {
+          "Calls": 270205,
+          "Constraint Name": "visibility_branch_fkey",
+          "Relation": "visibility",
+          "Time": 1539.795,
+          "Trigger Name": "RI_ConstraintTrigger_c_16453"
+        },
+        {
+          "Calls": 270205,
+          "Constraint Name": "visibility_version_id_fkey",
+          "Relation": "visibility",
+          "Time": 2668.33,
+          "Trigger Name": "RI_ConstraintTrigger_c_16458"
+        }
+      ]
+    }
+  },
+  "profileWorkStatus": "PASS",
+  "propertyOracle": {
+    "actual": {
+      "entities": 1452336,
+      "parameters": 75000,
+      "relationships": 34800
+    },
+    "expected": {
+      "entities": 1452336,
+      "parameters": 75000,
+      "relationships": 34800
+    }
+  },
+  "publishedRevision": "519e59bbb6a0847209f05fd13a7167d718270814bcd93ae2df9ab8c7a18abfff",
+  "readySealSha256": "dc4ba4a156edf1a79ff3b306665f7ccc67ee1a00275b9fd7805aa785996e9080",
+  "recoveryInputHashes": {
+    "bim-issue162-profile-20261026a-budget.docker-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bim-issue162-profile-20261026a-budget.docker-stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bim-issue162-profile-20261026a-client.docker-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bim-issue162-profile-20261026a-client.docker-stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bim-issue162-profile-20261026a-pg.docker-stderr.log": "219c44f2d91dbceb02dc03a75f864823f63a85ba805840b67552a1d30e7ae777",
+    "bim-issue162-profile-20261026a-pg.docker-stdout.log": "7571a7a1f1a7322283cb9c6a83cd46ed002463bf7ad633451be40646bf69110b",
+    "client-log-ownership.json": "74aec0a3ff6140d42b1638e6a8fa38bad2dbf65ca1618f330eabab3948d4bbce",
+    "controller-finalization-source.txt": "353bad6dcd9bff638f95d43d0f9fbd30ff5e8ac1047b5cfe9e22ae1cd88b18cd",
+    "raw/activity.ndjson": "e75f7be611c8d566df16a613ae16dd77e077db4cccc939699cfb61605d54d25d",
+    "raw/admission.json": "2597f16ce6efca8505a196e1efbe73c6d75cb56019e95ea922dcdf44ff781554",
+    "raw/budget-created.json": "0b4c9dd9b641fe554f558666436781af9e8fc56c550f80506e9e2ff790cc593b",
+    "raw/budget.json": "156e9f4d0990c5f9efc8c77f80d0a59a645d750e1cf0cb4e4c03080b689b1380",
+    "raw/budget.ndjson": "d300e648372c24abe6bb6ae4119cb49f3e306cccaa20cf2cddc3eb3d737175e4",
+    "raw/client-created.json": "21aa1bf0fa106665b3fb9cb95d5763c867053563d3dfc9fe063ed3ff4e7cc966",
+    "raw/client-final.json": "46d924a2ad3abed43a4067aba54419d054bef2da951ebafd68356d0981be81d1",
+    "raw/client-terminal.json": "35a10f7ff147bb31107aea08232741b76c81dd493b2657befcbb325f7882cb13",
+    "raw/client.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw/client.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw/config.json": "d6e86b08847444bc6274d63fc3d532fa0223d0c2dc9dbe623417806daea410f3",
+    "raw/controller-heartbeat.json": "57ba2238445b4118df06221d5a64b5b21ef42743db3a310697bf3430c526537b",
+    "raw/database-settings.json": "74dc76d542ab03ef2770f4c8c287d8f2dbe38854a0ec8f1064dd81b2ac6615cd",
+    "raw/host-before.json": "7827c151235160588ccf3a9313add3dea533f89985affbb5feacf1ba56f4cc3c",
+    "raw/intent.json": "ce703ecb31b11e8bea98cc6795c06774e268060d4d1755cc45eaa0a7d99a7f5e",
+    "raw/job-finished.json": "7209e29b14a00eb11fc3383c7eb3fb70bf009b3011b13da7b96051ef5f18e1a4",
+    "raw/job-start.json": "f6dceb872f69205b2189ca3e779ba93cc0594a0abbf0ce42d76d50092a5caf21",
+    "raw/lease.json": "97ffb2ec187a69f8e7e9ca572b24a979c75a942950276098e9c63d1cadb20cba",
+    "raw/observer-cost.ndjson": "dd72e608ef738dd253db8102d6077a25b7eb4ee85835b4874c2c59e23ac13181",
+    "raw/observer-heartbeat.json": "8068903fea1d6a3c40f707bf70d2922988aafc1e2fcb55b21edd9b0b8e19e69c",
+    "raw/pg-created.json": "d273e7fa773f01d817c4fff83fae7a858e1d8469dc5d97435096d6ec7fb3bcdc",
+    "raw/pg-final.json": "dd68235ebd75314622df3d82a5b7b67d2a12659dfd48f5c5a89020314b70490c",
+    "raw/pg.stderr.log": "219c44f2d91dbceb02dc03a75f864823f63a85ba805840b67552a1d30e7ae777",
+    "raw/pg.stdout.log": "7571a7a1f1a7322283cb9c6a83cd46ed002463bf7ad633451be40646bf69110b",
+    "raw/phases.ndjson": "d48ca9af52835629235ca1b3e79faaf1f6ae34b1eeaceedb4bd9b27a0cb60fee",
+    "raw/plan-changes.json": "3f8938bc1592377894ef6910c3ebe01dba4962aa1886434a6a422937d2b85168",
+    "raw/plan-references.json": "016483bc701764f53b42efe555527440567b12edaf12678fe32809f5b40ffb5e",
+    "raw/plan-visibility.json": "0ed02c326187ecf398929afccb083be13bfe84abf1d835ee43fe904bc69c8a0a",
+    "raw/profile-result.json": "7094a478bfdedde89ea119eef81cae11cb02b273d9781171b0f3d65439802a0e",
+    "raw/resources.ndjson": "54a08b47d03a1c3fbd83c768f5d949a2ae68ff01354f4748a49192504138d7ea",
+    "raw/run/artifact-checksums.json": "e39b7d52018b405243b00b21549aa4202d2e5688976d5cfb84690de027e0d339",
+    "raw/run/config.json": "d6e86b08847444bc6274d63fc3d532fa0223d0c2dc9dbe623417806daea410f3",
+    "raw/run/environment.json": "2dbe4483905886e3ac9703635916be2663ca711c577f8ef8bb05acc54651e992",
+    "raw/run/errors.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "raw/run/execution-envelope.json": "b63ededd2dd3d6c1153b4cfa2dbb40dd4c6ee049ab646dd5aa5aad0f5cd9aa52",
+    "raw/run/exploratory-budgets.json": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+    "raw/run/load.json": "e9f84366013b4f024497f2b035eb524d899e0ff592cdc66d3eb3ac154ff25272",
+    "raw/run/metrics-before.json": "ad109be612364a8ed2610028db62c1d686bed7ca3355d59e3cbd340fecfdaef1",
+    "raw/run/metrics-loaded.json": "20b7823a12cd74a3efb33b405f0cb28d064e50053ec313f10f07543aeb490551",
+    "raw/run/observations.json": "620fe172b27ae51916bcf443dc6ef47f8135483b32a87fcb665137b25ed4b792",
+    "raw/run/oracle.json": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+    "raw/run/property-values.json": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+    "raw/run/sample-summary.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "raw/run/samples.ndjson": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw/schema-and-sizes.json": "20844658177636320d0f0b46375da32c6a09bcfa1445af5adc615c9d1dd56218",
+    "raw/watchdog-cleanup.json": "81c222e87df803e5500af978b41cd83bbb934f1ce535b71eb0528d3b8980fd39",
+    "raw/watchdog-heartbeat.json": "19a638eff6e650a57043c1d4275746a5fcaabf84337ab70e257ba33eba47b12d",
+    "raw/watchdog-process.json": "32256116f8c7978d2002ab1e6979c81ec6ccc9060e210e24c7eccdc1e90ff51f",
+    "raw/watchdog-stop.json": "bc144c763ed71b63c6fb08e3bb21e11efd8ce202f6265a368c91ec6a180bc79c",
+    "raw/watchdog.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "recovered-terminal.json": "6a1adf3fb7b75db6d34d014a31d917cee03d1a24d74be3243419842a1e6d473a"
+  },
+  "recoveryKind": "Post hoc read-only collection, not the controller terminal record",
+  "settings": {
+    "settings": {
+      "fsync": "on",
+      "full_page_writes": "on",
+      "hash_mem_multiplier": "2",
+      "maintenance_work_mem": "262144",
+      "max_parallel_workers_per_gather": "1",
+      "max_wal_size": "8192",
+      "shared_buffers": "32768",
+      "synchronous_commit": "on",
+      "work_mem": "8192"
+    },
+    "version": "15.14 (Debian 15.14-1.pgdg13+1)"
+  },
+  "sourceOracle": {
+    "actual": {
+      "countsByKind": {
+        "bed": 50,
+        "boundsSpace": 1600,
+        "building": 1,
+        "cabinet": 300,
+        "cableSegment": 3000,
+        "chair": 600,
+        "circuit": 500,
+        "connectedTo": 15000,
+        "connectionPort": 30000,
+        "containedIn": 37776,
+        "containmentSegment": 1000,
+        "desk": 200,
+        "door": 250,
+        "ductFitting": 2400,
+        "ductSegment": 1800,
+        "electricalOutlet": 1800,
+        "electricalPanel": 50,
+        "equipment": 300,
+        "externalBinding": 1000,
+        "hasPort": 30000,
+        "hostedBy": 17450,
+        "instanceOf": 37602,
+        "level": 1,
+        "luminaire": 1400,
+        "memberOfSystem": 20800,
+        "otherFurnishing": 350,
+        "parameter:dependencyInput": 3000,
+        "parameter:dimension": 3794,
+        "parameter:hostOffset": 2206,
+        "parameter:recipe": 3000,
+        "parameter:typeReference": 3000,
+        "parameterDependsOn": 15000,
+        "pipeFitting": 3000,
+        "pipeSegment": 2500,
+        "provenance": 1000,
+        "pump": 50,
+        "roof": 2,
+        "sensor": 800,
+        "site": 1,
+        "slab": 100,
+        "space": 100,
+        "stud": 14000,
+        "supportedBy": 10200,
+        "switch": 400,
+        "system": 20,
+        "terminal": 800,
+        "typeDefinition": 50,
+        "valve": 1000,
+        "wall": 800,
+        "window": 150,
+        "zone": 2
+      },
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      }
+    },
+    "expected": {
+      "countsByKind": {
+        "bed": 50,
+        "boundsSpace": 1600,
+        "building": 1,
+        "cabinet": 300,
+        "cableSegment": 3000,
+        "chair": 600,
+        "circuit": 500,
+        "connectedTo": 15000,
+        "connectionPort": 30000,
+        "containedIn": 37776,
+        "containmentSegment": 1000,
+        "desk": 200,
+        "door": 250,
+        "ductFitting": 2400,
+        "ductSegment": 1800,
+        "electricalOutlet": 1800,
+        "electricalPanel": 50,
+        "equipment": 300,
+        "externalBinding": 1000,
+        "hasPort": 30000,
+        "hostedBy": 17450,
+        "instanceOf": 37602,
+        "level": 1,
+        "luminaire": 1400,
+        "memberOfSystem": 20800,
+        "otherFurnishing": 350,
+        "parameter:dependencyInput": 3000,
+        "parameter:dimension": 3794,
+        "parameter:hostOffset": 2206,
+        "parameter:recipe": 3000,
+        "parameter:typeReference": 3000,
+        "parameterDependsOn": 15000,
+        "pipeFitting": 3000,
+        "pipeSegment": 2500,
+        "provenance": 1000,
+        "pump": 50,
+        "roof": 2,
+        "sensor": 800,
+        "site": 1,
+        "slab": 100,
+        "space": 100,
+        "stud": 14000,
+        "supportedBy": 10200,
+        "switch": 400,
+        "system": 20,
+        "terminal": 800,
+        "typeDefinition": 50,
+        "valve": 1000,
+        "wall": 800,
+        "window": 150,
+        "zone": 2
+      },
+      "fingerprint": {
+        "count": 270205,
+        "sum": "7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082",
+        "xor": "50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a"
+      }
+    }
+  },
+  "timingLimitations": [
+    "One instrumented case, no A/B or repetitions.",
+    "Plan node times include children. AFTER-trigger times are separate.",
+    "Phase boundaries include collection and instrumentation toggles.",
+    "No source-equivalent speedup, overall full-run limiter, or full-capacity conclusion."
+  ],
+  "watchdogCleanup": [
+    {
+      "id": "e8316ca989df716c60ca2acc0816b676c447bf54d1a65dc5650b1d8a77b1a3ab",
+      "name": "bim-issue162-profile-20261026a-client",
+      "running": false
+    },
+    {
+      "id": "7914eda0a7a6f8cdad6b2074d136353f3e51bcbca37e33f095e4112ad6802ba2",
+      "name": "bim-issue162-profile-20261026a-pg",
+      "running": false
+    },
+    {
+      "id": "8427c50f962b6aef549da8432896197e62d0229c7f76b7fc82a8ed7262c50896",
+      "name": "bim-issue162-profile-20261026a-budget",
+      "running": false
+    }
+  ],
+  "watchdogStop": {
+    "error": "Budget stale or breached",
+    "unix": 1792994437.715079
+  }
+}

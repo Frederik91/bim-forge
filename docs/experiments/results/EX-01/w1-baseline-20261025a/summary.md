@@ -1,0 +1,26 @@
+# EX-01: w1-baseline-20261025a
+
+Outcome: failed. Execution: completed.
+
+Does the existing native baseline satisfy the declared EX-01 assertions?
+
+Variant: baseline-room-model.
+
+- native-identity-restore: passed; expected Rename preserves all native IDs, immutable base, ancestry, exact one-object delta, and restore bytes.; observed {"stable":true,"immutableBase":true,"delta":{"entities":{"added":[],"removed":[],"modified":[{"id":"desk-one","before":{"id":"desk-one","type":"Furniture","name":"desk","kind":"desk","position":[1,2],"width":1,"depth":0.6,"height":0.8,"rotationDeg":0,"supportId":null},"after":{"id":"desk-one","type":"Furniture","name":"Renamed occurrence","kind":"desk","position":[1,2],"width":1,"depth":0.6,"height":0.8,"rotationDeg":0,"supportId":null}}]},"relationships":{"added":[],"removed":[],"modified":[]}},"parent":"15432dd15825bef90a00777f22b78a684cc2e207fb906bad35c19226fa6b5448","restoredExactly":true}
+- identical-chair-occurrences: passed; expected Chairs with identical shape and metadata retain distinct native occurrence IDs and local placements.; observed {"identicalContent":true,"one":{"id":"chair-one","type":"Furniture","name":"chair","kind":"chair","position":[1,3.2],"width":0.4,"depth":0.4,"height":0.8,"rotationDeg":0,"supportId":null},"two":{"id":"chair-two","type":"Furniture","name":"chair","kind":"chair","position":[2.2,3.2],"width":0.4,"depth":0.4,"height":0.8,"rotationDeg":0,"supportId":null}}
+- duplicate-native-id: passed; expected A duplicated native ID is rejected.; observed {"kind":"rejected","error":{"name":"Error","message":"Duplicate entity identifier."}}
+- native-id-churn-lineage: failed; expected Replacement of a geometrically identical occurrence has explicit old/new identity lineage.; observed {"entities":{"added":[{"id":"chair-recreated","type":"Furniture","name":"chair","kind":"chair","position":[1,3.2],"width":0.4,"depth":0.4,"height":0.8,"rotationDeg":0,"supportId":null}],"removed":[{"id":"chair-one","type":"Furniture","name":"chair","kind":"chair","position":[1,3.2],"width":0.4,"depth":0.4,"height":0.8,"rotationDeg":0,"supportId":null}],"modified":[]},"relationships":{"added":[],"removed":[],"modified":[]}}
+- native-split-merge-lineage: failed; expected Applied split and merge operations retain explicit source-to-result object lineage.; observed {"splitDelta":{"entities":{"added":[{"familyId":"standing-person","id":"person-split-a","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,1.7],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"},{"familyId":"standing-person","id":"person-split-b","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2.4],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"}],"removed":[{"familyId":"standing-person","id":"person-187","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"}],"modified":[]},"relationships":{"added":[],"removed":[],"modified":[]}},"mergeDelta":{"entities":{"added":[{"familyId":"standing-person","id":"person-merged","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"}],"removed":[{"familyId":"standing-person","id":"person-split-a","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,1.7],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"},{"familyId":"standing-person","id":"person-split-b","name":"Person 1.87 m","placement":{"kind":"single-room"},"position":[1,2.4],"rotationDeg":0,"size":{"width":0.5,"depth":0.3,"height":1.87},"type":"AssetInstance"}],"modified":[]},"relationships":{"added":[],"removed":[],"modified":[]}},"lineageInputOutcome":{"kind":"rejected","error":{"name":"Error","message":"Unexpected model fields."}}}
+- paired-real-exports-not-covered: failed; expected W2 paired real exports demonstrate unchanged, duplicate, and churned source identities.; observed Not covered: no paired real export artifacts have been supplied to W1.
+
+Limitations:
+
+- Baseline-only execution of the existing native model. This does not qualify an unimplemented VM-C1 candidate.
+- Baseline records removal and addition; no object-lineage field exists. Revision ancestry is not object lineage.
+- Disposable native baseline only; no external engine, IFC exchange, persistent store, or production adoption is qualified.
+- Fixture acceptance actors and worker labels exercise API bookkeeping; they are not human approvals or AI execution evidence.
+- Native ID rejection does not qualify duplicate external source IDs.
+- Operation fixtures are the existing native single-room and asset fixtures; the W0 multilevel fixture is bound as a reference, not executed through a native adapter.
+- Positions differ to keep both real occurrences valid; shared mesh deduplication is not implemented.
+- Split and merge execute as asset removal/addition; baseline rejects explicit lineage metadata.
+- W2 artifact dependency pending. No IFC parser, exporter, or simulated engine is substituted.

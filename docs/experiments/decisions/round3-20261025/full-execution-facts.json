@@ -1,0 +1,28 @@
+{
+  "runId": "r3-hospital-full-20261025a",
+  "scale": "full",
+  "database": "qvm_w5_r3_hospital_full_20261025a",
+  "startedAt": "2026-10-25T19:56:39.842915Z",
+  "finishedAt": "2026-10-26T00:01:15.811965691Z",
+  "elapsedSeconds": 14675.96905,
+  "completeAdmission": false,
+  "expectedRecords": 27020089,
+  "loadedCount": null,
+  "exitCode": 143,
+  "oomKilled": false,
+  "stopReason": null,
+  "errors": [
+    "Runner terminal errors are missing"
+  ],
+  "sourceCommit": "3a0b1ef3ec44c2e741fa5858d83d0ef8a7ce5098",
+  "purpose": "extended-initial-inventory",
+  "walGiB": 8,
+  "nodeCpu": 1,
+  "postgresCpu": 1.5,
+  "postgresGiB": 3,
+  "checkpointWarnings": 0,
+  "checkpointWarningIntervalMedianSeconds": null,
+  "crossedOriginalTwoHourTarget": true,
+  "load": {},
+  "postgresOomKillObserved": false
+}

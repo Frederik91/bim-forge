@@ -1,0 +1,3208 @@
+{
+  "schemaVersion": 1,
+  "recordKind": "run",
+  "experimentId": "EX-13",
+  "runId": "checkpoint-comparison-20261025a",
+  "executionStatus": "completed",
+  "conclusion": "inconclusive",
+  "startedAt": "2026-10-25T17:57:57.654057Z",
+  "finishedAt": "2026-10-25T18:16:21.523889967Z",
+  "hypothesis": "A larger WAL allowance reduces checkpoint pressure while preserving complete reduced admission under fixed original CPU/RAM.",
+  "variant": "Five alternating reduced pairs;1GiB vs8GiB max_wal_size;runtime962d602",
+  "design": {
+    "candidateId": "VM-C1",
+    "commit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "path": "docs/design/versioned-model-candidate.md",
+    "sha256": "7a3dadffd7cfe74f201a15605e176a88456d4a646641d8e746cc69ce49e4b00c"
+  },
+  "definition": {
+    "commit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "path": "docs/experiments/registry.json",
+    "sha256": "62058ca580352b8434653df4d1e950a0724d9ec1a533c4835acbd478d91628fb"
+  },
+  "implementation": {
+    "sourceCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "runnerCommit": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+    "validators": [
+      "Original complete W4 producer byte/count/hash and source/database body/kind/property oracles in every admitted case",
+      "Independent coordinator recheck of actual images/CPU/RAM, original errors/observations and fingerprint/property outcomes",
+      "Source-bound root/strict and focused tests; exact outputs retained with their respective sources"
+    ]
+  },
+  "dataset": {
+    "name": "hospital-200k-v1 reduced",
+    "seed": "bim-forge-hospital-200k-v1",
+    "manifestSha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca"
+  },
+  "environment": {
+    "host": "192.168.1.17; existing services active",
+    "software": {
+      "node": "24.22.1",
+      "postgresql": "15.14",
+      "sources": "962d6023119baf070bd6c2a8c599e2cf0ea3186e",
+      "profile": "Individual actual resource/WAL settings and I/O counters are retained per sample."
+    },
+    "imageDigests": [
+      "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+      "sha256:1493afd6cc99c05d611913cd5731aa0a081aefd9ff0b805552e66dc150b17ccc"
+    ],
+    "cpuLimit": 1,
+    "memoryLimitBytes": 1073741824,
+    "diskBudgetBytes": 214748364800,
+    "storage": "Fresh per-sample databases in the new private SSD-backed round3 cluster. All old/new allocations count toward total200GiB.",
+    "cacheProcedure": "Private checkpoint before each timed job; unchanged host caches; no cold-cache claim. New containers disable swap.",
+    "measurementSlot": "Exclusive database sequence; no competing qualification DB workload. Existing services and bounded file-only analysis remain active."
+  },
+  "commands": [
+    "python3 /ssd1/bim-forge-qualification/qvm-20261025/round3/trial.py <unique-id> <explicit-arm-arguments>",
+    "node experiments/storage/cli.ts workload <pinned-config> <fresh-output>"
+  ],
+  "observations": [
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-a-1-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":49496.300399,\"publication\":29941.921969000003,\"analyze\":291.0396119999932}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-b-1-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":48897.743024999996,\"publication\":26237.993666000002,\"analyze\":302.0207079999964}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-a-2-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":49419.616374,\"publication\":26436.200401999995,\"analyze\":303.1423630000063}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-b-2-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":59163.305225000004,\"publication\":26347.06034699999,\"analyze\":813.8236100000067}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-a-3-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":54244.213247,\"publication\":28802.683259000005,\"analyze\":417.99136899999576}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-b-3-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":43658.008023,\"publication\":26605.818236,\"analyze\":306.35881400000653}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-a-4-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":69081.347777,\"publication\":27792.085869999995,\"analyze\":290.5042439999961}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-b-4-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":44396.52799,\"publication\":26675.687719999994,\"analyze\":584.585963000005}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-a-5-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":66041.960152,\"publication\":27932.488072000007,\"analyze\":384.3811790000036}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "r3-wal-b-5-fidelity",
+      "expected": "Fresh admitted inventory retains complete source/table/body/hash/kind/property fidelity at actual declared resources.",
+      "observed": "{\"verified\":true,\"actualEnvironmentMatches\":true,\"records\":270205,\"fingerprint\":{\"count\":270205,\"sum\":\"7a7dce5cc0865f0bf3aa82a0fe14ca5a115e8a5258b60a4f24442bb7d5600082\",\"xor\":\"50c0078fc4df5d1d4fca3e065a4ea698cf7d53cae90fceb20a6a9ffe2cce472a\"},\"properties\":{\"entities\":1452336,\"parameters\":75000,\"relationships\":34800},\"phasesMs\":{\"ingest\":44239.952471000004,\"publication\":28992.473021000005,\"analyze\":446.1703959999868}}",
+      "passed": true,
+      "limitations": [
+        "This case does not qualify full history, contention, geometry or engineering authority."
+      ]
+    },
+    {
+      "experimentId": "EX-13",
+      "caseId": "coordinator-synthetic-scope",
+      "expected": "Database-only synthetic and selected-scale scope remains explicit.",
+      "observed": "No real hospital completeness, geometry, engineering authority, full history/client/concurrency matrix or general language winner is qualified.",
+      "passed": true,
+      "limitations": [
+        "Scope assertion only."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "assertion": "Seeded category counts, relation integrity, history and query oracles pass before timing.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-wal-a-1-fidelity",
+        "r3-wal-b-1-fidelity",
+        "r3-wal-a-2-fidelity",
+        "r3-wal-b-2-fidelity",
+        "r3-wal-a-3-fidelity",
+        "r3-wal-b-3-fidelity",
+        "r3-wal-a-4-fidelity",
+        "r3-wal-b-4-fidelity",
+        "r3-wal-a-5-fidelity",
+        "r3-wal-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Run admitted reduced/full scales with detailed properties, ports, systems and parametric records.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-wal-a-1-fidelity",
+        "r3-wal-b-1-fidelity",
+        "r3-wal-a-2-fidelity",
+        "r3-wal-b-2-fidelity",
+        "r3-wal-a-3-fidelity",
+        "r3-wal-b-3-fidelity",
+        "r3-wal-a-4-fidelity",
+        "r3-wal-b-4-fidelity",
+        "r3-wal-a-5-fidelity",
+        "r3-wal-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Measure bulk readiness, isolated operations, aged mixed traffic, contention and working sets.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-wal-a-1-fidelity",
+        "r3-wal-b-1-fidelity",
+        "r3-wal-a-2-fidelity",
+        "r3-wal-b-2-fidelity",
+        "r3-wal-a-3-fidelity",
+        "r3-wal-b-3-fidelity",
+        "r3-wal-a-4-fidelity",
+        "r3-wal-b-4-fidelity",
+        "r3-wal-a-5-fidelity",
+        "r3-wal-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "Report failures, latency distributions, achieved/offered load, resource peaks and capacity limits.",
+      "coverage": "partial",
+      "caseIds": [
+        "r3-wal-a-1-fidelity",
+        "r3-wal-b-1-fidelity",
+        "r3-wal-a-2-fidelity",
+        "r3-wal-b-2-fidelity",
+        "r3-wal-a-3-fidelity",
+        "r3-wal-b-3-fidelity",
+        "r3-wal-a-4-fidelity",
+        "r3-wal-b-4-fidelity",
+        "r3-wal-a-5-fidelity",
+        "r3-wal-b-5-fidelity"
+      ]
+    },
+    {
+      "assertion": "State that database-only synthetic results do not qualify geometry or a real hospital inventory.",
+      "coverage": "covered",
+      "caseIds": [
+        "coordinator-synthetic-scope"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "analyze.py",
+      "sha256": "05d2b9b05fefc7354c261056f8c74a4a5df325fe31d1e8c0926b6120be04697c",
+      "bytes": 1181,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "batch-decision.md",
+      "sha256": "8674d279315cb48bd3b7f43d7ce55fa3fd11b3f5579bdba6cb48ae6109487545",
+      "bytes": 1976,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "budget.ndjson",
+      "sha256": "1170e0ca6c07a86cef2f71023276e9a36f9a70b0faf4160b22b4d37591842cb9",
+      "bytes": 15180,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "cgroup-resources.ndjson",
+      "sha256": "d474fb999d3cd5ae1a17bd8165c459303f658ae9a8b4aa25324b983d5308fe34",
+      "bytes": 238831,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "cgroups.py",
+      "sha256": "d2f939c138e4e28e9876e92b5c92cd46fcc5741cc4a198fbf90f46b887a3917f",
+      "bytes": 740,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "enforcer.py",
+      "sha256": "af2ed40ea7fb3671a7121cc0335f47963b8538110d56f6066c6ede27886ebf66",
+      "bytes": 2067,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/budget-after.ndjson",
+      "sha256": "08d1434cbaf9f49643106a7565d9aef28505810cc880ae8e6c8a1b3f8486adfc",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-1/budget-before.ndjson",
+      "sha256": "e3436fb1b5de321defa1355787f4f7bc9a819a5dd2e76ccb5287a3a7199ec276",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-1/client-container-after.json",
+      "sha256": "84558123b5913eb9cd23656bf766143f240985a78a0959787cea1165b800b705",
+      "bytes": 9208,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/client-container-before.json",
+      "sha256": "346c4ff628ed95fa3897b5afea38223d22d4a74c63b8def221b4b56c2b09d18e",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/client-cpu-stat.txt",
+      "sha256": "4bb17088929a8e72bb71c75d4f778da6b382d6b3704b1f3c5d0647f837ed7fcd",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/client-memory-peak.txt",
+      "sha256": "69643874535a0cc54ef7a889c0af3f0abbd5364d93d5c7654cb6a763ae7ddece",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/config.json",
+      "sha256": "bad9679d88669411797f6d6c756b19ab0c3badb42ab30b3bf1262b11acab165c",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/container-id.txt",
+      "sha256": "7e491ed8f47687603d30004cdc49750265309d5d93715459ea6baeb3cd6d855a",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/coordinator-detected-finish-at.txt",
+      "sha256": "ff0661dc9d14719561de31178b3625afb0393a563c284efdd5447f87e2c06444",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/decision-commit.txt",
+      "sha256": "2aad0ae79a3da860677001ca7c40f69385e9f8d4bede00b5c5272132d0fe5b4b",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/execution-facts.json",
+      "sha256": "446e85018a0321b0393c6506c9c519e4a7235240fca16bef04fd88e3f029a722",
+      "bytes": 2899,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/job-finished-at.txt",
+      "sha256": "9964b3720485fe259ddd22971eb3cb405588ca998d90c591a096acf96d2ec123",
+      "bytes": 30,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/job-started-at.txt",
+      "sha256": "4b80a493402c45b5c549094c24f85002416ca1e1d4f3e3845ccf6ee2202e79c1",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/metrics-after.json",
+      "sha256": "010225d9defc358e636c99c7d35692b8b5598d57c6feadf37a86f6d30d58bfe4",
+      "bytes": 3758,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/metrics-before.json",
+      "sha256": "65a18686430952ab9e370509cfd4d548006140e3fb3ba25c1a54c6d8799907f6",
+      "bytes": 3665,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/postgres.log",
+      "sha256": "b3127411b054583f82e540053c15b109b6636ffbaa91493d25853f50a70ec334",
+      "bytes": 64,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/progress.ndjson",
+      "sha256": "ecb1af4878037ae644f16433bf00746632bef609113e529a0a2833c531af8fb5",
+      "bytes": 12039,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-1/resources.ndjson",
+      "sha256": "4d19c3790c6863d2a93e885e4a9b639e04678ce3a299fb4b5a9894bce664102a",
+      "bytes": 6082,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-1/run/artifact-checksums.json",
+      "sha256": "b7fdf3bf888d22c093915ff03b35bb566c2b186ad6ed31b036731699a3ba0baa",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/config.json",
+      "sha256": "bad9679d88669411797f6d6c756b19ab0c3badb42ab30b3bf1262b11acab165c",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/environment.json",
+      "sha256": "3d331fbe80c950b3e0c89673e672fb26eda4cc2850fd3f3a45892ebdbbf659b3",
+      "bytes": 39784,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/execution-envelope.json",
+      "sha256": "c66f4b3c03d1d639954fcd33311d31d03b140118e4cb66805c369f5c1750f0b5",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/load.json",
+      "sha256": "7e59fd4fe48d76f9b116ca875f5c1588324f3b6f0a5e9e60455daa9dcd2c2c15",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/metrics-before.json",
+      "sha256": "b5d0e995f4875917339b343844c1571b76c7eeecdcd75f033bb603a178acba86",
+      "bytes": 16358,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/metrics-loaded.json",
+      "sha256": "85cc773e1dcde14127126d1eab772b3ceb355b90258552624b3022076d643cd5",
+      "bytes": 16530,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/observations.json",
+      "sha256": "4fde8e99c4c06e589559ec1737619ce2187ec52414f8e4327ef20f904ecab3c9",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-1/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-1/stdout.json",
+      "sha256": "4fde8e99c4c06e589559ec1737619ce2187ec52414f8e4327ef20f904ecab3c9",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/budget-after.ndjson",
+      "sha256": "f19331e73a438f0a74d96f4a858cd7d7b03ab83349abb9113ac7311399ab726d",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-2/budget-before.ndjson",
+      "sha256": "c7d363aa8ff877a108a0aaca8aaa4fefa464743b33785161f7288343cfe6ce6a",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-2/client-container-after.json",
+      "sha256": "5bc81df9da05951e6d9646f8b3eb3fcfbf7fc67dcea03af76ac5a6e010499d18",
+      "bytes": 9209,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/client-container-before.json",
+      "sha256": "7f1c0f4d4625edce269b796bea22a4ea56d07fee1b4045376bb90b4c63d4b848",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/client-cpu-stat.txt",
+      "sha256": "f43ad8f916c30db891c61c0a5c2e18ef067ab090b7ece333f307e1df61225b05",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/client-memory-peak.txt",
+      "sha256": "82cb7ba76d5236311f15e13a8134a3c9f91c86aa17640cef5ddb48d328d16a7f",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/config.json",
+      "sha256": "dfc54410b8a6484c6c34c55275719867bc57b11cb0ed2067f71859098e86a850",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/container-id.txt",
+      "sha256": "13b059f1f564b66e165b2e0ae5d63f39ea8f77238fc0a830e26d4a03822dd12e",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/coordinator-detected-finish-at.txt",
+      "sha256": "f58a91419a66ce9469fd6ce84889d2ca767d8cab795669bd634f919365e0e65d",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/decision-commit.txt",
+      "sha256": "2aad0ae79a3da860677001ca7c40f69385e9f8d4bede00b5c5272132d0fe5b4b",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/execution-facts.json",
+      "sha256": "fb7caaa126dbadc4be568fc2f188542088aa0322bacfc75cbe166dc171c08254",
+      "bytes": 2899,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/job-finished-at.txt",
+      "sha256": "e874492d8185f6591e0372fa87e6642d10c6cc2bd279633ba1239222e2a7ff1e",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/job-started-at.txt",
+      "sha256": "bf23004aa844f3806b7b7f4273b8a841140a2748ad28879438bb60e2296f7706",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/metrics-after.json",
+      "sha256": "13137dbcb93c0ab7623923963a267d5211b3997737561da8d5588c22ae6f0e09",
+      "bytes": 3762,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/metrics-before.json",
+      "sha256": "a82cd9b93ac14976d7facd19c5ba30e95d25f52aef0af8074a622b614df414d9",
+      "bytes": 3685,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/postgres.log",
+      "sha256": "47df0a3bdcc04c004bdf15227a27ff5c0884e66771d3f5815e2a286e43a0d593",
+      "bytes": 64,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/progress.ndjson",
+      "sha256": "cc244d989b8785d8f86c08be2ad6de5514d79b6c57da2146fd20a2c349075f4f",
+      "bytes": 12077,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-2/resources.ndjson",
+      "sha256": "cff2e59b1813e2f0edfdba5f0b036f39ce146f28f09e10de38094c0942950d17",
+      "bytes": 5603,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-2/run/artifact-checksums.json",
+      "sha256": "45be7a412fdb8d4fb7bcf4d851ceda4f057bdcfe6f4d18ff903c0320bb28e1ef",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/config.json",
+      "sha256": "dfc54410b8a6484c6c34c55275719867bc57b11cb0ed2067f71859098e86a850",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/environment.json",
+      "sha256": "78c99af4e51912a36588246f76f5053cdc39aff1d5c763f123c7506955beee2e",
+      "bytes": 39587,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/execution-envelope.json",
+      "sha256": "fb88e0d6ab4bea4fbc42a5cfe0c733fde2b9cf50ca3aa7eb2fcef7054e007f80",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/load.json",
+      "sha256": "83de6024d2b34775f50b18730864f3ae4b6d9d17ead81b155f5695651dbba462",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/metrics-before.json",
+      "sha256": "cbb3fd2e36a595175e14dbc687d89ca37d49e399dab1e69a7151d541c7a2a558",
+      "bytes": 16399,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/metrics-loaded.json",
+      "sha256": "e5ac4a0e2b596eddbf7870232598c47336a9872e66fc19392ae4a5f5c13a6054",
+      "bytes": 16562,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/observations.json",
+      "sha256": "b7a20c49b6f261657751686d972ed59219c03f8333514062379124e3f4f62ea0",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-2/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-2/stdout.json",
+      "sha256": "b7a20c49b6f261657751686d972ed59219c03f8333514062379124e3f4f62ea0",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/budget-after.ndjson",
+      "sha256": "480d4f501d1fc33d40c0fa4b71598e7455303f42434d4cba9b81c28a72aaa30c",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-3/budget-before.ndjson",
+      "sha256": "c4fa97a7b02e7e33a8f94d451e111787756035381d70d2a23639119c1e4cfc75",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-3/client-container-after.json",
+      "sha256": "a82a43c7f47756659656a2c75f2e68762d9e7eb47d2454e0ae89cd8cd4d68bf0",
+      "bytes": 9208,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/client-container-before.json",
+      "sha256": "a5ab98e3791240dff715443c40690ef96d469fd8bdd442fb908aeeb60f01c20f",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/client-cpu-stat.txt",
+      "sha256": "ff83da305afd993f0f237144a1c7d6fd2609818d1bde09ca1b8947c506450b93",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/client-memory-peak.txt",
+      "sha256": "cbe20dc052844eb6b4fe427db1550d43e26f1dcbd8757cce40d788937b4b7890",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/config.json",
+      "sha256": "13519a9cf6d3c802feb7e3456dde25406891bb50772f5fe0c24669bab053183e",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/container-id.txt",
+      "sha256": "56a7a73e675fca39a513914d4bfb5258470be2aa7a43d59d9cc91ce1fddf0d26",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/coordinator-detected-finish-at.txt",
+      "sha256": "3a21bc15ae53876cb69823371b4e4553a7cee967a61e426d68c34c816a7dfcd0",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/decision-commit.txt",
+      "sha256": "2aad0ae79a3da860677001ca7c40f69385e9f8d4bede00b5c5272132d0fe5b4b",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/execution-facts.json",
+      "sha256": "349498979c3cad22a9852a78b7e40504db597c429a22b82217d5fbc68c3c620b",
+      "bytes": 2899,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/job-finished-at.txt",
+      "sha256": "7d832cb5b0fa6efec296088a492619add9e80b7df2f65ae6c0eb6d1576ff4841",
+      "bytes": 30,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/job-started-at.txt",
+      "sha256": "f3e80880fa97a26afe92ad03b055a2d0c58f39d9c3cd16d4b46c8fc814bb57e7",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/metrics-after.json",
+      "sha256": "981355614ebfec21e34744d8eaa3f5a6197af292aa49c35254acc661ffe84f70",
+      "bytes": 3769,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/metrics-before.json",
+      "sha256": "0d0c4ac5150b8d1da4c658096f2f7ab57f4de661ed739574290ecb189acaa747",
+      "bytes": 3687,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/postgres.log",
+      "sha256": "6f11399cea1541ebed7e34d935ae9726fc649e705037858eeef70f068095a886",
+      "bytes": 64,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/progress.ndjson",
+      "sha256": "19d5366e1732d5dc49466755777aeac2967182e03c61d044e8edc617244806a1",
+      "bytes": 12116,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-3/resources.ndjson",
+      "sha256": "b74b4a4637d594d8188a3151d15e390c29fd020057300fc3bf561f4bdd3e5a73",
+      "bytes": 6162,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-3/run/artifact-checksums.json",
+      "sha256": "8d46a50887388e75247c6c2492cbcbbbcb3162f625a361d3ae1908d785ca72bc",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/config.json",
+      "sha256": "13519a9cf6d3c802feb7e3456dde25406891bb50772f5fe0c24669bab053183e",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/environment.json",
+      "sha256": "55ffb24b6dc8077454bf7efbf3c0d45949f7466eb4a5d7f774c4224aaa4278af",
+      "bytes": 38737,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/execution-envelope.json",
+      "sha256": "5b5d709e11df9c3e321cab4debaf30d86ecf4cecf6fa8e6d3d2b6def8b5ed037",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/load.json",
+      "sha256": "ca4edd675f253d6cdf9299d057c770465f994713b11531eaec9d7ced0272c047",
+      "bytes": 2064,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/metrics-before.json",
+      "sha256": "d205ebc9716e8336dfdb1e16359be500e51093f16d97926464fcefd0bad959db",
+      "bytes": 16461,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/metrics-loaded.json",
+      "sha256": "b6a0beb32e1270d39a5f156013d93b4474f018b39cca86c671d72e1736463a97",
+      "bytes": 16594,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/observations.json",
+      "sha256": "9932b3ead1a5312e84e492fe8dd1a05ee7f957013f35ab09a95b909c2ef68188",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-3/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-3/stdout.json",
+      "sha256": "9932b3ead1a5312e84e492fe8dd1a05ee7f957013f35ab09a95b909c2ef68188",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/budget-after.ndjson",
+      "sha256": "06cfd4becaec1d2247d7af1013266735b3b53bb6871e1b8397f37bdbad0c271a",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-4/budget-before.ndjson",
+      "sha256": "25ca15541f95000645a6af45a3b9cd5470187751e5ae16e0688dc396391965ac",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-4/client-container-after.json",
+      "sha256": "2fa4677fe1f3ebe18c97e7e3c314adc569d146d294ae2eaa97dd9592dfff6bc7",
+      "bytes": 9209,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/client-container-before.json",
+      "sha256": "62f71c84062ca7112ca5f4f6666ecdae5162ee8ba356e0054e435b12c0077338",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/client-cpu-stat.txt",
+      "sha256": "519826e8e3e89b7651b2befbc71bc276c3f5730cd364d5d47afe810349f0c214",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/client-memory-peak.txt",
+      "sha256": "a292d9bb7ebf05b90bdec4ac68945b0c365198c1619fdff53886bd9eb2019425",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/config.json",
+      "sha256": "2fc0ade4d27abc92d0834a5dcecc751a0ae098f8a978b80d2176c7a90a4dfbce",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/container-id.txt",
+      "sha256": "3fc35a1a58b057a431753f851fa209e86275156072c523798c2b94b8a999b27b",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/coordinator-detected-finish-at.txt",
+      "sha256": "abdedb7e08318d4d4e067d81f7d1e623442078a62c89abd433895a0d74dd736a",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/decision-commit.txt",
+      "sha256": "2aad0ae79a3da860677001ca7c40f69385e9f8d4bede00b5c5272132d0fe5b4b",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/execution-facts.json",
+      "sha256": "de4fbf7c473866aa80b51242210adf4185da12951c72016ca2a15035314183fb",
+      "bytes": 2900,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/job-finished-at.txt",
+      "sha256": "481adf22792db51b0ddaeb9cb936d8e287b37cd4e96c3dc2d7f51f3b20e4e803",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/job-started-at.txt",
+      "sha256": "f90af934eaa41764572766dbeb0362967f99b4c955131f6b64ca4ff73c05043c",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/metrics-after.json",
+      "sha256": "fa5920fcf72bf59ccad787dd31a7660c4186fbfe54f12c015133dba3e9f5cd13",
+      "bytes": 3771,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/metrics-before.json",
+      "sha256": "9b58ad3d998c403a94c411100621f18e8b92b3410807784e09fe18076bf63811",
+      "bytes": 3695,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/postgres.log",
+      "sha256": "1196d3028bdfbd9e84a54f4fa667589e723b4f9482140062152d9fe6ea88eede",
+      "bytes": 64,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/progress.ndjson",
+      "sha256": "028bc5a011d23943c82d2532e299da38c660096898c03b35f32c5def1962d0ef",
+      "bytes": 12215,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-4/resources.ndjson",
+      "sha256": "26256c3ca4cc90dc7944eb2fe8a48d8ee9d40a22129a07619ced091118879319",
+      "bytes": 6737,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-4/run/artifact-checksums.json",
+      "sha256": "a668cf270cfdbbc4c7563eb126e7290601f7691e57bf6dde5e950d41f71211cd",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/config.json",
+      "sha256": "2fc0ade4d27abc92d0834a5dcecc751a0ae098f8a978b80d2176c7a90a4dfbce",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/environment.json",
+      "sha256": "d8b9ca700bfef8e94d9bcfc860c270d472b88d1363d3d21b95900479779884a2",
+      "bytes": 39974,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/execution-envelope.json",
+      "sha256": "c1e4e7495d900ff347f23cff9bec1bdafc61c4ab31fee9f31c47cdc92fbfc28a",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/load.json",
+      "sha256": "36a9d03d8e61aa06e4fb4e2747fda6624d812a152051b343203b56dc9673bbff",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/metrics-before.json",
+      "sha256": "682ade6fd6f0db1d7c6c9b14e588b85003b38115fa5d5b45d9614163bcd5e5f7",
+      "bytes": 16516,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/metrics-loaded.json",
+      "sha256": "ff271ae912a934cc34790472deb75746bf288282553bc30eea399a6bbbb5d481",
+      "bytes": 16647,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/observations.json",
+      "sha256": "1c0c791488d9c98947ad178001de3dfb7d608329bbf5f62c0b6a20939dac1cd4",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-4/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-4/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-4/stdout.json",
+      "sha256": "1c0c791488d9c98947ad178001de3dfb7d608329bbf5f62c0b6a20939dac1cd4",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/budget-after.ndjson",
+      "sha256": "e497a6c78eb08475ffb8383bdb6d6332d80fb753955c89e8227df34ca22dc641",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-5/budget-before.ndjson",
+      "sha256": "65f68e86da50a4eefd8181d6adbaf9e771e668c069cb9c4968e9b8410393d303",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-5/client-container-after.json",
+      "sha256": "7974fffc9564bf9a4a8534f574f9c7556eecffcf86ad47b305df60e830114596",
+      "bytes": 9208,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/client-container-before.json",
+      "sha256": "918e56444befb445e032df24671c085b680e52b5d698e3958924b5b03b107a2b",
+      "bytes": 9404,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/client-cpu-stat.txt",
+      "sha256": "15735a8f23f4cea0f42c231d2e28caa662b106b7b1d437b32f5a930c86562f3e",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/client-memory-peak.txt",
+      "sha256": "b3380fc202891896c2d43d1861c6e7f10950acb2fbee7888edf478c0e4f95481",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/config.json",
+      "sha256": "991413786c9dd557c68748c0d301c0418e2ae802b4de2ce78ff4f5491eb86045",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/container-id.txt",
+      "sha256": "ddbd078a59da9eb2754f5b958e59783cf7ca92a07595e3a623aaa519b793912b",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/coordinator-detected-finish-at.txt",
+      "sha256": "698f9dbcf9cb6e896b20fb33aa0a168e11cd4c2ee2eea4b13cfe2639c67a2f48",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/decision-commit.txt",
+      "sha256": "4e23934996ff39609fdc3d01f54179de95b3001c0c1538859e85b74534533cd9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/execution-facts.json",
+      "sha256": "4e400cc1b29b39679b2cfdac0181447e79081e0063dd68488222bf06eee700db",
+      "bytes": 2900,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/job-finished-at.txt",
+      "sha256": "9b9654c5b48253049dd1075d301c2aa0ca1486d162d09f35d4de57934913b929",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/job-started-at.txt",
+      "sha256": "b0ceaa5980814546dd7b9bbb80a33ac5cc900a90ed5fbf90ff330072fd288531",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/metrics-after.json",
+      "sha256": "fd482eac3f57b6be8473c2fd4190308944ddaa91bad2a7b046fb198c741e9f02",
+      "bytes": 3777,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/metrics-before.json",
+      "sha256": "8785c34fbb4c26ad77740ad55f8d3662e0ad8f2b65bda11528544e431ca0350c",
+      "bytes": 3699,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/postgres.log",
+      "sha256": "97b8bbc6344144d2c7b6047a8c67ff7e21a19f142814d5e3f87a46efb51ecae4",
+      "bytes": 64,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/progress.ndjson",
+      "sha256": "82726a7276fc91894806bbfe101cc29ab61ffc39b566f1753329cfbb3143b57d",
+      "bytes": 12109,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-5/resources.ndjson",
+      "sha256": "fb0f6cb9138f333bb4471766da03a3a3f99af4e1c0c4ef41a394fd5aabbcfa49",
+      "bytes": 6735,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-5/run/artifact-checksums.json",
+      "sha256": "627f6b150e778f10f983a4dae25b7664c42693dab24410c273fcccfec96506a2",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/config.json",
+      "sha256": "991413786c9dd557c68748c0d301c0418e2ae802b4de2ce78ff4f5491eb86045",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/environment.json",
+      "sha256": "2d9306771162b93a2d5c3d4050a84214bb93a5ae36fdd4322bb1a6774ccd3671",
+      "bytes": 39974,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/execution-envelope.json",
+      "sha256": "a6877bfb8fa4057d131b309cbe08415bb311632c5a4d58c44d45721617838ac6",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/load.json",
+      "sha256": "ec753e025269124ec7c822ad7c4197272f35b8413fc60dacb61cc426fd8ec629",
+      "bytes": 2063,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/metrics-before.json",
+      "sha256": "95efaf1b13237793ab3931249534e49f61566da3710edf61565fde310abb19b6",
+      "bytes": 16520,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/metrics-loaded.json",
+      "sha256": "1b0abe0ae3aa997aefc0d2c2bc7c5bd6e7ca954f27fc36d58bc471531a72e892",
+      "bytes": 16651,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/observations.json",
+      "sha256": "fe087ce5d8993654e64f83527202494097d0446372f0ca03ef417b1ab40bf060",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-a-5/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-a-5/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-a-5/stdout.json",
+      "sha256": "fe087ce5d8993654e64f83527202494097d0446372f0ca03ef417b1ab40bf060",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/budget-after.ndjson",
+      "sha256": "c7d363aa8ff877a108a0aaca8aaa4fefa464743b33785161f7288343cfe6ce6a",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-1/budget-before.ndjson",
+      "sha256": "08d1434cbaf9f49643106a7565d9aef28505810cc880ae8e6c8a1b3f8486adfc",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-1/client-container-after.json",
+      "sha256": "a6fe2edf38b74dbe8e1bdced0f8cfe5b67226da4a91bc56beaaef7d11dad39ed",
+      "bytes": 9209,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/client-container-before.json",
+      "sha256": "96277bd731d0cbf21d9e8aed52aff8c35e764b928a1363a7ffcfae53b2f3292e",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/client-cpu-stat.txt",
+      "sha256": "587ba723aeb0c822a114a02e796392983d003b46b368dc7efaf5a078df59dea7",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/client-memory-peak.txt",
+      "sha256": "e9c6278dbc2faa0a18685b35c91111b31c6da6ed19c2e46c7ca53b8aeea1dade",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/config.json",
+      "sha256": "2e61c0fc32c11b27cb60cb5137ad8a102707167689344351800e77cc722e3748",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/container-id.txt",
+      "sha256": "639df6050950b30aaa4cb4f59e97e60e3f3a752ea6894d3798e572c68403251e",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/coordinator-detected-finish-at.txt",
+      "sha256": "38bd727e41c3ffbba7477ff60b8fda702ed26351af3297a921c859abe57b472d",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/decision-commit.txt",
+      "sha256": "2aad0ae79a3da860677001ca7c40f69385e9f8d4bede00b5c5272132d0fe5b4b",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/execution-facts.json",
+      "sha256": "ed81164ab502f58ed2e2103005436bd146586f53cdbfa2aa0f14f80fb9b45bbe",
+      "bytes": 2905,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/job-finished-at.txt",
+      "sha256": "5ccb10ff6e6d6ae236684f816ad5d7fc0ab28a7b46363dc0c8cb0b5d7607be25",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/job-started-at.txt",
+      "sha256": "682e4eefaead0c3cd09c27c41b1cf00afaa183932ede381fc494aa21cea32dc9",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/metrics-after.json",
+      "sha256": "6a50190180f9548fe2278226961e2c93e9ebf90fe8d9d0c3feb954b58aa598d7",
+      "bytes": 3757,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/metrics-before.json",
+      "sha256": "52919938cd33055edd018dfe8a086d5ea0e82e2c203e6d27e3ddf1fd5a4ae35b",
+      "bytes": 3684,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/progress.ndjson",
+      "sha256": "a63ba28225098c7b18c10509515add65c3f2d15e27a2b841c06abdfd4a0594d6",
+      "bytes": 12203,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-1/resources.ndjson",
+      "sha256": "3de90faef70670975f4a90e360c48b2856aba85ecf4695e54869c1a5c66dee16",
+      "bytes": 5593,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-1/run/artifact-checksums.json",
+      "sha256": "592b2bfc25513afa0dcbb69fc71faea5eee370e08c6d5e1beab09bf61654ded3",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/config.json",
+      "sha256": "2e61c0fc32c11b27cb60cb5137ad8a102707167689344351800e77cc722e3748",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/environment.json",
+      "sha256": "a3aa691a10e90d1ee98286368cace86b7e2e20694af37bb48ea690e99252ecd8",
+      "bytes": 39974,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/execution-envelope.json",
+      "sha256": "dbdbcfe3eb2be1aff35cee85fb3ec3ce2fad3613752f42d098f2534a7639a724",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/load.json",
+      "sha256": "e4e14f925a8ec02befa400cfb2329384beb3bbf5d8e28049ce5fea9734bea465",
+      "bytes": 2069,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/metrics-before.json",
+      "sha256": "74cc0fa48dc7899f44f0424426232d43f13070ec1d34087a434c12e76760bac5",
+      "bytes": 16399,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/metrics-loaded.json",
+      "sha256": "c0210fc522fcdadd20c3f7334cc526c2ea0004bc7da09864a156d3be75e91d7a",
+      "bytes": 16530,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/observations.json",
+      "sha256": "742fa8cd714b2fb7010e46e45b4c98cdd055a872da7fdc8fdce18d4669975745",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-1/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-1/stdout.json",
+      "sha256": "742fa8cd714b2fb7010e46e45b4c98cdd055a872da7fdc8fdce18d4669975745",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/budget-after.ndjson",
+      "sha256": "c4fa97a7b02e7e33a8f94d451e111787756035381d70d2a23639119c1e4cfc75",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-2/budget-before.ndjson",
+      "sha256": "febc1499a2f41ea51dbd3e9288ba7a7bcabeecb352a3f2032a9e4f5db155c3df",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-2/client-container-after.json",
+      "sha256": "670ff00e36c9bfbf4e1c739d14973acbf929782a8db715f2b44bfe966912e527",
+      "bytes": 9209,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/client-container-before.json",
+      "sha256": "99a75f1b02dbba9e0550a51ecd82cba9f60cf53220655dffa0a147f378d78c86",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/client-cpu-stat.txt",
+      "sha256": "c580e647f60e03ba142cc537c7f4344a5672022f316b6e13138168ba5c4b932a",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/client-memory-peak.txt",
+      "sha256": "0afc20cef7be7c8ad21cd6ea45970dc9c3d00663d89f149711c8144073829bb2",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/config.json",
+      "sha256": "dba2096e4d0d80c34269a4ced0ba8be953a32c5bcfbd892bd7a9cc51a1b22378",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/container-id.txt",
+      "sha256": "7dca50a3c71925ecea0e5e25074df2e18d273eaa7b62756875e709f22c04fd9c",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/coordinator-detected-finish-at.txt",
+      "sha256": "3349271fbb4bd7ab503a898cb3b206117594174771ee33082a61ad8e6bf154a7",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/decision-commit.txt",
+      "sha256": "2aad0ae79a3da860677001ca7c40f69385e9f8d4bede00b5c5272132d0fe5b4b",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/execution-facts.json",
+      "sha256": "1c24e40264e4f50a01fced878689a5e732281d1430649be4ab31505322867b66",
+      "bytes": 2904,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/job-finished-at.txt",
+      "sha256": "ee907b85f4bf2b7b790377508f416c23fda31b9386b2f6e63889b9b8d9164584",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/job-started-at.txt",
+      "sha256": "20852b0317e7c6f4a0f1add246286f65d5d1b0f3e9bbab7808893e72d2bcdf4c",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/metrics-after.json",
+      "sha256": "9cf38311ae0089a8df51a56570df15d1d8cc6fa1472d27307477338fa60162ec",
+      "bytes": 3761,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/metrics-before.json",
+      "sha256": "25992180f3a0583d1eb36b734354f9d7dd16d79ef7ebbce1f82fd052dc23bc3f",
+      "bytes": 3687,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/postgres.log",
+      "sha256": "fcd9fe5bd6f067c2aaa40cc80092a838af12152a893dd154330a26a2f005b3c7",
+      "bytes": 94,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/progress.ndjson",
+      "sha256": "179de987900794e7bee707a581609abbdd6295fdb370be3f03806718bc05a78f",
+      "bytes": 12104,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-2/resources.ndjson",
+      "sha256": "1f9acf6c7d5d2b2ff1c5cc76429b4a8d0f632d420dd097ff6aebab7b10449b84",
+      "bytes": 6689,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-2/run/artifact-checksums.json",
+      "sha256": "282a9f0822746e2347ea8cf37448dd00ded836d28e07c1d371194431799d0476",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/config.json",
+      "sha256": "dba2096e4d0d80c34269a4ced0ba8be953a32c5bcfbd892bd7a9cc51a1b22378",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/environment.json",
+      "sha256": "fc5048672ddb895df47966932270468faa495b4639f67362cdcd8025a2946326",
+      "bytes": 38737,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/execution-envelope.json",
+      "sha256": "809ae7cf93ac3659226cb4874297877255f2966cffe168e374764e20c8a43448",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/load.json",
+      "sha256": "43f6ca6df864afb32ae2bf2ed2bd843dbd7e386b521fe93e5d76d53a24d285c6",
+      "bytes": 2068,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/metrics-before.json",
+      "sha256": "e5ec01e709dc1b8190dd29e89e6c05a9ec169d1282498cfaf976f2c5d4a9e6ba",
+      "bytes": 16433,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/metrics-loaded.json",
+      "sha256": "1e70bcf1c1cfb509a171b1e80a49e7d52d0ed67e46ae30b1d57444a9df6aa2bd",
+      "bytes": 16564,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/observations.json",
+      "sha256": "83e53c25873eb2536535913893d33c8893110f99914987da39c4b6ead1ca17f6",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-2/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-2/stdout.json",
+      "sha256": "83e53c25873eb2536535913893d33c8893110f99914987da39c4b6ead1ca17f6",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/budget-after.ndjson",
+      "sha256": "25ca15541f95000645a6af45a3b9cd5470187751e5ae16e0688dc396391965ac",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-3/budget-before.ndjson",
+      "sha256": "480d4f501d1fc33d40c0fa4b71598e7455303f42434d4cba9b81c28a72aaa30c",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-3/client-container-after.json",
+      "sha256": "50cc48c18f3a1b8af49815fe2a1d39e1825823e0887141d9afdadeff9e721136",
+      "bytes": 9209,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/client-container-before.json",
+      "sha256": "c695147b42a7924f57400d0762aba5dea60976578da2d31e0a590d9b41a188b6",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/client-cpu-stat.txt",
+      "sha256": "f281c086dea3788f0228e00dd5344ebfb607f1cfaf5f442a15ed8ca004d52258",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/client-memory-peak.txt",
+      "sha256": "07f512931b73c2bdb712350fc53be998c0b231ad4912f2e6b184aba57ee474b2",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/config.json",
+      "sha256": "1540e88c4bba927b28a39c41aaf28db9e550ef3c620dc135fdfe8aa0b0588cb0",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/container-id.txt",
+      "sha256": "0c2c9e9ccaeaa9977594a02543a2a4164ade7b22fcb10ae8c8f1d024cf2fb413",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/coordinator-detected-finish-at.txt",
+      "sha256": "9f252534c54c6b543cfbb22193388d172f6214d40e6face21f2318273ed55a31",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/decision-commit.txt",
+      "sha256": "2aad0ae79a3da860677001ca7c40f69385e9f8d4bede00b5c5272132d0fe5b4b",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/execution-facts.json",
+      "sha256": "e8694b320770adfc8826afc3c456f9d6b1c1d29270abe6ae7438015b082dfd41",
+      "bytes": 2894,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/job-finished-at.txt",
+      "sha256": "eb49bad6dfb39977f8648fc33d693dd8cb82bc02ec641975d746e3d18758090b",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/job-started-at.txt",
+      "sha256": "365c7939b328cb11b3f9d3aef3f0f5e8cc4df24d8d7f8cf1e9504a9fe91bd591",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/metrics-after.json",
+      "sha256": "b36c895b977f1ddf33469f2ee8a40f238b0a8e87095446c49c9973535ccbb3b7",
+      "bytes": 3765,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/metrics-before.json",
+      "sha256": "842b6ff3d3ffaa4d333746f9b71042f18cfb893dd350f8b0008acec5c8c62944",
+      "bytes": 3697,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/progress.ndjson",
+      "sha256": "8ef8a9ea39fddd1fcfd3b34083f748e614ca2eefc2c4ed0f435a6e9da7fa1240",
+      "bytes": 12002,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-3/resources.ndjson",
+      "sha256": "f181c07bc9c5a29b2bd2f20fa94ab4c82fe79db6271f535f5b38917dd8f8663e",
+      "bytes": 5603,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-3/run/artifact-checksums.json",
+      "sha256": "0ee712733c58bf0be037fd142db911564766d012dc53ce319b3a4cf62e01f9dc",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/config.json",
+      "sha256": "1540e88c4bba927b28a39c41aaf28db9e550ef3c620dc135fdfe8aa0b0588cb0",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/environment.json",
+      "sha256": "810d2221d171eef9f14be57424a01ad1acf79597751d1ff42388916cfa84f6c8",
+      "bytes": 38737,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/execution-envelope.json",
+      "sha256": "82b98444e7bdd3fa194c00e4bc378b2fe2587b303aed6303eede9065504e87b1",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/load.json",
+      "sha256": "f2ebe457fc5aa2faa6e6ec90e19564f15c39936813f0352ffc5e2b1da3460f4a",
+      "bytes": 2058,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/metrics-before.json",
+      "sha256": "a093849e339ea38dd2b8366d2723eacf2c4da7ee507c2cf9537deead01cfda4f",
+      "bytes": 16462,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/metrics-loaded.json",
+      "sha256": "5e71d76e035f02c395da6391dfef1388fca82f9b72e76be5ca1ad4729493f5e2",
+      "bytes": 16593,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/observations.json",
+      "sha256": "69fc688d6236171184c239418102e824cb664aab383893dcefed2652a9cc2d6d",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-3/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-3/stdout.json",
+      "sha256": "69fc688d6236171184c239418102e824cb664aab383893dcefed2652a9cc2d6d",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/budget-after.ndjson",
+      "sha256": "65f68e86da50a4eefd8181d6adbaf9e771e668c069cb9c4968e9b8410393d303",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-4/budget-before.ndjson",
+      "sha256": "06cfd4becaec1d2247d7af1013266735b3b53bb6871e1b8397f37bdbad0c271a",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-4/client-container-after.json",
+      "sha256": "e8e93d8ab3f203d7c8f36eea66c92d9f0d109823708d0b3a0701e875578bf3c6",
+      "bytes": 9209,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/client-container-before.json",
+      "sha256": "529860dbc646de70a4c4bab7872b9e6e10dc65b17f9fd96d9ca772db183aae48",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/client-cpu-stat.txt",
+      "sha256": "c8cd7378f4466c500163f732174a22ddf0c08a33b86108f6ca65255cd6587a1b",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/client-memory-peak.txt",
+      "sha256": "3383a1889b526b0690f7b86562442278d1782f2709e9302701d456b89cd6c34e",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/config.json",
+      "sha256": "2b4843199836245a6bea1c43a7524d5e60f07ead35c43b2b160299a777db31f3",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/container-id.txt",
+      "sha256": "108c0b672be5e578f82da448ac6084ba608dea89cd08b3e0a262fab5ee1e88ad",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/coordinator-detected-finish-at.txt",
+      "sha256": "05043844b6c0ec3e41952fd6d6f498ca7ee13667bfb15a66698e84c2cc8233c2",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/decision-commit.txt",
+      "sha256": "4e23934996ff39609fdc3d01f54179de95b3001c0c1538859e85b74534533cd9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/execution-facts.json",
+      "sha256": "50abfbe72133d624bf0d00e73e721a85050a5de439ea7d7afe37ed6be4acad9f",
+      "bytes": 2897,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/job-finished-at.txt",
+      "sha256": "52ba68771b0d735a4a2ded5ef553972414f88fdef2fbfff84bc1a556fa2f4402",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/job-started-at.txt",
+      "sha256": "868018bb10acbb488fcac27ae0ace46aeed38e09af9ef97cca9d6ac834fa1dc1",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/metrics-after.json",
+      "sha256": "65d760c6797a22b4792290361db1dc6992afa028d1df2157ae5322079b65e70d",
+      "bytes": 3771,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/metrics-before.json",
+      "sha256": "45d3452fae5adc5d1c4ad7763e50d2ede234474cb09e1b0ecd258007d54bdbca",
+      "bytes": 3697,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/progress.ndjson",
+      "sha256": "8df23292514ab5c8675401ca9967603b5b17b15554ac4fc63108c91b97bea772",
+      "bytes": 12250,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-4/resources.ndjson",
+      "sha256": "d7dc988159ebb90cb3ef1b8ba7e22d30fe333143dd2435aa2ee7e36957e5847f",
+      "bytes": 5607,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-4/run/artifact-checksums.json",
+      "sha256": "d44c4220b43dbf4728b6cf9a0cd94b916826af8d7572676946115daa8a8961fd",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/config.json",
+      "sha256": "2b4843199836245a6bea1c43a7524d5e60f07ead35c43b2b160299a777db31f3",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/environment.json",
+      "sha256": "11b58350fcd73f00e7c7b514e36fc98e162f9df70f9738397021fa8c1afbc03e",
+      "bytes": 39974,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/execution-envelope.json",
+      "sha256": "f2eb3e821de15110c267b0037cc1baab182f2e9f333d59dc8ffafa32d2e77950",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/load.json",
+      "sha256": "31a71c1fe7b02bb87de8a819257c477198adb3eb17a1fbce50bd58f88f792bdb",
+      "bytes": 2061,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/metrics-before.json",
+      "sha256": "e43189c6bef8e723b8446dbabed35f7d412a561770a38aa8decdfa8041fa2c6b",
+      "bytes": 16516,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/metrics-loaded.json",
+      "sha256": "0f4d0921db362cb636cfa20bdebe9a3a4e8b1ba81854b99e184458e0da20bc80",
+      "bytes": 16739,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/observations.json",
+      "sha256": "da325c9934313155f0d4cfd72288c75d994c60fd3c6af871e87aafc050b93340",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-4/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-4/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-4/stdout.json",
+      "sha256": "da325c9934313155f0d4cfd72288c75d994c60fd3c6af871e87aafc050b93340",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/admission.json",
+      "sha256": "718923cea67d5c22adf11d17327306c272f23e0314ebbc6315d033346d550589",
+      "bytes": 805,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/budget-after.ndjson",
+      "sha256": "0d040ffdab9560a3f07a3d7594215aa34e9193f992e55e721a60bda43d3bd0ef",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-5/budget-before.ndjson",
+      "sha256": "e497a6c78eb08475ffb8383bdb6d6332d80fb753955c89e8227df34ca22dc641",
+      "bytes": 165,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-5/client-container-after.json",
+      "sha256": "98b22af61781dfb557f736596865e4c4ef032013e7a789a039db1bd2abf13ed8",
+      "bytes": 9209,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/client-container-before.json",
+      "sha256": "334717a9e8056d5d0daadf274f9f9b863c2d2fc6ad5a9bbb40f60008c753aa4e",
+      "bytes": 9405,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/client-cpu-stat.txt",
+      "sha256": "6cfa7c443a0d776f14afa60c4bfb8de2b67c46bda37e23875fe8300d762ad2e7",
+      "bytes": 168,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/client-memory-events.txt",
+      "sha256": "28fe05a1d7b8467a03fb54454f7b6a130fab752864d0454f5f6c4a4b6ce307f2",
+      "bytes": 53,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/client-memory-peak.txt",
+      "sha256": "92f0e3d8ef23e189bf3a152358ecc83f5e07f6fd4787f4cc57b142397590a0d6",
+      "bytes": 10,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/config.json",
+      "sha256": "2d8698f0f303e1c81a330f51f0c6c050cd61b0e107f185b252341cefe08c4839",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/container-id.txt",
+      "sha256": "70fee64b5cd84921898699a900593d96ac7491abe6ce8f88f8c628fabfe1e1f3",
+      "bytes": 65,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/coordinator-detected-finish-at.txt",
+      "sha256": "2b693deb64809b0e8477642d623a23447afaf65a31758109f4c0a1c5c2f09bc9",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/decision-commit.txt",
+      "sha256": "4e23934996ff39609fdc3d01f54179de95b3001c0c1538859e85b74534533cd9",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/docker-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/docker-stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/execution-facts.json",
+      "sha256": "abe769b1c2d9af59737ae73cfde71b2a552b49cd9e5440e95b5348630e8066df",
+      "bytes": 2905,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/init.json",
+      "sha256": "51abdcd817c736f9bdb807fc638db6be8baa5482fa51f51bd15179263e45cab4",
+      "bytes": 26,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/job-finished-at.txt",
+      "sha256": "5eacd8b0af379f1541cf0592a1b05c8a800ca3886d5e1962eb4d494b3bf5132f",
+      "bytes": 31,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/job-started-at.txt",
+      "sha256": "73857151b9325c5c36cdc53f2ab795b4aba21227c2b97b7ce909b4a3c900ec71",
+      "bytes": 28,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/metrics-after.json",
+      "sha256": "786899e9cea8b56e5c9efd5bcc722e28d00ccf7ca8035ae300fbd17e4417473f",
+      "bytes": 3773,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/metrics-before.json",
+      "sha256": "87e94138291c3a7a4d2625b566e86bc7a454054a0154f4a6419bbad51cf62bf2",
+      "bytes": 3700,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/orchestration/budget.sh",
+      "sha256": "2a4215ae29d810a425072e5d1b97af7a004fc63aa52b823b78c0f03784ec712f",
+      "bytes": 867,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/orchestration/decision.md",
+      "sha256": "704d980e50b22adefb7eb9e333a277c0c54deacf26cb1584ec2d35c362a17553",
+      "bytes": 6051,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/orchestration/trial.py",
+      "sha256": "0933d99134a04971e0df933b01d0de16492e20959a4f5ab1077942bc716bd6dd",
+      "bytes": 11399,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/owned-backends.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/postgres-container-after.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/postgres-container-before.json",
+      "sha256": "3a810c73ee351aa9d581228f22f11ff08d1484d8b80e7f5a9884b2c5aba69a04",
+      "bytes": 8976,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/postgres.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/progress.ndjson",
+      "sha256": "82c251167417e9c2f647284a2543d9786eae34439474d79e8fb9d88620158005",
+      "bytes": 12144,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-5/resources.ndjson",
+      "sha256": "ead26cc2e27c0a9ac8e7dd698905b156583454353bf31f72f2135789ea41fa87",
+      "bytes": 5613,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-5/run/artifact-checksums.json",
+      "sha256": "1aa61e953c76afa9f17e576ce2dc9c1391cd8de1ed18ad91d4e7cc15030bfdd7",
+      "bytes": 618,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/config.json",
+      "sha256": "2d8698f0f303e1c81a330f51f0c6c050cd61b0e107f185b252341cefe08c4839",
+      "bytes": 1979,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/environment.json",
+      "sha256": "3214811cc6d971e46b2efdb1fa485490c2acfc0c25fbae91afeab2c421efa26f",
+      "bytes": 39784,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/execution-envelope.json",
+      "sha256": "d5ef9a590012d39b86b40b450e513826d19d01f5389ef8d11dbe3abf977e5592",
+      "bytes": 1181,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/exploratory-budgets.json",
+      "sha256": "18ad5785a4452cb478f3e0ad8b251756aacd77b1e229fd1911d707b792e3eea4",
+      "bytes": 874,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/load.json",
+      "sha256": "16ae1d996a233e5b277677ee3eda0cbeff3cd34175154d62cdbf26fedd18b9a4",
+      "bytes": 2069,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/metrics-before.json",
+      "sha256": "8c8bb8f7ba52b28b3f2c7d02207a40d5c8984c002c0ddf74c11990467e6c4e99",
+      "bytes": 16517,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/metrics-loaded.json",
+      "sha256": "9da8e9d27c8d97e329106acc8f23f32d839bde6af18e666fb04ee9cb692dd245",
+      "bytes": 16650,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/observations.json",
+      "sha256": "1d9d2b744b16d16a19024a3b6df0ae429ebc3c3aee4ffb4c4d032d409400b768",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/oracle.json",
+      "sha256": "e8e273cc41dc7048050e72ae48bdfa0fb3bef3836a6118df0f59f91d17934b24",
+      "bytes": 3111,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/property-values.json",
+      "sha256": "d77ef6e59688c21bc80435f5f744c66e68f10dfefdfa65da6ee6a3c1b629b35f",
+      "bytes": 197,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/sample-summary.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/run/samples.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "application/x-ndjson"
+    },
+    {
+      "path": "r3-wal-b-5/shell-exit-code.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/source-commit.txt",
+      "sha256": "8832c1755b739b6e162825b5d85a7bf4dcd5849653b0bdc74fc97cd7bd30fdeb",
+      "bytes": 41,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/source-manifest.json",
+      "sha256": "6214eed2616670c697fa0a90b7a3c3257c116faaeca0591b32cab58c5a4aa3ca",
+      "bytes": 120622,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "r3-wal-b-5/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "mediaType": "text/plain"
+    },
+    {
+      "path": "r3-wal-b-5/stdout.json",
+      "sha256": "1d9d2b744b16d16a19024a3b6df0ae429ebc3c3aee4ffb4c4d032d409400b768",
+      "bytes": 1753,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "terminal-observations.json",
+      "sha256": "db68242fcdcf85d0352e62b43a8c8952fbba731f46c972ffd762e67f1a3e7e51",
+      "bytes": 8653,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "measurement-summary.json",
+      "sha256": "50b3e8d8a0d5da7534a871ca8368472f0f2c8893831ce22eb300195384297c92",
+      "bytes": 9642,
+      "mediaType": "application/json"
+    },
+    {
+      "path": "collector.py",
+      "sha256": "b52f9dbc375d8e1618be8b993f200454b51efbf4ff4d988c09053fc56df838f9",
+      "bytes": 8721,
+      "mediaType": "text/plain"
+    }
+  ],
+  "observationsArtifact": "terminal-observations.json",
+  "errors": [],
+  "limitations": [
+    "Ten reduced admissions are one comparison, not full hospital qualification.",
+    "Global cgroup monitoring started during the first control; its early interval is unavailable. Per-trial Docker sampling and SQL start/end counters cover every trial.",
+    "Small-data checkpoint effects cannot establish full working-set RAM sensitivity or a full-scale timing improvement.",
+    "All records are synthetic metadata; geometry, engineering authority and production adoption remain unqualified.",
+    "Cluster WAL/checkpoint counters may include private-cluster background maintenance; per-database I/O and raw activity are retained.",
+    "Completion and source-body fidelity do not qualify broad interactive tail latency or concurrent offered-load capacity."
+  ],
+  "decisionImplications": [
+    "Preserve both original failed two-hour full trials and all new attempts.",
+    "Interpret configuration/resource effects only at their executed scale and source.",
+    "Further full history, contention, IFC/kernel and authority qualification remains necessary."
+  ]
+}

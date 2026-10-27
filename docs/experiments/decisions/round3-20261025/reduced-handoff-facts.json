@@ -1,0 +1,14 @@
+{
+  "executionStatus": "completed",
+  "runnerPassed": true,
+  "metadataVerified": true,
+  "completeBoundedStage": true,
+  "outerWaitExitCode": 0,
+  "containerExitCode": 0,
+  "clientOomKilled": false,
+  "budgetStopObserved": false,
+  "inspectionStartedAt": "2026-10-25T19:12:20.215655Z",
+  "inspectionFinishedAt": "2026-10-25T19:12:25.750619Z",
+  "admissionSource": "d3160be232eabbb99e371b427c8bfb422b41d490",
+  "runnerSource": "d3160be232eabbb99e371b427c8bfb422b41d490"
+}

@@ -64,6 +64,12 @@ Deliver verified mirrors before collaboration between installations. Preserve st
 
 See [Independent project mirrors](project-mirrors.md) for the replication boundaries, delivery order, and two-installation acceptance scenarios. These are architecture requirements for future implementation.
 
+## Data model research
+
+The [versioned BIM data model research](research/versioned-bim-data-model.md) compares IFC, existing authoring systems, and versioned model platforms. It proposes qualification experiments for identity, relationship semantics, regeneration, concurrency, and storage before the persistence schema is adopted. Its recommendations remain proposals.
+
+The [current design candidate](design/versioned-model-candidate.md) records the suggestion being tested. The [qualification program](experiments/README.md) tracks experiment definitions, immutable run evidence, parallel execution streams, and the synthetic 200,000 m² hospital database benchmark. These records do not establish that the design is implemented or qualified.
+
 ## First vertical slice
 
 The first feature should be read-only: import a small IFC fixture, expose entities and relationships, create an issue-linked branch, compute a semantic diff, run a validator, and open a draft PR containing the evidence. Model mutation follows only after this slice is reviewable.
