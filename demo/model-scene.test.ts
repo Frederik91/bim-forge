@@ -548,7 +548,7 @@ test('comparison ghost picking and highlights retain wireframes and removed evid
   const surface = Vector3.Project(modelPoint(.7, 3.3, 1), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
   assert.equal(viewer.objectAt(surface.x, surface.y), 'plant-test', 'removed evidence picks the original stable ID');
   for (const mode of ['basic', 'realistic'] satisfies ('basic' | 'realistic')[]) {
-    viewer.setMode(mode); viewer.hover('plant-test'); viewer.scene.render();
+    viewer.select(''); viewer.setMode(mode); viewer.hover('plant-test'); viewer.scene.render();
     assert.ok(removed.every(mesh => mesh.renderOutline && !mesh.renderOverlay && mesh.outlineColor.toHexString().toLowerCase() === HOVER_COLOR));
     viewer.select('plant-test'); viewer.hover(null); viewer.scene.render();
     assert.ok(removed.every(mesh => mesh.renderOutline && !mesh.renderOverlay && mesh.outlineColor.toHexString().toLowerCase() === SELECTION_COLOR));

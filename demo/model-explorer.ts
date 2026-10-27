@@ -39,7 +39,7 @@ export function modelHierarchy(graph: ModelGraph, name: string): ModelNode {
 
 export function elementProperties(graph: ModelGraph, id: string): { name: string; rows: [string, string][] } | null {
   const entity = graph.entities.find(item => item.id === id); if (!entity) return null;
-  const rows: [string, string][] = [['Identity', entity.id], ['Type', entity.type]];
+  const rows: [string, string][] = [['Identity', entity.id], ['Type', entity.type], ['Units', graph.units]];
   const level = entityLevel(graph, entity); const room = entitySpace(graph, entity);
   if (level && entity.type !== 'Level') rows.push(['Level', level.name]);
   if (room && entity.type !== 'Space') rows.push(['Room', room.name]);
