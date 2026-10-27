@@ -1,0 +1,10 @@
+{
+  "nodes": [
+    { "id": "wall", "kind": "hosted", "hostId": "level-ground", "offsetMm": 200, "ceilingMm": 6000, "attachment": { "kind": "datum" } },
+    { "id": "opening", "kind": "hosted", "hostId": "wall", "offsetMm": 1000, "ceilingMm": 6000, "attachment": { "kind": "datum" } },
+    { "id": "handle", "kind": "hosted", "hostId": "opening", "offsetMm": 900, "ceilingMm": 6000, "attachment": { "kind": "datum" } },
+    { "id": "clearance", "kind": "dimension", "fromId": "opening", "toId": "level-upper" },
+    { "id": "upper-equipment", "kind": "hosted", "hostId": "level-upper", "offsetMm": 50, "ceilingMm": 6000, "attachment": { "kind": "datum" } }
+  ],
+  "connectivity": [["wall", "opening"], ["opening", "handle"], ["handle", "wall"]]
+}

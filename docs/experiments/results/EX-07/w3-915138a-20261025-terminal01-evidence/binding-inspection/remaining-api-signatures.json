@@ -1,0 +1,64 @@
+{
+  "TopoDS": {
+    "type": "<class 'module'>",
+    "methods": {
+      "Face_s": "ABSENT",
+      "Face": "Face(*args, **kwargs)\nOverloaded function.\n\n1. Face(theShape: OCP.OCP.TopoDS.TopoDS_Shape) -> OCP.OCP.TopoDS.TopoDS_Face\n\nCasts shape theShape to the more specialized return type, Face.\n\n2. Face(theShape: OCP.OCP.TopoDS.TopoDS_Shape) -> OCP.OCP.TopoDS.TopoDS_Face\n\nCasts shape theShape to the more specialized return type, Face.\n"
+    }
+  },
+  "BRepBndLib": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "Add_s": "Add_s(S: OCP.OCP.TopoDS.TopoDS_Shape, B: OCP.OCP.Bnd.Bnd_Box, useTriangulation: bool = True) -> None\n\nAdds the shape S to the bounding box B. More precisely are successively added to B: - each face of S; the triangulation of the face is used if it exists, - then each edge of S which does not belong to a face, the polygon of the edge is used if it exists - and last each vertex of S which does not belong to an edge. After each elementary operation, the bounding box B is enlarged by the tolerance value of the relative sub-shape. When working with the triangulation of a face this value of enlargement is the sum of the triangulation deflection and the face tolerance. When working with the polygon of an edge this value of enlargement is the sum of the polygon deflection and the edge tolerance. Warning - This algorithm is time consuming if triangulation has not been inserted inside the data structure of the shape S. - The resulting bounding box may be somewhat larger than the object.\n",
+      "Add": "ABSENT"
+    }
+  },
+  "BRepGProp": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "SurfaceProperties_s": "SurfaceProperties_s(*args, **kwargs)\nOverloaded function.\n\n1. SurfaceProperties_s(S: OCP.OCP.TopoDS.TopoDS_Shape, SProps: OCP.OCP.GProp.GProp_GProps, SkipShared: bool = False, UseTriangulation: bool = False) -> None\n\nComputes the surface global properties of the shape S, i.e. the global properties induced by each face of the shape S, and brings them together with the global properties still retained by the framework SProps. If the current system of SProps was empty, its global properties become equal to the surface global properties of S. For this computation, no surface density is attached to the faces. Consequently, the added mass corresponds to the sum of the areas of the faces of S. The density of the component systems, i.e. that of each component of the current system of SProps, and that of S which is considered to be equal to 1, must be coherent. Note that this coherence cannot be checked. You are advised to use a framework for each different value of density, and then to bring these frameworks together into a global one. The point relative to which the inertia of the system is computed is the reference point of the framework SProps. Note : if your programming ensures that the framework SProps retains only surface global properties, brought together, for example, by the function SurfaceProperties, for objects the density of which is equal to 1 (or is not defined), the function Mass will return the total area of faces of the system analysed by SProps. Warning No check is performed to verify that the shape S retains truly surface properties. If S is simply a vertex, an edge or a wire, it is not considered to present any additional global properties. SkipShared is a special flag, which allows taking in calculation shared topological entities or not. For ex., if SkipShared = True, faces, shared by two or more shells, are taken into calculation only once. UseTriangulation is a special flag, which defines preferable source of geometry data. If UseTriangulation = false, exact geometry objects (surfaces) are used, otherwise face triangulations are used first.\n\n2. SurfaceProperties_s(S: OCP.OCP.TopoDS.TopoDS_Shape, SProps: OCP.OCP.GProp.GProp_GProps, Eps: float, SkipShared: bool = False) -> float\n\nUpdates <SProps> with the shape <S>, that contains its principal properties. The surface properties of all the faces in <S> are computed. Adaptive 2D Gauss integration is used. Parameter Eps sets maximal relative error of computed mass (area) for each face. Error is calculated as std::abs((M(i+1)-M(i))/M(i+1)), M(i+1) and M(i) are values for two successive steps of adaptive integration. Method returns estimation of relative error reached for whole shape. WARNING: if Eps > 0.001 algorithm performs non-adaptive integration. SkipShared is a special flag, which allows taking in calculation shared topological entities or not For ex., if SkipShared = True, faces, shared by two or more shells, are taken into calculation only once.\n",
+      "SurfaceProperties": "ABSENT"
+    }
+  },
+  "BRepTools": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "Write_s": "Write_s(*args, **kwargs)\nOverloaded function.\n\n1. Write_s(theShape: OCP.OCP.TopoDS.TopoDS_Shape, theStream: io.BytesIO, theProgress: OCP.OCP.Message.Message_ProgressRange = <OCP.OCP.Message.Message_ProgressRange object at 0x7ac9305e98b0>) -> None\n\nWrites the shape to the stream in an ASCII format TopTools_FormatVersion_VERSION_1. This alias writes shape with triangulation data.\n\n2. Write_s(theShape: OCP.OCP.TopoDS.TopoDS_Shape, theStream: io.BytesIO, theWithTriangles: bool, theWithNormals: bool, theVersion: OCP.OCP.TopTools.TopTools_FormatVersion, theProgress: OCP.OCP.Message.Message_ProgressRange = <OCP.OCP.Message.Message_ProgressRange object at 0x7ac9313cdfb0>) -> None\n\nWrites the shape to the stream in an ASCII format of specified version.\n\n3. Write_s(theShape: OCP.OCP.TopoDS.TopoDS_Shape, theFile: str, theProgress: OCP.OCP.Message.Message_ProgressRange = <OCP.OCP.Message.Message_ProgressRange object at 0x7ac93051c970>) -> bool\n\nWrites the shape to the file in an ASCII format TopTools_FormatVersion_VERSION_1. This alias writes shape with triangulation data.\n\n4. Write_s(theShape: OCP.OCP.TopoDS.TopoDS_Shape, theFile: str, theWithTriangles: bool, theWithNormals: bool, theVersion: OCP.OCP.TopTools.TopTools_FormatVersion, theProgress: OCP.OCP.Message.Message_ProgressRange = <OCP.OCP.Message.Message_ProgressRange object at 0x7ac92f540870>) -> bool\n\nWrites the shape to the file in an ASCII format of specified version.\n",
+      "Write": "ABSENT"
+    }
+  },
+  "surface": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "__init__": "__init__(*args, **kwargs)\nOverloaded function.\n\n1. __init__(self: OCP.OCP.BRepAdaptor.BRepAdaptor_Surface) -> None\n\n2. __init__(self: OCP.OCP.BRepAdaptor.BRepAdaptor_Surface, F: OCP.OCP.TopoDS.TopoDS_Face, R: bool = True) -> None\n",
+      "GetType": "GetType(self: OCP.OCP.GeomAdaptor.GeomAdaptor_TransformedSurface) -> OCP.OCP.GeomAbs.GeomAbs_SurfaceType\n",
+      "Plane": "Plane(self: OCP.OCP.GeomAdaptor.GeomAdaptor_TransformedSurface) -> OCP.OCP.gp.gp_Pln\n"
+    }
+  },
+  "classifier": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "State": "State(self: OCP.OCP.BRepClass.BRepClass_FClassifier) -> OCP.OCP.TopAbs.TopAbs_State\n\nReturns the result of the classification.\n"
+    }
+  },
+  "builder": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "MakeCompound": "MakeCompound(*args, **kwargs)\nOverloaded function.\n\n1. MakeCompound(self: OCP.OCP.TopoDS.TopoDS_Builder, C: OCP.OCP.TopoDS.TopoDS_Compound) -> None\n\nMake an empty Compound.\n\n2. MakeCompound(self: OCP.OCP.TopoDS.TopoDS_Builder, C: OCP.OCP.TopoDS.TopoDS_Compound) -> None\n\nMake an empty Compound.\n",
+      "Add": "Add(self: OCP.OCP.TopoDS.TopoDS_Builder, S: OCP.OCP.TopoDS.TopoDS_Shape, C: OCP.OCP.TopoDS.TopoDS_Shape) -> None\n\nAdd the Shape C in the Shape S. Exceptions - TopoDS_FrozenShape if S is not free and cannot be modified. - TopoDS__UnCompatibleShapes if S and C are not compatible.\n"
+    }
+  },
+  "bounds": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "Get": "Get(*args, **kwargs)\nOverloaded function.\n\n1. Get(self: OCP.OCP.Bnd.Bnd_Box) -> Bnd_Box::Limits\n\nReturns the bounds of this bounding box as a Limits structure. The gap is included. If this bounding box is infinite (i.e. \"open\"), returned values may be equal to +/- Precision::Infinite(). If the box is void, returns raw internal values. Can be used with C++17 structured bindings:\n\n2. Get(self: OCP.OCP.Bnd.Bnd_Box) -> tuple[float, float, float, float, float, float]\n\nReturns the bounds of this bounding box. The gap is included. If this bounding box is infinite (i.e. \"open\"), returned values may be equal to +/- Precision::Infinite(). Standard_ConstructionError exception will be thrown if the box is void. if IsVoid()\n"
+    }
+  },
+  "properties": {
+    "type": "<class 'pybind11_builtins.pybind11_type'>",
+    "methods": {
+      "Mass": "Mass(self: OCP.OCP.GProp.GProp_GProps) -> float\n\nReturns the mass of the current system.\n",
+      "CentreOfMass": "CentreOfMass(self: OCP.OCP.GProp.GProp_GProps) -> OCP.OCP.gp.gp_Pnt\n\nReturns the centre of mass of the current system. With a uniform gravitational field this is also the centre of gravity. The coordinates returned for the centre of mass are expressed in the absolute Cartesian coordinate system.\n"
+    }
+  }
+}
