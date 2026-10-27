@@ -152,7 +152,7 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   }
   if (evidencePins?.length && !evidence) throw new Error('Stored request is missing its frozen project evidence.');
   if (evidence && (evidence.projectId !== value.projectId || evidence.revisionId !== r.baseRevisionId
-      || !sameDesignTarget(evidence.target, target?.target ?? { kind: 'main' })
+      || !isDeepStrictEqual(evidence.target, target?.target ?? { kind: 'main' })
       || !isDeepStrictEqual(evidence.pins, evidencePins ?? []))) throw new Error('Stored project evidence differs from its request binding.');
   const scopedRequest = Object.hasOwn(r, 'scope') ? parseScopedRequest(r.scope) : undefined;
   const scope = Object.hasOwn(value, 'scope') ? parseFrozenModelScope(value.scope) : undefined;
@@ -474,7 +474,7 @@ export class ChangeRequests {
       this.#appendMessage(ticket.id, { kind: 'user', id: version.request.requestId, sequence, at: version.createdAt,
         requestId: version.request.requestId, baseRevisionId: version.request.baseRevisionId, text: version.request.instruction,
         sources: version.request.sources ?? [], visual: version.request.conversationVisual ?? null,
-        ...(version.request.evidencePins ? { evidencePins: version.request.evidencePins } : {}) });
+        ...(version.request.evidencePins ? { evidencePins: [...version.request.evidencePins] } : {}) });
       if (version.result) this.#assistantMessage(version);
       if (version.decisionId && version.decisionAction) this.#decisionMessage(version);
     }
@@ -845,7 +845,7 @@ export class ChangeRequests {
         state: 'queued', attempts: 0, result: null, error: null, decisionId: null, decisionAction: null, updatedAt: Date.now() }, { stage: 'queued', message: 'New revision queued. Earlier attempts remain in request history.' });
       this.#put(next);
       this.#appendMessage(id, { kind: 'user', id: request.requestId, sequence: this.#messages(id).length + 1, at: Date.now(), requestId: request.requestId, baseRevisionId: request.baseRevisionId, text: request.instruction, sources: request.sources ?? [], visual: request.conversationVisual ?? null,
-        ...(request.evidencePins ? { evidencePins: request.evidencePins } : {}) });
+        ...(request.evidencePins ? { evidencePins: [...request.evidencePins] } : {}) });
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
     });
     setImmediate(() => this.#pump());

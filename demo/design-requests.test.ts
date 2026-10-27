@@ -114,6 +114,7 @@ async function claims(queue: ChangeRequests, repository: RoomRepository) {
 const evidenceWorker: ModelWorker = {
   identity: { provider: 'test', model: 'evidence-wall-fixture' },
   async run(session) {
+    assert.ok(session.input && typeof session.input === 'object' && 'sourceEvidence' in session.input);
     const context = session.input.sourceEvidence;
     assert.ok(context && typeof context === 'object' && 'readSet' in context && 'entries' in context);
     const readSet = parseEvidenceReadSet(context.readSet);
