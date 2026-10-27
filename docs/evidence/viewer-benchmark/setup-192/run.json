@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "issue": 192,
+  "purpose": "setup-smoke",
+  "qualified": false,
+  "source": "91346cd0434982ec72bf473161db10240338feee",
+  "dirty": false,
+  "sourceFiles": [
+    {
+      "path": "benchmarks/viewer/README.md",
+      "sha256": "82598e1a059b05456b3cc0fe11958e6d3f4510dfdf33338828ea6d1623f8a0c0"
+    },
+    {
+      "path": "benchmarks/viewer/adapters/babylon.ts",
+      "sha256": "4ed2703e24bf34b23b6f6ca07d9019f9e4cb4badbb2f86d316fe9e7bceb0464b"
+    },
+    {
+      "path": "benchmarks/viewer/adapters/fragments.ts",
+      "sha256": "9383b4593e11f7db90c93e564a21742a19b80ba31f3fd9d8ac7801ea9c6b50c2"
+    },
+    {
+      "path": "benchmarks/viewer/browser.ts",
+      "sha256": "83b6d6e825bfa7a836b8ab9859342e34ce502221c6b739367e0647277184d46f"
+    },
+    {
+      "path": "benchmarks/viewer/contract.test.ts",
+      "sha256": "90100f4784a6c95861cc2aad6ec50f896dffd5834951eb13985f969f34f28bc2"
+    },
+    {
+      "path": "benchmarks/viewer/contract.ts",
+      "sha256": "198112a0d90eaf582ab76673695737403373c9d006a991aaf79d2b5d2a0220cb"
+    },
+    {
+      "path": "benchmarks/viewer/dataset-requirements.md",
+      "sha256": "79f993edeaccfe2ca3f19a2acb4cecafd1216f1eae4331c3b61b29f22a529362"
+    },
+    {
+      "path": "benchmarks/viewer/fixtures.ts",
+      "sha256": "e0a8111017015c612ed1ef7a6c451c2a3cac94857d80c2e76b7531140bba90b5"
+    },
+    {
+      "path": "benchmarks/viewer/metrics.ts",
+      "sha256": "e880269e8a0ae7cfa02bb4acd81eff9dbb3dd1bfb33c7c6ebceb1cb802645fe6"
+    },
+    {
+      "path": "benchmarks/viewer/profile.json",
+      "sha256": "32bd711b5d0a978519cc5d41210d1c27470aa60664bcae9de1d4b1ec389ac33e"
+    },
+    {
+      "path": "benchmarks/viewer/runner.ts",
+      "sha256": "7344d8b97606b2eaa357450cc8894a7ea89fa76bd4743a0ef162a66425b6cfa1"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "86ab745f598d869f97f409f90564ee97e8fdaccd521419f4eefeb39c97c515ad"
+    },
+    {
+      "path": "package.json",
+      "sha256": "a3dc1bdf6bbcfdbe7676a8d11083793cd2040a615737d46cdb0b9f3d3f345781"
+    },
+    {
+      "path": "scripts/validate-typescript.ts",
+      "sha256": "24af443c907fe9c4c2466d1913ff31658d586421d3e7436de8ac62c5c166d3c5"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "dd7b51037fe7a7ceeb3e6cae944558db88d2c05a6987746876bf531aece683ce"
+    }
+  ],
+  "dataset": {
+    "id": "viewer-smoke-192",
+    "sha256": "bca0ac31fe67841d6753f4d318fac0e7fe081d65c37c5e40942f13e3e709b662",
+    "elements": 24,
+    "triangles": 12,
+    "admission": {
+      "qualified": false,
+      "reasons": [
+        "Synthetic fixture cannot qualify a realistic project",
+        "Gross floor area is below 200,000 m²",
+        "Dataset evidence, hardware profile, conversion equivalence, and complete scored scenarios require human qualification"
+      ]
+    }
+  },
+  "profile": {
+    "id": "viewer-192-v1",
+    "status": "setup-only",
+    "viewport": {
+      "width": 1280,
+      "height": 800,
+      "deviceScaleFactor": 1
+    },
+    "materialProfile": "basic-double-sided-opaque-unqualified-fidelity",
+    "coordinateSystem": "right-handed-y-up-metres",
+    "coldOpens": 5,
+    "warmSessions": 10,
+    "interactionSamples": 100,
+    "proposalSizes": [
+      1,
+      10,
+      100,
+      1000
+    ],
+    "stressProposalSize": 10000,
+    "reviewCycles": 100,
+    "network": {
+      "bandwidthMbit": 50,
+      "rttMs": 30
+    },
+    "targets": {
+      "usefulFrameMs": 5000,
+      "overviewMs": 30000,
+      "p95FrameMs": 33.3,
+      "p95PickMs": 100,
+      "p95PropertiesMs": 200,
+      "p95ComparisonMs": 1000
+    },
+    "dataset": {
+      "status": "missing-real-project",
+      "minimumGrossFloorAreaM2": 200000,
+      "requiredDisciplines": [
+        "architecture",
+        "structure",
+        "mechanical",
+        "electrical",
+        "plumbing"
+      ]
+    }
+  },
+  "candidates": [
+    "babylon",
+    "fragments"
+  ],
+  "cycles": 100,
+  "timeout": 600000,
+  "node": "v24.18.0",
+  "os": {
+    "platform": "win32",
+    "release": "10.0.26300",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 7700X 8-Core Processor             ",
+    "totalMemoryBytes": 67756871680
+  },
+  "network": "loopback, unshaped",
+  "memory": "not-measured",
+  "status": "started"
+}

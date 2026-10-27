@@ -1,0 +1,7 @@
+
+> bim-forge@0.1.0 benchmark:viewer
+> node benchmarks/viewer/runner.ts --candidate babylon --channel missing-browser --output artifacts/private/viewer-benchmark/browser-launch-failure
+
+Benchmark assets: http://127.0.0.1:52426
+Evidence: D:\Codex\issue-192\bim-forge\artifacts\private\viewer-benchmark\browser-launch-failure
+babylon: Error: browserType.launch: Unsupported chromium channel "missing-browser"

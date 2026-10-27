@@ -1,0 +1,54 @@
+✔ fixture is deterministic and cannot qualify a realistic hospital by changing its area (11.9838ms)
+✔ input boundary rejects missing geometry, duplicate identities, invalid indices, and non-finite coordinates (17.286ms)
+✔ proposal adds, moves, and removes exactly its declared elements without mutating the baseline (3.2063ms)
+✔ stale, duplicate, and invalid proposals leave accepted input intact (3.0053ms)
+✔ comparison retains removed and previous geometry and discard restores the exact base (10.8797ms)
+✔ renderer oracle catches lost IDs, duplicate IDs, and wrong movement (1.8689ms)
+✔ percentiles require enough samples and never combine missing values into zeros (0.2508ms)
+✔ result validator rejects a false completion or a qualification claim (0.4515ms)
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+✔ real Babylon scene preserves every object, support elevation, camera and selection across modes without changing the model (136.4195ms)
+✔ walls have actual door and window gaps, cutaway affects visibility only, and replacement disposes old resources (38.3136ms)
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+✔ ray destinations are generic, millimetre-bound floor/wall references and do not infer move/group operations (0.9103ms)
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+✔ actual Babylon rays select visible desk geometry and mark floor points through cutaway walls (21.5302ms)
+✔ 3D delta retains before ghosts for moved and removed objects, solid additions and a stable camera without changing either revision (38.0033ms)
+✔ 3D delta includes opening placement and host geometry when only hosting relationships change (2.4708ms)
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+✔ derived support elevation and door-size gaps appear in the 3D delta even without changed relationship records (2.7353ms)
+✔ a residential floor renders shared walls once, frames a room without editing geometry and retains whole-floor deltas (143.7589ms)
+✔ legacy floor references stay visible on an isolated residential level without changing their wire shape or model (50.6151ms)
+✔ stacked geometry applies each floor elevation once, including supported furniture, openings and equipment (25.7167ms)
+✔ incoming stair footprints are real slab voids and ray picking preserves the selected floor (23.2126ms)
+✔ pitched roof solids and gable wall vertices meet the shared roof underside at eaves and ridge (41.9403ms)
+✔ level isolation and roof visibility compose with cutaway, framing and annotation visibility without rebuilding geometry (31.3148ms)
+✔ building floor annotations require explicit levels and wall annotations inherit the host elevation (2.3353ms)
+✔ level elevation and incoming stair changes produce derived object and slab-void deltas with before ghosts (61.8095ms)
+✔ roof changes derive clipped-wall deltas and flat roofs have physical thickness (26.1256ms)
+✔ before slab ghosts stay inspectable but cannot intercept a current-floor reference ray (38.2394ms)
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+✔ generated families render exact instance heights and unrelated geometry in both modes without changing definitions (31.3636ms)
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+BJS - [06:38:13]: Babylon.js v9.32.0 - Null engine
+✔ resizing one generated instance retains its family, ghosts and isolated delta without changing another size of that family (17.8516ms)
+✔ room-owned generated instances follow their level exactly once, including anchors, ghosts and visibility (65.25ms)
+✔ explicit family reassignment preserves the original definition and reviews the new definition without rendering it (14.8748ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1352.8989

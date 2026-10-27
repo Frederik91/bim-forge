@@ -1,0 +1,2610 @@
+{
+  "accepted": {
+    "version": 1,
+    "id": "viewer-smoke-192",
+    "revision": "baseline-1",
+    "coordinateSystem": "right-handed-y-up-metres",
+    "grossFloorAreaM2": 150,
+    "cameraPath": [
+      {
+        "eye": [
+          18,
+          15,
+          22
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          28,
+          15,
+          4
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          27.485652225621905,
+          15,
+          8.729349684642528
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          25.966659232761053,
+          15,
+          13.237560234325821
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          23.514047445524163,
+          15,
+          17.31383273426283
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          20.24249826520021,
+          15,
+          20.767565212808
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          16.304985695395384,
+          15,
+          23.437264977812504
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          11.88562344764286,
+          15,
+          25.198099835422905
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          7.191055988879187,
+          15,
+          25.967735104724724
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          2.440796075839176,
+          15,
+          25.710183495913576
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -2.1430394174781178,
+          15,
+          24.43748783596941
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -6.34611543797241,
+          15,
+          22.20915795945159
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -9.971900822308873,
+          15,
+          19.12938809477532
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -12.850857875686959,
+          15,
+          15.342184857894486
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -14.848369766021651,
+          15,
+          11.024633662991565
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -15.871035057395911,
+          15,
+          6.378618405326723
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -15.871035057395911,
+          15,
+          1.621381594673283
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -14.848369766021655,
+          15,
+          -3.024633662991559
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -12.850857875686966,
+          15,
+          -7.3421848578944715
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -9.971900822308877,
+          15,
+          -11.129388094775315
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -6.346115437972415,
+          15,
+          -14.209157959451591
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -2.1430394174781178,
+          15,
+          -16.43748783596941
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          2.440796075839175,
+          15,
+          -17.710183495913576
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          7.191055988879167,
+          15,
+          -17.967735104724728
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          11.88562344764286,
+          15,
+          -17.198099835422905
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          16.30498569539537,
+          15,
+          -15.43726497781251
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          20.242498265200197,
+          15,
+          -12.767565212808009
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          23.514047445524156,
+          15,
+          -9.313832734262842
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          25.966659232761053,
+          15,
+          -5.237560234325828
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          27.485652225621905,
+          15,
+          -0.7293496846425365
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      }
+    ],
+    "provenance": {
+      "kind": "synthetic",
+      "seed": 192
+    },
+    "geometries": [
+      {
+        "id": "box",
+        "positions": [
+          -0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          0.5,
+          -0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          -0.5,
+          0.5,
+          0.5
+        ],
+        "indices": [
+          0,
+          2,
+          1,
+          0,
+          3,
+          2,
+          4,
+          5,
+          6,
+          4,
+          6,
+          7,
+          0,
+          1,
+          5,
+          0,
+          5,
+          4,
+          3,
+          7,
+          6,
+          3,
+          6,
+          2,
+          0,
+          4,
+          7,
+          0,
+          7,
+          3,
+          1,
+          2,
+          6,
+          1,
+          6,
+          5
+        ]
+      }
+    ],
+    "elements": [
+      {
+        "id": "element-0",
+        "category": "Wall",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 0",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-1",
+        "category": "Door",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 1",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-2",
+        "category": "Window",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 2",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-3",
+        "category": "Slab",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 3",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-4",
+        "category": "Equipment",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 4",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-5",
+        "category": "Furniture",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 5",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-6",
+        "category": "Wall",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 6",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-7",
+        "category": "Door",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 7",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-8",
+        "category": "Window",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 8",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-9",
+        "category": "Slab",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 9",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-10",
+        "category": "Equipment",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 10",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-11",
+        "category": "Furniture",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 11",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-12",
+        "category": "Wall",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 12",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-13",
+        "category": "Door",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 13",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-14",
+        "category": "Window",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 14",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-15",
+        "category": "Slab",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 15",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-16",
+        "category": "Equipment",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 16",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-17",
+        "category": "Furniture",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 17",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-18",
+        "category": "Wall",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 18",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-19",
+        "category": "Door",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 19",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-20",
+        "category": "Window",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 20",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-21",
+        "category": "Slab",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 21",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-22",
+        "category": "Equipment",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 22",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-23",
+        "category": "Furniture",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 23",
+          "Source": "synthetic-seed-192"
+        }
+      }
+    ]
+  },
+  "proposed": {
+    "version": 1,
+    "id": "viewer-smoke-192",
+    "revision": "baseline-1-proposal",
+    "coordinateSystem": "right-handed-y-up-metres",
+    "grossFloorAreaM2": 150,
+    "cameraPath": [
+      {
+        "eye": [
+          18,
+          15,
+          22
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          28,
+          15,
+          4
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          27.485652225621905,
+          15,
+          8.729349684642528
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          25.966659232761053,
+          15,
+          13.237560234325821
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          23.514047445524163,
+          15,
+          17.31383273426283
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          20.24249826520021,
+          15,
+          20.767565212808
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          16.304985695395384,
+          15,
+          23.437264977812504
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          11.88562344764286,
+          15,
+          25.198099835422905
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          7.191055988879187,
+          15,
+          25.967735104724724
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          2.440796075839176,
+          15,
+          25.710183495913576
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -2.1430394174781178,
+          15,
+          24.43748783596941
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -6.34611543797241,
+          15,
+          22.20915795945159
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -9.971900822308873,
+          15,
+          19.12938809477532
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -12.850857875686959,
+          15,
+          15.342184857894486
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -14.848369766021651,
+          15,
+          11.024633662991565
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -15.871035057395911,
+          15,
+          6.378618405326723
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -15.871035057395911,
+          15,
+          1.621381594673283
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -14.848369766021655,
+          15,
+          -3.024633662991559
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -12.850857875686966,
+          15,
+          -7.3421848578944715
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -9.971900822308877,
+          15,
+          -11.129388094775315
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -6.346115437972415,
+          15,
+          -14.209157959451591
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          -2.1430394174781178,
+          15,
+          -16.43748783596941
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          2.440796075839175,
+          15,
+          -17.710183495913576
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          7.191055988879167,
+          15,
+          -17.967735104724728
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          11.88562344764286,
+          15,
+          -17.198099835422905
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          16.30498569539537,
+          15,
+          -15.43726497781251
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          20.242498265200197,
+          15,
+          -12.767565212808009
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          23.514047445524156,
+          15,
+          -9.313832734262842
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          25.966659232761053,
+          15,
+          -5.237560234325828
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      },
+      {
+        "eye": [
+          27.485652225621905,
+          15,
+          -0.7293496846425365
+        ],
+        "target": [
+          6,
+          0.5,
+          4
+        ]
+      }
+    ],
+    "provenance": {
+      "kind": "synthetic",
+      "seed": 192
+    },
+    "geometries": [
+      {
+        "id": "box",
+        "positions": [
+          -0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          0.5,
+          -0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          -0.5,
+          0.5,
+          0.5
+        ],
+        "indices": [
+          0,
+          2,
+          1,
+          0,
+          3,
+          2,
+          4,
+          5,
+          6,
+          4,
+          6,
+          7,
+          0,
+          1,
+          5,
+          0,
+          5,
+          4,
+          3,
+          7,
+          6,
+          3,
+          6,
+          2,
+          0,
+          4,
+          7,
+          0,
+          7,
+          3,
+          1,
+          2,
+          6,
+          1,
+          6,
+          5
+        ]
+      }
+    ],
+    "elements": [
+      {
+        "id": "element-0",
+        "category": "Wall",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          2.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 0",
+          "Source": "synthetic-seed-192",
+          "Review": "Moved up 2 m"
+        }
+      },
+      {
+        "id": "element-2",
+        "category": "Window",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 2",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-3",
+        "category": "Slab",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 3",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-4",
+        "category": "Equipment",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 4",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-5",
+        "category": "Furniture",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          0
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 5",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-6",
+        "category": "Wall",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 6",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-7",
+        "category": "Door",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 7",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-8",
+        "category": "Window",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 8",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-9",
+        "category": "Slab",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 9",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-10",
+        "category": "Equipment",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 10",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-11",
+        "category": "Furniture",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          2.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 11",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-12",
+        "category": "Wall",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 12",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-13",
+        "category": "Door",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 13",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-14",
+        "category": "Window",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 14",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-15",
+        "category": "Slab",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 15",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-16",
+        "category": "Equipment",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 16",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-17",
+        "category": "Furniture",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 17",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-18",
+        "category": "Wall",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          0,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 18",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-19",
+        "category": "Door",
+        "discipline": "plumbing",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 19",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-20",
+        "category": "Window",
+        "discipline": "architecture",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 20",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-21",
+        "category": "Slab",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          7.5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.18,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 21",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-22",
+        "category": "Equipment",
+        "discipline": "mechanical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          10,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 22",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "element-23",
+        "category": "Furniture",
+        "discipline": "electrical",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          12.5,
+          0.75,
+          7.5
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.48,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 23",
+          "Source": "synthetic-seed-192"
+        }
+      },
+      {
+        "id": "proposal-added",
+        "category": "Door",
+        "discipline": "structure",
+        "storey": "ground",
+        "geometryId": "box",
+        "position": [
+          2.5,
+          0.75,
+          1
+        ],
+        "scale": [
+          1.2,
+          1.5,
+          1.2
+        ],
+        "color": [
+          0.32999999999999996,
+          0.5,
+          0.65
+        ],
+        "properties": {
+          "Name": "Smoke element 1",
+          "Source": "synthetic-seed-192"
+        }
+      }
+    ]
+  },
+  "comparison": true,
+  "readback": [
+    {
+      "id": "element-10",
+      "position": [
+        10,
+        0.75,
+        2.5
+      ],
+      "min": [
+        9.399999976158142,
+        0,
+        1.899999976158142
+      ],
+      "max": [
+        10.600000023841858,
+        1.5,
+        3.100000023841858
+      ]
+    },
+    {
+      "id": "element-11",
+      "position": [
+        12.5,
+        0.75,
+        2.5
+      ],
+      "min": [
+        11.899999976158142,
+        0,
+        1.899999976158142
+      ],
+      "max": [
+        13.100000023841858,
+        1.5,
+        3.100000023841858
+      ]
+    },
+    {
+      "id": "element-12",
+      "position": [
+        0,
+        0.75,
+        5
+      ],
+      "min": [
+        -0.6000000238418579,
+        0,
+        4.399999976158142
+      ],
+      "max": [
+        0.6000000238418579,
+        1.5,
+        5.600000023841858
+      ]
+    },
+    {
+      "id": "element-13",
+      "position": [
+        2.5,
+        0.75,
+        5
+      ],
+      "min": [
+        1.899999976158142,
+        0,
+        4.399999976158142
+      ],
+      "max": [
+        3.100000023841858,
+        1.5,
+        5.600000023841858
+      ]
+    },
+    {
+      "id": "element-14",
+      "position": [
+        5,
+        0.75,
+        5
+      ],
+      "min": [
+        4.399999976158142,
+        0,
+        4.399999976158142
+      ],
+      "max": [
+        5.600000023841858,
+        1.5,
+        5.600000023841858
+      ]
+    },
+    {
+      "id": "element-15",
+      "position": [
+        7.5,
+        0.75,
+        5
+      ],
+      "min": [
+        6.899999976158142,
+        0,
+        4.399999976158142
+      ],
+      "max": [
+        8.100000023841858,
+        1.5,
+        5.600000023841858
+      ]
+    },
+    {
+      "id": "element-16",
+      "position": [
+        10,
+        0.75,
+        5
+      ],
+      "min": [
+        9.399999976158142,
+        0,
+        4.399999976158142
+      ],
+      "max": [
+        10.600000023841858,
+        1.5,
+        5.600000023841858
+      ]
+    },
+    {
+      "id": "element-17",
+      "position": [
+        12.5,
+        0.75,
+        5
+      ],
+      "min": [
+        11.899999976158142,
+        0,
+        4.399999976158142
+      ],
+      "max": [
+        13.100000023841858,
+        1.5,
+        5.600000023841858
+      ]
+    },
+    {
+      "id": "element-18",
+      "position": [
+        0,
+        0.75,
+        7.5
+      ],
+      "min": [
+        -0.6000000238418579,
+        0,
+        6.899999976158142
+      ],
+      "max": [
+        0.6000000238418579,
+        1.5,
+        8.100000023841858
+      ]
+    },
+    {
+      "id": "element-19",
+      "position": [
+        2.5,
+        0.75,
+        7.5
+      ],
+      "min": [
+        1.899999976158142,
+        0,
+        6.899999976158142
+      ],
+      "max": [
+        3.100000023841858,
+        1.5,
+        8.100000023841858
+      ]
+    },
+    {
+      "id": "element-20",
+      "position": [
+        5,
+        0.75,
+        7.5
+      ],
+      "min": [
+        4.399999976158142,
+        0,
+        6.899999976158142
+      ],
+      "max": [
+        5.600000023841858,
+        1.5,
+        8.100000023841858
+      ]
+    },
+    {
+      "id": "element-21",
+      "position": [
+        7.5,
+        0.75,
+        7.5
+      ],
+      "min": [
+        6.899999976158142,
+        0,
+        6.899999976158142
+      ],
+      "max": [
+        8.100000023841858,
+        1.5,
+        8.100000023841858
+      ]
+    },
+    {
+      "id": "element-22",
+      "position": [
+        10,
+        0.75,
+        7.5
+      ],
+      "min": [
+        9.399999976158142,
+        0,
+        6.899999976158142
+      ],
+      "max": [
+        10.600000023841858,
+        1.5,
+        8.100000023841858
+      ]
+    },
+    {
+      "id": "element-23",
+      "position": [
+        12.5,
+        0.75,
+        7.5
+      ],
+      "min": [
+        11.899999976158142,
+        0,
+        6.899999976158142
+      ],
+      "max": [
+        13.100000023841858,
+        1.5,
+        8.100000023841858
+      ]
+    },
+    {
+      "id": "element-2",
+      "position": [
+        5,
+        0.75,
+        0
+      ],
+      "min": [
+        4.399999976158142,
+        0,
+        -0.6000000238418579
+      ],
+      "max": [
+        5.600000023841858,
+        1.5,
+        0.6000000238418579
+      ]
+    },
+    {
+      "id": "element-3",
+      "position": [
+        7.5,
+        0.75,
+        0
+      ],
+      "min": [
+        6.899999976158142,
+        0,
+        -0.6000000238418579
+      ],
+      "max": [
+        8.100000023841858,
+        1.5,
+        0.6000000238418579
+      ]
+    },
+    {
+      "id": "element-4",
+      "position": [
+        10,
+        0.75,
+        0
+      ],
+      "min": [
+        9.399999976158142,
+        0,
+        -0.6000000238418579
+      ],
+      "max": [
+        10.600000023841858,
+        1.5,
+        0.6000000238418579
+      ]
+    },
+    {
+      "id": "element-5",
+      "position": [
+        12.5,
+        0.75,
+        0
+      ],
+      "min": [
+        11.899999976158142,
+        0,
+        -0.6000000238418579
+      ],
+      "max": [
+        13.100000023841858,
+        1.5,
+        0.6000000238418579
+      ]
+    },
+    {
+      "id": "element-6",
+      "position": [
+        0,
+        0.75,
+        2.5
+      ],
+      "min": [
+        -0.6000000238418579,
+        0,
+        1.899999976158142
+      ],
+      "max": [
+        0.6000000238418579,
+        1.5,
+        3.100000023841858
+      ]
+    },
+    {
+      "id": "element-7",
+      "position": [
+        2.5,
+        0.75,
+        2.5
+      ],
+      "min": [
+        1.899999976158142,
+        0,
+        1.899999976158142
+      ],
+      "max": [
+        3.100000023841858,
+        1.5,
+        3.100000023841858
+      ]
+    },
+    {
+      "id": "element-8",
+      "position": [
+        5,
+        0.75,
+        2.5
+      ],
+      "min": [
+        4.399999976158142,
+        0,
+        1.899999976158142
+      ],
+      "max": [
+        5.600000023841858,
+        1.5,
+        3.100000023841858
+      ]
+    },
+    {
+      "id": "element-9",
+      "position": [
+        7.5,
+        0.75,
+        2.5
+      ],
+      "min": [
+        6.899999976158142,
+        0,
+        1.899999976158142
+      ],
+      "max": [
+        8.100000023841858,
+        1.5,
+        3.100000023841858
+      ]
+    },
+    {
+      "id": "element-0",
+      "position": [
+        0,
+        2.75,
+        0
+      ],
+      "min": [
+        -0.6000000238418579,
+        2,
+        -0.6000000238418579
+      ],
+      "max": [
+        0.6000000238418579,
+        3.5,
+        0.6000000238418579
+      ]
+    },
+    {
+      "id": "proposal-added",
+      "position": [
+        2.5,
+        0.75,
+        1
+      ],
+      "min": [
+        1.899999976158142,
+        0,
+        0.3999999761581421
+      ],
+      "max": [
+        3.100000023841858,
+        1.5,
+        1.600000023841858
+      ]
+    },
+    {
+      "id": "before:element-0",
+      "position": [
+        0,
+        0.75,
+        0
+      ],
+      "min": [
+        -0.6000000238418579,
+        0,
+        -0.6000000238418579
+      ],
+      "max": [
+        0.6000000238418579,
+        1.5,
+        0.6000000238418579
+      ]
+    },
+    {
+      "id": "before:element-1",
+      "position": [
+        2.5,
+        0.75,
+        0
+      ],
+      "min": [
+        1.899999976158142,
+        0,
+        -0.6000000238418579
+      ],
+      "max": [
+        3.100000023841858,
+        1.5,
+        0.6000000238418579
+      ]
+    }
+  ]
+}
