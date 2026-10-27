@@ -50,7 +50,7 @@ Primary-source checks: buildingSMART defines rooted object [GlobalId](https://st
 - [x] Ground the current model, storage, source and workspace boundaries.
 - [x] Compare two complete design shapes: model-native evidence/scenario state versus a project-owned ledger over immutable model revisions.
 - [x] Cross-review and synthesize a small public API with explicit ownership.
-- [ ] Implement and integrate against the chosen contract; keep drafts reviewable.
+- [x] Implement and integrate against the chosen contract; keep drafts reviewable.
 - [ ] Replace the design if implementation reveals repeated authority or state-duplication workarounds.
 
 Design candidates are graded against five concrete criteria: unambiguous acceptance authority, preservation of source/privacy/restart/conflict invariants, small composable APIs, bounded work under constrained resources, and compatibility with the single viewer plus separate read-only IFC references. No human design checkpoint was requested; routine choices proceed with recorded rationale.
@@ -69,7 +69,7 @@ Acceptance checks command receipts before freshness so a lost response can repla
 
 First integration case: retain the generated plan and invented measurement sheet as explicitly synthetic sources, record their competing documented values, capture an As-is baseline, fork a partition alternative, prepare a wall proposal on that alternative, review geometry and the chosen evidence assumption, accept, restart, and verify the original main/baseline and unrelated contents remain unchanged. The sample uses a fresh project UUID; the fixed fixture UUID is reserved for disposable tests. Source identities and evidence commands are deterministic within that project so an interrupted setup can resume without duplicate claims.
 
-The initial fixture and wall helper passed 26 combined server tests at `179e34f`. Native/guest evidence review passed 130 focused tests. Parent queue attempt 4 at `cc9dbb5` passed root validation and 70 of 71 checks: all five queue workflow cases, actual HTTP sample setup with an interrupted upload, and source/evidence routes passed. One existing static-asset check failed because the harness had not built the browser bundle; the harness now builds before server tests. Full workspace/browser integration remains in progress. These correctness checks do not qualify large-project capacity or real-house evidence accuracy.
+The final code qualification at `384b2ce` passed root validation, an explicit 59-path policy check, the browser build and 802 tests, with zero failures and three existing optional skips. Server-container browser QA exercised generated evidence setup/recovery, baseline/fork creation, evidence-backed 3D proposal review and alternative-only acceptance, independent unsent chat contexts, removed-pin synchronization and explicit discard. Baseline input was disabled and its alternative action remained available. See the [qualification receipt](residential197-qualification.md) for source bindings, limitations and the attempt ledger. These correctness checks do not qualify large-project capacity, actual-phone interaction or real-house evidence accuracy.
 
 ## Verification and publication
 
