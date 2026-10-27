@@ -1,4 +1,4 @@
-import { MAX_EVIDENCE_PINS } from '../src/model-evidence.ts';
+import { MAX_EVIDENCE_PINS, parseEvidencePin } from '../src/model-evidence.ts';
 import type { EvidenceEntry, EvidencePin } from '../src/model-evidence.ts';
 import { parseRequestSources } from '../src/request-sources.ts';
 import type { RequestSource } from '../src/request-sources.ts';
@@ -72,6 +72,13 @@ export class ProjectEvidencePanel {
   }
   get selectedSourceDescriptors(): readonly RequestSource[] { return structuredClone(this.#chosenSources); }
   get selectedEvidencePins(): readonly EvidencePin[] { return structuredClone(this.#chosenPins); }
+  setSelection(input: { sources: readonly RequestSource[]; pins: readonly EvidencePin[] }): void {
+    if (input.pins.length > MAX_EVIDENCE_PINS) throw new Error('Choose at most 32 evidence pins for chat.');
+    const pins = input.pins.map(parseEvidencePin);
+    if (new Set(pins.map(pin => pin.entryId)).size !== pins.length) throw new Error('Choose each evidence record only once.');
+    const sources = input.sources.length ? parseRequestSources([...input.sources]) : [];
+    this.#chosenSources = sources; this.#chosenPins = pins; this.#render();
+  }
 
   async show(context: ProjectEvidenceContext): Promise<void> { await this.bind(context); }
   update(context: ProjectEvidenceContext | null): Promise<void> { return this.bind(context); }

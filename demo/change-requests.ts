@@ -838,7 +838,7 @@ export class ChangeRequests {
     const archived = JSON.stringify({ ...ticket, history: [] });
     this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
-      if (this.project(ticket.projectId) !== currentText || this.#get(id).fingerprint !== ticket.fingerprint) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
+      if (this.project(ticket.projectId) !== currentText || !isDeepStrictEqual(this.#get(id), ticket)) throw new BacklogConflict('The request changed while revising. Refresh and try again.');
       this.#assertSavedScope(ticket.projectId, bound.scopedRequest);
       if (request.sources) this.#sources.bind(ticket.projectId, request.sources, request.requestId);
       this.#pinEvidence(request.requestId, evidence);

@@ -5,7 +5,7 @@ import { initializeSyntheticEvidence } from './synthetic-pilot-client.ts';
 import { DesignWorkspace } from './design-workspace.ts';
 import { parseDesignTarget, parseFrozenDesignTarget } from '../src/design-targets.ts';
 import type { DesignTarget, FrozenDesignTarget } from '../src/design-targets.ts';
-import { MAX_EVIDENCE_PINS, parseEvidencePin, parseEvidenceUses } from '../src/model-evidence.ts';
+import { MAX_EVIDENCE_PINS, evidenceCanonical, parseEvidencePin, parseEvidenceUses } from '../src/model-evidence.ts';
 import type { EvidencePin, EvidenceUse } from '../src/model-evidence.ts';
 import { ProjectEvidencePanel } from './project-evidence-ui.ts';
 import type { ProjectEvidenceContext } from './project-evidence-ui.ts';
@@ -289,6 +289,8 @@ let selectedBranch = 'main';
 let selectedDesignTarget: DesignTarget = { kind: 'main' };
 let conversationTarget: FrozenDesignTarget | null = null;
 let syntheticSeedPending: string | null = null;
+let generatedSample = false;
+const syntheticRootSnapshot = evidenceCanonical(syntheticResidentialFixture().snapshot);
 let busy = true;
 let layout: RoomLayout | null = null;
 let preview: ModelSnapshot | null = null;
@@ -424,7 +426,9 @@ function refreshEvidencePanel(): void {
   const context: ProjectEvidenceContext | null = repo && snapshot ? { projectId: repo.projectId, bindingId: currentChatKey(),
     target: selectedDesignTarget, revisionId: selectedDesignHead(), selectedObject: selected ? { id: selected.id, name: selected.name } : null,
     entityName: id => snapshot.entities.find(item => item.id === id)?.name } : null;
-  void evidencePanel.update(context).catch(report);
+  const loading = evidencePanel.update(context);
+  evidencePanel.setSelection({ pins: chatEvidencePins, sources: sourcePicker.ready ? sourcePicker.sources : [] });
+  void loading.catch(report);
 }
 function renderEvidenceContext(): void {
   const mount = generic('request-evidence-context'); mount.replaceChildren();
@@ -503,6 +507,7 @@ function attachChatContext(ids: readonly string[]): boolean {
 ui['request-reconstruct'].addEventListener('change', updateControls);
 
 function clearRequestSources(): void {
+  chatEvidencePins = []; chatEvidenceEdited = false;
   ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear(); scopeBuilder.reset();
 }
 
@@ -893,7 +898,7 @@ function updateControls() {
   generic('design-readonly-banner').hidden = selectedDesignTarget.kind !== 'baseline';
   button('fork-selected-baseline').disabled = !writable;
   button('open-project-evidence').disabled = !repo || busy || dragging;
-  button('retry-synthetic-evidence').hidden = syntheticSeedPending !== repo?.projectId;
+  button('retry-synthetic-evidence').hidden = !generatedSample && syntheticSeedPending !== repo?.projectId;
   button('retry-synthetic-evidence').disabled = !writable;
   explorer.setDisabled(busy || dragging || !repo);
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
@@ -1114,6 +1119,7 @@ async function perform(action: () => void | Promise<void>): Promise<void> {
 
 // Display only repositories read from the server. Pending previews stay in reviewRepository.
 function displayAccepted(next: RoomRepository): void {
+  generatedSample = evidenceCanonical(next.view(next.root()).snapshot) === syntheticRootSnapshot;
   liveChatPreview = null; livePreviewSelection = null;
   const text = next.serialize();
   savedText = text;
@@ -1167,7 +1173,7 @@ async function createProject(name: string): Promise<void> {
   showRequestPane('canvas');
   showPage('project');
   status(generated ? seeded ? 'Generated residential model and test evidence saved. NOT SURVEY data; inspect the intentional contradiction before approving changes.'
-    : 'Generated model saved. Evidence setup is incomplete; use Retry generated evidence to finish safely.'
+    : 'Generated model saved. Evidence setup is incomplete; use Prepare generated evidence in Project tools to finish safely.'
     : 'Original model saved on the server. Choose a room and describe a request to begin.');
 }
 
@@ -1183,7 +1189,7 @@ async function seedGeneratedEvidence(project: RoomRepository): Promise<boolean> 
   }
 }
 button('retry-synthetic-evidence').addEventListener('click', () => { void perform(async () => {
-  if (!repo || syntheticSeedPending !== repo.projectId) return;
+  if (!repo || !generatedSample && syntheticSeedPending !== repo.projectId) return;
   const latest = await projects.read(repo.projectId);
   if (await seedGeneratedEvidence(latest)) status('Generated evidence setup complete. NOT SURVEY data; conflicting claims remain explicit.');
 }); });
@@ -1573,9 +1579,9 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const submittedTicket = parseBacklogItem(acknowledgement.ticket);
     const submittedName = submittedTicket.request.proposalName;
     chatTicketId = submittedTicket.id;
-    chatEvidencePins = submittedTicket.request.evidencePins ?? []; chatEvidenceEdited = false;
     submission = null;
     clearRequestSources();
+    chatEvidencePins = submittedTicket.request.evidencePins ?? []; chatEvidenceEdited = false;
     chatDrafts.delete(draftKey); sourcePicker.switchDraft(currentChatKey());
     chatVisual = null; composer.setVisual(null);
     ui['request-text'].value = ''; ui['proposal-name'].value = '';
@@ -1776,6 +1782,7 @@ async function sendChatReply(): Promise<void> {
   if (designKey(target) !== designKey(selectedDesignTarget)) throw new Error('Reopen this conversation in its bound design before replying.');
   const content = { baseRevisionId: repo.freezeDesignTarget(target).revisionId, text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual(),
     ...(chatEvidencePins.length || chatEvidenceEdited ? { evidencePins: chatEvidencePins } : {}) };
+  const evidenceSelection = chatEvidencePins;
   const fingerprint = JSON.stringify(content);
   if (!chatReply || chatReply.fingerprint !== fingerprint) chatReply = { fingerprint, body: parseConversationReply({
     ...content, messageId: globalThis.crypto.randomUUID(), expectedSequence: conversation.sequence,
@@ -1792,7 +1799,7 @@ async function sendChatReply(): Promise<void> {
   if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
   showChatTicket(value.ticket); chatReply = null; chatVisual = null; chatEvidenceEdited = false; composer.setVisual(null);
   chatDrafts.delete(currentChatKey());
-  clearRequestSources(); ui['request-text'].value = ''; visualDraft = null; renderComparison();
+  clearRequestSources(); chatEvidencePins = evidenceSelection; ui['request-text'].value = ''; visualDraft = null; renderComparison();
   await refreshBacklog(); status('Reply saved on this request. The assistant will continue with the complete conversation and earlier proposal.');
 }
 
@@ -2233,7 +2240,7 @@ ui['import-file'].addEventListener('change', () => {
     await recognizeHousePilot(next);
     displayAccepted(await projects.register(next));
     await refreshProjectChoices();
-    activeReview = repo?.reviewAt(selectedRevision)?.review ?? null;
+    activeReview = repo ? selectedReviewAt(repo, selectedRevision)?.review ?? null : null;
     renderReview();
     closeDialog(ui['start-dialog']);
     showPage('project');
@@ -3192,7 +3199,7 @@ function render(): void {
   const project = requireRepository();
   ui['project-title'].textContent = project.name;
   document.title = `${project.name} · Room studies`;
-  if (!activeReview) activeReview = project.reviewAt(selectedRevision)?.review ?? null;
+  if (!activeReview) activeReview = selectedReviewAt(project, selectedRevision)?.review ?? null;
   renderComparison();
   renderProjectOverview();
   renderHistory();

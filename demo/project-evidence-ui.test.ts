@@ -156,6 +156,24 @@ test('panel behavior at the DOM boundary; no browser layout or touch qualificati
     assert.equal(root.all().filter(element => element.tagName === 'SCRIPT').length, 0); panel.dispose();
   });
 
+  await t.test('composer selection restores checked records and a removed pin cannot return when another record is chosen', async () => {
+    const host = mount(); const root = tree(host); const chosen: EvidencePin[][] = [];
+    const otherEntry = { ...entry, id: 'record-other' }; const otherPin = { ...pin, entryId: otherEntry.id };
+    const panel = new ProjectEvidencePanel(host, { client: new ProjectEvidenceClient(async input => String(input).endsWith('project-sources')
+      ? reply({ sources: [source], next: null }) : reply({ entries: [{ entry, pin }, { entry: otherEntry, pin: otherPin }], next: null })),
+      useSources: () => {}, useEvidence: pins => { chosen.push([...pins]); } });
+    await panel.bind({ ...context, bindingId: 'chat-one' });
+    panel.setSelection({ sources: [source], pins: [pin] });
+    assert.deepEqual(panel.selectedEvidencePins, [pin]); assert.deepEqual(panel.selectedSourceDescriptors, [source]);
+    panel.setSelection({ sources: [], pins: [] });
+    choose(root, 'Choose record record-other for chat'); button(root, 'Use chosen records in chat (1)').trigger('click');
+    await until(() => chosen.length === 1); assert.deepEqual(chosen[0], [otherPin]);
+    await panel.bind({ ...context, bindingId: 'chat-two' });
+    panel.setSelection({ sources: [], pins: [pin] });
+    choose(root, 'Choose record record-other for chat'); button(root, 'Use chosen records in chat (2)').trigger('click');
+    await until(() => chosen.length === 2); assert.deepEqual(chosen[1], [pin, otherPin]); panel.dispose();
+  });
+
   await t.test('missing and busy errors retry independently; binding aborts stale work and clears panel choices', async () => {
     const host = mount(); const root = tree(host); let attempts = 0; let finishOld: ((value: Response) => void) | undefined;
     const old = new Promise<Response>(resolve => { finishOld = resolve; });

@@ -98,6 +98,25 @@ test('a queued wall request accepts only into its frozen alternative and retains
   assert.equal((await RoomRepository.restore(saved)).designView(fork.created).revisionId, accepted.designView(fork.created).revisionId);
 });
 
+test('a revision preparing asynchronously cannot overwrite a later human rejection', { timeout: 60_000 }, async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'bim-revision-rejection-'));
+  const queue = await ChangeRequests.open(path.join(directory, 'queue.sqlite'), () => wallWorker);
+  t.after(async () => { await queue.close(); await fs.rm(directory, { recursive: true, force: true }); });
+  const repository = await initial(); await queue.importProject(repository.serialize());
+  const input = { requestId: 'revision-race-original', proposalName: 'original-wall-study', baseRevisionId: repository.head('main'),
+    selectedObjectIds: ['wall-living-kitchen'], instruction: 'Explore a 200 mm partition shift.', visualIntent: { kind: 'selection' } };
+  const submitted = await queue.submit(repository.serialize(), input); await ready(queue, submitted.id);
+  const revision = queue.revise(submitted.id, repository.serialize(), { ...input,
+    requestId: 'revision-race-later', proposalName: 'later-wall-study', instruction: 'Prepare another wall study.' });
+  const refused = assert.rejects(revision, /request changed while revising/);
+  await queue.decide(submitted.id, { action: 'reject', decisionId: 'human-rejection-wins', expectedRequestId: input.requestId });
+  await refused;
+  const ticket = queue.get(submitted.id);
+  assert.equal(ticket.state, 'rejected'); assert.equal(ticket.decisionId, 'human-rejection-wins');
+  assert.equal(ticket.request.requestId, input.requestId);
+  assert.equal((await RoomRepository.restore(queue.project(repository.projectId))).head('main'), repository.head('main'));
+});
+
 async function claims(queue: ChangeRequests, repository: RoomRepository) {
   const source = await queue.addSource({ projectId: repository.projectId, id: randomUUID(), name: 'synthetic-plan.txt',
     mediaType: 'text/plain', bytes: Buffer.from(syntheticResidentialFixture().sources.plan.text), signal: new AbortController().signal });
