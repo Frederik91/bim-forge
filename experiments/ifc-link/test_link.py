@@ -112,6 +112,28 @@ class LinkBehavior(unittest.TestCase):
         self.assertNotEqual(first["source"], other["source"])
         self.assertNotEqual(first["occurrence"]["id"], other["occurrence"]["id"])
 
+    def test_occurrence_translation_cannot_conceal_out_of_envelope_source_geometry(self):
+        self.source = synthetic_ifc(self.root / "source-envelope-fixture", "m")
+
+        def edit(model):
+            wall = model.by_guid(guid("wall-b"))
+            wall.ObjectPlacement.RelativePlacement.Location.Coordinates = (999989., 4., 0.)
+
+        self.mutate(edit)
+        model = ifcopenshell.open(str(self.source))
+        settings = ifcopenshell.geom.settings()
+        settings.set("use-world-coords", True)
+        shape = ifcopenshell.geom.create_shape(settings, model.by_guid(guid("wall-b")))
+        source_points = np.asarray(shape.geometry.verts).reshape((-1, 3))
+        self.assertAlmostEqual(float(source_points[:, 0].min()), 999999., places=6)
+        self.assertAlmostEqual(float(source_points[:, 0].max()), 1000003., places=6)
+        occurrence_x = source_points[:, 0] - 999999.
+        self.assertAlmostEqual(float(occurrence_x.min()), 0., places=6)
+        self.assertAlmostEqual(float(occurrence_x.max()), 4., places=6)
+        transform = [row[:] for row in IDENTITY]
+        transform[0][3] = -999999.
+        self.assert_failure("UNSAFE_GEOMETRY", transform=transform)
+
     def test_step_renumbering_does_not_change_object_identity(self):
         self.build()
         first = json.loads((self.output / "index.json").read_text())["objects"]
