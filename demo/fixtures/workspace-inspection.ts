@@ -32,7 +32,7 @@ const worker: ModelWorker = { identity: { provider: 'integration-fixture', model
       if (item.type !== 'Furniture') throw new Error('Furniture required.');
       return {id:item.id,type:item.type,name:item.name,kind:item.kind,position:item.position,width:item.width,depth:item.depth,height:item.height,rotationDeg:item.rotationDeg,supportId:item.supportId};
     });
-    await model.previewRoomFurnishings({roomId:'level-ground-west',furnishings:[...furnishings,{id:'live-table',type:'Furniture',name:'Live draft table',kind:'table',position:[1,2],width:0.6,depth:0.6,height:0.6,rotationDeg:0,supportId:null}]});
+    await model.previewRoomFurnishings({roomId:'level-ground-west',furnishings:[...furnishings,{id:'live-table',type:'Furniture',name:'Live draft table',kind:'table',position:[2,4],width:0.6,depth:0.6,height:0.6,rotationDeg:0,supportId:null}]});
     return {kind:'propose',review:{summary:'Add the live draft table.',rationale:'Demonstrate a validated addition before the worker finishes.',constraints:'All other rooms and existing items remain unchanged.',uncertainty:'Disposable UI fixture.',intent:{interpretation:'Add one table.',assumptions:[],certainty:100,basis:'Explicit fixture instruction.'}}};
   ` : input.request.instruction.includes('1.2') ? `
     await model.inspect();
@@ -43,8 +43,8 @@ const worker: ModelWorker = { identity: { provider: 'integration-fixture', model
       assumptions:[],certainty:100,basis:'Explicit fixture reply and bounded target.'}}};
   ` : `await model.inspect(); return {kind:'clarify',question:'What height should this plant have?',options:['1.2 m','Keep current height']};`;
   const result = await session.executeTool('run_model_script', { language: 'typescript', source });
-  if (!result.ok) throw new Error('Fixture ScriptBox operation failed.');
-  await setTimeout(liveTable ? 15000 : 2500, undefined, { signal: session.signal });
+  if (!result.ok) throw new Error(`Fixture ScriptBox operation failed: ${typeof result.error === 'string' ? result.error : 'No diagnostic supplied.'}`);
+  await setTimeout(liveTable ? 25000 : 2500, undefined, { signal: session.signal });
   if (liveTable && input.request.instruction.toLowerCase().includes('discard')) throw new Error('Fixture provider failure after tentative preview.');
 } };
 const server = await createDemoServer({ backlogFile: file, modelWorker: worker });
