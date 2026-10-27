@@ -23,6 +23,9 @@ function nameInput(label: string): { label: HTMLLabelElement; input: HTMLInputEl
 export class DesignWorkspace {
   readonly #actions: DesignActions;
   readonly #trigger: HTMLButtonElement;
+  readonly #select = document.createElement('select');
+  readonly #quickAlternative: HTMLButtonElement;
+  readonly #switcher = document.createElement('div');
   readonly #dialog = document.createElement('dialog');
   readonly #list = document.createElement('div');
   readonly #status = document.createElement('p');
@@ -39,7 +42,18 @@ export class DesignWorkspace {
 
   constructor(mount: HTMLElement, actions: DesignActions) {
     this.#actions = actions;
-    this.#trigger = button('Design views', () => this.#open());
+    this.#trigger = button('Manage', () => this.#open());
+    this.#trigger.setAttribute('aria-label', 'Manage design versions');
+    this.#select.className = 'design-workspace-select';
+    this.#select.setAttribute('aria-label', 'Active design');
+    this.#select.addEventListener('change', () => {
+      const view = this.#views.find(item => key(item.target) === this.#select.value);
+      if (view) void this.#run('Opening design…', () => actions.select(view.target));
+    });
+    this.#quickAlternative = button('+ Alternative', () => this.createAlternative());
+    this.#quickAlternative.title = 'Explore a separate design; the starting version stays unchanged';
+    this.#switcher.className = 'design-workspace-switcher';
+    this.#switcher.append(this.#select, this.#quickAlternative, this.#trigger);
     this.#trigger.setAttribute('aria-haspopup', 'dialog');
     this.#dialog.className = 'design-workspace-dialog';
     this.#dialog.setAttribute('aria-label', 'Design views and alternatives');
@@ -71,16 +85,31 @@ export class DesignWorkspace {
     this.#capture.input.addEventListener('input', () => { this.#captureCommand = crypto.randomUUID(); });
     this.#alternative.input.addEventListener('input', () => { this.#forkCommand = crypto.randomUUID(); });
     this.#baselines.addEventListener('change', () => { this.#forkCommand = crypto.randomUUID(); });
-    mount.replaceChildren(this.#trigger, this.#dialog);
+    mount.replaceChildren(this.#switcher);
+    document.body.append(this.#dialog);
   }
 
   update(views: readonly DesignTargetView[], selected: DesignTarget): void {
     this.#views = views; this.#selected = selected;
     const current = views.find(view => key(view.target) === key(selected));
-    this.#trigger.textContent = `${current?.name ?? 'Design views'} ▾`;
-    this.#trigger.setAttribute('aria-label', `Design views. Current: ${current?.name ?? 'unavailable'}`);
+    this.#select.title = current ? `${current.name} · ${current.target.kind === 'baseline' ? 'fixed baseline' : 'editable design'}` : 'Open a project';
     this.#trigger.disabled = this.#busy || views.length === 0;
     this.#render();
+  }
+
+  createAlternative(): void {
+    void this.#run('Creating alternative…', async () => {
+      if (this.#selected.kind !== 'baseline') {
+        const current = this.#views.find(view => key(view.target) === key(this.#selected));
+        await this.#actions.capture({ name: current?.target.kind === 'main' ? 'As-is' : `${current?.name ?? 'Design'} baseline`, commandId: this.#captureCommand });
+        this.#captureCommand = crypto.randomUUID();
+      }
+      const selected = this.#selected;
+      if (selected.kind !== 'baseline') throw new Error('The starting baseline could not be confirmed. Reopen the project.');
+      await this.#actions.fork({ baselineId: selected.id,
+        name: `Alternative ${this.#views.filter(view => view.target.kind === 'alternative').length + 1}`, commandId: this.#forkCommand });
+      this.#forkCommand = crypto.randomUUID();
+    });
   }
 
   #open(): void {
@@ -92,6 +121,14 @@ export class DesignWorkspace {
 
   #render(): void {
     this.#trigger.disabled = this.#busy || this.#views.length === 0;
+    this.#select.disabled = this.#trigger.disabled;
+    this.#quickAlternative.disabled = this.#trigger.disabled;
+    this.#select.replaceChildren();
+    for (const view of this.#views) {
+      const option = document.createElement('option'); option.value = key(view.target);
+      option.textContent = `${view.name}${view.target.kind === 'baseline' ? ' · locked' : ''}`;
+      option.selected = key(view.target) === key(this.#selected); this.#select.append(option);
+    }
     this.#list.replaceChildren();
     for (const view of this.#views) {
       const row = button('', () => { void this.#run('Opening design…', () => this.#actions.select(view.target)); });
@@ -124,13 +161,14 @@ export class DesignWorkspace {
     if (this.#busy) return;
     this.#busy = true; this.#status.textContent = message; this.#render();
     try {
-      await action(); this.#dialog.close();
+      await action(); if (this.#dialog.open) this.#dialog.close();
     } catch (error) {
       this.#status.textContent = error instanceof Error ? error.message : 'The design action could not finish. Try again.';
+      if (!this.#dialog.open) this.#dialog.showModal();
     } finally {
       this.#busy = false; this.update(this.#views, this.#selected);
     }
   }
 
-  dispose(): void { this.#dialog.remove(); this.#trigger.remove(); }
+  dispose(): void { this.#dialog.remove(); this.#switcher.remove(); }
 }

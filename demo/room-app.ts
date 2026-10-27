@@ -3,6 +3,9 @@ import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
 import { syntheticResidentialFixture } from '../src/synthetic-residential-fixture.ts';
 import { initializeSyntheticEvidence } from './synthetic-pilot-client.ts';
 import { DesignWorkspace } from './design-workspace.ts';
+import { designSaveStatus } from './design-status.ts';
+import { ProjectEvidenceClient } from './project-evidence-client.ts';
+import { retainSubmittedSources } from './submitted-sources.ts';
 import { parseDesignTarget, parseFrozenDesignTarget } from '../src/design-targets.ts';
 import type { DesignTarget, FrozenDesignTarget } from '../src/design-targets.ts';
 import { MAX_EVIDENCE_PINS, evidenceCanonical, parseEvidencePin, parseEvidenceUses } from '../src/model-evidence.ts';
@@ -10,6 +13,7 @@ import type { EvidencePin, EvidenceUse } from '../src/model-evidence.ts';
 import { ProjectEvidencePanel } from './project-evidence-ui.ts';
 import type { ProjectEvidenceContext } from './project-evidence-ui.ts';
 import { parseRequestSources } from '../src/request-sources.ts';
+import type { RequestSource } from '../src/request-sources.ts';
 import { levels, levelView, entityLevel, stairFootprint } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
@@ -269,6 +273,13 @@ const ui = {
 };
 
 const projects = new ProjectClient();
+const submittedSourceClient = new ProjectEvidenceClient();
+let sourceLibrary: { projectId: string; sources: readonly RequestSource[] } | null = null;
+
+async function refreshSourceMentions(projectId: string): Promise<void> {
+  const page = await submittedSourceClient.sources(projectId);
+  if (repo?.projectId === projectId) sourceLibrary = { projectId, sources: page.sources };
+}
 const workspace = new WorkspaceShell();
 const explorer = new ModelExplorer(generic('model-explorer'), navigateModel);
 let inspectedComparison: { graph: ModelSnapshot; id: string } | null = null;
@@ -302,7 +313,7 @@ let reviewRepository: RoomRepository | null = null;
 let activeTicketId: string | null = null;
 let backlogItems: BacklogItem[] = [];
 let serverProjectText: string | null = null;
-let serverHeadRevisionId: string | null = null;
+let serverAcceptedRepository: RoomRepository | null = null;
 let submission: { fingerprint: string; requestId: string } | null = null;
 let chatTicketId: string | null = null;
 let activeChatProposalMessageId: string | null = null;
@@ -371,6 +382,15 @@ const requestChat = new RequestChat(generic('request-chat-mount'), {
 const composer = new RequestComposer({ root: generic('request-composer'), form: ui['proposal-form'], input: ui['request-text'],
   add: button('composer-add'), menu: generic('composer-menu'), visual: generic('composer-model-context') }, {
   items: () => (preview?.entities ?? []).map(({ id, name, type }) => ({ id, name, type })),
+  files: () => sourceLibrary?.projectId === repo?.projectId ? sourceLibrary?.sources ?? [] : [],
+  file: id => {
+    try {
+      if (!repo || busy || !serverAvailable || selectedDesignTarget.kind === 'baseline' || sourceLibrary?.projectId !== repo.projectId) return false;
+      const source = sourceLibrary.sources.find(item => item.id === id);
+      if (!source) return false;
+      useRetainedSources([source]); return true;
+    } catch (error) { report(error); return false; }
+  },
   action: action => {
     if (action === 'evidence') { showPage('evidence'); return true; }
     if (action === 'files') return sourcePicker.chooseFiles();
@@ -390,9 +410,7 @@ function assertEvidenceDestination(context: ProjectEvidenceContext | null, signa
       || context.bindingId !== currentChatKey() || designKey(parseDesignTarget(context.target)) !== designKey(selectedDesignTarget)
       || context.revisionId !== selectedDesignHead()) throw new Error('Reopen project evidence from the chat and design you want to use.');
 }
-const evidencePanel = new ProjectEvidencePanel(generic('project-evidence-mount'), {
-  useSources: (sources, context, signal) => {
-    assertEvidenceDestination(context, signal);
+function useRetainedSources(sources: readonly RequestSource[]): void {
     if (!sources.length) return;
     if (!sourcePicker.ready) throw new Error('Finish the current attachment uploads before adding retained files.');
     const existing = sourcePicker.sources;
@@ -405,6 +423,10 @@ const evidencePanel = new ProjectEvidencePanel(generic('project-evidence-mount')
     sourcePicker.restore(requireRepository().projectId, combined); submission = null; chatReply = null;
     showPage('request'); showRequestPane('details'); updateControls();
     status('Retained files attached to this chat. Remove individual files from the composer if needed.');
+}
+const evidencePanel = new ProjectEvidencePanel(generic('project-evidence-mount'), {
+  useSources: (sources, context, signal) => {
+    assertEvidenceDestination(context, signal); useRetainedSources(sources);
   },
   useEvidence: (pins, context, signal) => {
     assertEvidenceDestination(context, signal);
@@ -492,7 +514,20 @@ const designWorkspace = new DesignWorkspace(generic('design-views-mount'), {
   }),
 });
 button('open-project-evidence').addEventListener('click', () => showPage('evidence'));
-button('fork-selected-baseline').addEventListener('click', () => generic('design-views-mount').querySelector('button')?.click());
+button('fork-selected-baseline').addEventListener('click', () => designWorkspace.createAlternative());
+button('open-chat').addEventListener('click', () => { showPage('request'); showRequestPane('details'); ui['request-text'].focus(); });
+button('selection-properties').addEventListener('click', () => workspace.showInspector());
+for (const id of ['selection-ask', 'selection-move']) button(id).addEventListener('click', () => {
+  if (!selectedObject || selectedDesignTarget.kind === 'baseline') return;
+  showPage('request'); showRequestPane('details');
+  if (!attachChatContext([selectedObject])) return;
+  if (id === 'selection-move') {
+    const selected = preview?.entities.find(item => item.id === selectedObject);
+    if (!ui['request-text'].value.trim()) ui['request-text'].value = `Move ${selected?.name ?? 'the selected item'} `;
+    status('Drag the + handle in the model to mark a destination, then describe the move in chat. Nothing moves until a proposal is accepted.');
+  }
+  composer.refresh(); updateControls(); ui['request-text'].focus();
+});
 
 function attachChatContext(ids: readonly string[]): boolean {
   try {
@@ -890,6 +925,10 @@ function scheduleAuthPoll(): void {
 }
 
 function updateControls() {
+  const selection = (liveChatPreview?.snapshot ?? preview)?.entities.find(item => item.id === (livePreviewSelection ?? selectedObject));
+  generic('selection-context').hidden = !selection;
+  generic('selection-context-label').textContent = selection ? `${selection.name} · ${selection.type}` : '';
+  for (const id of ['selection-ask', 'selection-move']) button(id).disabled = busy || !selection || selectedDesignTarget.kind === 'baseline' || !serverAvailable;
   renderEvidenceContext();
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
@@ -1057,7 +1096,7 @@ function chooseObject(id: string): void {
   const item = preview?.entities.find((entity) => entity.id === id);
   if (item?.type === 'Space') focusedRoomId = item.id;
   else if (preview && focusedRoomId && item) focusedRoomId = entitySpace(preview, item)?.id ?? focusedRoomId;
-  syncInspector(); renderComparison(); updateControls(); workspace.showInspector();
+  syncInspector(); renderComparison(); updateControls();
 }
 
 ui['selected-object'].addEventListener('change', () => {
@@ -1127,11 +1166,12 @@ function displayAccepted(next: RoomRepository): void {
   if (projectChanged || !next.designTargets().some(view => designKey(view.target) === designKey(selectedDesignTarget))) selectedDesignTarget = { kind: 'main' };
   if (projectChanged) { newDraftId = 'new'; backlogItems = []; ticketScopes.clear(); submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
   serverProjectText = text;
-  serverHeadRevisionId = selectedDesignHead(next);
+  serverAcceptedRepository = next;
   historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
   ui['server-history-list'].replaceChildren();
   ui['server-history-status'].textContent = 'Open History to read the accepted server ancestry.';
   repo = next;
+  void refreshSourceMentions(next.projectId).catch(() => { if (sourceLibrary?.projectId !== next.projectId) sourceLibrary = null; });
   inspectedChatView = null;
   reviewRepository = null;
   activeReview = null;
@@ -1171,7 +1211,7 @@ async function createProject(name: string): Promise<void> {
   ui['project-name'].value = next.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
-  showPage('project');
+  showPage('request');
   status(generated ? seeded ? 'Generated residential model and test evidence saved. NOT SURVEY data; inspect the intentional contradiction before approving changes.'
     : 'Generated model saved. Evidence setup is incomplete; use Prepare generated evidence in Project tools to finish safely.'
     : 'Original model saved on the server. Choose a room and describe a request to begin.');
@@ -1205,7 +1245,7 @@ async function createHousePilot(): Promise<void> {
   ui['project-name'].value = fixture.repository.name;
   closeDialog(ui['start-dialog']);
   showRequestPane('canvas');
-  showPage('project');
+  showPage('request');
   status('House Pilot opened. Choose the reference room to explore the synchronized model.');
 }
 
@@ -1570,6 +1610,8 @@ ui['proposal-form'].addEventListener('submit', (event) => {
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
     const fingerprint = JSON.stringify(content);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
+    await retainSubmittedSources({ projectId: repo.projectId, sources, client: submittedSourceClient });
+    void refreshSourceMentions(repo.projectId).catch(() => {});
     const response = await fetch('/api/change-requests', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...content, request: { ...content.request, requestId: submission.requestId } }),
@@ -1694,6 +1736,7 @@ function updateChatProposalCard(): void {
   if (message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== review.requestId
     || message.content.proposalRevisionId !== review.proposalRevisionId) { requestChat.setProposalReview(null); return; }
   requestChat.setProposalReview({ messageId, requestId: review.requestId, proposalRevisionId: review.proposalRevisionId,
+    targetLabel: designLabel(),
     ...(review.target ? { target: review.target } : {}), ...(review.evidenceUses ? { evidenceUses: review.evidenceUses } : {}),
     summary: review.summary, rationale: review.rationale, constraints: review.constraints, uncertainty: review.uncertainty,
     status: generic('review-status').textContent ?? 'Proposal', canAccept: !ui['accept-proposal'].disabled,
@@ -1787,6 +1830,8 @@ async function sendChatReply(): Promise<void> {
   if (!chatReply || chatReply.fingerprint !== fingerprint) chatReply = { fingerprint, body: parseConversationReply({
     ...content, messageId: globalThis.crypto.randomUUID(), expectedSequence: conversation.sequence,
   }) };
+  await retainSubmittedSources({ projectId: repo.projectId, sources: content.sources, client: submittedSourceClient });
+  void refreshSourceMentions(repo.projectId).catch(() => {});
   const response = await fetch(`/api/change-requests/${encodeURIComponent(id)}/messages`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatReply.body),
   });
@@ -1918,10 +1963,9 @@ async function refreshBacklog(): Promise<void> {
     if (accepted && (accepted.projectId !== projectId || accepted.root() !== repo.root())) throw new Error('Accepted backlog model identity mismatch.');
     const changed = JSON.stringify(items) !== JSON.stringify(backlogItems);
     backlogItems = items; serverProjectText = value.project;
-    if (accepted) serverHeadRevisionId = selectedDesignHead(accepted);
-    serverConnection(true, serverHeadRevisionId !== selectedDesignHead(repo)
-      ? 'Server has a newer accepted model · open current model from Backlog · request sketch is unsaved'
-      : `Server saved · ${designLabel()} · displayed accepted ${selectedDesignHead(repo).slice(0, 10)} · request sketches are unsaved`);
+    if (accepted) serverAcceptedRepository = accepted;
+    serverConnection(true, designSaveStatus({ name: designLabel(), target: selectedDesignTarget,
+      displayedRevisionId: selectedDesignHead(repo), serverRevisionId: selectedDesignHead(serverAcceptedRepository ?? repo) }));
     ui['backlog-connection'].textContent = 'Synced with server · work continues when this page is closed';
     if (changed) renderBacklog();
     updateControls();
