@@ -109,7 +109,7 @@ test('panel behavior at the DOM boundary; no browser layout or touch qualificati
     assert.ok(requests.every(url => !url.includes('/sources/')), 'listing never fetches blobs or previews'); panel.dispose();
   });
 
-  await t.test('missing and busy errors retry independently; binding aborts stale work and clears chosen context', async () => {
+  await t.test('missing and busy errors retry independently; binding aborts stale work and clears panel choices', async () => {
     const host = mount(); const root = tree(host); let attempts = 0; let finishOld: ((value: Response) => void) | undefined;
     const old = new Promise<Response>(resolve => { finishOld = resolve; });
     let rejectContext = false; const contexts: (string | null)[] = [];
@@ -127,7 +127,7 @@ test('panel behavior at the DOM boundary; no browser layout or touch qualificati
     const stale = panel.show({ ...context, projectId: 'old-project' }); assert.ok(root.all().some(element => element.getAttribute('aria-busy') === 'true'));
     await panel.show({ ...context, projectId: 'new-project' }); finishOld?.(reply({ entries: [], next: null })); await stale;
     assert.match(root.textContent, /Displaying new-project/); assert.deepEqual(panel.selectedSourceDescriptors, []);
-    assert.ok(contexts.includes('new-project'));
+    assert.deepEqual(contexts, [], 'Navigation must not call the parent composer.');
     await panel.bind(null); assert.match(root.textContent, /Choose a project/); panel.dispose(); assert.equal(root.textContent, '');
   });
 
@@ -149,17 +149,58 @@ test('panel behavior at the DOM boundary; no browser layout or touch qualificati
     await panel.refresh(); assert.equal(panel.selectedSourceDescriptors.length, 0); panel.dispose();
   });
 
-  await t.test('parent context clearing finishes before fresh choices can be applied', async () => {
-    const host = mount(); const root = tree(host); let finish: (() => void) | undefined;
-    const gate = new Promise<void>(resolve => { finish = resolve; });
+  await t.test('navigation and refresh preserve parent chat drafts; only explicit empty Use actions clear composer context', async () => {
+    const host = mount(); const root = tree(host); let calls = 0;
+    let parentSources = [source]; let parentPins = [pin];
     const panel = new ProjectEvidencePanel(host, { client: new ProjectEvidenceClient(async input => reply(String(input).endsWith('/project-sources')
-      ? { sources: [source], next: null } : { entries: [], next: null })), useSources: async () => { await gate; }, useEvidence: () => {} });
-    const binding = panel.bind(context);
-    await until(() => root.textContent.includes(source.name));
-    assert.equal(button(root, 'Use chosen files in chat (0)').disabled, true);
-    assert.ok(root.all().filter(element => element.type === 'checkbox').every(element => element.disabled));
-    finish?.(); await binding;
-    assert.equal(button(root, 'Use chosen files in chat (0)').disabled, false); panel.dispose();
+      ? { sources: [source], next: null } : { entries: [{ entry, pin }], next: null })),
+      useSources: values => { calls++; parentSources = structuredClone([...values]); },
+      useEvidence: values => { calls++; parentPins = structuredClone([...values]); } });
+    await panel.show({ ...context, bindingId: 'chat-a' });
+    choose(root, `Choose ${source.name} for chat`); choose(root, 'Choose record record-1 for chat');
+    await panel.update({ ...context, bindingId: 'chat-b' });
+    assert.deepEqual(panel.selectedSourceDescriptors, []); assert.deepEqual(panel.selectedEvidencePins, []);
+    await panel.refresh(); await panel.bind(null); await panel.show(context);
+    assert.equal(calls, 0); assert.deepEqual(parentSources, [source]); assert.deepEqual(parentPins, [pin]);
+    button(root, 'Use chosen files in chat (0)').trigger('click'); await until(() => parentSources.length === 0);
+    assert.deepEqual(parentPins, [pin]);
+    button(root, 'Use chosen records in chat (0)').trigger('click'); await until(() => parentPins.length === 0);
+    assert.equal(calls, 2); await panel.bind(null); panel.dispose(); assert.equal(calls, 2);
+  });
+
+  const kinds: ('sources' | 'evidence')[] = ['sources', 'evidence'];
+  for (const kind of kinds) await t.test(`same-project chat switch aborts pending ${kind} callbacks and cannot overwrite new-chat status`, async () => {
+    const host = mount(); const root = tree(host); let fetches = 0;
+    let finishA: (() => void) | undefined; let finishB: (() => void) | undefined;
+    const gateA = new Promise<void>(resolve => { finishA = resolve; });
+    const gateB = new Promise<void>(resolve => { finishB = resolve; });
+    const callbacks: { bindingId: string | undefined; signal: AbortSignal }[] = []; const settled: string[] = []; const applied: string[] = [];
+    async function apply(binding: ProjectEvidenceContext | null, signal: AbortSignal): Promise<void> {
+      const bindingId = binding?.bindingId; callbacks.push({ bindingId, signal });
+      if (bindingId === 'chat-a') await gateA;
+      else if (bindingId === 'chat-b') await gateB;
+      else throw new Error('Unexpected implicit composer callback.');
+      if (!signal.aborted) applied.push(bindingId);
+      settled.push(bindingId);
+    }
+    const panel = new ProjectEvidencePanel(host, { client: new ProjectEvidenceClient(async input => {
+      fetches++; return reply(String(input).endsWith('/project-sources') ? { sources: [source], next: null } : { entries: [{ entry, pin }], next: null });
+    }), useSources: (_values, binding, signal) => apply(binding, signal), useEvidence: (_values, binding, signal) => apply(binding, signal) });
+    const label = kind === 'sources' ? `Choose ${source.name} for chat` : 'Choose record record-1 for chat';
+    const action = kind === 'sources' ? 'Use chosen files in chat (1)' : 'Use chosen records in chat (1)';
+    await panel.show({ ...context, bindingId: 'chat-a' }); assert.equal(callbacks.length, 0);
+    choose(root, label); button(root, action).trigger('click'); assert.equal(callbacks.length, 1);
+    const old = callbacks[0]; assert.ok(old); assert.equal(old.signal.aborted, false);
+    const before = fetches; await panel.update({ ...context, bindingId: 'chat-a', selectedObject: null });
+    assert.equal(fetches, before); assert.equal(old.signal.aborted, false);
+    await panel.update({ ...context, bindingId: 'chat-b' });
+    assert.equal(old.signal.aborted, true); assert.equal(fetches, before + 2); assert.equal(callbacks.length, 1);
+    choose(root, label); button(root, action).trigger('click'); assert.equal(callbacks.length, 2);
+    finishA?.(); await until(() => settled.includes('chat-a'));
+    assert.equal(button(root, action).disabled, true); assert.deepEqual(applied, []);
+    assert.equal(root.textContent.includes('Chosen context sent to chat.'), false);
+    finishB?.(); await until(() => !button(root, action).disabled && applied.length === 1);
+    assert.deepEqual(applied, ['chat-b']); assert.match(root.textContent, /Chosen context sent to chat/); panel.dispose();
   });
 
   await t.test('file uploads use the shared private protocol, retain explicitly and retry retention without re-uploading', async () => {
