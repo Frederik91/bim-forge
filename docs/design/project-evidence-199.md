@@ -1,7 +1,9 @@
 # Project evidence ledger (#199)
 
 Child of [#197](https://github.com/Frederik91/bim-forge/issues/197), stacked on
-`feature/issue-197-synthetic-pilot` at `d914ab4`. Storage changes require human
+`feature/issue-197-synthetic-pilot`. Initial baseline was `d914ab4`; the final
+qualification uses parent `40b207c` plus owned commits `fe17f9e` and `46e36db`.
+Storage changes require human
 review. This slice owns evidence domain/storage, existing source retention and
 their tests. The parent owns queue, native review fields, server, ScriptBox, UI
 and package integration.
@@ -49,7 +51,9 @@ name the original candidate IDs, selected candidate and rationale. Their selecte
 claim keeps its original provenance kind.
 
 `demo/project-evidence-store.ts` exports `ProjectEvidenceStore`,
-`EvidenceBundleClosure`, `evidenceHash`, `evidenceAnchor`, `evidenceApplicable`.
+`EvidenceBundleClosure`, `StoredEvidence`, `EvidenceReviewReadiness`,
+`EvidenceReviewContext`, `EvidenceContextIssue`, `evidenceHash`, `evidenceAnchor`,
+`evidenceApplicable`.
 The hashes use SHA-256 over the existing native canonical entity-body preimage.
 
 ```typescript
@@ -253,10 +257,13 @@ automations, merging, deploying or issue closing were used.
 | 3 | `residential197/evidence199-3`, `bim-evidence199-a3` | root validate; 28/28 focused tests | No failure. Added bounded retained-source metadata discovery. SQLite authorizer denied BLOB reads during listing; paging, isolation, cursor guards, expiry/restart and original integrity checks passed. |
 | 4 | `residential197/evidence199-4`, `bim-evidence199-a4` | root validate; 39/39 focused tests | No failure. Qualified explicit proposal review choices with strict conflict refusal unchanged. |
 | 5 | `residential197/evidence199-5`, `bim-evidence199-a5` | root validate; 43/43 focused tests | No failure. Qualified bounded complete generation context and exact32-entry/64KiB boundaries. Independent review then required consumed-pin supersession and target-lineage hardening before final handoff. |
+| 6 | `residential197/evidence199-6`, `bim-evidence199-a6` | root validate failed; 48/48 focused tests passed | TS2741: borrowed native fixtures in `src/design-targets.test.ts` and `demo/versioned-project-store.test.ts` lacked new required target fields. No owned-code or test failure. Parent supplied fixture-only fix `40b207c`; no validator was changed. |
+| 7 | `residential197/evidence199-7`, `bim-evidence199-a7` | root validate; 85/85 tests | Passed after rebasing on parent `40b207c`. Includes all 48 evidence/source tests and 37 native target/store tests. Superseded consumed roots/bases, shared-root sibling claims/resolutions, irrelevant corrupt sibling source, unchanged-read freshness across unrelated edits, R2 new-fact invalidation and baseline inheritance/caps passed. |
 
 All slots are under `/ssd1/bim-forge-qualification/`. Clean source snapshots use
-the `d914ab4` archive for attempts 1/2 and `aa7104c` for attempt 3, plus owned-file
-overlays, mounted read-only. Dependencies:
+the `d914ab4` archive for attempts 1/2, `aa7104c` for attempt 3 and `85cc5c2` for
+attempts 4/5, plus owned-file overlays. Attempts 6/7 use full clean committed
+archives; final archive is `46e36db` on parent `40b207c`. Mounts are read-only. Dependencies:
 `/ssd1/bim-forge-qualification/all-ready-195/final/dependencies`, read-only. Image:
 `bim-qvm-tools:20261025`, ID
 `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`.
@@ -268,21 +275,24 @@ one test process at a time, per-test timeout 60 s.
 npm run validate
 node --test --test-concurrency=1 --test-timeout=60000 \
   src/model-evidence.test.ts demo/project-evidence-store.test.ts \
-  demo/request-source-store.test.ts
+  demo/request-source-store.test.ts src/design-targets.test.ts \
+  demo/versioned-project-store.test.ts
 ```
 
 Final validator/test output:
 
 ```text
-Strict TypeScript valid. 249 source file(s) checked.
+Strict TypeScript valid. 255 source file(s) checked.
 > tsc --noEmit
 Policy valid. 0 changed file(s) checked.
-tests 28; pass 28; fail 0; cancelled 0; skipped 0; todo 0
+tests 85; pass 85; fail 0; cancelled 0; skipped 0; todo 0
+VALIDATE_EXIT=0; FOCUSED_EXIT=0
 ```
 
 The standard root validate policy command does not pass changed paths; its
-reported zero is preserved above. All seven PR paths are within the explicit
-ownership and outside the policy denylist. `git diff --check` also passes.
+reported zero is preserved above. The final diff against parent `40b207c` has
+five owned paths, outside the policy denylist. Borrowed parent/core commits are
+upstream dependencies, not issue-owned edits. `git diff --check` also passes.
 Logs/manifests are retained in each server slot and local `artifacts/private/`.
 
 Attempt 2 archives (SHA-256), retained for the initial implementation:
@@ -292,29 +302,41 @@ Attempt 2 archives (SHA-256), retained for the initial implementation:
 71291b7e311563a42e676b704cf3fe16e366e9edf877596b53e9dcf2050ede0f evidence199-overlay-a2.tar
 ```
 
-Final attempt 3 archives (SHA-256):
+Attempt 3 archives (SHA-256):
 
 ```text
 e92148f068697b0918b8e85ab61fce1c3b5e18aa0c6b0bab4c132edc261af888 source-base-a3.tar
 601dfe6e8307d3b048ff0d46a16dea1beb0cbac9eee5f5f4accba3f8025aa228 evidence199-overlay-a3.tar
 ```
 
+Final attempt 7 source archive (SHA-256):
+
+```text
+67eb63c6b2e8a0fca77661e0eb3d39c5f80cf750af7b298af921922ca53db335 source-base-a7.tar
+```
+
 Final qualified source files (SHA-256, exact bytes):
 
 ```text
-1f4d8c8919c70c37deb3a1a8d2a805494f7ca85ce1490bb4da3bfcc56e5cbbaa src/model-evidence.ts
-e54d088727ddd4ebaa5c513f98db70d1f00be0afe570421fa9c80f4c6eecf0cf src/model-evidence.test.ts
-0f8987b336357dbc53cf165170170ad85e2c34063682bb7839c200d674fdf70c demo/project-evidence-store.ts
-1e38c30a63e4dedc594d97569843b833a662775c6d94e89a8a6bd0e8ad44dbc6 demo/project-evidence-store.test.ts
+e06e292145fd80990af386948cdb0f8a0f352ea6bdefa919138db8bfd0c66e5a src/model-evidence.ts
+474074054fb82008b088354f759631439b724c3a28cb0b95b66b7f42f7aaba59 src/model-evidence.test.ts
+a0fcef21f7f84e0177fd19b9c196f4e462181f2a7dd06088ac5b115589e1a8b0 demo/project-evidence-store.ts
+4cbe99df27d72ff6988e0cfa289c95b1cf75cb3a29f91bae4659cdc71009c75b demo/project-evidence-store.test.ts
 345f8cf19d1ac77755c81c98abdb1e7666402c490b41edc9117a2e5f430c1d35 demo/request-source-store.ts
 cb0cb01105fc20ffc9d829bbdad6ded04f82ef1d709ada0f769e4d70ab862c4a demo/request-source-store.test.ts
 ```
 
-The source-discovery follow-up changes only the existing source store, its tests
-and this issue-specific note. Parent integration already contains the initial
-ledger. The parent independently qualifies queue/native-review wiring, package
-registration, UI, browser/full-suite behavior and private-bundle import. The
-review-read-set implementation is unchanged by this follow-up, including its
-same-subject comparison across exact native revision/body applicability checks.
-This qualification covers the domain/store boundary, without a claim about the
-combined workflow, UI or engineering-survey behavior.
+The source-discovery commit `85cc5c2` is already integrated by the parent. Final
+owned code commits are `fe17f9e` (schemas) and `46e36db` (review policy/context and
+lineage/supersession fixes), rebased onto parent `40b207c`; earlier shared local
+IDs `12fe44c` and `e7d0f91` contain equivalent owned patches. The final proof-note
+commit changes documentation only; the six code/test hashes above remain exact.
+Seven of ten total attempts were used. Attempt 6's known dependency failure was
+resolved by the parent fixture patch; final validators and all 85 tests pass.
+
+Parent integration still owns `nativeReview.evidenceUses` hashing/display,
+native target-equality guards and guest/queue/server/UI wiring. The parent
+independently qualifies those callers, package registration, browser/full-suite
+behavior and private-bundle import. This proof covers the domain/store and
+borrowed native target/store tests without claiming the combined UI workflow or
+engineering-survey qualification.
