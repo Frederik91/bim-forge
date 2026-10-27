@@ -759,6 +759,8 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
   .workspace-stage #chat-proposal-tools #chat-proposal-return::before { content: '×'; font-size: 20px; }
   #request-canvas-pane > .model-card-heading { padding: 4px 8px; min-height: 0; }
   .workspace-shell[data-context="request"][data-context-open="true"] #request-canvas-pane > footer { display: none; }
+  .workspace-shell[data-context="request"][data-context-open="true"] :is(#chat-proposal-tools, #selection-context, #model-3d-controls, .model-object-picker) { display: none; }
+  .workspace-shell[data-context="request"][data-context-open="true"] .model-selection-caption { max-width: calc(100% - 16px); padding: 2px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 }
 
 @media (min-width: 901px) {

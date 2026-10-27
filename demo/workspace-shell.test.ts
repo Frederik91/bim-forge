@@ -176,6 +176,7 @@ test('workspace panels preserve the model through desktop resizing, collapse and
           const drawing = document.getElementById('proposal-drawing'); drawing?.before(bar);
         });
         await frame(page);
+        if (width <= 900) await page.locator('#workspace-context-close').click();
         for (const selector of ['.design-workspace-select', '.design-workspace-switcher > button', '.selection-context button']) {
           for (const control of await page.locator(selector).all()) {
             const bounds = await control.boundingBox(); assert.ok(bounds);
@@ -207,7 +208,8 @@ test('workspace panels preserve the model through desktop resizing, collapse and
       const history = await box(page, '#request-chat-mount');
       const model = await box(page, '#workspace-test-canvas'); const panel = await box(page, '#workspace-context');
       assert.ok(history.height >= 120, `Readable history was only ${history.height}px`);
-      assert.ok(Math.min(model.y + model.height, panel.y) - model.y >= 80, 'Model geometry remains visible above the chat');
+      assert.ok(Math.min(model.y + model.height, panel.y) - model.y >= 200, 'The model preview stays useful while reading chat');
+      assert.equal(await page.locator('#model-3d-controls').isVisible(), false, 'Closing chat restores the full model toolbars');
       assert.equal(await page.locator('#request-options').isVisible(), false, 'Advanced options start under the + menu');
       assert.ok((await box(page, '#composer-add')).height >= 44);
       await modelRemainsVisible(page, 390);
