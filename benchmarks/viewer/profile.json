@@ -1,0 +1,16 @@
+{
+  "id": "viewer-192-v1",
+  "status": "setup-only",
+  "viewport": { "width": 1280, "height": 800, "deviceScaleFactor": 1 },
+  "materialProfile": "basic-double-sided-opaque-unqualified-fidelity",
+  "coordinateSystem": "right-handed-y-up-metres",
+  "coldOpens": 5,
+  "warmSessions": 10,
+  "interactionSamples": 100,
+  "proposalSizes": [1, 10, 100, 1000],
+  "stressProposalSize": 10000,
+  "reviewCycles": 100,
+  "network": { "bandwidthMbit": 50, "rttMs": 30 },
+  "targets": { "usefulFrameMs": 5000, "overviewMs": 30000, "p95FrameMs": 33.3, "p95PickMs": 100, "p95PropertiesMs": 200, "p95ComparisonMs": 1000 },
+  "dataset": { "status": "missing-real-project", "minimumGrossFloorAreaM2": 200000, "requiredDisciplines": ["architecture", "structure", "mechanical", "electrical", "plumbing"] }
+}
