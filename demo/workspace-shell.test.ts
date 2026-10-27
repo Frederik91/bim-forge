@@ -195,6 +195,7 @@ test('workspace panels preserve the model through desktop resizing, collapse and
       await page.evaluate(() => {
         const shell = document.getElementById('workspace-shell'); if (shell) shell.dataset.chatModel = 'proposal';
         const tools = document.getElementById('chat-proposal-tools'); if (tools) tools.hidden = false;
+        const controls = document.getElementById('model-3d-controls'); if (controls) controls.hidden = false;
         const selection = document.getElementById('selection-context'); if (selection) selection.hidden = false;
         const transcript = document.createElement('section'); transcript.className = 'request-chat';
         for (let index = 0; index < 30; index++) {

@@ -755,8 +755,10 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
   #chat-proposal-tools { flex-wrap: nowrap; }
   #chat-proposal-tools strong { flex: 1 1 auto; white-space: nowrap; }
   #chat-proposal-changes { display: none; }
-  #chat-proposal-return { width: 44px; min-width: 44px; padding: 0; font-size: 0; }
-  #chat-proposal-return::before { content: '×'; font-size: 20px; }
+  .workspace-stage #chat-proposal-tools #chat-proposal-return { width: 44px; min-width: 44px; padding: 0; font-size: 0; }
+  .workspace-stage #chat-proposal-tools #chat-proposal-return::before { content: '×'; font-size: 20px; }
+  #request-canvas-pane > .model-card-heading { padding: 4px 8px; min-height: 0; }
+  .workspace-shell[data-context="request"][data-context-open="true"] #request-canvas-pane > footer { display: none; }
 }
 
 @media (min-width: 901px) {
