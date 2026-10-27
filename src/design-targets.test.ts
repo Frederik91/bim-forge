@@ -7,6 +7,7 @@ import { parseDesignTarget, parseFrozenDesignTarget, parseWritableDesignTarget }
 import type { FrozenDesignTarget } from './design-targets.ts';
 import { createResidentialProject } from './residential-floor.ts';
 import { freezeModelScope } from './model-scope.ts';
+import type { EvidenceReadSet } from './model-evidence.ts';
 
 const main = { kind: 'main' } satisfies { kind: 'main' };
 const kitchen = { kind: 'alternative', id: identifier('kitchen') } satisfies { kind: 'alternative'; id: string };
@@ -200,4 +201,63 @@ test('native wall proposal enforces wall AND changed-space authority and reports
   assert.ok(wall?.before.type === 'Wall' && wall.after.type === 'Wall');
   assert.deepEqual(wall.before.start, [5, 0]); assert.deepEqual(wall.after.start, [5.3, 0]);
   assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
+});
+
+function evidenceReadSet(repository: RoomRepository, target: FrozenDesignTarget): EvidenceReadSet {
+  return { version: 1, projectId: repository.projectId, revisionId: target.revisionId,
+    pins: [{ entryId: 'measured-entry', hash: 'a'.repeat(64) }], subjects: [{ subject: {
+      anchor: { projectId: repository.projectId, revisionId: target.revisionId, entityId: 'door-entry', bodyHash: 'b'.repeat(64) },
+      property: { definitionId: 'geometry-width', valueKind: 'length' } }, signature: 'c'.repeat(64) }] };
+}
+
+test('optional native review evidence retains the authoritative read set and declares external portable dependencies', async () => {
+  const repository = await fixture(); const target = repository.freezeDesignTarget(kitchen);
+  const evidence = evidenceReadSet(repository, target);
+  const snapshot = structuredClone(repository.view(target.revisionId).snapshot); rename(snapshot, 'door-entry', 'Pinned evidence entry');
+  const proposed = await repository.proposeReviewedModel({ name: 'evidence-pinned', from: target.revisionId, target, snapshot,
+    review: { ...record(details('evidence-pinned')), evidence } });
+  const accepted = proposed.accept('evidence-pinned', { decisionId: 'accept-pinned', actor: 'human' }, target);
+  assert.deepEqual(accepted.review('evidence-pinned').evidence, evidence);
+  assert.ok(Object.isFrozen(accepted.review('evidence-pinned').evidence));
+  const state = accepted.persistence(); assert.equal(state.version, 3);
+  assert.ok(state.version === 3);
+  assert.deepEqual(state.externalDependencies, { evidence: 'external', sourceBytes: 'external' });
+  assert.equal((await RoomRepository.restore(accepted.serialize())).serialize(), accepted.serialize());
+  assert.equal(accepted.head('main'), repository.root());
+});
+
+test('core evidence boundary rejects tampered project, base revision, subject project and pin shape without state changes', async () => {
+  const repository = await fixture(); const target = repository.freezeDesignTarget(kitchen);
+  const evidence = evidenceReadSet(repository, target);
+  const snapshot = structuredClone(repository.view(target.revisionId).snapshot); rename(snapshot, 'door-entry', 'Evidence validation');
+  const subject = evidence.subjects[0]; assert.ok(subject);
+  const invalid = [
+    { ...evidence, projectId: crypto.randomUUID() },
+    { ...evidence, revisionId: 'd'.repeat(64) },
+    { ...evidence, subjects: [{ ...subject, subject: { ...subject.subject, anchor: { ...subject.subject.anchor, projectId: crypto.randomUUID() } } }] },
+    { ...evidence, pins: [{ entryId: 'broken', hash: 'invalid' }] },
+  ];
+  const before = repository.serialize();
+  for (const bad of invalid) {
+    await assert.rejects(repository.proposeReviewedModel({ name: 'invalid-evidence', from: target.revisionId, target, snapshot,
+      review: { ...record(details('invalid-evidence')), evidence: bad } }), /Evidence read set|Invalid bounded evidence/i);
+  }
+  assert.equal(repository.serialize(), before);
+});
+
+test('portable restore rejects changed evidence binding or source-byte inclusion claims even with valid geometry hashes', async () => {
+  const repository = await fixture(); const target = repository.freezeDesignTarget(kitchen);
+  const snapshot = structuredClone(repository.view(target.revisionId).snapshot); rename(snapshot, 'door-entry', 'Portable evidence');
+  const proposed = await repository.proposeReviewedModel({ name: 'portable-evidence', from: target.revisionId, target, snapshot,
+    review: { ...record(details('portable-evidence')), evidence: evidenceReadSet(repository, target) } });
+  const accepted = proposed.accept('portable-evidence', { decisionId: 'accept-portable-evidence', actor: 'human' }, target);
+  const state = accepted.persistence(); assert.ok(state.version === 3);
+  for (const key of ['projectId', 'revisionId']) {
+    const modified = { ...state, reviews: state.reviews.map(review => ({ ...review,
+      evidence: { ...review.evidence, [key]: key === 'projectId' ? crypto.randomUUID() : 'e'.repeat(64) } })) };
+    await assert.rejects(RoomRepository.restore(JSON.stringify(modified)), /exact review project and base revision/);
+  }
+  await assert.rejects(RoomRepository.restore(JSON.stringify({ ...state, externalDependencies: { evidence: 'included', sourceBytes: 'included' } })), /source bytes are not included/);
+  const { externalDependencies, ...undeclared } = state;
+  await assert.rejects(RoomRepository.restore(JSON.stringify(undeclared)), /model fields/);
 });

@@ -1,3 +1,5 @@
+import { parseEvidenceReadSet } from './model-evidence.ts';
+import type { EvidenceReadSet } from './model-evidence.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 import type { WallShiftRequest, WallShiftImpact } from './wall-dependencies.ts';
 import { parseDesignTarget, parseWritableDesignTarget, parseFrozenDesignTarget, parseDesignTargets, sameDesignTarget } from './design-targets.ts';
@@ -206,6 +208,7 @@ export interface ProposalReview {
   authoringScope?: AuthoringScope;
   scope?: FrozenModelScope;
   target?: FrozenDesignTarget;
+  evidence?: EvidenceReadSet;
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
@@ -235,6 +238,7 @@ interface RepositoryStateV3 {
   branches: Branch[];
   reviews: ProposalReview[];
   designTargets: DesignTargetsState;
+  externalDependencies?: { readonly evidence: 'external'; readonly sourceBytes: 'external' };
 }
 export type RepositoryState = RepositoryStateV1 | RepositoryStateV2 | RepositoryStateV3;
 type ModelItem = Entity | HostingRelationship;
@@ -429,8 +433,9 @@ function validateScriptReview(executions: ScriptExecutionEvidence[], toolCalls: 
   }
 }
 
-function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, branches: Map<BranchName, Branch>): ProposalReview {
+function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, branches: Map<BranchName, Branch>, projectId: ProjectId): ProposalReview {
   const review = copy(input);
+  const hasEvidence = review !== null && typeof review === 'object' && Object.hasOwn(review, 'evidence');
   const hasTarget = review !== null && typeof review === 'object' && Object.hasOwn(review, 'target');
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
   const hasIntent = review !== null && typeof review === 'object' && Object.hasOwn(review, 'intent');
@@ -440,7 +445,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
     'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
     ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
-    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasTarget ? ['target'] : [])]);
+    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasTarget ? ['target'] : []), ...(hasEvidence ? ['evidence'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
   const baseRevisionId = revisionIdentifier(review.baseRevisionId);
@@ -492,6 +497,11 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     if (!scriptEvidence.scriptExecutions) fail('Script reviews require execution evidence.');
     validateScriptReview(scriptEvidence.scriptExecutions, toolCalls);
   }
+  const evidence = hasEvidence ? parseEvidenceReadSet(review.evidence) : undefined;
+  if (evidence && (evidence.projectId !== projectId || evidence.revisionId !== baseRevisionId
+      || evidence.subjects.some(item => item.subject.anchor.projectId !== projectId))) {
+    fail('Evidence read set must match the exact review project and base revision.');
+  }
   const target = hasTarget ? parseFrozenDesignTarget(review.target) : undefined;
   if (target && target.revisionId !== baseRevisionId) fail('Review target does not match its original base.');
   const scope = hasFrozenScope ? parseFrozenModelScope(review.scope) : undefined;
@@ -532,7 +542,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     constraints, uncertainty, worker: { provider, model, responseIds, usage: { inputTokens, outputTokens, totalTokens } },
     toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}),
     ...(hasSources ? { sources: parseRequestSources(review.sources) } : {}),
-    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), ...(target ? { target } : {}), validator: 'room-graph-v1', decision,
+    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), ...(target ? { target } : {}), ...(evidence ? { evidence } : {}), validator: 'room-graph-v1', decision,
   });
 }
 
@@ -1215,7 +1225,8 @@ export class RoomRepository {
     if (!value || Array.isArray(value) || typeof value !== 'object') fail('Unsupported saved project.');
     if (value.version === 1) fields(value, ['version', 'projectId', 'name', 'revisions', 'branches']);
     else if (value.version === 2) fields(value, ['version', 'projectId', 'name', 'revisions', 'branches', 'reviews']);
-    else if (value.version === 3) fields(value, ['version', 'projectId', 'name', 'revisions', 'branches', 'reviews', 'designTargets']);
+    else if (value.version === 3) fields(value, ['version', 'projectId', 'name', 'revisions', 'branches', 'reviews', 'designTargets',
+      ...(Object.hasOwn(value, 'externalDependencies') ? ['externalDependencies'] : [])]);
     else fail('Unsupported saved project.');
     const name = label(value.name);
     const projectId = projectIdentifier(value.projectId);
@@ -1276,11 +1287,11 @@ export class RoomRepository {
     if (value.version !== 1) {
       const requests = new Set<RequestId>(); const proposals = new Set<BranchName>();
       for (const item of reviewValues) {
-        const review = reviewRecord(item, revisions, branches);
+        const review = reviewRecord(item, revisions, branches, projectId);
         if (requests.has(review.requestId) || proposals.has(review.proposalName)) fail('Duplicate proposal review identity.');
         requests.add(review.requestId); proposals.add(review.proposalName); reviews.push(review);
       }
-      if (!targets && reviews.some(review => review.target)) fail('Target reviews require envelope version 3.');
+      if (!targets && reviews.some(review => review.target || review.evidence)) fail('Target/evidence reviews require envelope version 3.');
       const mainBranch = branches.get(branchName('main'));
       if (!mainBranch) fail('Saved project has missing or unreachable history.');
       const main = mainBranch.revisionId;
@@ -1294,9 +1305,17 @@ export class RoomRepository {
             && (item.decision.appliedRevisionId ?? item.proposalRevisionId) === onto)) fail('Proposal application must preserve an accepted predecessor.');
       }
     }
+    const externalDependencies: RepositoryStateV3['externalDependencies'] = reviews.some(review => review.evidence)
+      ? { evidence: 'external', sourceBytes: 'external' } : undefined;
+    if (externalDependencies) {
+      fields(value.externalDependencies, ['evidence', 'sourceBytes']);
+      if (value.externalDependencies.evidence !== 'external' || value.externalDependencies.sourceBytes !== 'external') {
+        fail('Portable evidence pins require external dependencies; source bytes are not included.');
+      }
+    } else if (Object.hasOwn(value, 'externalDependencies')) fail('Unexpected external evidence dependency declaration.');
     const restored: RepositoryState = value.version === 1
       ? { version: 1, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()] }
-      : targets ? { version: 3, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()], reviews, designTargets: targets }
+      : targets ? { version: 3, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()], reviews, designTargets: targets, ...(externalDependencies ? { externalDependencies } : {}) }
       : { version: 2, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()], reviews };
     const repository = new RoomRepository(token, restored);
     if (targets) repository.#validateTargets();
@@ -1314,9 +1333,12 @@ export class RoomRepository {
   #next(revisions = this.#state.revisions, branches = this.#state.branches,
     reviews = this.reviews(), targets = this.#targets()): RoomRepository {
     if (revisions.length > 32 || branches.length > 32 || reviews.length > 31) fail('Unsupported saved project. Demo history is full.');
+    if (reviews.some(review => review.evidence)) targets ??= { baselines: [], alternatives: [], proposals: [] };
+    const externalDependencies: RepositoryStateV3['externalDependencies'] = reviews.some(review => review.evidence)
+      ? { evidence: 'external', sourceBytes: 'external' } : undefined;
     const common = { projectId: this.projectId, name: this.name, revisions, branches };
     const state: RepositoryState = targets
-      ? { ...common, version: 3, reviews, designTargets: parseDesignTargets(targets, branchName) }
+      ? { ...common, version: 3, reviews, designTargets: parseDesignTargets(targets, branchName), ...(externalDependencies ? { externalDependencies } : {}) }
       : this.#state.version === 1 && reviews.length === 0 ? { ...common, version: 1 }
       : { ...common, version: 2, reviews };
     if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
@@ -1633,6 +1655,7 @@ export class RoomRepository {
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
     const details = proposal.review;
+    const hasEvidence = details !== null && typeof details === 'object' && Object.hasOwn(details, 'evidence');
     const hasScripts = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scriptExecutions');
     const hasIntent = details !== null && typeof details === 'object' && Object.hasOwn(details, 'intent');
     const hasSources = details !== null && typeof details === 'object' && Object.hasOwn(details, 'sources');
@@ -1640,7 +1663,7 @@ export class RoomRepository {
     const hasScope = details !== null && typeof details === 'object' && Object.hasOwn(details, 'authoringScope');
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
       'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
-      ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : [])]);
+      ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasEvidence ? ['evidence'] : [])]);
     const base = this.view(from);
     const target = this.#proposalTarget(proposal, from);
     const next = await this.#commit(proposalName, base, proposal.snapshot, hasFrozenScope ? parseFrozenModelScope(details.scope) : undefined, target);
@@ -1657,8 +1680,9 @@ export class RoomRepository {
       ...(hasScope ? { authoringScope: details.authoringScope } : {}),
       ...(hasFrozenScope ? { scope: details.scope } : {}),
       ...(target ? { target } : {}),
+      ...(hasEvidence ? { evidence: details.evidence } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
-    }, next.#revisions, branchMap(next.#state.branches));
+    }, next.#revisions, branchMap(next.#state.branches), this.projectId);
     const reviews = [...next.reviews(), record];
     if (reviews.some((item, index) => reviews.findIndex((other) => other.requestId === item.requestId || other.proposalName === item.proposalName) !== index)) {
       fail('Duplicate proposal review identity.');

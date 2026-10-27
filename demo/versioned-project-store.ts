@@ -3,7 +3,7 @@ import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
 import { RoomRepository, validateSnapshot, parseModelEntity, parseModelRelationship, branchName } from '../src/room-model.ts';
 import { parseDesignTargets, parseWritableDesignTarget, parseFrozenDesignTarget, sameDesignTarget } from '../src/design-targets.ts';
 import type { DesignTargetsState, WritableDesignTarget } from '../src/design-targets.ts';
-import type { ModelSnapshot, ModelGraph } from '../src/room-model.ts';
+import type { ModelSnapshot, ModelGraph, RepositoryState } from '../src/room-model.ts';
 import type { ProjectHistoryEntry, ProjectHistoryPage, ProjectSummary, RepositoryReference, VersionedProjects } from './versioned-project-contract.ts';
 
 type Kind = 'entity' | 'relationship';
@@ -25,6 +25,7 @@ interface Manifest {
   branches: { name: string; revisionId: string }[];
   reviews: { hash: string; decision: unknown }[];
   designTargets?: DesignTargetsState;
+  externalDependencies?: Extract<RepositoryState, { version: 3 }>['externalDependencies'];
 }
 let savepointSequence = 0;
 const MAX_BYTES = 256 * 1024;
@@ -83,6 +84,11 @@ function parsed(text: string): unknown {
 function bounded(limit: number, maximum: number): void {
   if (!Number.isInteger(limit) || limit < 1 || limit > maximum) fail(`limit must be 1..${maximum}.`);
 }
+function externalDependencies(input: unknown): NonNullable<Extract<RepositoryState, { version: 3 }>['externalDependencies']> {
+  const value = object(input);
+  if (Object.keys(value).length !== 2 || value.evidence !== 'external' || value.sourceBytes !== 'external') fail('invalid external dependency declaration.');
+  return { evidence: 'external', sourceBytes: 'external' };
+}
 function manifest(text: string): Manifest {
   const value = object(parsed(text));
   if (value.version !== 1 && value.version !== 2 && value.version !== 3) fail('invalid repository version.');
@@ -91,7 +97,8 @@ function manifest(text: string): Manifest {
       const branch = object(entry); return { name: string(branch.name), revisionId: string(branch.revisionId) };
     }), reviews: value.version !== 1 ? array(value.reviews, 31).map((entry) => {
       const review = object(entry); return { hash: string(review.hash), decision: review.decision };
-    }) : [], ...(value.version === 3 ? { designTargets: parseDesignTargets(value.designTargets, branchName) } : {}) };
+    }) : [], ...(value.version === 3 ? { designTargets: parseDesignTargets(value.designTargets, branchName),
+      ...(Object.hasOwn(value, 'externalDependencies') ? { externalDependencies: externalDependencies(value.externalDependencies) } : {}) } : {}) };
 }
 function delta(text: string): Delta {
   const value = object(parsed(text));
@@ -224,7 +231,7 @@ export class VersionedProjectStore implements VersionedProjects {
       }) : [];
       const metadata = { version: state.version, projectId: state.projectId, name: state.name,
         revisions: state.revisions.map((revision) => revision.id), branches: state.branches,
-        ...(state.version !== 1 ? { reviews } : {}), ...(state.version === 3 ? { designTargets: state.designTargets } : {}) };
+        ...(state.version !== 1 ? { reviews } : {}), ...(state.version === 3 ? { designTargets: state.designTargets, ...(state.externalDependencies ? { externalDependencies: state.externalDependencies } : {}) } : {}) };
       const text = canonical(metadata); const documentId = hash(text);
       const saved = this.#db.prepare('SELECT manifest FROM versioned_documents WHERE project_id = ? AND id = ?').get(state.projectId, documentId);
       if (saved) { if (saved.manifest !== text) fail('document hash corruption.'); }
@@ -314,7 +321,7 @@ export class VersionedProjectStore implements VersionedProjects {
     });
     const text = canonical({ version: metadata.version, projectId: metadata.projectId, name: metadata.name, revisions,
       branches: metadata.branches, ...(metadata.version !== 1 ? { reviews } : {}),
-      ...(metadata.version === 3 ? { designTargets: metadata.designTargets } : {}) });
+      ...(metadata.version === 3 ? { designTargets: metadata.designTargets, ...(metadata.externalDependencies ? { externalDependencies: metadata.externalDependencies } : {}) } : {}) });
     if (Buffer.byteLength(text) > MAX_BYTES) fail('reconstructed project exceeds the portable bound.');
     if (metadata.version === 3) RoomRepository.assertDesignTargetAuthority(parsed(text));
     return text;

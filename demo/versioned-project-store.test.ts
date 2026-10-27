@@ -9,6 +9,7 @@ import { RoomRepository, identifier } from '../src/room-model.ts';
 import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
 import type { ModelSnapshot } from '../src/room-model.ts';
 import { VersionedProjectStore } from './versioned-project-store.ts';
+import type { EvidenceReadSet } from '../src/model-evidence.ts';
 import type { WritableDesignTarget } from '../src/design-targets.ts';
 import type { RepositoryReference } from './versioned-project-contract.ts';
 
@@ -250,7 +251,7 @@ test('oversize typed persistence is refused before writes and preserves the acce
   const root = await RoomRepository.create(); const current = initial(store, root); const state = root.persistence();
   const before = [count(db, 'bodies'), count(db, 'revisions'), count(db, 'documents'), count(db, 'publications')];
   // Simulate a typed future repository mutator that omits a whole-document bound.
-  const oversized = Object.freeze({ ...state, name: 'ÃƒÆ’Ã‚Â§ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€¦Ã¢â‚¬â„¢'.repeat(90_000) });
+  const oversized = Object.freeze({ ...state, name: 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢'.repeat(90_000) });
   assert.ok(Buffer.byteLength(canonical(oversized)) > 256 * 1024);
   const invalid = new Proxy(root, { get(target, key): unknown {
     return key === 'persistence' ? () => oversized : Reflect.get(target, key);
@@ -311,14 +312,14 @@ async function targetFixture(store: VersionedProjectStore): Promise<{ repository
   return { repository, reference };
 }
 
-async function targetStudy(repository: RoomRepository, name: string, target: WritableDesignTarget): Promise<RoomRepository> {
+async function targetStudy(repository: RoomRepository, name: string, target: WritableDesignTarget, evidence?: EvidenceReadSet): Promise<RoomRepository> {
   const frozen = repository.freezeDesignTarget(target); const snapshot = structuredClone(repository.view(frozen.revisionId).snapshot);
   const door = snapshot.entities.find(item => item.type === 'Door'); assert.ok(door); door.name = name;
   return repository.proposeReviewedModel({ name, from: frozen.revisionId, target: frozen, snapshot,
     review: { requestId: `request-${name}`, selectedObjectIds: ['door-entry'], instruction: 'Prepare a target fixture.',
       summary: 'Rename entry.', rationale: 'Prove target authority.', constraints: 'Retain siblings.', uncertainty: 'Synthetic fixture.',
       worker: { provider: 'fixture', model: 'target-store', responseIds: [], usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
-      toolCalls: [{ name: 'preview_furnishings', status: 'accepted', error: null }], validator: 'room-graph-v1' } });
+      toolCalls: [{ name: 'preview_furnishings', status: 'accepted', error: null }], validator: 'room-graph-v1', ...(evidence ? { evidence } : {}) } });
 }
 
 function publishTarget(store: VersionedProjectStore, repository: RoomRepository, previous: RepositoryReference,
@@ -505,4 +506,24 @@ test('identical sibling geometry retains distinct target-local review decisions 
   publishTarget(store, both, firstRef, 'same-bedroom', targetBedroom, repository.root());
   assert.equal(store.history({ projectId: repository.projectId, target: targetKitchen, before: null, limit: 50 }).entries[0]?.decisionId, 'decision-same-change');
   assert.equal(store.history({ projectId: repository.projectId, target: targetBedroom, before: null, limit: 50 }).entries[0]?.decisionId, 'decision-same-bedroom');
+});
+
+
+test('changed-only documents hash native evidence pins before decisions and retain explicit external dependencies on restart', async t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close()); const store = new VersionedProjectStore(db);
+  const { repository, reference } = await targetFixture(store); const frozen = repository.freezeDesignTarget(targetKitchen);
+  const evidence: EvidenceReadSet = { version: 1, projectId: repository.projectId, revisionId: frozen.revisionId,
+    pins: [{ entryId: 'authoritative-entry', hash: 'a'.repeat(64) }], subjects: [] };
+  const proposed = await targetStudy(repository, 'store-evidence', targetKitchen, evidence);
+  const pendingReference = store.put(proposed); const countBefore = count(db, 'reviews');
+  const accepted = proposed.accept('store-evidence', { decisionId: 'decision-store-evidence', actor: 'human' }, frozen);
+  const published = publishTarget(store, accepted, reference, 'store-evidence', targetKitchen, repository.root());
+  assert.equal(count(db, 'reviews'), countBefore);
+  assert.deepEqual((await RoomRepository.restore(store.read(pendingReference))).review('store-evidence').evidence, evidence);
+  const restored = await RoomRepository.restore(store.read(published));
+  assert.deepEqual(restored.review('store-evidence').evidence, evidence);
+  const state = restored.persistence(); assert.ok(state.version === 3);
+  assert.deepEqual(state.externalDependencies, { evidence: 'external', sourceBytes: 'external' });
+  const body = db.prepare('SELECT body FROM versioned_reviews').get(); assert.ok(body && typeof body.body === 'string');
+  assert.ok(body.body.includes('authoritative-entry'));
 });
