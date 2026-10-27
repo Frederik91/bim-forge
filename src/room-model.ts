@@ -1,3 +1,7 @@
+import { previewWallShift } from './wall-dependencies.ts';
+import type { WallShiftRequest, WallShiftImpact } from './wall-dependencies.ts';
+import { parseDesignTarget, parseWritableDesignTarget, parseFrozenDesignTarget, parseDesignTargets, sameDesignTarget } from './design-targets.ts';
+import type { DesignTarget, WritableDesignTarget, FrozenDesignTarget, DesignTargetsState, DesignTargetView } from './design-targets.ts';
 import { validateFloorPlan, spaces, spaceForFootprint, doorClearanceBounds } from './floor-plan.ts';
 import { parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
@@ -201,6 +205,7 @@ export interface ProposalReview {
   sources?: RequestSource[];
   authoringScope?: AuthoringScope;
   scope?: FrozenModelScope;
+  target?: FrozenDesignTarget;
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
@@ -222,7 +227,16 @@ interface RepositoryStateV2 {
   reviews: ProposalReview[];
 }
 
-export type RepositoryState = RepositoryStateV1 | RepositoryStateV2;
+interface RepositoryStateV3 {
+  version: 3;
+  projectId: ProjectId;
+  name: string;
+  revisions: Revision[];
+  branches: Branch[];
+  reviews: ProposalReview[];
+  designTargets: DesignTargetsState;
+}
+export type RepositoryState = RepositoryStateV1 | RepositoryStateV2 | RepositoryStateV3;
 type ModelItem = Entity | HostingRelationship;
 
 export interface CollectionChanges<T extends ModelItem> {
@@ -333,7 +347,7 @@ function isRevisionId(value: unknown): value is RevisionId {
   return typeof value === 'string' && revisionPattern.test(value);
 }
 
-function revisionIdentifier(value: unknown): RevisionId {
+export function revisionIdentifier(value: unknown): RevisionId {
   if (!isRevisionId(value)) fail('Invalid revision identity.');
   return value;
 }
@@ -342,7 +356,7 @@ function isBranchName(value: unknown): value is BranchName {
   return typeof value === 'string' && value.length <= 64 && /^[a-z]+(?:-[a-z]+)*$/.test(value);
 }
 
-function branchName(value: unknown): BranchName {
+export function branchName(value: unknown): BranchName {
   if (!isBranchName(value)) fail('Proposal names require lowercase words separated by hyphens.');
   return value;
 }
@@ -360,7 +374,7 @@ function isProjectId(value: unknown): value is ProjectId {
   return typeof value === 'string' && projectPattern.test(value);
 }
 
-function projectIdentifier(value: unknown): ProjectId {
+export function projectIdentifier(value: unknown): ProjectId {
   if (!isProjectId(value)) fail('Invalid project identity.');
   return value;
 }
@@ -417,6 +431,7 @@ function validateScriptReview(executions: ScriptExecutionEvidence[], toolCalls: 
 
 function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, branches: Map<BranchName, Branch>): ProposalReview {
   const review = copy(input);
+  const hasTarget = review !== null && typeof review === 'object' && Object.hasOwn(review, 'target');
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
   const hasIntent = review !== null && typeof review === 'object' && Object.hasOwn(review, 'intent');
   const hasSources = review !== null && typeof review === 'object' && Object.hasOwn(review, 'sources');
@@ -425,7 +440,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
     'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
     ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
-    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : [])]);
+    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasTarget ? ['target'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
   const baseRevisionId = revisionIdentifier(review.baseRevisionId);
@@ -477,6 +492,8 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     if (!scriptEvidence.scriptExecutions) fail('Script reviews require execution evidence.');
     validateScriptReview(scriptEvidence.scriptExecutions, toolCalls);
   }
+  const target = hasTarget ? parseFrozenDesignTarget(review.target) : undefined;
+  if (target && target.revisionId !== baseRevisionId) fail('Review target does not match its original base.');
   const scope = hasFrozenScope ? parseFrozenModelScope(review.scope) : undefined;
   if (scope) assertScopeBinding(base, proposal.snapshot, scope);
   if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
@@ -515,7 +532,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     constraints, uncertainty, worker: { provider, model, responseIds, usage: { inputTokens, outputTokens, totalTokens } },
     toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}),
     ...(hasSources ? { sources: parseRequestSources(review.sources) } : {}),
-    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), validator: 'room-graph-v1', decision,
+    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), ...(target ? { target } : {}), validator: 'room-graph-v1', decision,
   });
 }
 
@@ -1142,9 +1159,7 @@ export class RoomRepository {
     if (key !== token) fail('Use RoomRepository.create or restore.');
     const branches = [...state.branches].sort((a, b) =>
       a.name === b.name ? 0 : a.name === 'main' ? -1 : b.name === 'main' ? 1 : a.name < b.name ? -1 : 1);
-    this.#state = state.version === 1
-      ? freeze({ version: 1, projectId: state.projectId, name: state.name, revisions: state.revisions, branches })
-      : freeze({ version: 2, projectId: state.projectId, name: state.name, revisions: state.revisions, branches, reviews: state.reviews });
+    this.#state = freeze({ ...state, branches });
     this.#revisions = new Map<RevisionId, Revision>(state.revisions.map((item) => [item.id, item]));
     Object.freeze(this);
   }
@@ -1178,9 +1193,29 @@ export class RoomRepository {
     let parsed: unknown;
     try { parsed = JSON.parse(text); } catch { fail('Saved project is not valid bounded JSON.'); }
     const value = copy(parsed);
+    if (!value || Array.isArray(value) || typeof value !== 'object' || !Array.isArray(value.revisions) || value.revisions.length > 32) fail('Unsupported saved project.');
+    for (const item of value.revisions) {
+      fields(item, ['id', 'parentId', 'snapshot']);
+      const id = revisionIdentifier(item.id);
+      const parentId = item.parentId === null ? null : revisionIdentifier(item.parentId);
+      const validated = await revision(parentId, validateSnapshot(item.snapshot));
+      if (validated.id !== id) fail('Saved revision content does not match its hash.');
+    }
+    return RoomRepository.#restoreState(value);
+  }
+
+  /** Storage has already verified revision hashes; synchronously check native authority. */
+  static assertDesignTargetAuthority(input: unknown): void {
+    const repository = RoomRepository.#restoreState(input);
+    if (repository.#state.version !== 3) fail('Target authority requires envelope version 3.');
+  }
+
+  static #restoreState(input: unknown): RoomRepository {
+    const value = copy(input);
     if (!value || Array.isArray(value) || typeof value !== 'object') fail('Unsupported saved project.');
     if (value.version === 1) fields(value, ['version', 'projectId', 'name', 'revisions', 'branches']);
     else if (value.version === 2) fields(value, ['version', 'projectId', 'name', 'revisions', 'branches', 'reviews']);
+    else if (value.version === 3) fields(value, ['version', 'projectId', 'name', 'revisions', 'branches', 'reviews', 'designTargets']);
     else fail('Unsupported saved project.');
     const name = label(value.name);
     const projectId = projectIdentifier(value.projectId);
@@ -1188,7 +1223,8 @@ export class RoomRepository {
     const branchValues = value.branches;
     if (!Array.isArray(revisionValues) || !revisionValues.length || revisionValues.length > 32
         || !Array.isArray(branchValues) || !branchValues.length || branchValues.length > 32) fail('Unsupported saved project.');
-    const reviewValues = value.version === 2 ? value.reviews : [];
+    const reviewValues = value.version !== 1 ? value.reviews : [];
+    const targets = value.version === 3 ? parseDesignTargets(value.designTargets, branchName) : undefined;
     if (!Array.isArray(reviewValues) || reviewValues.length > 31) fail('Unsupported saved project.');
     const revisions = new Map<RevisionId, Revision>();
     const familyIdentities = new Map<EntityId, string>();
@@ -1197,8 +1233,7 @@ export class RoomRepository {
       const id = revisionIdentifier(item.id);
       const parentId = item.parentId === null ? null : revisionIdentifier(item.parentId);
       if (revisions.has(id)) fail('Invalid revision identity.');
-      const validated = await revision(parentId, validateSnapshot(item.snapshot));
-      if (validated.id !== id) fail('Saved revision content does not match its hash.');
+      const validated: Revision = { id, parentId, snapshot: validateSnapshot(item.snapshot) };
       registerFamilyIdentities(familyIdentities, validated.snapshot);
       revisions.set(id, validated);
     }
@@ -1229,23 +1264,31 @@ export class RoomRepository {
         current = current.parentId === null ? undefined : revisions.get(current.parentId);
       }
     }
+    if (targets) {
+      for (const id of [...targets.baselines.map(item => item.from.revisionId), ...targets.alternatives.map(item => item.revisionId)]) {
+        let current = revisions.get(id);
+        if (!current) fail('Missing design target revision.');
+        while (current) { reachable.add(current.id); current = current.parentId === null ? undefined : revisions.get(current.parentId); }
+      }
+    }
     if (!branches.has(branchName('main')) || reachable.size !== revisions.size) fail('Saved project has missing or unreachable history.');
     const reviews: ProposalReview[] = [];
-    if (value.version === 2) {
+    if (value.version !== 1) {
       const requests = new Set<RequestId>(); const proposals = new Set<BranchName>();
       for (const item of reviewValues) {
         const review = reviewRecord(item, revisions, branches);
         if (requests.has(review.requestId) || proposals.has(review.proposalName)) fail('Duplicate proposal review identity.');
         requests.add(review.requestId); proposals.add(review.proposalName); reviews.push(review);
       }
+      if (!targets && reviews.some(review => review.target)) fail('Target reviews require envelope version 3.');
       const mainBranch = branches.get(branchName('main'));
       if (!mainBranch) fail('Saved project has missing or unreachable history.');
       const main = mainBranch.revisionId;
-      if (main !== roots[0].id && !reviews.some((review) => review.decision.status === 'accepted' && (review.decision.appliedRevisionId ?? review.proposalRevisionId) === main)) {
+      if (!targets && main !== roots[0].id && !reviews.some((review) => review.decision.status === 'accepted' && (review.decision.appliedRevisionId ?? review.proposalRevisionId) === main)) {
         fail('The current model must reference an accepted reviewed proposal.');
       }
       for (const review of reviews) {
-        if (review.decision.status === 'pending' || !review.decision.appliedRevisionId) continue;
+        if (targets || review.decision.status === 'pending' || !review.decision.appliedRevisionId) continue;
         const onto = revisions.get(review.decision.appliedRevisionId)?.parentId;
         if (!reviews.some((item) => item.decision.status !== 'pending'
             && (item.decision.appliedRevisionId ?? item.proposalRevisionId) === onto)) fail('Proposal application must preserve an accepted predecessor.');
@@ -1253,13 +1296,163 @@ export class RoomRepository {
     }
     const restored: RepositoryState = value.version === 1
       ? { version: 1, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()] }
+      : targets ? { version: 3, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()], reviews, designTargets: targets }
       : { version: 2, projectId, name, revisions: [...revisions.values()], branches: [...branches.values()], reviews };
-    return new RoomRepository(token, restored);
+    const repository = new RoomRepository(token, restored);
+    if (targets) repository.#validateTargets();
+    return repository;
   }
 
   get name(): string { return this.#state.name; }
 
   get projectId(): ProjectId { return this.#state.projectId; }
+
+  #targets(): DesignTargetsState | undefined {
+    return this.#state.version === 3 ? this.#state.designTargets : undefined;
+  }
+
+  #next(revisions = this.#state.revisions, branches = this.#state.branches,
+    reviews = this.reviews(), targets = this.#targets()): RoomRepository {
+    if (revisions.length > 32 || branches.length > 32 || reviews.length > 31) fail('Unsupported saved project. Demo history is full.');
+    const common = { projectId: this.projectId, name: this.name, revisions, branches };
+    const state: RepositoryState = targets
+      ? { ...common, version: 3, reviews, designTargets: parseDesignTargets(targets, branchName) }
+      : this.#state.version === 1 && reviews.length === 0 ? { ...common, version: 1 }
+      : { ...common, version: 2, reviews };
+    if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
+    const repository = new RoomRepository(token, state);
+    if (targets) repository.#validateTargets();
+    return repository;
+  }
+
+  #targetHead(target: WritableDesignTarget): RevisionId {
+    if (target.kind === 'main') return this.head('main');
+    const alternative = this.#targets()?.alternatives.find(item => item.id === target.id);
+    if (!alternative) fail('Unknown design alternative.');
+    return alternative.revisionId;
+  }
+
+  freezeDesignTarget(input: unknown): FrozenDesignTarget {
+    const target = parseWritableDesignTarget(input);
+    return freeze({ projectId: this.projectId, target, revisionId: this.#targetHead(target) });
+  }
+
+  #frozen(input: unknown, current: boolean): FrozenDesignTarget {
+    const target = parseFrozenDesignTarget(input);
+    if (target.projectId !== this.projectId) fail('Design target belongs to another project.');
+    const head = this.#targetHead(target.target);
+    if (current && head !== target.revisionId) fail('Frozen design target has advanced.');
+    this.view(target.revisionId);
+    return target;
+  }
+
+  captureBaseline(input: { id: string; name: string; from: FrozenDesignTarget }): RoomRepository {
+    const value = copy(input); fields(value, ['id', 'name', 'from']);
+    const from = this.#frozen(value.from, true);
+    const targets = this.#targets() ?? { baselines: [], alternatives: [], proposals: [] };
+    if (targets.baselines.some(item => item.id === value.id)) fail('Baseline identity is immutable.');
+    return this.#next(undefined, undefined, undefined, { ...targets,
+      baselines: [...targets.baselines, { id: identifier(value.id), name: label(value.name), from }] });
+  }
+
+  forkAlternative(input: { id: string; name: string; baselineId: string }): RoomRepository {
+    const value = copy(input); fields(value, ['id', 'name', 'baselineId']);
+    const targets = this.#targets();
+    const baseline = targets?.baselines.find(item => item.id === value.baselineId);
+    if (!targets || !baseline) fail('Unknown immutable baseline.');
+    if (targets.alternatives.some(item => item.id === value.id)) fail('Alternative identity already exists.');
+    return this.#next(undefined, undefined, undefined, { ...targets, alternatives: [...targets.alternatives,
+      { id: identifier(value.id), name: label(value.name), baselineId: baseline.id, revisionId: baseline.from.revisionId }] });
+  }
+
+  designTargets(): readonly DesignTargetView[] {
+    const targets = this.#targets();
+    const result: DesignTargetView[] = [
+      { target: { kind: 'main' }, name: 'Main', revisionId: this.head('main') },
+      ...(targets?.baselines.map((item): DesignTargetView => ({ target: { kind: 'baseline', id: item.id }, name: item.name, revisionId: item.from.revisionId })) ?? []),
+      ...(targets?.alternatives.map((item): DesignTargetView => ({ target: { kind: 'alternative', id: item.id }, name: item.name, revisionId: item.revisionId })) ?? []),
+    ];
+    return freeze(result);
+  }
+
+  designView(input: unknown): { target: DesignTarget; revisionId: RevisionId; snapshot: ModelSnapshot;
+    baselineRevisionId: RevisionId; delta: ModelDelta } {
+    const target = parseDesignTarget(input);
+    const selected = this.designTargets().find(item => item.target.kind === target.kind
+      && (target.kind === 'main' || (item.target.kind !== 'main' && item.target.id === target.id)));
+    if (!selected) fail('Unknown design target.');
+    const alternative = target.kind === 'alternative' ? this.#targets()?.alternatives.find(item => item.id === target.id) : undefined;
+    const baseline = this.#targets()?.baselines.find(item => item.id === alternative?.baselineId);
+    const baselineRevisionId = baseline?.from.revisionId ?? (target.kind === 'baseline' ? selected.revisionId : this.root());
+    return freeze({ target, revisionId: selected.revisionId, snapshot: this.view(selected.revisionId).snapshot,
+      baselineRevisionId, delta: this.compare(baselineRevisionId, selected.revisionId) });
+  }
+
+  #validateTargets(): void {
+    const targets = this.#targets();
+    if (!targets) return;
+    const main: WritableDesignTarget = { kind: 'main' };
+    const reviewTarget = (review: ProposalReview): WritableDesignTarget => review.target?.target ?? main;
+    for (const binding of targets.proposals) {
+      const head = this.view(this.head(binding.proposalName));
+      if (binding.proposalName === 'main' || binding.target.projectId !== this.projectId
+          || head.parentId !== binding.target.revisionId) fail('Invalid frozen proposal target.');
+      this.#targetHead(binding.target.target);
+    }
+    for (const review of this.reviews()) {
+      const binding = targets.proposals.find(item => item.proposalName === review.proposalName);
+      if (canonical(binding?.target ?? null) !== canonical(review.target ?? null)) fail('Review target binding mismatch.');
+    }
+    const chains = new Map<string, Set<RevisionId>>(); const visiting = new Set<string>();
+    const key = (target: WritableDesignTarget): string => target.kind === 'main' ? 'main' : `alternative:${target.id}`;
+    const chain = (target: WritableDesignTarget): Set<RevisionId> => {
+      const identity = key(target); const cached = chains.get(identity);
+      if (cached) return cached;
+      if (visiting.has(identity)) fail('Cyclic baseline authority.');
+      visiting.add(identity);
+      const alternative = target.kind === 'alternative' ? targets.alternatives.find(item => item.id === target.id) : undefined;
+      const baseline = alternative ? targets.baselines.find(item => item.id === alternative.baselineId) : undefined;
+      if (target.kind === 'alternative' && !baseline) fail('Missing alternative baseline.');
+      if (baseline && (baseline.from.projectId !== this.projectId || !chain(baseline.from.target).has(baseline.from.revisionId))) {
+        fail('Baseline must pin accepted target ancestry.');
+      }
+      const origin = baseline?.from.revisionId ?? this.root(); const head = this.#targetHead(target);
+      const accepted = new Set<RevisionId>(); let id = head;
+      while (id !== origin) {
+        if (accepted.has(id)) fail('Cyclic accepted target ancestry.');
+        accepted.add(id);
+        const decisions = this.reviews().filter(review => sameDesignTarget(reviewTarget(review), target)
+          && review.decision.status !== 'pending' && (review.decision.appliedRevisionId ?? review.proposalRevisionId) === id);
+        const review = decisions[0];
+        if (decisions.length !== 1 || !review || review.decision.status === 'pending') fail('Target head requires exact native accepted review ancestry.');
+        if (review.decision.status !== (id === head ? 'accepted' : 'superseded')) fail('Target-local decision status mismatch.');
+        const parent = this.view(id).parentId;
+        if (!parent) fail('Target acceptance must extend its baseline.');
+        id = parent;
+      }
+      accepted.add(origin); chains.set(identity, accepted); visiting.delete(identity);
+      for (const review of this.reviews().filter(item => sameDesignTarget(reviewTarget(item), target))) {
+        if (!accepted.has(review.baseRevisionId)) fail('Proposal base is outside accepted target ancestry.');
+        if (review.target && review.target.projectId !== this.projectId) fail('Review target belongs to another project.');
+        if (review.decision.status !== 'pending' && !accepted.has(review.decision.appliedRevisionId ?? review.proposalRevisionId)) {
+          fail('Decision is outside accepted target ancestry.');
+        }
+      }
+      return accepted;
+    };
+    chain(main);
+    for (const alternative of targets.alternatives) chain({ kind: 'alternative', id: alternative.id });
+    for (const baseline of targets.baselines) {
+      if (baseline.from.projectId !== this.projectId || !chain(baseline.from.target).has(baseline.from.revisionId)) {
+        fail('Baseline must pin accepted target ancestry.');
+      }
+    }
+    for (const binding of targets.proposals) {
+      if (!chain(binding.target.target).has(binding.target.revisionId)) fail('Proposal base is outside accepted target ancestry.');
+    }
+    const decisionIds = this.reviews().filter(item => item.decision.status !== 'pending').map(item => item.decision.decisionId);
+    if (new Set(decisionIds).size !== decisionIds.length) fail('Duplicate human decision identity.');
+  }
 
   root(): RevisionId {
     const root = this.#state.revisions.find((item) => item.parentId === null);
@@ -1283,7 +1476,7 @@ export class RoomRepository {
 
   branches(): Branch[] { return this.#state.branches; }
 
-  reviews(): ProposalReview[] { return this.#state.version === 2 ? this.#state.reviews : []; }
+  reviews(): ProposalReview[] { return this.#state.version !== 1 ? this.#state.reviews : []; }
 
   review(name: string): ProposalReview {
     const proposalName = branchName(name);
@@ -1303,93 +1496,112 @@ export class RoomRepository {
     return null;
   }
 
-  accept(name: string, input: unknown): RoomRepository {
-    const proposalName = branchName(name);
-    if (proposalName === 'main') fail('Choose a proposal to accept.');
-    const proposal = this.#state.branches.find((item) => item.name === proposalName);
-    if (!proposal) fail('Unknown proposal.');
-    const review = this.review(proposalName);
-    const decision = copy(input);
-    fields(decision, ['decisionId', 'actor']);
-    const decisionId = requestIdentifier(decision.decisionId);
-    const actor = readable(decision.actor, 'Decision actor', 80);
-    if (this.head('main') === proposal.revisionId && review.decision.status === 'accepted') return this;
-    if (this.head('main') !== review.baseRevisionId) fail('Accepting an older proposal requires reconciliation with the current model.');
-    if (review.scope) {
-      const base = this.view(review.baseRevisionId);
-      assertScopeBinding(base, this.view(proposal.revisionId).snapshot, review.scope);
-      assertModelScopeFresh({ base: base.snapshot, current: this.view(this.head('main')).snapshot, binding: review.scope });
+  #reviewTarget(review: ProposalReview, input: unknown): FrozenDesignTarget | undefined {
+    if (!review.target) {
+      if (input !== undefined) fail('Legacy reviews retain their original main target binding.');
+      return undefined;
     }
-    const mainName = branchName('main');
-    const branches: Branch[] = this.#state.branches.map((item) => item.name === mainName
-      ? { name: mainName, revisionId: proposal.revisionId } : item);
-    const reviews: ProposalReview[] = this.reviews().map((item): ProposalReview => {
-      if (item.proposalName === proposalName) return { ...item, decision: { status: 'accepted', decisionId, actor } };
-      if (item.decision.status === 'accepted') return { ...item, decision: { ...item.decision, status: 'superseded' } };
-      return item;
-    });
-    const state: RepositoryStateV2 = {
-      version: 2, projectId: this.#state.projectId, name: this.#state.name,
-      revisions: this.#state.revisions, branches, reviews,
-    };
-    if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
-    return new RoomRepository(token, state);
+    const target = this.#frozen(input, false);
+    if (canonical(target) !== canonical(review.target)) fail('Frozen proposal target mismatch; proposals cannot be retargeted.');
+    return target;
   }
 
-  proposalSnapshot(proposed: RoomRepository, name: string): ModelSnapshot {
+  #decision(input: unknown): { decisionId: RequestId; actor: string } {
+    const value = copy(input); fields(value, ['decisionId', 'actor']);
+    return { decisionId: requestIdentifier(value.decisionId), actor: readable(value.actor, 'Decision actor', 80) };
+  }
+
+  #advance(review: ProposalReview, applied: Revision, decision: { decisionId: RequestId; actor: string },
+    revisions: Revision[], branches: Branch[], reviews: ProposalReview[], targets = this.#targets()): RoomRepository {
+    const target: WritableDesignTarget = review.target?.target ?? { kind: 'main' };
+    if (reviews.some(item => item.proposalName !== review.proposalName && item.decision.decisionId === decision.decisionId)) fail('Duplicate human decision identity.');
+    const nextBranches = target.kind === 'main' ? branches.map(item => item.name === 'main' ? { ...item, revisionId: applied.id } : item) : branches;
+    const nextTargets = targets && target.kind === 'alternative' ? { ...targets,
+      alternatives: targets.alternatives.map(item => item.id === target.id ? { ...item, revisionId: applied.id } : item) } : targets;
+    const nextReviews = reviews.map((item): ProposalReview => item.proposalName === review.proposalName
+      ? { ...item, decision: { status: 'accepted', ...decision,
+        ...(applied.id !== review.proposalRevisionId ? { appliedRevisionId: applied.id } : {}) } }
+      : item.decision.status === 'accepted' && sameDesignTarget(item.target?.target ?? { kind: 'main' }, target)
+        ? { ...item, decision: { ...item.decision, status: 'superseded' } } : item);
+    return this.#next(revisions, nextBranches, nextReviews, nextTargets);
+  }
+
+  accept(name: string, input: unknown, target?: FrozenDesignTarget): RoomRepository {
+    const proposalName = branchName(name);
+    if (proposalName === 'main') fail('Choose a proposal to accept.');
+    const proposal = this.#state.branches.find(item => item.name === proposalName);
+    if (!proposal) fail('Unknown proposal.');
+    const review = this.review(proposalName); this.#reviewTarget(review, target);
+    const decision = this.#decision(input);
+    if (review.decision.status !== 'pending') {
+      if (review.decision.status === 'accepted' && review.decision.decisionId === decision.decisionId
+          && review.decision.actor === decision.actor) return this;
+      fail('This proposal already has a different human decision.');
+    }
+    const head = this.#targetHead(review.target?.target ?? { kind: 'main' });
+    if (head !== review.baseRevisionId) fail('Accepting an older proposal requires reconciliation with the current model.');
+    if (review.scope) assertScopeBinding(this.view(head), this.view(proposal.revisionId).snapshot, review.scope);
+    return this.#advance(review, this.view(proposal.revisionId), decision, this.#state.revisions, this.#state.branches, this.reviews());
+  }
+
+  proposalSnapshot(proposed: RoomRepository, name: string, target?: FrozenDesignTarget): ModelSnapshot {
     if (proposed.projectId !== this.projectId || proposed.root() !== this.root()) fail('The proposal belongs to another project.');
     const review = proposed.review(name);
+    this.#reviewTarget(review, target);
     const base = this.#revisions.get(review.baseRevisionId);
     if (!base) throw new ProposalConflict('This proposal is based on an unaccepted model. Revise it against the current accepted model.');
-    let ancestor = this.view(this.head('main'));
+    const head = this.#targetHead(review.target?.target ?? { kind: 'main' });
+    let ancestor = this.view(head);
     while (ancestor.id !== base.id && ancestor.parentId !== null) ancestor = this.view(ancestor.parentId);
     if (ancestor.id !== base.id) throw new ProposalConflict('This proposal is based on an unaccepted model. Revise it against the current accepted model.');
     if (review.scope) {
       assertScopeBinding(base, proposed.view(review.proposalRevisionId).snapshot, review.scope);
-      assertModelScopeFresh({ base: base.snapshot, current: this.view(this.head('main')).snapshot, binding: review.scope });
+      assertModelScopeFresh({ base: base.snapshot, current: this.view(head).snapshot, binding: review.scope });
     }
-    return mergeSnapshots(base.snapshot, this.view(this.head('main')).snapshot, proposed.view(review.proposalRevisionId).snapshot);
+    return mergeSnapshots(base.snapshot, this.view(head).snapshot, proposed.view(review.proposalRevisionId).snapshot);
   }
 
-  async acceptFrom(proposed: RoomRepository, name: string, input: unknown): Promise<RoomRepository> {
-    const snapshot = this.proposalSnapshot(proposed, name);
-    const review = proposed.review(name);
-    const decision = copy(input); fields(decision, ['decisionId', 'actor']);
-    const decisionId = requestIdentifier(decision.decisionId); const actor = readable(decision.actor, 'Decision actor', 80);
+  async acceptFrom(proposed: RoomRepository, name: string, input: unknown, target?: FrozenDesignTarget): Promise<RoomRepository> {
+    const snapshot = this.proposalSnapshot(proposed, name, target);
+    const review = proposed.review(name); const decision = this.#decision(input);
     if (review.decision.status !== 'pending') fail('Only a pending reviewed proposal can be accepted.');
-    const previous = this.reviews().find((item) => item.proposalName === review.proposalName);
+    const previous = this.reviews().find(item => item.proposalName === review.proposalName);
     if (previous && previous.decision.status !== 'pending') fail('This proposal already has a decision.');
-    const main = this.head('main');
-    const applied = main === review.baseRevisionId ? proposed.view(review.proposalRevisionId) : await revision(main, snapshot);
+    if (previous && canonical(previous) !== canonical(review)) fail('Proposal review evidence changed.');
+    const head = this.#targetHead(review.target?.target ?? { kind: 'main' });
+    const proposal = proposed.view(review.proposalRevisionId);
+    const applied = head === review.baseRevisionId ? proposal : await revision(head, snapshot);
     const revisions = new Map(this.#revisions);
-    for (const item of proposed.#state.revisions) revisions.set(item.id, item);
-    revisions.set(applied.id, applied);
-    const branches = branchMap(this.#state.branches);
-    for (const branch of proposed.branches()) {
-      if (branch.name === 'main') continue;
-      const existing = branches.get(branch.name);
-      if (existing && existing.revisionId !== branch.revisionId) fail('A different proposal already uses that name.');
-      branches.set(branch.name, branch);
+    revisions.set(proposal.id, proposal); revisions.set(applied.id, applied);
+    const branches = branchMap(this.#state.branches); const existing = branches.get(review.proposalName);
+    if (existing && existing.revisionId !== proposal.id) fail('A different proposal already uses that name.');
+    branches.set(review.proposalName, { name: review.proposalName, revisionId: proposal.id });
+    const reviews = previous ? this.reviews() : [...this.reviews(), review];
+    let targets = this.#targets();
+    if (review.target) {
+      targets ??= { baselines: [], alternatives: [], proposals: [] };
+      const binding = targets.proposals.find(item => item.proposalName === review.proposalName);
+      if (binding && canonical(binding.target) !== canonical(review.target)) fail('Proposal target evidence changed.');
+      if (!binding) targets = { ...targets, proposals: [...targets.proposals, { proposalName: review.proposalName, target: review.target }] };
     }
-    branches.set(branchName('main'), { name: branchName('main'), revisionId: applied.id });
-    const reviews = new Map(this.reviews().map((item) => [item.proposalName, item]));
-    for (const item of proposed.reviews()) {
-      const existing = reviews.get(item.proposalName);
-      if (existing && canonical({ ...existing, decision: null }) !== canonical({ ...item, decision: null })) fail('Proposal review evidence changed.');
-      if (!existing) reviews.set(item.proposalName, item);
+    const accepted = this.#advance(review, applied, decision, [...revisions.values()], [...branches.values()], reviews, targets);
+    return RoomRepository.restore(accepted.serialize());
+  }
+
+  #proposalTarget(value: JsonObject, from: string): FrozenDesignTarget | undefined {
+    if (!Object.hasOwn(value, 'target')) {
+      if (this.#state.version === 3) fail('New proposals require an explicit frozen design target.');
+      return undefined;
     }
-    const state: RepositoryStateV2 = { version: 2, projectId: this.projectId, name: this.name,
-      revisions: [...revisions.values()], branches: [...branches.values()],
-      reviews: [...reviews.values()].map((item): ProposalReview => item.proposalName === review.proposalName
-        ? { ...item, decision: { status: 'accepted', decisionId, actor, ...(main !== review.baseRevisionId ? { appliedRevisionId: applied.id } : {}) } }
-        : item.decision.status === 'accepted' ? { ...item, decision: { ...item.decision, status: 'superseded' } } : item) };
-    return RoomRepository.restore(canonical(state));
+    const target = this.#frozen(value.target, true);
+    if (target.revisionId !== from) fail('Proposal source revision must match its frozen design target.');
+    return target;
   }
 
   async propose(input: unknown): Promise<RoomRepository> {
     const proposal = copy(input);
     const hasFrozenScope = proposal !== null && typeof proposal === 'object' && Object.hasOwn(proposal, 'scope');
-    fields(proposal, ['name', 'from', 'doorWidthM', ...(hasFrozenScope ? ['scope'] : [])]);
+    fields(proposal, ['name', 'from', 'doorWidthM', ...(hasFrozenScope ? ['scope'] : []), ...(proposal !== null && typeof proposal === 'object' && Object.hasOwn(proposal, 'target') ? ['target'] : [])]);
     const name = branchName(proposal.name);
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
@@ -1399,24 +1611,24 @@ export class RoomRepository {
     const door = snapshot.entities.find((item): item is Door => item.id === 'door-entry' && item.type === 'Door');
     if (!door) fail('This revision has no entry door.');
     door.width = doorWidthM;
-    return this.#commit(name, base, snapshot, hasFrozenScope ? parseFrozenModelScope(proposal.scope) : undefined);
+    return this.#commit(name, base, snapshot, hasFrozenScope ? parseFrozenModelScope(proposal.scope) : undefined, this.#proposalTarget(proposal, from));
   }
 
   async proposeLayout(input: unknown): Promise<RoomRepository> {
     const proposal = copy(input);
     const hasFrozenScope = proposal !== null && typeof proposal === 'object' && Object.hasOwn(proposal, 'scope');
-    fields(proposal, ['name', 'from', 'layout', ...(hasFrozenScope ? ['scope'] : [])]);
+    fields(proposal, ['name', 'from', 'layout', ...(hasFrozenScope ? ['scope'] : []), ...(proposal !== null && typeof proposal === 'object' && Object.hasOwn(proposal, 'target') ? ['target'] : [])]);
     const name = branchName(proposal.name);
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
     const layout = proposal.layout;
     const base = this.view(from);
-    return this.#commit(name, base, previewRectangle(base.snapshot, layout), hasFrozenScope ? parseFrozenModelScope(proposal.scope) : undefined);
+    return this.#commit(name, base, previewRectangle(base.snapshot, layout), hasFrozenScope ? parseFrozenModelScope(proposal.scope) : undefined, this.#proposalTarget(proposal, from));
   }
 
   async proposeReviewedModel(input: unknown): Promise<RoomRepository> {
     const proposal = copy(input);
-    fields(proposal, ['name', 'from', 'snapshot', 'review']);
+    fields(proposal, ['name', 'from', 'snapshot', 'review', ...(proposal !== null && typeof proposal === 'object' && Object.hasOwn(proposal, 'target') ? ['target'] : [])]);
     const proposalName = branchName(proposal.name);
     const from = proposal.from;
     if (typeof from !== 'string') fail('Unknown revision.');
@@ -1430,7 +1642,8 @@ export class RoomRepository {
       'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
       ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : [])]);
     const base = this.view(from);
-    const next = await this.#commit(proposalName, base, proposal.snapshot, hasFrozenScope ? parseFrozenModelScope(details.scope) : undefined);
+    const target = this.#proposalTarget(proposal, from);
+    const next = await this.#commit(proposalName, base, proposal.snapshot, hasFrozenScope ? parseFrozenModelScope(details.scope) : undefined, target);
     if (next === this) fail('The reviewed proposal must change the bound revision.');
     const record = reviewRecord({
       requestId: details.requestId, proposalName, baseRevisionId: base.id,
@@ -1443,21 +1656,30 @@ export class RoomRepository {
       ...(hasSources ? { sources: details.sources } : {}),
       ...(hasScope ? { authoringScope: details.authoringScope } : {}),
       ...(hasFrozenScope ? { scope: details.scope } : {}),
+      ...(target ? { target } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches));
     const reviews = [...next.reviews(), record];
     if (reviews.some((item, index) => reviews.findIndex((other) => other.requestId === item.requestId || other.proposalName === item.proposalName) !== index)) {
       fail('Duplicate proposal review identity.');
     }
-    const state: RepositoryStateV2 = {
-      version: 2, projectId: next.#state.projectId, name: next.#state.name,
-      revisions: next.#state.revisions, branches: next.#state.branches, reviews,
-    };
-    if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
-    return new RoomRepository(token, state);
+    return next.#next(undefined, undefined, reviews);
   }
 
-  async #commit(name: BranchName, base: Revision, snapshot: unknown, scope?: FrozenModelScope): Promise<RoomRepository> {
+  async proposeWallShift(input: { name: string; from: string; target: FrozenDesignTarget;
+    shift: WallShiftRequest; review: unknown }): Promise<{ repository: RoomRepository; impacts: WallShiftImpact[]; delta: ModelDelta }> {
+    const value = copy(input); fields(value, ['name', 'from', 'target', 'shift', 'review']);
+    const target = this.#frozen(value.target, true);
+    if (target.revisionId !== value.from) fail('Proposal source revision must match its frozen design target.');
+    fields(value.shift, ['wallId', 'offsetMetres']);
+    if (typeof value.shift.wallId !== 'string' || typeof value.shift.offsetMetres !== 'number') fail('Invalid wall shift request.');
+    const preview = previewWallShift(this.view(target.revisionId).snapshot, { wallId: value.shift.wallId, offsetMetres: value.shift.offsetMetres });
+    const repository = await this.proposeReviewedModel({ name: value.name, from: target.revisionId, target,
+      snapshot: preview.snapshot, review: value.review });
+    return freeze({ repository, impacts: preview.impacts, delta: preview.delta });
+  }
+
+  async #commit(name: BranchName, base: Revision, snapshot: unknown, scope?: FrozenModelScope, target?: FrozenDesignTarget): Promise<RoomRepository> {
     if (name === 'main') fail('Choose a proposal name other than main.');
     const candidate = validateSnapshot(snapshot);
     const updated = validateSnapshot({ ...candidate, entities: candidate.entities.map((entity) =>
@@ -1469,6 +1691,8 @@ export class RoomRepository {
     const next = canonical(updated) === canonical(base.snapshot) ? base : await revision(base.id, updated);
     const existing = this.#state.branches.find((item) => item.name === name);
     if (existing) {
+      const binding = this.#targets()?.proposals.find(item => item.proposalName === name);
+      if (canonical(binding?.target ?? null) !== canonical(target ?? null)) fail('A proposal cannot be retargeted.');
       if (existing.revisionId === next.id) return this;
       fail('A different proposal already uses that name.');
     }
@@ -1476,11 +1700,12 @@ export class RoomRepository {
     const revisions = this.#revisions.has(next.id) ? this.#state.revisions : [...this.#state.revisions, next];
     if (revisions.length > 32 || this.#state.branches.length >= 32) fail('Demo history is full. Export it before starting another project.');
     const branches: Branch[] = [...this.#state.branches, { name, revisionId: next.id }];
-    const state: RepositoryState = this.#state.version === 1
-      ? { version: 1, projectId: this.#state.projectId, name: this.#state.name, revisions, branches }
-      : { version: 2, projectId: this.#state.projectId, name: this.#state.name, revisions, branches, reviews: this.#state.reviews };
-    if (size(canonical(state)) > MAX_BYTES) fail('Saved project exceeds the 256 KiB demo limit.');
-    return new RoomRepository(token, state);
+    let targets = this.#targets();
+    if (target) {
+      targets ??= { baselines: [], alternatives: [], proposals: [] };
+      targets = { ...targets, proposals: [...targets.proposals, { proposalName: name, target }] };
+    }
+    return this.#next(revisions, branches, undefined, targets);
   }
 
   compare(before: string, after: string): ModelDelta { return diffSnapshots(this.view(before).snapshot, this.view(after).snapshot); }
