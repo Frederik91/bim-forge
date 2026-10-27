@@ -101,7 +101,7 @@ export class DesignWorkspace {
     void this.#run('Creating alternative…', async () => {
       if (this.#selected.kind !== 'baseline') {
         const current = this.#views.find(view => key(view.target) === key(this.#selected));
-        await this.#actions.capture({ name: current?.target.kind === 'main' ? 'As-is' : `${current?.name ?? 'Design'} baseline`, commandId: this.#captureCommand });
+        await this.#actions.capture({ name: (current?.target.kind === 'main' ? 'As-is' : `${current?.name ?? 'Design'} baseline`).slice(0, 80), commandId: this.#captureCommand });
         this.#captureCommand = crypto.randomUUID();
       }
       const selected = this.#selected;
@@ -123,6 +123,7 @@ export class DesignWorkspace {
     this.#trigger.disabled = this.#busy || this.#views.length === 0;
     this.#select.disabled = this.#trigger.disabled;
     this.#quickAlternative.disabled = this.#trigger.disabled;
+    this.#quickAlternative.textContent = this.#busy ? 'Working…' : '+ Alternative';
     this.#select.replaceChildren();
     for (const view of this.#views) {
       const option = document.createElement('option'); option.value = key(view.target);
