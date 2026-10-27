@@ -1,5 +1,5 @@
-import { parseEvidenceReadSet } from './model-evidence.ts';
-import type { EvidenceReadSet } from './model-evidence.ts';
+import { parseEvidenceReadSet, parseEvidenceUses, evidenceCanonical } from './model-evidence.ts';
+import type { EvidenceReadSet, EvidenceUse } from './model-evidence.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 import type { WallShiftRequest, WallShiftImpact } from './wall-dependencies.ts';
 import { parseDesignTarget, parseWritableDesignTarget, parseFrozenDesignTarget, parseDesignTargets, sameDesignTarget } from './design-targets.ts';
@@ -209,6 +209,7 @@ export interface ProposalReview {
   scope?: FrozenModelScope;
   target?: FrozenDesignTarget;
   evidence?: EvidenceReadSet;
+  evidenceUses?: EvidenceUse[];
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
@@ -433,9 +434,20 @@ function validateScriptReview(executions: ScriptExecutionEvidence[], toolCalls: 
   }
 }
 
+/** Frozen review authority only; live evidence readiness belongs to the accepting store. */
+export function assertEvidenceUsesBound(readSet: EvidenceReadSet, uses: readonly EvidenceUse[]): void {
+  for (const use of uses) {
+    if (!readSet.pins.some(pin => evidenceCanonical(pin) === evidenceCanonical(use.pin))
+        || !readSet.subjects.some(item => evidenceCanonical(item.subject) === evidenceCanonical(use.subject))) {
+      fail('Evidence uses must match exact pinned entries and frozen subjects.');
+    }
+  }
+}
+
 function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, branches: Map<BranchName, Branch>, projectId: ProjectId): ProposalReview {
   const review = copy(input);
   const hasEvidence = review !== null && typeof review === 'object' && Object.hasOwn(review, 'evidence');
+  const hasEvidenceUses = review !== null && typeof review === 'object' && Object.hasOwn(review, 'evidenceUses');
   const hasTarget = review !== null && typeof review === 'object' && Object.hasOwn(review, 'target');
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
   const hasIntent = review !== null && typeof review === 'object' && Object.hasOwn(review, 'intent');
@@ -445,7 +457,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
     'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
     ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
-    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasTarget ? ['target'] : []), ...(hasEvidence ? ['evidence'] : [])]);
+    ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasTarget ? ['target'] : []), ...(hasEvidence ? ['evidence'] : []), ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
   const baseRevisionId = revisionIdentifier(review.baseRevisionId);
@@ -504,6 +516,14 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   }
   const target = hasTarget ? parseFrozenDesignTarget(review.target) : undefined;
   if (target && target.revisionId !== baseRevisionId) fail('Review target does not match its original base.');
+  if (evidence && canonical(evidence.target) !== canonical(target?.target ?? { kind: 'main' })) {
+    fail('Evidence read set target must match the review target.');
+  }
+  const evidenceUses = hasEvidenceUses ? parseEvidenceUses(review.evidenceUses) : undefined;
+  if (evidenceUses) {
+    if (!evidence) fail('Evidence uses require a frozen evidence read set.');
+    assertEvidenceUsesBound(evidence, evidenceUses);
+  }
   const scope = hasFrozenScope ? parseFrozenModelScope(review.scope) : undefined;
   if (scope) assertScopeBinding(base, proposal.snapshot, scope);
   if (review.validator !== 'room-graph-v1') fail('Unknown proposal validator.');
@@ -542,7 +562,8 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     constraints, uncertainty, worker: { provider, model, responseIds, usage: { inputTokens, outputTokens, totalTokens } },
     toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}),
     ...(hasSources ? { sources: parseRequestSources(review.sources) } : {}),
-    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), ...(target ? { target } : {}), ...(evidence ? { evidence } : {}), validator: 'room-graph-v1', decision,
+    ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), ...(target ? { target } : {}), ...(evidence ? { evidence } : {}),
+    ...(evidenceUses ? { evidenceUses } : {}), validator: 'room-graph-v1', decision,
   });
 }
 
@@ -1656,6 +1677,7 @@ export class RoomRepository {
     if (typeof from !== 'string') fail('Unknown revision.');
     const details = proposal.review;
     const hasEvidence = details !== null && typeof details === 'object' && Object.hasOwn(details, 'evidence');
+    const hasEvidenceUses = details !== null && typeof details === 'object' && Object.hasOwn(details, 'evidenceUses');
     const hasScripts = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scriptExecutions');
     const hasIntent = details !== null && typeof details === 'object' && Object.hasOwn(details, 'intent');
     const hasSources = details !== null && typeof details === 'object' && Object.hasOwn(details, 'sources');
@@ -1663,7 +1685,7 @@ export class RoomRepository {
     const hasScope = details !== null && typeof details === 'object' && Object.hasOwn(details, 'authoringScope');
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
       'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
-      ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasEvidence ? ['evidence'] : [])]);
+      ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasEvidence ? ['evidence'] : []), ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
     const base = this.view(from);
     const target = this.#proposalTarget(proposal, from);
     const next = await this.#commit(proposalName, base, proposal.snapshot, hasFrozenScope ? parseFrozenModelScope(details.scope) : undefined, target);
@@ -1681,6 +1703,7 @@ export class RoomRepository {
       ...(hasFrozenScope ? { scope: details.scope } : {}),
       ...(target ? { target } : {}),
       ...(hasEvidence ? { evidence: details.evidence } : {}),
+      ...(hasEvidenceUses ? { evidenceUses: details.evidenceUses } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches), this.projectId);
     const reviews = [...next.reviews(), record];

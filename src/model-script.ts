@@ -26,6 +26,8 @@ import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts'
 import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 import type { WallShiftImpact } from './wall-dependencies.ts';
+import { parseEvidenceUses } from './model-evidence.ts';
+import type { EvidenceUse } from './model-evidence.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -111,7 +113,10 @@ export interface ModelScriptBinding {
   authoringScope?: AuthoringScope;
   scope?: FrozenModelScope;
 }
-export interface ScriptReviewText { summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment }
+export interface ScriptReviewText {
+  summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment;
+  evidenceUses?: EvidenceUse[];
+}
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
@@ -173,10 +178,12 @@ function decision(value: unknown):
   }
   if (value.kind === 'propose') {
     fields(value, ['kind', 'review']);
-    fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', 'intent']);
+    const hasEvidenceUses = record(value.review) && Object.hasOwn(value.review, 'evidenceUses');
+    fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', 'intent', ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
     return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
       constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
-      intent: parseIntentAssessment(value.review.intent) } };
+      intent: parseIntentAssessment(value.review.intent),
+      ...(hasEvidenceUses ? { evidenceUses: parseEvidenceUses(value.review.evidenceUses) } : {}) } };
   }
   if (value.kind === 'clarify') {
     fields(value, ['kind', 'question', 'options']);
@@ -345,6 +352,7 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
 export { model as modelScriptApi };
 
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
+  'A propose decision returns review:{summary,rationale,constraints,uncertainty,intent,evidenceUses?}. Optional evidenceUses is an array of {pin,subject,rationale} choosing exact pinned known sourceEvidence facts as proposal-local assumptions for human review. Copy the complete frozen subject including anchor.target; preserve competing claims and explain the choice without promoting global truth. The host validates choices against the bound read set and context; self-rated certainty grants no authority. ' +
   'For scoped requests, await model.scope() returns {scope,graph}: immutable target/context/dependent/writable IDs and a live partial working graph. Context is never write authority. model.inspect and mutation results use this same context. It is not a standalone valid project. ' +
   'Call model.previewParameters({edits:[{definitionId,name,value}]}) to edit frozen targets with explicit typed units. All mutation tools enforce frozen write limits; query matches never expand during a proposal. Changed membership or dependencies require a fresh human review. ' +
   'Call model.previewWallShift({wallId,offsetMetres}) for a bounded complete shared partition. Offsets are nonzero metres on a 1 mm grid, at most one metre; positive means global +X for vertical walls or +Y for horizontal walls. The existing helper updates adjacent rectangular Spaces and supported wall junctions, then validates contents and openings atomically. Frozen scope must authorize every stored write; adjacent Spaces in read-only context do not grant permission. The result contains model, cumulative stored changes from the execution base, and impacts for this operation. An impact with changed:false can still move in world geometry when its host moves. Impacts never expand write authority. Unsupported topology or invalid contents leave the draft unchanged. ' +
