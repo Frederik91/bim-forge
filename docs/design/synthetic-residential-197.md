@@ -44,12 +44,26 @@ Primary-source checks: buildingSMART defines rooted object [GlobalId](https://st
 ## Architecture decision process
 
 - [x] Ground the current model, storage, source and workspace boundaries.
-- [ ] Compare two complete design shapes: model-native evidence/scenario state versus a project-owned ledger over immutable model revisions.
-- [ ] Cross-review and synthesize a small public API with explicit ownership.
+- [x] Compare two complete design shapes: model-native evidence/scenario state versus a project-owned ledger over immutable model revisions.
+- [x] Cross-review and synthesize a small public API with explicit ownership.
 - [ ] Implement and integrate against the chosen contract; keep drafts reviewable.
 - [ ] Replace the design if implementation reveals repeated authority or state-duplication workarounds.
 
 Design candidates are graded against five concrete criteria: unambiguous acceptance authority, preservation of source/privacy/restart/conflict invariants, small composable APIs, bounded work under constrained resources, and compatibility with the single viewer plus separate read-only IFC references. No human design checkpoint was requested; routine choices proceed with recorded rationale.
+
+### Synthesis decision
+
+Choose candidate A's native acceptance authority and graft candidate B's immutable evidence ledger. The independent cross-review agrees. External scenario receipts that leave the native review pending are rejected; so is storing every source observation inside native geometry revisions. Raw source bytes remain owned by `RequestSourceStore`, with explicit project retention extending both read eligibility and expiry.
+
+`RoomRepository` owns typed main/alternative targets, immutable baseline pins, target-local accepted ancestry and review decisions. Keep existing geometry revision hash preimages and legacy review/hash behavior. A new envelope may introduce target metadata; old readers must reject an unsupported format instead of misreading it. `VersionedProjectStore` publishes the selected target atomically with the existing queue's decision transaction. No temporary main-pointer swap or cloned-project adapter is permitted.
+
+The evidence store owns immutable claims, corrections, explicit conflict resolutions and command receipts, not accepted geometry or scenario heads. Native reviews pin evidence entry IDs/hashes, relevant subject/property candidate-set signatures including absence, source hashes and anchor applicability. New relevant contradictions invalidate readiness; unrelated evidence does not. Observed, measured, inferred and assumed assertions remain distinguishable. Corrections never overwrite original claims or silently promote an assumption.
+
+Parent integration owns queue/server/ScriptBox/UI, frozen target/evidence dispatch and combined transactions. The #201 core worker owns native target/ref/restore/acceptance plus the versioned model store, publishing exact APIs before parent caller migration. The #199 worker owns `src/model-evidence.ts`, `demo/project-evidence-store.ts` and project retention in `demo/request-source-store.ts`; it does not edit the queue, server, viewer or native repository. Both workers build on the already integrated fixture and pure wall helper.
+
+Acceptance checks command receipts before freshness so a lost response can replay idempotently after later advances. Following asynchronous preparation, recheck the selected target, ticket, evidence read set and cancellation/generation fences in the same SQLite transaction. Sibling-target races must preserve sibling heads. Baselines never yield writable authority. Portable/native scenario history must itself prove acceptance; complete private bundles additionally need pinned evidence/source closure. Missing dependencies remain visible and block dependent new acceptance.
+
+First integration case: retain the generated plan, record a measured claim and competing assumption, capture an As-is baseline, fork Wider kitchen, prepare a wall proposal on that alternative, review geometry and source evidence, accept, restart, and verify the original main/baseline and unrelated contents remain unchanged. Current fixture and wall helper passed 26 combined server tests at `179e34f`, with root validation. These are domain checks; full queue/UI/scenario/evidence behavior is still in progress.
 
 ## Verification and publication
 
