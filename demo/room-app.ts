@@ -1527,8 +1527,9 @@ async function sendChatReply(): Promise<void> {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatReply.body),
   });
   if (response.status === 409) {
+    const conflict: unknown = await response.json();
     chatReply = null; await refreshConversation();
-    throw new Error('The conversation changed while this reply was being sent. Review the latest messages and send again. Your draft and attachments are retained.');
+    throw new Error(`${isRecord(conflict) && typeof conflict.error === 'string' ? conflict.error : 'The conversation changed. Refresh before sending.'} Your draft and attachments are retained.`);
   }
   const value = await proposalJson(response);
   if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
