@@ -234,8 +234,8 @@ export class RequestChat {
         node('p', 'These are design assumptions for your review. Conflicting source history remains unchanged.'));
       for (const use of review.evidenceUses) choices.append(node('p', use.rationale),
         node('small', `${use.subject.anchor.entityId} · ${use.subject.property.definitionId} · ${use.pin.entryId} · SHA-256 ${use.pin.hash}`));
-      details.append(node('dt', 'Source assumptions'), node('dd'));
-      details.lastElementChild?.append(choices);
+      const assumptions = node('dd'); assumptions.append(choices);
+      details.append(node('dt', 'Source assumptions'), assumptions);
     }
     const actions = node('div', undefined, 'ticket-actions');
     const delta = this.#control(review.delta ? 'Hide changes' : 'View changes', () => {
