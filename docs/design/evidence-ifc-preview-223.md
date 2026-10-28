@@ -32,7 +32,8 @@ existing snapshot and frozen-scope validators; no general parametric solver is i
 **Navigate → Linked IFC models** retains an original IFC and reports asynchronous preparation.
 Hierarchy, original properties, source diagnostics and visibility stay beside the existing model.
 Linked meshes use the same Babylon scene and canvas. Their selection is separate from native selection
-and scope. **Reference in request** appends source identity to an unsent message; it does not submit,
+and scope. **Reference in request** attaches a named source-context note with the pinned identity and
+original object properties to the unsent composer, keeping machine identifiers out of the message field. It does not submit,
 approve, import native objects or grant editing rights. IFC geometry is shown in 3D, with explicit
 reference framing. Hover and selection use distinct outlines.
 
@@ -81,6 +82,10 @@ Do not merge new geometry/storage/security work without human approval.
   histories were then integrated. No validator/test attempt ran during that correction.
 - Parent check 1, `8896658`: validation, explicit policy, build and 32 focused checks passed.
 - Parent check 2, `1b110b1`: strict lint passed; typecheck caught missing awaits in the new browser test's asynchronous repository restoration. No browser test ran; corrected the fixture.
+- Parent check 3, `14422ff`: root validation, explicit policy, build and 49 focused checks passed. Browser setup stopped before tests because its generator requires a new output directory; removed the helper's premature directory creation.
+- Parent check 4, same source: both shipped floor-plan/IFC workflows and all five chat cases passed. The existing workspace suite could not find its cached default browser; fixed only the harness's browser-cache environment.
+- Parent check 5, same source: all 15 actual-browser checks passed, including desktop/phone layout, baseline/alternative isolation, linked canvas picking/visibility and no submission on reference.
+- Screenshot inspection prompted compact IFC controls, a corrected reference-frame enable state and named source-context attachments instead of raw JSON in the message field. Final-source qualification follows.
 - Final combined qualification and publication: pending.
 
 The owner permits ten attempts per interactive item, without weakening validators or changing factory

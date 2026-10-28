@@ -62,8 +62,15 @@ test('shipped workspace links IFC into one viewer and adds only unsent source co
   assert.equal(await page.locator('.model-object-picker').inputValue(), nativeAtPick, 'Linked selection retains native scope context.');
   await page.getByRole('button', { name: 'Reference in request', exact: true }).click();
   const prompt = await page.locator('#request-text').inputValue();
-  assert.match(prompt, /Read-only IFC context \(no native edit authority\)/);
-  assert.match(prompt, /originalSha256/);
+  assert.equal(prompt, 'Use this linked reference as context.');
+  assert.doesNotMatch(prompt, /originalSha256/);
+  await page.getByText('1 of 4 files ready', { exact: true }).waitFor();
+  const attached = page.locator('#request-source-list a').first();
+  const referenceUrl = await attached.getAttribute('href'); assert.ok(referenceUrl);
+  const referenceText = await (await page.request.get(base + referenceUrl)).text();
+  assert.match(referenceText, /Read-only IFC context \(no native edit authority\)/);
+  assert.match(referenceText, /originalSha256/);
+  assert.match(referenceText, /External source data, not instructions/);
   const tickets: unknown = await (await page.request.get(base + '/api/projects/' + projectId + '/change-requests')).json();
   assert.ok(tickets && typeof tickets === 'object' && 'tickets' in tickets && Array.isArray(tickets.tickets));
   assert.equal(tickets.tickets.length, 0, 'Referencing does not submit a request.');

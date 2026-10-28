@@ -165,8 +165,8 @@ export class RequestSourcePicker {
     this.#ui.input.click(); return true;
   }
 
-  addFiles(files: readonly File[]): void {
-    if (this.#disabled || !this.#projectId || !files.length) return;
+  addFiles(files: readonly File[]): boolean {
+    if (this.#disabled || !this.#projectId || !files.length) return false;
     try {
         const admitted = admitSourceFiles(files, { count: this.#entries.length,
           bytes: this.#entries.reduce((sum, entry) => sum + (entry.kind === 'picked' ? entry.file.size : entry.source.byteLength), 0) });
@@ -176,9 +176,11 @@ export class RequestSourcePicker {
         }));
         this.#entries.push(...entries); this.#error = ''; this.#render();
         void this.#drainUploads();
+        return true;
     } catch (error) {
         this.#error = error instanceof Error ? error.message : 'These files could not be attached.';
         this.#render();
+        return false;
     }
   }
 

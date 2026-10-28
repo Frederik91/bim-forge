@@ -845,6 +845,11 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
 #linked-model-mount h3, #linked-model-mount h4 { font-size: .8rem; margin: 8px 0 4px; }
 #linked-model-mount p { margin: 4px 0; }
 #linked-model-mount input[type="file"] { width: 100%; min-width: 0; font-size: .75rem; }
+#linked-model-mount label { display: flex; align-items: center; gap: 6px; font-size: .75rem; }
+#linked-model-mount input[type="checkbox"] { appearance: auto; width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex: 0 0 16px; }
+#linked-model-mount a { color: var(--accent, #196863); font-size: .75rem; }
+#linked-model-mount section > a { display: inline-block; margin-bottom: 6px; }
+#linked-model-mount button { border: 1px solid var(--line, #d8e0df); border-radius: 5px; background: #f4f8f7; color: #284d4c; }
 #linked-model-mount ul { padding-left: 12px; margin: 4px 0; list-style: none; }
 #linked-model-mount button { min-height: 30px; padding: 4px 6px; text-align: left; font-size: .75rem; }
 #linked-model-mount section section { border-top: 1px solid var(--line, #d8e0df); margin-top: 8px; padding-top: 4px; }
