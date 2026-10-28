@@ -35,7 +35,7 @@ test('shipped workspace links IFC into one viewer and adds only unsent source co
   await page.locator('#create-project').click();
   const created: unknown = await (await creation).json();
   assert.ok(created && typeof created === 'object' && 'project' in created && typeof created.project === 'string');
-  const native = RoomRepository.restore(created.project); const projectId = native.projectId;
+  const native = await RoomRepository.restore(created.project); const projectId = native.projectId;
   const acceptedBefore = native.serialize();
   await page.locator('#linked-model-references > summary').click();
   await page.getByLabel('Attach IFC reference', { exact: true }).setInputFiles({ name: 'Linked context fixture.ifc', mimeType: 'application/x-step', buffer: await fs.readFile(fixture) });
@@ -73,7 +73,7 @@ test('shipped workspace links IFC into one viewer and adds only unsent source co
   await page.screenshot({ path: path.join(artifacts, 'linked-workspace-desktop.png'), fullPage: true });
   const after: unknown = await (await page.request.get(base + '/api/projects/' + projectId)).json();
   assert.ok(after && typeof after === 'object' && 'project' in after && typeof after.project === 'string');
-  assert.equal(RoomRepository.restore(after.project).serialize(), acceptedBefore, 'IFC leaves native accepted state unchanged.');
+  assert.equal((await RoomRepository.restore(after.project)).serialize(), acceptedBefore, 'IFC leaves native accepted state unchanged.');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(artifacts, 'linked-workspace-phone.png'), fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

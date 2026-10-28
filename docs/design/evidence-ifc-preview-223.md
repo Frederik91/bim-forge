@@ -80,6 +80,7 @@ Do not merge new geometry/storage/security work without human approval.
 - Preparation: an isolated docs-only cherry-pick was aborted before product edits; full component
   histories were then integrated. No validator/test attempt ran during that correction.
 - Parent check 1, `8896658`: validation, explicit policy, build and 32 focused checks passed.
+- Parent check 2, `1b110b1`: strict lint passed; typecheck caught missing awaits in the new browser test's asynchronous repository restoration. No browser test ran; corrected the fixture.
 - Final combined qualification and publication: pending.
 
 The owner permits ten attempts per interactive item, without weakening validators or changing factory
