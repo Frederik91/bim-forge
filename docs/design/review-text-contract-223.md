@@ -31,4 +31,33 @@ All builds/tests are isolated server-container-only over SSH `frederik@192.168.1
 | Attempt | Commands / source | Outcome |
 | --- | --- | --- |
 | `a1` | `b782cda`; the red command above, product source unchanged from base | 1 pass / 2 expected diagnostic failures, exact live symptom reproduced; completed geometry and discard/base/preview fences verified. |
-| Pending | Root validation, explicit four-path policy and focused script/review/wall/dimension/intent checks | Not yet qualified |
+| `a2` | `5bc1aa0`; `npm run validate`, explicit four-path policy and focused command below | All passed: 61/61 tests (8 new, 53 existing), zero failures/skips. The original red regressions pass; exact acceptance boundaries and both live instruction seams are covered. A bounded companion container retained a compact synthetic receipt with four actual guest executions, audit records and unchanged accepted-state proof. |
+
+Focused green command:
+
+```sh
+node --test --test-concurrency=1 src/model-script-review.test.ts src/model-script.test.ts src/model-script-wall.test.ts src/model-script-dimension.test.ts src/room-dimension-preview.test.ts src/visual-request.test.ts
+```
+
+Evidence root: `/ssd1/bim-forge-qualification/issue223-reviewcontract/`. `a1/` retains the original red proof and unchanged product source bundle; `a2/` retains the qualified bundle/checkout, runner, Node `v24.22.1`, exact container inspections, full logs, source hashes and `artifacts/review-contract-receipt.json`. The receipt shows overlength/newline failures, successful exact600/corrected proposals, completed geometry host calls and cleared failed previews. Its synthetic model delta remains a +100 mm shared partition move, adjacent centreline spans 3/3 -> 3.1/2.9 m and evaluated hosted-opening motion, without accepted-state changes.
+
+```text
+Strict TypeScript valid. 290 source file(s) checked.
+tsc --noEmit: exit 0
+Policy valid. 4 changed file(s) checked. [explicit command]
+tests 61; pass 61; fail 0; skipped 0
+```
+
+The unchanged root policy invocation supplies zero paths; an additional explicit command checks all four changed paths. Image ID: `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `a1/artifacts/red.log` | `ac45d39f18af74bdde2844da9e1ab438b506692e6ba98b486a1782e72c49242a` |
+| `a2/artifacts/validate.log` | `0fae94202dc2818448f38daa7dec35af2d4c50535e23abfa2fe25363c00f3c14` |
+| `a2/artifacts/policy.log` | `6f3926ab3331c9844fc51585523a80c2468c3bd63deb9aaade6f52757b715842` |
+| `a2/artifacts/focused.log` | `0b8cd032f22b608f9f5542fee155bb693c9bb7f2ade5b86b56d38c79b25a1890` |
+| `a2/artifacts/review-contract-receipt.json` | `4d3d12b258bc90649b18c93ae12e9dd9bbafd0831509a8c08b502f1721dd1945` |
+
+Qualified source hashes: `src/model-script.ts` = `14eac6343aace20a8be0690fea58783752523eb722c3e4b905407db09905f9a6`; `src/model-proposal.ts` = `a827ea13f80d426593b16bae7f129eb9a2580a39f4191190559c76ec4504a3eb`; `src/model-script-review.test.ts` = `fa55790d54bff2da92f3cdfe2d56ccc98d1c00523069e4ecee9f1db8d7e916fd`.
+
+Only this note changes after product/test qualification. Final documentation-head root validation and identical source hashes are reported in issue #223. Parent owns registration, the combined PR224 checks, live provider retry and deployment. This synthetic deterministic correction does not claim live source interpretation or IFC/context qualification.
