@@ -136,3 +136,30 @@ The separate-container check is retained in a06 `sidecar.sh`, `evidence/sidecar-
 | a06 `evidence/sidecar-test.log` | `d2bfe1bef2c86f3c114dfc62d9d7b115e68c1db248c6dcaf2bb89e6b236e8de9` |
 
 All seven attempts are retained under `/ssd1/bim-forge-qualification/issue218/`; three of the ten authorized attempts remain. No full `npm test` suite was claimed: the root validators, browser build, meaningful native-focused cases, real importer/runtime/browser checks and isolated-sidecar recovery check above were executed.
+
+### Parent review corrections and final requalification
+
+This receipt supersedes the earlier final-code and remaining-attempt statements. Parent review found that cleanup skipped a live descendant group after its leader exited. The focused regression at `bfa14ec` starts a real descendant, waits for its readiness, then exits the leader with status 0 or 7. Against the original supervisor both subcases failed: the descendant wrote `late` after `supervise` returned. `supervisor-cleanup/red/evidence/regression.log` retains both failures; no validator was changed.
+
+The fix at `3815df4` always sends SIGKILL to the owned process group, including after leader exit, tolerates only `ProcessLookupError` when the group has already disappeared, and waits for the leader. Existing hard wall/CPU/memory/file limits remain unchanged. The same regression passes after the fix and also checks that the descendant is dead (or a terminated zombie pending reaping), not merely that no marker appeared. Existing cancellation/deadline and actual converter runs exercise already-gone-group races without raising an error.
+
+Parent also identified a public display-ID mismatch and collection-wide artifact-fetch failure. Final executable source `fb1f006` enforces the documented display/occurrence equality before changing any layer meshes and before panel admission. A valid actual prepared artifact under a different display ID is rejected while the previously displayed meshes stay intact. Repeated valid `setLinks`/hide/show retains the same four meshes. Polling commits statuses first, isolates each artifact fetch failure and exposes the affected link's error. A Chromium fixture uses the real prepared A artifact, a deliberately failing B client response, a running C progressing from index to geometry, and a valid artifact under mismatched D. A's hierarchy/selection/reference remains usable, B/D show their individual errors, and C's progress/cancel action continues updating on later polls.
+
+| Additional attempt | Source | Result |
+| --- | --- | --- |
+| supervisor-cleanup/red | `bfa14ec` | Expected failure: normal and failed leader exits both permit descendant late publication. |
+| supervisor-cleanup/green | `3815df4` | Root validation/build/policy, 28 Python tests and 47 focused/native/runtime/browser tests passed before the two further review findings arrived. |
+| review-final | `fb1f006` | Combined final code passed root validation (279 strict TS sources), explicit 14-path policy, browser build, 28 Python tests, 47 Node tests and the paired-container sidecar/recovery test; zero failures/skips, container exit 0, no OOM. |
+
+These three additional runs consume the original remaining allowance: **ten of ten total qualification attempts are now used**, counting the intentional failing-before proof. No count was reset. No executable changes follow `fb1f006`; later receipt/PR updates are documentation only. Further qualification retries require renewed owner authorization.
+
+The exact source snapshot, commands and bounded-container metadata are retained at `/ssd1/bim-forge-qualification/issue218/review-final/`: `source.tar`, `run.sh`, `sidecar.sh`, and `evidence/*inspect.json`. The same source was used for both the main qualification and isolated paired-container check. Native model delta remains zero; shared server/room-app/viewer/package mounts and preview publication remain parent-owned under #223.
+
+| Retained artifact | SHA-256 |
+| --- | --- |
+| review-final `source.tar` | `ff58ecbc5a3f9adbd5fdc55dc6958a1520a48e62bd0a95dac7f7c2cf6ab95a1c` |
+| review-final `evidence/validate.log` | `043e839af97db1038b1bf9918058b9912ee6480f8c93be7f43085b0a75878dec` |
+| review-final `evidence/python-tests.log` | `634858dbd0e4a2b8e6eae03fcd766e1e0d095f1cb563bc9a1d9606711cece235` |
+| review-final `evidence/runtime-tests.log` | `e8d570b71b9aca40596868e21c34b2f6ba8a2d57171e7022dbe7d29c2021059e` |
+| review-final `evidence/sidecar-test.log` | `ddef8e316a883a23e7eb4ddea6d8d74533b63f00c2b24adbd85f7a9b10d45fbb` |
+| supervisor-cleanup/red `evidence/regression.log` | `bb8c48d425acb631066ae2ec2c41d80fbf29d6dcbac4358c1b19a45d10d1fbe0` |
