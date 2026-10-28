@@ -1,0 +1,23 @@
+# Optional reviewed packaging. Parent supplies app wiring and mounts the same private spool.
+# Never mount application state, credentials, accepted models or the Docker socket here.
+services:
+  ifc-converter:
+    image: ${BIM_FORGE_IFC_IMAGE:?Set the reviewed immutable converter image}
+    user: "65032:33"
+    network_mode: none
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 2304m
+    memswap_limit: 2304m
+    pids_limit: 64
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    volumes:
+      - ${BIM_FORGE_IFC_SPOOL:?Set a dedicated private SSD directory}:/spool:rw
+    logging:
+      driver: json-file
+      options: { max-size: 2m, max-file: "2" }

@@ -1,8 +1,9 @@
 import type { ConversationVisual } from '../src/request-conversation.ts';
 
-export type ComposerAction = 'files' | 'evidence' | 'reference' | 'view' | 'scope' | 'options';
+export type ComposerAction = 'files' | 'floor' | 'evidence' | 'reference' | 'view' | 'scope' | 'options';
 export const COMPOSER_ACTIONS: readonly { id: ComposerAction; label: string; description: string }[] = [
   { id: 'files', label: 'Attach files', description: 'Images, plans and documents' },
+  { id: 'floor', label: 'Reconstruct a floor plan', description: 'Attach a plan, confirm a known dimension, review an AI proposal' },
   { id: 'evidence', label: 'Use project evidence', description: 'Retained sources and model-linked claims' },
   { id: 'reference', label: 'Reference a model item', description: 'Search the model with @' },
   { id: 'view', label: 'Attach current view', description: 'Selection and marked location · 2D or 3D' },
