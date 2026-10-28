@@ -89,6 +89,9 @@ export class SceneMeshBatches {
       geometry.releaseForMesh(source.mesh, false);
       if (!geometry.meshes.length) geometry.dispose();
     }
+    // Logical meshes have no draw data. Stale submeshes would make Babylon
+    // compile materials against missing attributes during scene readiness checks.
+    source.mesh.releaseSubMeshes();
     source.mesh.isVisible = false;
     const bounds = new BoundingInfo(source.min, source.max); bounds.update(source.world); source.mesh.setBoundingInfo(bounds);
   }
@@ -160,11 +163,14 @@ export class SceneMeshBatches {
     batch.mesh.geometry?.dispose(); const data = new VertexData();
     data.positions = positions; data.normals = normals; data.uvs = uvs; data.indices = [];
     data.applyToMesh(batch.mesh, false);
+    // A hidden rebuild replaced the previous index buffer too. Its previous
+    // visibility mask cannot describe the new (initially empty) buffer.
+    batch.mask = '';
     this.work.rebuiltBatches++; this.work.vertexUploads += offset; this.totalVertexUploads += offset;
     this.indices(batch, true);
   }
 
-  update(parts: readonly BatchSource[]): void {
+  update(parts: readonly BatchSource[], allowBatching = true): void {
     this.work = { rebuiltBatches: 0, vertexUploads: 0, indexUploads: 0, preservedBatches: 0 };
     const live = new Set(parts.map(part => part.mesh)); const touched = new Set<Batch>();
     for (const [mesh, source] of this.sources) if (!live.has(mesh)) {
@@ -172,7 +178,7 @@ export class SceneMeshBatches {
     }
     // Capture all new users before detaching a geometry shared by several parts.
     for (const part of parts) if (!this.sources.has(part.mesh)) this.sources.set(part.mesh, this.capture(part));
-    const active = this.enabled && parts.length >= 128;
+    const active = this.enabled && allowBatching && parts.length >= 128;
     for (const part of parts) {
       const source = this.sources.get(part.mesh); if (!source) throw new Error('Missing source record');
       const world = part.mesh.computeWorldMatrix();

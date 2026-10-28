@@ -243,7 +243,7 @@ export class ModelViewer {
   show(host: HTMLElement, state: ViewerState): void {
     let next: ActiveViewerState = { ...state, levelId: state.levelId ?? null, roofVisible: state.roofVisible ?? true };
     const projectChanged = this.state?.projectId !== next.projectId;
-    if (this.drag && (!state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
+    if (this.drag && (projectChanged || !state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
     if (projectChanged || !state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
     next = { ...next, selectedId: this.comparisonSelection ?? state.selectedId };
     const inLevel = (snapshot: ModelSnapshot | null, id: string): boolean => {

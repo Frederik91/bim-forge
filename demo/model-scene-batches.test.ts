@@ -160,8 +160,17 @@ test('batching captures shared source geometry before releasing its last GPU use
     batches.update(sources.map(mesh => ({ mesh, castsShadow: false })));
     assert.equal(batches.resources().batchedParts, 128);
     assert.equal(batches.resources().cachedVertices, 128 * 24);
+    assert.ok(sources.every(mesh => !mesh.subMeshes?.length));
     const rendered = scene.meshes.filter(mesh => mesh.name.startsWith('bim-batch-'));
     assert.equal(rendered.reduce((sum, mesh) => sum + mesh.getTotalIndices(), 0), 128 * 36);
+    for (const mesh of sources) mesh.setEnabled(false);
+    batches.update(sources.map(mesh => ({ mesh, castsShadow: false })));
+    first.position.x += .1; first.computeWorldMatrix(true);
+    batches.update(sources.map(mesh => ({ mesh, castsShadow: false })));
+    for (const mesh of sources) mesh.setEnabled(true);
+    batches.update(sources.map(mesh => ({ mesh, castsShadow: false })));
+    assert.equal(rendered.reduce((sum, mesh) => sum + mesh.getTotalIndices(), 0), 128 * 36,
+      'restoring a hidden rebuilt batch must restore its triangles');
     first.renderOutline = true; batches.update(sources.map(mesh => ({ mesh, castsShadow: false })));
     assert.equal(first.getTotalIndices(), 36); assert.equal(first.isVisible, true);
   } finally { batches.clear(); shadow.dispose(); scene.dispose(); gpu.dispose(); }

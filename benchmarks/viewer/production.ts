@@ -54,7 +54,23 @@ async function runWorker():Promise<void>{
           modes.push({mode,overview,stages,changed,before,blocks});
         }
         if(errors.length)throw new Error(errors.join('\n'));
-        const result={status:'completed',qualified:false,session,configuration,browserVersion:browser.version(),input,modes,errors};
+        process.send?.({phase:'interaction'});
+        await page.evaluate(()=>window.productionViewer.uiStart());
+        const handle=page.locator('.model-reference-handle');await handle.waitFor({state:'visible'});
+        await page.waitForFunction(()=>document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready')==='true',{},{timeout:15000}).catch(async error=>{await fs.writeFile(path.join(dir,'interaction-dom.html'),await page.content());await page.screenshot({path:path.join(dir,'interaction-failure.png')});throw error;});
+        const box=await handle.boundingBox();if(!box)throw new Error('No reference handle bounds');
+        await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+        let marked=false;
+        for(const [x,y] of [[400,350],[300,350],[500,350],[400,450],[300,450],[500,450]]){
+          await page.mouse.move(x,y,{steps:3});
+          if((await page.locator('.model-selection-caption').textContent())?.startsWith('Reference location')){marked=true;break;}
+        }
+        if(!marked)throw new Error('Reference drag never reached a valid floor or wall');
+        await page.evaluate(()=>window.productionViewer.uiSwitch());await page.mouse.up();
+        const interaction=await page.evaluate(()=>window.productionViewer.uiStatus());
+        if(interaction.references!==0||interaction.marking)throw new Error('Cross-project reference drag leaked');
+        if(errors.length)throw new Error(errors.join('\n'));
+        const result={status:'completed',qualified:false,session,configuration,browserVersion:browser.version(),input,modes,interaction,errors};
         await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(result,null,2));
         await page.evaluate(()=>window.productionViewer.dispose());
         process.stdout.write('Completed '+session+' '+configuration+'\n');
@@ -82,11 +98,12 @@ await fs.writeFile(path.join(output,'run.json'),JSON.stringify({qualified:false,
   profile:'local workstation diagnostics; no CPU profiling/tracing; isolated Chrome processes; GPU presentation/memory unavailable'},null,2));
 await build({entryPoints:[path.join(root,'benchmarks/viewer/production-browser.ts')],outdir:assets,bundle:true,platform:'browser',format:'esm',target:'es2023',sourcemap:true,logLevel:'warning'});
 const assetNames=new Set(await fs.readdir(assets));
-const html='<!doctype html><meta charset="utf-8"><title>Production viewer diagnostics</title><style>body{margin:0}canvas{display:block;width:800px;height:600px}</style><canvas width="800" height="600"></canvas><script type="module" src="/production-browser.js"></script>';
+const html='<!doctype html><meta charset="utf-8"><title>Production viewer diagnostics</title><link rel="stylesheet" href="/room.css"><style>body{margin:0}canvas{display:block;width:800px;height:600px}</style><canvas width="800" height="600"></canvas><script type="module" src="/production-browser.js"></script>';
 const server=createServer(async(request,response)=>{try{
-  response.setHeader('Cache-Control','no-store');response.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data: blob:");
+  response.setHeader('Cache-Control','no-store');response.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:");
   const name=request.url?.split('?')[0]?.slice(1)??'';
   if(!name){response.setHeader('Content-Type','text/html');response.end(html);}
+  else if(name==='room.css'){response.setHeader('Content-Type','text/css');response.end(await fs.readFile(path.join(root,'demo/room.css')));}
   else if(name==='favicon.ico'){response.writeHead(204);response.end();}
   else if(assetNames.has(name)){response.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':'application/json');response.end(await fs.readFile(path.join(assets,name)));}
   else{response.writeHead(404);response.end();}

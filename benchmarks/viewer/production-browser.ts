@@ -5,6 +5,8 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { ModelScene, modelPoint } from '../../demo/model-scene.ts';
 import type { RenderingMode } from '../../demo/model-scene.ts';
 import { productionViewerFixture } from '../../demo/production-viewer-fixture.ts';
+import { ModelViewer } from '../../demo/model-viewer.ts';
+import type { ViewerState } from '../../demo/model-viewer.ts';
 
 type Configuration = 'individual' | 'retained';
 type Stage = 'baseline' | 'preview' | 'comparison' | 'discard';
@@ -19,6 +21,9 @@ declare global {
       cycles(count: number): Promise<unknown>;
       counts(): unknown;
       dispose(): Promise<void>;
+      uiStart(): Promise<void>;
+      uiSwitch(): Promise<void>;
+      uiStatus(): { references: number; marking: boolean };
     };
   }
 }
@@ -28,6 +33,7 @@ let current: {
   viewer: ModelScene; engine: Engine; instrumentation: SceneInstrumentation; configuration: Configuration;
   fixture: Awaited<ReturnType<typeof productionViewerFixture>>; original: string; samples: Sample[];
 } | null = null;
+let ui: { viewer: ModelViewer; host: HTMLElement; state: ViewerState; references: number } | null = null;
 function loaded() { if (!current) throw new Error('No production scene'); return current; }
 async function frame(): Promise<void> {
   const { viewer } = loaded();
@@ -66,6 +72,7 @@ async function stage(stage: Stage): Promise<unknown> {
   return { sample: state.samples.at(-1), sourceRows: sourceRows(), counts: counts() };
 }
 async function dispose(): Promise<void> {
+  if (ui) { ui.viewer.dispose(); ui.host.remove(); ui = null; canvas.style.display = 'block'; }
   if (!current) return;
   current.instrumentation.dispose(); current.viewer.dispose(); current.engine.dispose(); current = null;
 }
@@ -101,4 +108,20 @@ window.productionViewer = {
   },
   counts,
   dispose,
+  async uiStart() {
+    await dispose(); canvas.style.display = 'none';
+    const fixture = await productionViewerFixture(); const host = document.createElement('div'); document.body.append(host);
+    const viewer = new ModelViewer({ select() {}, inspect() {}, keyboardReference() {}, reference() { if (ui) ui.references++; } });
+    viewer.root.style.width = '800px'; viewer.root.style.height = '600px';
+    const state: ViewerState = { projectId: fixture.projectId, snapshot: fixture.accepted, comparison: null,
+      selectedId: 'ground-desk', focusId: null, mode: 'basic', cutaway: true, interactive: true,
+      reference: null, levelId: 'ground', roofVisible: false };
+    ui = { viewer, host, state, references: 0 }; viewer.show(host, state);
+  },
+  async uiSwitch() {
+    if (!ui) throw new Error('Missing UI fixture');
+    const other = await productionViewerFixture(); ui.state = { ...ui.state, projectId: other.projectId };
+    ui.viewer.show(ui.host, ui.state);
+  },
+  uiStatus() { if (!ui) throw new Error('Missing UI fixture'); return { references: ui.references, marking: ui.viewer.root.dataset.marking === 'true' }; },
 };

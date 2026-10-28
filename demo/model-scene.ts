@@ -561,7 +561,15 @@ export class ModelScene {
     this.syncBatches();
   }
 
-  private syncBatches(): void { this.batches.update(this.parts.map(part => ({ mesh: part.mesh, castsShadow: !part.before && part.surface !== 'floor' }))); }
+  private syncBatches(): void {
+    this.batches.update(this.parts.map(part => ({ mesh: part.mesh, castsShadow: !part.before && part.surface !== 'floor' })), this.comparison === null);
+    // Review context and ghosts already require individual sorting. Keep the
+    // entire review pass and its caster order consistent with source parts.
+    if (this.comparison) {
+      const map = this.shadow.getShadowMap();
+      if (map) map.renderList = this.parts.filter(part => !part.before && part.surface !== 'floor').map(part => part.mesh);
+    }
+  }
 
   renderResources(): ReturnType<SceneMeshBatches['resources']> { return this.batches.resources(); }
 
