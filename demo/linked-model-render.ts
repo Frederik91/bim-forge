@@ -46,7 +46,7 @@ export class LinkedModelLayer {
     }
   }
   pick(mesh: AbstractMesh | null): LinkedSelection | null { return mesh instanceof Mesh && mesh.isEnabled() ? this.parts.get(mesh) ?? null : null; }
-  objectAt(x: number, y: number): LinkedSelection | null { return this.pick(this.scene.pick(x, y, mesh => mesh instanceof Mesh && this.parts.has(mesh))?.pickedMesh ?? null); }
+  objectAt(x: number, y: number): LinkedSelection | null { return this.pick(this.scene.pick(x, y)?.pickedMesh ?? null); }
   select(selection: LinkedSelection | null): void {
     for (const [mesh, value] of this.parts) {
       mesh.renderOutline = Boolean(selection && JSON.stringify(selection) === JSON.stringify(value));

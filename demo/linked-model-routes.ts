@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { MAX_LINK_SOURCE_BYTES } from '../src/linked-model.ts';
 import type { LinkedModelStore } from './linked-model-store.ts';
+const uploads = new WeakMap<LinkedModelStore, number>();
 
 /** Mount after the server host/security headers. authorize must enforce its existing same-origin rule for every method. */
 export async function handleLinkedModelRoute(input: {
@@ -11,6 +12,7 @@ export async function handleLinkedModelRoute(input: {
   const url = new URL(request.url ?? '/', 'http://localhost');
   const route = /^\/api\/projects\/([a-f0-9-]{36})\/ifc-links(?:\/([a-f0-9-]{36})(?:\/(prepared|original|cancel))?)?$/.exec(url.pathname);
   if (!route) return false;
+  let uploading = false;
   const send = (status: number, value: unknown) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(value)); };
   try {
     input.authorize(request);
@@ -19,6 +21,8 @@ export async function handleLinkedModelRoute(input: {
     if (!input.hasProject(projectId)) { send(404, { error: 'Unknown project.' }); return true; }
     if (!id && request.method === 'GET') send(200, { links: store.list(projectId) });
     else if (!id && request.method === 'POST') {
+      if ((uploads.get(store) ?? 0) >= 2) { send(429, { error: 'Two IFC files are already uploading.' }); return true; }
+      uploads.set(store, (uploads.get(store) ?? 0) + 1); uploading = true;
       if (request.headers['content-type'] !== 'application/x-step') throw new Error('Upload original IFC bytes as application/x-step.');
       const length = request.headers['content-length'];
       if (length && (!/^[0-9]+$/.test(length) || Number(length) > MAX_LINK_SOURCE_BYTES)) throw new Error('IFC source must be at most 2 MiB.');
@@ -40,5 +44,6 @@ export async function handleLinkedModelRoute(input: {
     } else if (id && !resource && request.method === 'GET') send(200, { link: store.get(projectId, id) });
     else send(405, { error: 'Unsupported IFC method.' });
   } catch (error) { send(400, { error: error instanceof Error ? error.message : 'IFC reference unavailable.' }); }
+  finally { if (uploading) uploads.set(store, (uploads.get(store) ?? 1) - 1); }
   return true;
 }
