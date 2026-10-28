@@ -7,14 +7,14 @@ import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { admission, parseModel } from './contract.ts';
+import { admission, assertNativeManifest, parseFragmentsInput, parseModel } from './contract.ts';
 import { smokeModel } from './fixtures.ts';
 import { runCandidateProcess } from './runner-limits.ts';
 import type { Candidate } from './metrics.ts';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
-const known = new Set(['--candidate', '--dataset', '--output', '--channel', '--cycles', '--timeout-ms', '--elements', '--headed', '--serve']);
+const known = new Set(['--candidate', '--dataset', '--output', '--channel', '--cycles', '--timeout-ms', '--elements', '--headed', '--serve', '--fragments']);
 for (const argument of args.filter(item => item.startsWith('--'))) if (!known.has(argument)) throw new Error('Unknown option: ' + argument);
 function option(name: string, fallback: string): string {
   const index = args.indexOf(name); if (index === -1) return fallback;
@@ -33,7 +33,7 @@ const cycles = integer('--cycles', 3, 100);
 const timeout = integer('--timeout-ms', 120000, 600000);
 const count = integer('--elements', 24, 10000);
 const dataset = option('--dataset', '');
-const model = parseModel(dataset ? JSON.parse(await fs.readFile(path.resolve(dataset), 'utf8')) : smokeModel(count));
+const model = parseModel(dataset ? JSON.parse(await fs.readFile(path.resolve(dataset), 'utf8')) : smokeModel(count), 'transfer');
 const channel = option('--channel', '');
 const output = path.resolve(option('--output', path.join(root, 'artifacts/private/viewer-benchmark', new Date().toISOString().replaceAll(':', '-'))));
 await fs.mkdir(path.dirname(output), { recursive: true });
@@ -41,15 +41,26 @@ await fs.mkdir(output, { recursive: false });
 const assets = path.join(output, 'assets'); await fs.mkdir(assets);
 const hash = (bytes: string | Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 const modelText = JSON.stringify(model);
+const nativePath = option('--fragments', '');
+const nativeBytes = nativePath ? await fs.readFile(path.resolve(nativePath)) : null;
+const fragmentsInput = parseFragmentsInput(nativePath ? { kind: 'native', manifest: JSON.parse(await fs.readFile(path.resolve(nativePath) + '.json', 'utf8')) } : { kind: 'raw-edit' });
+if (fragmentsInput.kind === 'native') {
+  assertNativeManifest(fragmentsInput.manifest, model, hash(modelText));
+  if (!nativeBytes || nativeBytes.length !== fragmentsInput.manifest.bytes || hash(nativeBytes) !== fragmentsInput.manifest.sha256) throw new Error('Native Fragments binary integrity mismatch');
+}
+const purpose = model.provenance.kind === 'synthetic' ? 'setup-smoke' : 'initial-local';
 const profile: unknown = JSON.parse(await fs.readFile(path.join(root, 'benchmarks/viewer/profile.json'), 'utf8'));
 const source = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim();
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'benchmarks/viewer', 'package.json', 'package-lock.json', 'tsconfig.json', 'scripts/validate-typescript.ts'], { cwd: root, encoding: 'utf8' }).trim().split(/\r?\n/).filter(Boolean);
 const sourceFiles = await Promise.all(files.map(async name => ({ path: name, sha256: hash(await fs.readFile(path.join(root, name))) })));
-await fs.writeFile(path.join(output, 'run.json'), JSON.stringify({ version: 1, issue: 192, purpose: 'setup-smoke', qualified: false,
+await fs.writeFile(path.join(output, 'run.json'), JSON.stringify({ version: 1, issue: 192, purpose, qualified: false,
   source, dirty: dirty.length > 0, sourceFiles, dataset: { id: model.id, sha256: hash(modelText), elements: model.elements.length,
-    triangles: model.geometries.reduce((sum, geometry) => sum + geometry.indices.length / 3, 0), admission: admission(model) },
-  profile, candidates, cycles, timeout, node: process.version, os: { platform: os.platform(), release: os.release(), arch: os.arch(),
+    triangles: model.geometries.reduce((sum, geometry) => sum + geometry.indices.length / 3, 0), admission: admission(model),
+    grossFloorAreaM2: model.grossFloorAreaM2, provenance: model.provenance,
+    disciplines: Object.fromEntries([...new Set(model.elements.map(item => item.discipline))].map(discipline =>
+      [discipline, model.elements.filter(item => item.discipline === discipline).length])) },
+  profile, candidates, cycles, timeout, fragmentsInput, fragmentsLodMode: 'ALL_GEOMETRY', node: process.version, os: { platform: os.platform(), release: os.release(), arch: os.arch(),
     cpu: os.cpus()[0]?.model ?? 'unavailable', totalMemoryBytes: os.totalmem() },
   network: 'loopback, unshaped', memory: 'not-measured', status: 'started',
 }, null, 2) + '\n');
@@ -70,6 +81,9 @@ const server = createServer(async (request, response) => {
     const name = request.url?.split('?')[0]?.slice(1) ?? '';
     if (name === '' || name === 'index.html') { response.setHeader('Content-Type', 'text/html'); response.end(pageHtml); }
     else if (name === 'dataset.json') { response.setHeader('Content-Type', 'application/json'); response.end(modelText); }
+    else if (name === 'fragments-input.json') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(fragmentsInput)); }
+    else if (name === 'native.frag' && nativeBytes) { response.setHeader('Content-Type', 'application/octet-stream'); response.end(nativeBytes); }
+    else if (name === 'favicon.ico') { response.writeHead(204); response.end(); }
     else if (assetNames.has(name)) { response.setHeader('Content-Type', name.endsWith('.mjs') ? 'text/javascript' : 'application/json'); response.end(await fs.readFile(path.join(assets, name))); }
     else { response.writeHead(404); response.end(); }
   } catch (error) { response.writeHead(500); response.end('Benchmark asset failed'); process.stderr.write(String(error) + '\n'); }
@@ -93,7 +107,7 @@ if (args.includes('--serve')) {
       process.stdout.write(engine + ': ' + (passed ? 'completed' : 'failed') + '\n');
     }
     await fs.writeFile(path.join(output, 'completion.json'), JSON.stringify({ status: failed ? 'failed' : 'completed', qualified: false,
-      purpose: 'setup-smoke', realisticDataset: 'not-qualified', finishedAt: new Date().toISOString() }, null, 2) + '\n');
+      purpose, realisticDataset: 'not-qualified', finishedAt: new Date().toISOString() }, null, 2) + '\n');
     if (failed) process.exitCode = 1;
   } finally {
     server.closeAllConnections();

@@ -1,5 +1,5 @@
 import type { Adapter, Element, Model, Proposal } from './contract.ts';
-import { admission, applyProposal, assertReadback, changesBetween, comparisonElements, parseModel } from './contract.ts';
+import { admission, applyProposal, assertReadback, changesBetween, comparisonElements, parseModel, unchangedModel } from './contract.ts';
 import { smokeProposal } from './fixtures.ts';
 import type { Candidate, Result, Sample } from './metrics.ts';
 
@@ -73,18 +73,23 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
       renderer: 'unavailable', viewport: [canvas.width, canvas.height], devicePixelRatio: devicePixelRatio },
   };
   async function measure(operation: string, work: () => Promise<void>): Promise<void> {
+    output.textContent = 'Running ' + candidate + ': ' + operation;
+    console.info('[viewer-benchmark] start ' + operation);
     const start = performance.now(); await work();
     if (!adapter) throw new Error('Missing active adapter');
     samples.push({ operation, durationMs: performance.now() - start, ...adapter.stats() });
     checks.push(operation);
+    console.info('[viewer-benchmark] end ' + operation + ' ' + samples.at(-1)?.durationMs.toFixed(1) + ' ms');
   }
   try {
     await dispose();
     const response = await fetch('/dataset.json'); if (!response.ok) throw new Error('Dataset fetch failed');
-    const input: unknown = await response.json(); const model = parseModel(input);
+    const input: unknown = await response.json(); const model = parseModel(input, 'transfer');
+    result.purpose = model.provenance.kind === 'synthetic' ? 'setup-smoke' : 'initial-local';
+    if (model.provenance.kind !== 'synthetic') result.limitations.push(...model.provenance.limitations);
     const firstCamera = model.cameraPath[0];
     accepted = model; result.limitations.push(...admission(model).reasons);
-    const baseline = JSON.stringify(model);
+    const unchanged = unchangedModel(model);
     if (candidate === 'babylon') {
       const { BabylonAdapter } = await import('./adapters/babylon.ts'); adapter = new BabylonAdapter(canvas);
     } else {
@@ -99,7 +104,8 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
     }
     await measure('load', async () => { await renderer.load(model); await renderer.camera(firstCamera); });
     displayed = model.elements;
-    assertReadback(model, model.elements, await renderer.readback()); checks.push('renderer-readback');
+    await measure('validation-readback', async () => { assertReadback(model, model.elements, await renderer.readback()); });
+    checks.push('renderer-readback');
     const stable = model.elements[2]; if (!stable) throw new Error('Replay needs three elements');
     await measure('select', () => renderer.select(stable.id));
     await measure('properties', async () => {
@@ -128,7 +134,7 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
     });
     async function review(operation: string, work: () => Promise<void>): Promise<void> {
       await measure(operation, work);
-      if (JSON.stringify(accepted) !== baseline) throw new Error('Accepted model mutated during review');
+      if (accepted !== model || !unchanged()) throw new Error('Accepted model mutated during review');
       checks.push('accepted-immutable');
     }
     for (let i = 0; i < cycles; i++) {
@@ -141,7 +147,7 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
     try { await preview({ ...smokeProposal(model), baseRevision: 'stale-revision' }); throw new Error('Stale proposal was accepted'); }
     catch (error) { if (!(error instanceof Error) || error.message !== 'Stale or invalid proposal revision') throw error; }
     if (JSON.stringify(displayed) !== beforeStale) throw new Error('Stale proposal changed rendered state');
-    if (JSON.stringify(accepted) !== baseline) throw new Error('Stale proposal changed accepted state');
+    if (accepted !== model || !unchanged()) throw new Error('Stale proposal changed accepted state');
     assertReadback(model, model.elements, await renderer.readback());
     checks.push('stale-rejected');
     for (const size of [1, 10, 100, 1000]) {
@@ -163,7 +169,9 @@ async function replay(candidate: Candidate, cycles: number): Promise<Result> {
 }
 
 window.viewerBenchmark = { run: replay, preview: () => preview(), compare, discard, dispose,
-  inspect: async () => ({ accepted, proposed, comparison, readback: await loaded().adapter.readback() }) };
+  inspect: async () => ({ modelId: accepted?.id, acceptedRevision: accepted?.revision, proposedRevision: proposed?.revision,
+    comparison, delta: changesBetween(accepted?.elements ?? [], proposed?.elements ?? accepted?.elements ?? []),
+    readback: await loaded().adapter.readback() }) };
 for (const button of document.querySelectorAll('button[data-candidate]')) {
   if (!(button instanceof HTMLButtonElement)) continue;
   button.addEventListener('click', async () => {

@@ -25,7 +25,13 @@ try {
   const context = await browser.newContext({ viewport: { width: 1320, height: 1080 }, deviceScaleFactor: 1 });
   await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
   const page = await context.newPage(); page.setDefaultTimeout(timeout);
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => { errors.push(error.message); process.stderr.write('[viewer-benchmark] pageerror ' + error.message + '\n'); });
+  page.on('crash', () => process.stderr.write('[viewer-benchmark] page-crashed\n'));
+  page.on('console', message => {
+    if (message.type() === 'info' && message.text().startsWith('[viewer-benchmark]')) process.stdout.write(message.text() + '\n');
+    if (message.type() === 'error' || (message.type() === 'warning' && message.text().includes('WebGL: INVALID_'))) errors.push(message.text());
+    if (message.type() === 'error' || message.type() === 'warning') process.stderr.write('[viewer-benchmark] console ' + message.type() + ' ' + message.text() + '\n');
+  });
   await page.goto(url); await page.waitForFunction(() => !!window.viewerBenchmark);
   phase('replay');
   const raw: unknown = await page.evaluate(({ candidate, cycles }) => window.viewerBenchmark.run(candidate, cycles), { candidate, cycles });

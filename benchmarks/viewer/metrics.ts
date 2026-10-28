@@ -6,7 +6,7 @@ const sampleSchema = Type.Object({ operation: Type.String({ minLength: 1 }), dur
   drawCalls: Type.Integer({ minimum: 0 }), triangles: Type.Integer({ minimum: 0 }) }, { additionalProperties: false });
 export const ResultSchema = Type.Object({
   version: Type.Literal(1), candidate: Type.Union([Type.Literal('babylon'), Type.Literal('fragments')]),
-  profile: Type.Literal('viewer-192-v1'), purpose: Type.Literal('setup-smoke'),
+  profile: Type.Literal('viewer-192-v1'), purpose: Type.Union([Type.Literal('setup-smoke'), Type.Literal('initial-local')]),
   status: Type.Union([Type.Literal('completed'), Type.Literal('failed')]), qualified: Type.Literal(false),
   reviewCycles: Type.Integer({ minimum: 1, maximum: 100 }),
   samples: Type.Array(sampleSchema), frameIntervalsMs: Type.Array(Type.Number({ minimum: 0 })),
