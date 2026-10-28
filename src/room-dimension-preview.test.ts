@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { entityLevel } from './building-levels.ts';
 import { multiStoreySnapshot } from './multi-storey-house.ts';
 import { residentialFloor } from './residential-floor.ts';
 import { roomDimensionFixture } from './room-dimension-fixture.ts';
 import { previewRoomDimensionChange } from './room-dimension-preview.ts';
 import type { RoomDimensionRequest } from './room-dimension-preview.ts';
 import { diffSnapshots, validateSnapshot } from './room-model.ts';
-import type { ModelSnapshot } from './room-model.ts';
+import type { ModelSnapshot, Point } from './room-model.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 
 function request(base: ModelSnapshot = roomDimensionFixture()): RoomDimensionRequest {
@@ -37,9 +38,10 @@ test('confirmed centreline span drives a bounded move with deterministic room an
     centrelineSpans: { x: 3.3, y: 4 }, clearSpans: { x: 3.15, y: 3.85 } });
   assert.equal(room.storedChanged, true); assert.equal(room.evaluatedChanged, true);
   assert.deepEqual(result.clearSpanChecks, [{ roomId: 'room-b', axis: 'x', metres: 2.5, beforeMetres: 2.85, afterMetres: 2.55 }]);
-  for (const [id, start, end] of [
-    ['door-between', [3, 1], [3, 1.9]], ['window-between', [3, 2.4], [3, 3]],
-  ]) {
+  const expectedOpenings: { id: string; start: Point; end: Point }[] = [
+    { id: 'door-between', start: [3, 1], end: [3, 1.9] }, { id: 'window-between', start: [3, 2.4], end: [3, 3] },
+  ];
+  for (const { id, start, end } of expectedOpenings) {
     const opening = result.dependencies.find((item) => item.id === id);
     assert.ok(opening?.kind === 'opening');
     assert.deepEqual(opening.before.start, start); assert.deepEqual(opening.before.end, end);
@@ -146,7 +148,7 @@ test('different level room cannot drive a coincident wall and unrelated building
     assert.deepEqual(result.snapshot.entities.find((entity) => entity.id === item.id), item);
   }
   assert.deepEqual(result.snapshot.relationships, base.relationships);
-  assert.ok(result.dependencies.every((item) => item.id.startsWith('level-ground')));
+  assert.ok(result.dependencies.every((item) => entityLevel(base, item.id)?.id === 'level-ground'));
 });
 
 test('invalid dimensions, unsupported moves, room/wall mismatch and constraint references refuse a candidate', () => {

@@ -63,4 +63,4 @@ Builds/tests run only in isolated server containers over SSH, with source/depend
 
 | Attempt | Source / commands | Result |
 | --- | --- | --- |
-| Pending | `npm run validate`; focused tests plus relevant existing geometry tests | Not yet qualified |
+| `a1` | `b7aa472`; `npm run validate`, explicit four-path policy check; new dimensions, wall dependencies, floor layout, building levels and ScriptBox wall tests | 52/53 tests passed; typecheck refused an inferred heterogeneous test tuple. The one runtime failure incorrectly inferred level ownership from an ID prefix (the ground entry door is named `door-entry`). Corrected the test tuple type and asserted actual `entityLevel` ownership. No product or validator changes. |
