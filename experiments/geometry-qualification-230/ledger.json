@@ -1,0 +1,34 @@
+{
+  "issue": 234,
+  "parent": 230,
+  "status": "unqualified-static-source-only",
+  "implementationBase": "f4285c644e52b5bdba8e4f6afeb6e099bc02b891",
+  "docsBase": "e43dd859a631ff8676d080011607447806beeb34",
+  "attemptAllowance": 10,
+  "runtimeAttemptsStarted": 0,
+  "qualification": {
+    "fixtureGeneration": "not-run",
+    "independentOracle": "not-run",
+    "converter": "not-run",
+    "rootValidate": "not-run",
+    "explicitChangedPaths": "not-run",
+    "browser": "not-run",
+    "connectedProvider": "parent-reserved-not-run",
+    "proposalAcceptance": "not-run"
+  },
+  "availability": [
+    {
+      "source": "parent kickoff and bounded parent recheck, 2026-10-28",
+      "condition": "SSH and HTTPS to 192.168.1.17 timed out; parent reports Twingate /32 route ahead of WiFi",
+      "action": "No child network reprobe, no local build/test substitution. Continue static source work."
+    }
+  ],
+  "defectsReproduced": [],
+  "staticHarnessCorrections": [
+    "Use explicit PowerShell executable/login:false/workdir; native git with absolute -C. Outer shell redirected native command cwd.",
+    "Writable roots exclude managed checkout. Staged files in writable visualization directory; requested explicit owned-checkout copy.",
+    "Use existing server's HTTP 200 project import response, confirmed by source read; no invented 201 assertion.",
+    "Retain trace before browser closes; retained failure evidence must survive teardown."
+  ],
+  "delivery": "No PR until server root validation and all-changed-path policy pass. No merge/deploy authorized for this child."
+}
