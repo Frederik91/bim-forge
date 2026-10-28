@@ -9,6 +9,8 @@
 !demo/versioned-project-store.ts
 !demo/versioned-project-contract.ts
 !demo/model-scope-store.ts
+!demo/linked-model-store.ts
+!demo/linked-model-routes.ts
 !src/
 !src/**
 !scripts/

@@ -86,6 +86,7 @@ Do not merge new geometry/storage/security work without human approval.
 - Parent check 4, same source: both shipped floor-plan/IFC workflows and all five chat cases passed. The existing workspace suite could not find its cached default browser; fixed only the harness's browser-cache environment.
 - Parent check 5, same source: all 15 actual-browser checks passed, including desktop/phone layout, baseline/alternative isolation, linked canvas picking/visibility and no submission on reference.
 - Screenshot inspection prompted compact IFC controls, a corrected reference-frame enable state and named source-context attachments instead of raw JSON in the message field. Final-source qualification follows.
+- Parent check 6, `9140400`: root validation, explicit policy, build, 49 focused checks and all 15 browser checks passed with the refined UI. The full root suite passed 810 checks with two existing optional skips and one packaging failure: the Docker context allowlist omitted the new linked store/routes. Added the two explicit entries; no validator changed. Assets tests had not yet run because the root command stopped at that failure.
 - Final combined qualification and publication: pending.
 
 The owner permits ten attempts per interactive item, without weakening validators or changing factory
