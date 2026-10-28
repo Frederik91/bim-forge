@@ -838,3 +838,15 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
   .floor-plan-measurement { grid-template-columns: minmax(0, 1fr); }
   .floor-plan-guide :is(button, summary) { min-height: 44px; }
 }
+.linked-model-references { border-top: 1px solid var(--line, #d8e0df); padding: 8px 10px; font-size: .8rem; }
+.linked-model-references > summary { cursor: pointer; font-weight: 650; }
+.linked-model-references .editor-help { margin: 6px 0; }
+#linked-model-mount { min-width: 0; overflow-wrap: anywhere; }
+#linked-model-mount h3, #linked-model-mount h4 { font-size: .8rem; margin: 8px 0 4px; }
+#linked-model-mount p { margin: 4px 0; }
+#linked-model-mount input[type="file"] { width: 100%; min-width: 0; font-size: .75rem; }
+#linked-model-mount ul { padding-left: 12px; margin: 4px 0; list-style: none; }
+#linked-model-mount button { min-height: 30px; padding: 4px 6px; text-align: left; font-size: .75rem; }
+#linked-model-mount section section { border-top: 1px solid var(--line, #d8e0df); margin-top: 8px; padding-top: 4px; }
+#linked-model-mount pre { font-size: .7rem; }
+@media (pointer: coarse) { #linked-model-mount button { min-height: 44px; } }

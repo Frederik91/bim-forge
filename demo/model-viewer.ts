@@ -1,9 +1,13 @@
 import { Engine } from '@babylonjs/core/Engines/engine.js';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { FileToolsOptions } from '@babylonjs/core/Misc/fileTools.pure.js';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { entityLevel } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { ModelScene } from './model-scene.ts';
+import { LinkedModelLayer } from './linked-model-render.ts';
+import type { LinkedDisplay } from './linked-model-render.ts';
+import type { LinkedSelection } from '../src/linked-model.ts';
 import type { RenderingMode } from './model-scene.ts';
 import type { ModelSnapshot, Point } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
@@ -22,6 +26,7 @@ export interface ViewerState {
 }
 type ActiveViewerState = ViewerState & { levelId: string | null; roofVisible: boolean };
 interface ViewerActions {
+  linkedReference?: (selection: LinkedSelection | null) => void;
   select: (id: string) => void;
   inspect: (id: string, snapshot: ModelSnapshot) => void;
   reference: (reference: SpatialReference) => void;
@@ -73,6 +78,8 @@ export class ModelViewer {
   private comparisonSelection: string | null = null;
   private readonly engine: Engine;
   private readonly model: ModelScene;
+  private readonly linked: LinkedModelLayer;
+  private linkedSelection: LinkedSelection | null = null;
   private readonly observer: ResizeObserver;
   private state: ActiveViewerState | null = null;
   private drag: MarkerDrag | null = null;
@@ -112,6 +119,7 @@ export class ModelViewer {
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 1.5));
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
+    this.linked = new LinkedModelLayer(this.model.scene);
     this.model.scene.skipPointerMovePicking = true;
     this.model.camera.attachControl(this.canvas, false);
     this.model.scene.executeWhenReady(() => { this.frames = 3; });
@@ -124,7 +132,9 @@ export class ModelViewer {
     });
     this.canvas.addEventListener('pointerup', (event) => {
       if (!this.pointer.up(event)) return;
-      const [x, y] = this.local(event); const id = this.model.objectAt(x, y);
+      const [x, y] = this.local(event); const linked = this.linked.objectAt(x, y);
+      if (linked) { this.actions.linkedReference?.(linked); return; }
+      const id = this.model.objectAt(x, y);
       if (id) this.select(id);
     });
     for (const type of ['pointercancel', 'pointerleave', 'lostpointercapture']) this.canvas.addEventListener(type, event => {
@@ -134,7 +144,9 @@ export class ModelViewer {
     this.canvas.addEventListener('pointermove', event => {
       this.pointer.move(event);
       if (event.buttons || !this.pointer.canHover || this.drag || !['mouse', 'pen'].includes(event.pointerType)) { this.hover(null); return; }
-      const [x, y] = this.local(event); this.hover(this.model.objectAt(x, y));
+      const [x, y] = this.local(event); const linked = this.linked.objectAt(x, y);
+      this.hover(linked ? null : this.model.objectAt(x, y)); this.linked.hover(linked);
+      if (linked) { this.canvas.style.cursor = 'pointer'; this.frames = 2; }
     });
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     for (const type of ['wheel', 'pointermove', 'keydown']) this.canvas.addEventListener(type, () => { this.frames = 3; });
@@ -183,6 +195,7 @@ export class ModelViewer {
   }
 
   private hover(id: string | null): void {
+    this.linked.hover(null);
     this.model.hover(id);
     if (id !== this.hoveredId) this.frames = 2;
     this.hoveredId = id;
@@ -200,6 +213,7 @@ export class ModelViewer {
   }
 
   private select(id: string): void {
+    this.actions.linkedReference?.(null);
     if (!this.state?.comparison) { this.actions.select(id); return; }
     this.comparisonSelection = id;
     this.state = { ...this.state, selectedId: id };
@@ -219,6 +233,10 @@ export class ModelViewer {
     this.handle.setAttribute('aria-label', `Mark a destination using ${item?.name ?? 'selection'} as reference`);
     this.handle.title = 'Drag to mark a location; Enter for coordinates. No geometry is moved.';
     this.handle.hidden = !item || !this.state?.interactive;
+    if (this.linkedSelection) {
+      this.caption.textContent = 'Read-only IFC reference · ' + this.linkedSelection.source.globalId;
+      this.handle.hidden = true;
+    }
   }
 
   private readonly renderFrame = (): void => {
@@ -279,10 +297,30 @@ export class ModelViewer {
   }
 
   hide(): void { this.endDrag(false); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
+  setLinkedModels(links: readonly LinkedDisplay[]): void {
+    this.linked.setLinks(links); this.frames = 3;
+    this.root.dataset.linkedModels = String(links.filter(link => link.visible).length);
+  }
+  selectLinkedReference(selection: LinkedSelection | null): void {
+    this.linkedSelection = selection; this.linked.select(selection); this.updateCaption(); this.frames = 3;
+  }
+  frameLinkedModels(selection: LinkedSelection | null = null): void {
+    const meshes = this.model.scene.meshes.filter(mesh => mesh.isEnabled() && mesh.name.startsWith('ifc:')
+      && (!selection || mesh.name === 'ifc:' + selection.occurrence.id + ':' + selection.source.globalId));
+    if (!meshes.length) return;
+    const boxes = meshes.map(mesh => { mesh.computeWorldMatrix(true); return mesh.getBoundingInfo().boundingBox; });
+    const minimum = new Vector3(Math.min(...boxes.map(box => box.minimumWorld.x)), Math.min(...boxes.map(box => box.minimumWorld.y)), Math.min(...boxes.map(box => box.minimumWorld.z)));
+    const maximum = new Vector3(Math.max(...boxes.map(box => box.maximumWorld.x)), Math.max(...boxes.map(box => box.maximumWorld.y)), Math.max(...boxes.map(box => box.maximumWorld.z)));
+    const span = Math.max(.5, maximum.x - minimum.x, maximum.y - minimum.y, maximum.z - minimum.z);
+    this.model.camera.setTarget(Vector3.Center(minimum, maximum));
+    this.model.camera.radius = Math.max(2, span * 1.65);
+    this.model.camera.lowerRadiusLimit = Math.max(.1, span * .02); this.model.camera.upperRadiusLimit = Math.max(20, span * 8);
+    this.frames = 3;
+  }
   frame(): void { this.pointer.cancelClick(); this.hover(null); this.model.frame(); this.frames = 3; }
   dispose(): void {
     this.hide(); this.observer.disconnect(); document.removeEventListener('visibilitychange', this.visibility);
-    this.model.dispose(); this.engine.dispose();
+    this.linked.dispose(); this.model.dispose(); this.engine.dispose();
     if (FileToolsOptions.PreprocessUrl === this.imageUrl) FileToolsOptions.PreprocessUrl = this.previousImageUrl;
     for (const url of this.embeddedImages.values()) URL.revokeObjectURL(url);
     this.embeddedImages.clear();

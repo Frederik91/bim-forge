@@ -21,6 +21,11 @@ import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
 import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint, identifier } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
+import { LinkedModelPanel } from './linked-model-ui.ts';
+import { LinkedModelClient } from './linked-model-client.ts';
+import { linkedReferenceText } from '../src/linked-model.ts';
+import type { LinkedSelection } from '../src/linked-model.ts';
+import type { LinkedDisplay } from './linked-model-render.ts';
 import { WorkspaceShell } from './workspace-shell.ts';
 import { ModelExplorer, renderElementProperties } from './model-explorer.ts';
 import type { ModelNode } from './model-explorer.ts';
@@ -334,6 +339,8 @@ let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = '3d';
 let modelViewer: ModelViewer | null = null;
+let linkedDisplays: LinkedDisplay[] = [];
+let linkedSelection: LinkedSelection | null = null;
 let renderingMode: RenderingMode = 'realistic';
 let cutaway = true;
 let reviewDelta = false;
@@ -437,6 +444,22 @@ function useRetainedSources(sources: readonly RequestSource[]): void {
     showPage('request'); showRequestPane('details'); updateControls();
     status('Retained files attached to this chat. Remove individual files from the composer if needed.');
 }
+const linkedPanel = new LinkedModelPanel({
+  host: generic('linked-model-mount'), client: new LinkedModelClient(),
+  changed: links => { linkedDisplays = links; modelViewer?.setLinkedModels(links); },
+  selected: selection => {
+    linkedSelection = selection; modelViewer?.selectLinkedReference(selection);
+    if (selection && repo) { switchModelView('3d'); generic('linked-model-references').setAttribute('open', ''); modelViewer?.frameLinkedModels(selection); }
+  },
+  reference: selection => {
+    if (!repo || ui['request-text'].disabled) { status('Open a writable design chat to add this reference.'); return; }
+    const text = [ui['request-text'].value.trim(), linkedReferenceText(selection)].filter(Boolean).join(' ');
+    if (text.length > ui['request-text'].maxLength) { status('Shorten the message before adding this IFC reference.'); return; }
+    ui['request-text'].value = text; showPage('request'); showRequestPane('details');
+    saveChatDraft(); composer.refresh(); updateControls(); ui['request-text'].focus();
+    status('Read-only IFC context added to the unsent message. No change request was submitted.');
+  },
+});
 const evidencePanel = new ProjectEvidencePanel(generic('project-evidence-mount'), {
   useSources: (sources, context, signal) => {
     assertEvidenceDestination(context, signal); useRetainedSources(sources);
@@ -993,6 +1016,7 @@ function updateControls() {
   const authoring = writable && selectedDesignTarget.kind !== 'baseline';
   generic('design-readonly-banner').hidden = selectedDesignTarget.kind !== 'baseline';
   button('fork-selected-baseline').disabled = !writable;
+  button('show-linked-3d').disabled = !repo || !linkedDisplays.some(link => link.visible);
   button('open-project-evidence').disabled = !repo || busy || dragging;
   button('retry-synthetic-evidence').hidden = !generatedSample && syntheticSeedPending !== repo?.projectId;
   button('retry-synthetic-evidence').disabled = !writable;
@@ -1239,7 +1263,7 @@ function displayAccepted(next: RoomRepository): void {
   selectedBranch = 'main';
   selectedRevision = selectedDesignHead(repo); inspectedComparison = null;
   resetEditor();
-  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); }
+  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); linkedPanel.setProject(next.projectId); }
   try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
   serverConnection(true, `Server saved · accepted ${selectedRevision.slice(0, 10)} · request sketches are unsaved`);
   ui['project-name'].value = next.name;
@@ -1514,6 +1538,7 @@ function switchModelView(next: ModelView): void {
 }
 ui['view-plan'].addEventListener('click', () => switchModelView('plan'));
 ui['view-3d'].addEventListener('click', () => switchModelView('3d'));
+button('show-linked-3d').addEventListener('click', () => { switchModelView('3d'); modelViewer?.frameLinkedModels(); });
 ui['review-plan'].addEventListener('click', () => switchModelView('plan'));
 ui['review-3d'].addEventListener('click', () => switchModelView('3d'));
 ui['review-drawing'].addEventListener('click', (event) => {
@@ -1537,8 +1562,8 @@ for (const prefix of ['', 'review-', 'delta-']) {
   });
   button(`${prefix}cutaway`).addEventListener('click', () => { cutaway = !cutaway; if (cutaway) roofVisible = false; if (repo) renderComparison(); });
 }
-window.addEventListener('pagehide', () => { sourcePicker.releasePreviews(); modelViewer?.dispose(); modelViewer = null; });
-window.addEventListener('pageshow', (event) => { if (event.persisted && repo) renderComparison(); });
+window.addEventListener('pagehide', event => { sourcePicker.releasePreviews(); if (event.persisted) linkedPanel.setProject(null); else linkedPanel.dispose(); modelViewer?.dispose(); modelViewer = null; });
+window.addEventListener('pageshow', (event) => { if (event.persisted && repo) { linkedPanel.setProject(repo.projectId); renderComparison(); } });
 ui['request-canvas-tab'].addEventListener('click', () => showRequestPane('canvas'));
 ui['request-details-tab'].addEventListener('click', () => showRequestPane('details'));
 ui['to-request-details'].addEventListener('click', () => {
@@ -3123,6 +3148,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       return;
     }
     modelViewer ??= new ModelViewer({
+      linkedReference: selection => linkedPanel.select(selection),
       select: chooseObject,
       inspect: (id, graph) => { if (liveChatPreview) inspectLiveObject(id, graph); else { inspectedComparison = { id, graph }; renderElementProperties(generic('element-properties'), graph, id, 'Comparison snapshot'); workspace.showInspector(); } },
       reference: (destination) => {
@@ -3132,6 +3158,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
+    modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
     modelViewer.show(host, { snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
       interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null });
   } catch {

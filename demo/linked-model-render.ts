@@ -14,6 +14,8 @@ export class LinkedModelLayer {
   private readonly material: StandardMaterial;
   private readonly parts = new Map<Mesh, LinkedSelection>();
   private readonly signatures = new Map<string, string>();
+  private selectedKey: string | null = null;
+  private hoveredKey: string | null = null;
   constructor(scene: Scene) {
     this.scene = scene; this.material = new StandardMaterial('ifc-reference-material', scene);
     this.material.diffuseColor = Color3.FromHexString('#4b91ab'); this.material.alpha = .65; this.material.backFaceCulling = false;
@@ -45,13 +47,21 @@ export class LinkedModelLayer {
       }
       for (const [mesh, selection] of this.parts) if (selection.occurrence.id === link.id) mesh.setEnabled(link.visible);
     }
+    this.highlight();
   }
   pick(mesh: AbstractMesh | null): LinkedSelection | null { return mesh instanceof Mesh && mesh.isEnabled() ? this.parts.get(mesh) ?? null : null; }
   objectAt(x: number, y: number): LinkedSelection | null { return this.pick(this.scene.pick(x, y)?.pickedMesh ?? null); }
   select(selection: LinkedSelection | null): void {
+    this.selectedKey = selection ? linkedSelectionKey(selection) : null; this.highlight();
+  }
+  hover(selection: LinkedSelection | null): void {
+    this.hoveredKey = selection ? linkedSelectionKey(selection) : null; this.highlight();
+  }
+  private highlight(): void {
     for (const [mesh, value] of this.parts) {
-      mesh.renderOutline = Boolean(selection && linkedSelectionKey(selection) === linkedSelectionKey(value));
-      mesh.outlineColor = Color3.FromHexString('#135b91'); mesh.outlineWidth = .025;
+      const key = linkedSelectionKey(value); const selected = this.selectedKey === key;
+      mesh.renderOutline = selected || this.hoveredKey === key;
+      mesh.outlineColor = Color3.FromHexString(selected ? '#135b91' : '#c67914'); mesh.outlineWidth = .025;
     }
   }
   dispose(): void { for (const mesh of this.parts.keys()) mesh.dispose(); this.parts.clear(); this.signatures.clear(); this.material.dispose(); }
