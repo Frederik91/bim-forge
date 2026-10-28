@@ -69,10 +69,11 @@ open in #192. Private West Riverside data and images must not enter Git.
 
 ## Implementation and review outcome
 
-**Draft only; do not merge the production integration yet.** The implementation
+**Current: production fixture checks passed; ready for human review after final CI.**
+The failures below are retained historical evidence, superseded by the renewed
+completion recorded at the end of this report. The implementation
 is in the existing ModelScene/ModelViewer path. Two code-review axes found no
-remaining source-level blockers after fixes, but repeated browser evidence still
-fails exact Realistic comparison parity and exposed one UI readiness timeout.
+remaining source-level blockers after fixes, and the renewed browser run now passes exact parity, readiness and resource checks.
 The metadata-only evidence is [issue-226-production-viewer.json](../evidence/issue-226-production-viewer.json).
 All source models, images, traces and raw logs remain ignored and private.
 
@@ -112,7 +113,7 @@ calls as optimized or the current production change as pixel-identical.
 - npm run validate passes. Accepted production model delta is zero. Validators,
   model schema/storage, production CSP and dataset admission are unchanged.
 
-### Qualification attempts and escalation
+### Historical qualification attempts and escalation
 
 Three multi-session checks are retained in the evidence, with every completed
 candidate and failure. No further multi-session attempt is authorized under the
@@ -237,3 +238,39 @@ triangles and visible proposals; 100-cycle live resources, including uniform
 buffers, recover; applicable tests and CI pass. The final five alternating pairs
 are pending at this implementation freeze. #192's dataset/device qualification
 and GitHub's required human approving review remain separate merge conditions.
+
+
+## Renewed completion at 51fe3d0
+
+The first renewed qualification attempt passes all ten candidates in five
+alternating A/B pairs. All fifty paired overview/baseline/preview/comparison/
+discard images are pixel-identical, and every within-candidate discard restores
+its own baseline exactly. Both configurations complete 100 preview/compare/
+discard cycles per mode in the final pair. No page errors or invalid WebGL
+warnings occur. All ten actual ModelViewer deferred-readiness regressions and
+project-switch drag checks pass.
+
+The Basic overview is 147 -> 26 draw calls; Realistic is 284 -> 49, including
+its shadow pass. These counts include the new single FXAA draw. Source triangle
+counts remain 1,782 / 3,456. Both modes restore meshes, geometries, materials,
+textures, source caches, batches, shadow casters and **37 live uniform buffers**
+after 100 cycles for both configurations. Raw heap samples are retained, but
+include diagnostic sample accumulation and JIT caches; they do not qualify GPU
+memory or prove the complete absence of leaks.
+
+The exact frozen implementation and harness are 51fe3d0; the public evidence
+retains source-file, input, raw-result and diagnostic-bundle hashes. Later report
+edits add no runtime changes. All 36 scene tests and 13 workspace/chat browser
+tests pass; root validation passes (279 TypeScript files). Both review axes
+report no remaining source-level blockers at the frozen commit. Final CI must
+pass at the published head; human review still covers the changed AA appearance.
+
+No pixel threshold, timeout, source validator or production array limit was
+relaxed. Default MSAA is replaced by explicit camera-owned FXAA in both real UI
+and harness. Diagnostics rule out shadows, draw order, dithering and alpha as
+the observed MSAA variation's cause; they do not establish the upstream driver
+implementation defect. The earlier failed runs remain part of the record.
+
+The 200k+ sqm data admission, engineering/coordination completeness and device
+qualification remain open in #192. Merge order and GitHub approval requirements
+remain #214 -> #219 -> #227. No issue should auto-close from this delivery.
