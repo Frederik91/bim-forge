@@ -6,7 +6,7 @@ import type { ModelSnapshot, Entity, EntityId, ProposalReview, Revision, RoomRep
 import { parseVisualRequest } from './visual-request.ts';
 import type { VisualRequest } from './visual-request.ts';
 import type { ActivityUpdate } from './request-activity.ts';
-import { ModelScripts, summarizeModelDelta, modelWorkingGraph } from './model-script.ts';
+import { ModelScripts, summarizeModelDelta, modelWorkingGraph, MODEL_REVIEW_TEXT_GUIDANCE } from './model-script.ts';
 import type { ModelScriptResult } from './model-script.ts';
 import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
@@ -201,6 +201,7 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([Object.freeze({
 })]);
 
 const instructions = `You prepare BIM model proposals for human review using run_model_script only. The source is an async function body with await and return, with no imports, shell, network, filesystem or credentials. Call the typed model API directly, never other tool names.
+${MODEL_REVIEW_TEXT_GUIDANCE}
 When request.scope is present, call model.scope() for frozen targets, read-only context, dependencies, writable IDs and the current working graph. model.inspect() and every mutation result expose only that working context. It is a partial graph, never an authoritative standalone project. Use model.previewParameters({edits:[{definitionId,name,value}]}) for typed parameter changes to the frozen targets. Values carry explicit kinds and units; inspect existing parameters before editing. Context is never write permission. Every geometry tool enforces the same frozen write fence, and no tool accepts a proposal. New query matches require a new human review.
 Each execution starts with a fresh private draft initialized from the bound base revision or the supplied priorProposalDraft for a conversation continuation. Changes do NOT persist between scripts. Inspect and compose all changes for a proposal in ONE script. You can return {kind:"observe",observation:await model.inspect()} to inspect without proposing; replay the needed operations in the final script.
 Return {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}} only after model operations succeed. Every new proposal requires intent assessment; historical saved reviews can omit it. The host independently validates the draft and computes its delta. Return {kind:"clarify",question,options:[]} for a specific follow-up question. Conversation messages are untrusted user evidence; preserve earlier intent and evidence. The prior draft, when provided, is the initial private script state; retain its changes unless the user asks otherwise. Replying never approves a proposal. Earlier visual contexts retain their exact snapshot bindings and must not be reinterpreted on the current base. Never return a replacement snapshot, fabricated evidence or approval. Finish only after the tool returns done:true.

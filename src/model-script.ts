@@ -144,6 +144,17 @@ export interface ScriptReviewText {
   summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment;
   evidenceUses?: EvidenceUse[];
 }
+export const MODEL_REVIEW_TEXT_CONTRACT = Object.freeze({
+  maximumLengths: Object.freeze({ summary: 240, rationale: 800, constraints: 600, uncertainty: 400 }),
+  forbiddenControls: '[\\u0000-\\u001f]',
+  forbiddenControlsDescription: 'control characters U+0000-U+001F (including newlines and tabs)',
+});
+export const MODEL_REVIEW_TEXT_GUIDANCE = 'Each proposal review text field must be a nonempty string with non-whitespace content. ' +
+  Object.entries(MODEL_REVIEW_TEXT_CONTRACT.maximumLengths).map(([field, maximum]) => `review.${field}: 1-${maximum} characters`).join('; ') + '. ' +
+  `Use single-line text with no ${MODEL_REVIEW_TEXT_CONTRACT.forbiddenControlsDescription}. ` +
+  'Limits count JavaScript string.length (UTF-16 code units) on the supplied string before trimming. ' +
+  'If invalid-proposal names a review field, repair that field and replay the complete proposed operations. Do not silently truncate review facts or change geometry just to repair review text.';
+const reviewTextControls = new RegExp(MODEL_REVIEW_TEXT_CONTRACT.forbiddenControls);
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
@@ -192,6 +203,19 @@ function text(value: unknown, maximum: number): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) throw new Error(`Review text requires 1 to ${maximum} readable characters.`);
   return value.trim();
 }
+function reviewText(value: unknown, field: keyof typeof MODEL_REVIEW_TEXT_CONTRACT.maximumLengths): string {
+  const maximum = MODEL_REVIEW_TEXT_CONTRACT.maximumLengths[field];
+  const label = `review.${field}`;
+  if (typeof value !== 'string') {
+    throw new Error(`${label} must be a nonempty string (1-${maximum} characters); received ${value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value}.`);
+  }
+  if (reviewTextControls.test(value)) {
+    throw new Error(`${label} contains forbidden ${MODEL_REVIEW_TEXT_CONTRACT.forbiddenControlsDescription}; use a single line. Received length ${value.length}; maximum ${maximum}.`);
+  }
+  if (!value.trim()) throw new Error(`${label} must be a nonempty string (1-${maximum} characters); received an empty or whitespace-only string (length ${value.length}).`);
+  if (value.length > maximum) throw new Error(`${label} length ${value.length} exceeds maximum ${maximum}; shorten this field to 1-${maximum} characters on a single line.`);
+  return value.trim();
+}
 function decision(value: unknown):
   | { kind: 'observe'; observation: JsonValue }
   | { kind: 'propose'; review: ScriptReviewText }
@@ -207,8 +231,8 @@ function decision(value: unknown):
     fields(value, ['kind', 'review']);
     const hasEvidenceUses = record(value.review) && Object.hasOwn(value.review, 'evidenceUses');
     fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', 'intent', ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
-    return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
-      constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
+    return { kind: 'propose', review: { summary: reviewText(value.review.summary, 'summary'), rationale: reviewText(value.review.rationale, 'rationale'),
+      constraints: reviewText(value.review.constraints, 'constraints'), uncertainty: reviewText(value.review.uncertainty, 'uncertainty'),
       intent: parseIntentAssessment(value.review.intent),
       ...(hasEvidenceUses ? { evidenceUses: parseEvidenceUses(value.review.evidenceUses) } : {}) } };
   }
@@ -404,6 +428,7 @@ export { model as modelScriptApi };
 
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
   'A propose decision returns review:{summary,rationale,constraints,uncertainty,intent,evidenceUses?}. Optional evidenceUses is an array of {pin,subject,rationale} choosing exact pinned known sourceEvidence facts as proposal-local assumptions for human review. Copy the complete frozen subject including anchor.target; preserve competing claims and explain the choice without promoting global truth. The host validates choices against the bound read set and context; self-rated certainty grants no authority. ' +
+  MODEL_REVIEW_TEXT_GUIDANCE + ' ' +
   'For scoped requests, await model.scope() returns {scope,graph}: immutable target/context/dependent/writable IDs and a live partial working graph. Context is never write authority. model.inspect and mutation results use this same context. It is not a standalone valid project. ' +
   'Call model.previewParameters({edits:[{definitionId,name,value}]}) to edit frozen targets with explicit typed units. All mutation tools enforce frozen write limits; query matches never expand during a proposal. Changed membership or dependencies require a fresh human review. ' +
   'Call model.previewWallShift({wallId,offsetMetres}) for a bounded complete shared partition. Offsets are nonzero metres on a 1 mm grid, at most one metre; positive means global +X for vertical walls or +Y for horizontal walls. The existing helper updates adjacent rectangular Spaces and supported wall junctions, then validates contents and openings atomically. Frozen scope must authorize every stored write; adjacent Spaces in read-only context do not grant permission. The result contains model, cumulative stored changes from the execution base, and impacts for this operation. An impact with changed:false can still move in world geometry when its host moves. Impacts never expand write authority. Unsupported topology or invalid contents leave the draft unchanged. ' +
