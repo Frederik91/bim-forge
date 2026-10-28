@@ -189,3 +189,24 @@ with paired browser/runtime rollback and accepted/source/auth preservation.
 Initial resource probe: SSH to `192.168.1.17:22` timed out; a separate bounded HTTPS health connection
 also timed out. No test/container ran. Continue code/design work while the server is unavailable;
 do not substitute local tests or repeatedly consume attempts on an unreachable host.
+
+### Parent findings before executable qualification
+
+- Server remains unreachable on a subsequent bounded SSH probe. Read-only route inspection shows
+  the server-specific `/32` route uses Twingate, ahead of the Wi-Fi subnet route. This narrows the
+  availability investigation; no route, VPN, firewall, credential or security setting was changed.
+  The owner has a pending asynchronous server/address question. No implementation test has run.
+- #231 draft used a constructor parameter property despite `erasableSyntaxOnly: true`. Parent
+  requested an explicit field/assignment and a corrected source before qualification.
+- #231 draft containment returned solid distance zero with separated nearest-boundary witnesses.
+  Parent requested consistent witness semantics plus an independent regression assertion. This is
+  static inspection, not an executed pass/failure or a claim of a verified fix.
+- Some #231 draft files initially landed in the session visualization directory rather than its
+  Git checkout. Parent requested absolute owned source paths and an early schema commit for #233.
+  Shell startup profiles also reset worker working directories: workers were instructed to set
+  the outer `exec_command` to `login:false`, an explicit shell and exact workdir; an inner
+  `pwsh -NoProfile` alone does not fix a parent shell that already changed directories.
+- Parent prepared ignored `artifacts/private/qualify230.sh` for isolated root validation/build/full
+  tests, explicit all-changed-path policy, pinned tools image and retained logs/inspection. It is
+  not executed or qualified. Browser, actual-image, live-provider, independent-oracle and preservation
+  gates remain separate and cannot be inferred from that runner's exit code.
