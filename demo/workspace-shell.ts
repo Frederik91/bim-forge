@@ -95,8 +95,12 @@ export class WorkspaceShell {
     else if (this.phone.matches) this.setPanel('context', false);
   }
 
-  showInspector(): void {
+  showNavigation(): void {
     this.setPanel('navigation', true);
+  }
+
+  showInspector(): void {
+    this.showNavigation();
     const inspector = document.getElementById('element-inspector');
     if (inspector instanceof HTMLDetailsElement) inspector.open = true;
   }
