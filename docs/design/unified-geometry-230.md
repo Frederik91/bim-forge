@@ -210,3 +210,26 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
   tests, explicit all-changed-path policy, pinned tools image and retained logs/inspection. It is
   not executed or qualified. Browser, actual-image, live-provider, independent-oracle and preservation
   gates remain separate and cannot be inferred from that runner's exit code.
+
+### First executable source integration (not qualified)
+
+- Composed #231 core `3063bd210995d47a66f7839d02f9eb76415e435e` locally, retaining its
+  history. The shared contract now includes source-neutral categories and bounded surface
+  samples. Source-level unavailable metadata makes spatial completeness explicit. The pure
+  synchronous executor is not yet the live product boundary: its owner is adding a hard-
+  terminated asynchronous worker session before live tool wiring.
+- Composed #234 initial harness `faa6a80274adce99aaf8758d786e52d082e17391` locally.
+  Its runner and README were inspected; the fixture generator, independent oracle and browser
+  assertions are source only. No IFC fixture generation, runtime test or browser check has run.
+  All qualification-matrix rows above remain pending.
+- Static inspection identified a possible zero-clearance certification defect in the core:
+  volume overlap can reach the nonnegative distance comparison and report satisfied clearance.
+  Sent to #231 and independent QA for explicit contained/overlapping/contact/separated cases.
+  This is an inspection finding, not a reproduced failure or verified correction.
+- Parent UI source `1b58d0bb322bb410f80a745bee3e43efb7aa56eb` aligns Ask, Properties and
+  native Move visibility with the actual linked selection. Context attachment checks the full
+  source/occurrence/placement pin before combining it with current properties. Independent
+  browser coverage is being extended; these source changes are not yet qualified.
+- Latest bounded SSH probe still timed out. No server container started, no new preview was
+  published, and no GitHub PR was merged. #232 versioned storage and #233 trusted proposal
+  evidence/final publication wiring remain in their dedicated sessions.
