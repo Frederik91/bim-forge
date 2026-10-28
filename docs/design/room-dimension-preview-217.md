@@ -63,5 +63,27 @@ Builds/tests run only in isolated server containers over SSH, with source/depend
 
 | Attempt | Source / commands | Result |
 | --- | --- | --- |
-| `a1` | `b7aa472`; `npm run validate`, explicit four-path policy check; new dimensions, wall dependencies, floor layout, building levels and ScriptBox wall tests | 52/53 tests passed; typecheck refused an inferred heterogeneous test tuple. The one runtime failure incorrectly inferred level ownership from an ID prefix (the ground entry door is named `door-entry`). Corrected the test tuple type and asserted actual `entityLevel` ownership. No product or validator changes. |
+| `a1` | `b7aa472`; `npm run validate`, explicit four-path policy check; new dimensions, wall dependencies, floor layout, building levels and ScriptBox wall tests | 52/53 tests passed; typecheck refused inference for a loop-local dependency lookup. The one runtime failure incorrectly inferred level ownership from an ID prefix (the ground entry door is named `door-entry`). First correction typed the expected endpoint cases and asserted actual `entityLevel` ownership. No product or validator changes. |
 | `a2` | `18846d9`; same commands | 53/53 tests and four-path policy passed. Typing the expected endpoint cases alone did not resolve TS7022 on the loop-local dependency lookup. Added the exported `RoomDimensionDependency` annotation directly to that lookup, as required by the compiler diagnostic. No product or validator changes. |
+| `a3` | `55a5716`; qualification preflight | Launcher string substitution accidentally altered the pinned base SHA while changing the attempt name. Git comparison refused the unknown object before a container/build/test started. Retained source bundle; corrected the launcher with path/name-specific substitution. |
+| `a4` | `55a5716`; `npm run validate`, explicit four-path policy check and the same five focused suites | Passed root lint/typecheck/policy and all 53 tests (13 new, 40 existing), zero failures/skips. Bounded companion container emitted the actual fixture before/after JSON, unresolved-scale result and rejected minimum-constraint diagnostic. |
+
+Qualified product/test source commit: `55a5716`. Evidence root on `frederik@192.168.1.17`: `/ssd1/bim-forge-qualification/issue217/a4/`. It retains the Git source bundle/checkout, source commit/path/hash receipts, runner, exact container inspections, Node `v24.22.1`, full logs and emitted JSON. Image ID: `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`.
+
+```text
+Strict TypeScript valid. 273 source file(s) checked.
+tsc --noEmit: exit 0
+Policy valid. 4 changed file(s) checked. [explicit policy command]
+tests 53; pass 53; fail 0; skipped 0
+```
+
+The root validation script's default policy invocation reports zero supplied changed paths. The additional explicit command passes the four actual changed paths to the unchanged policy validator.
+
+| Artifact under `a4/artifacts/` | SHA-256 |
+| --- | --- |
+| `validate.log` | `4178b7d5164b9d8266287fb5f2335a8901e053b93a3969b867a2d834fee8f348` |
+| `policy.log` | `6f3926ab3331c9844fc51585523a80c2468c3bd63deb9aaade6f52757b715842` |
+| `focused.log` | `1f69357d4de289672d1b2b0aee900b7d22902c38d346585aa9284f9c8f0f9eb9` |
+| `dependency-delta.json` | `dc6b011c20026a5b96293f3f9790faf584f04b8a2f67f7d78a801cd1b5aa2418` |
+
+Only this note changes after the qualified product/test commit. A final documentation-head root validation and identical source-hash check are reported on the draft PR/issue. No preview publication, live model mutation, UI/browser integration or performance qualification is included.
