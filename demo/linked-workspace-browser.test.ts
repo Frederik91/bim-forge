@@ -49,16 +49,17 @@ test('shipped workspace links IFC into one viewer and adds only unsent source co
   await page.locator('.model-object-picker').selectOption(nativeSelection);
   assert.equal(await page.getByLabel('Original IFC properties and conversion losses', { exact: true }).count(), 0);
   const canvas = page.locator('.babylon-viewer canvas'); const box = await canvas.boundingBox(); assert.ok(box);
-  let picked = false;
+  let picked = false; let nativeAtPick = nativeSelection;
   for (const y of [.25, .4, .55, .7]) {
     for (const x of [.25, .4, .55, .7]) {
+      const precedingNative = await page.locator('.model-object-picker').inputValue();
       await canvas.click({ position: { x: box.width * x, y: box.height * y } });
-      if ((await page.locator('.model-selection-caption').textContent())?.startsWith('Read-only IFC reference')) { picked = true; break; }
+      if ((await page.locator('.model-selection-caption').textContent())?.startsWith('Read-only IFC reference')) { picked = true; nativeAtPick = precedingNative; break; }
     }
     if (picked) break;
   }
   assert.ok(picked, 'Actual pointer clicks select linked geometry in the shipped viewer.');
-  assert.equal(await page.locator('.model-object-picker').inputValue(), nativeSelection, 'Linked selection retains native scope context.');
+  assert.equal(await page.locator('.model-object-picker').inputValue(), nativeAtPick, 'Linked selection retains native scope context.');
   await page.getByRole('button', { name: 'Reference in request', exact: true }).click();
   const prompt = await page.locator('#request-text').inputValue();
   assert.match(prompt, /Read-only IFC context \(no native edit authority\)/);
