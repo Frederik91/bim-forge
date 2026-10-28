@@ -58,8 +58,11 @@ async function inspectAndAccept(page: Page, label: string): Promise<void> {
   const accept = page.getByRole('button', { name: `Accept into ${label}`, exact: true });
   await inspect.or(accept).first().waitFor({ timeout: 30_000 });
   if (await inspect.isVisible()) await inspect.click();
+  const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
   await page.getByRole('button', { name: `Accept into ${label}`, exact: true }).click();
-  await page.getByText('Accepted', { exact: true }).first().waitFor({ timeout: 20_000 });
+  const response = await decision; assert.equal(response.status(), 200, await response.text());
+  await page.locator('#request-chat .request-chat-status strong').filter({ hasText: /^Accepted$/ }).waitFor({ state: 'attached', timeout: 20_000 });
+  await page.locator('#open-chat').click();
 }
 
 test('guided floor reconstruction through shipped desktop/phone UI preserves source, review and target authority', { timeout: 150_000 }, async t => {
@@ -71,9 +74,14 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   const base = `http://127.0.0.1:${address.port}`;
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'],
     ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
-  t.after(async () => { await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers(); await fs.rm(directory, { recursive: true, force: true }); });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const page = await context.newPage(); const errors: string[] = [];
+  t.after(async () => {
+    await page.screenshot({ path: path.join(artifacts, 'last-ui-state.png'), fullPage: true });
+    await context.tracing.stop({ path: path.join(artifacts, 'browser-trace.zip') });
+    await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers();
+    await fs.rm(directory, { recursive: true, force: true });
+  });
   await context.tracing.start({ screenshots: true, snapshots: true });
   page.setDefaultTimeout(15_000);
   page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => { void dialog.accept(); });
@@ -153,6 +161,5 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   await page.getByRole('button', { name: 'Remove synthetic-floor.pdf from this request', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: 'Send message', exact: true }).isDisabled(), true, 'Removing the confirmed source revokes readiness.');
   assert.deepEqual(errors, []);
-  await context.tracing.stop({ path: path.join(artifacts, 'browser-trace.zip') });
   t.diagnostic('Deterministic worker only; no live model-provider accuracy claim. PNG/PDF preparation, source-bound confirmation, unsent reload, explicit acceptance, As-is baseline, alternative-only partition delta and SQLite restart verified.');
 });
