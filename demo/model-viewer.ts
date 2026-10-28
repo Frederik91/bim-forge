@@ -5,10 +5,11 @@ import { entityLevel } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { ModelScene } from './model-scene.ts';
 import type { RenderingMode } from './model-scene.ts';
-import type { ModelSnapshot, Point } from '../src/room-model.ts';
+import type { ModelSnapshot, Point, ProjectId } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 
 export interface ViewerState {
+  projectId?: ProjectId;
   snapshot: ModelSnapshot;
   comparison: ModelSnapshot | null;
   selectedId: string;
@@ -241,8 +242,9 @@ export class ModelViewer {
 
   show(host: HTMLElement, state: ViewerState): void {
     let next: ActiveViewerState = { ...state, levelId: state.levelId ?? null, roofVisible: state.roofVisible ?? true };
+    const projectChanged = this.state?.projectId !== next.projectId;
     if (this.drag && (!state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
-    if (!state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
+    if (projectChanged || !state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
     next = { ...next, selectedId: this.comparisonSelection ?? state.selectedId };
     const inLevel = (snapshot: ModelSnapshot | null, id: string): boolean => {
       const item = snapshot?.entities.find((candidate) => candidate.id === id);
@@ -257,7 +259,7 @@ export class ModelViewer {
     }
     const focusChanged = this.state?.focusId !== state.focusId;
     const levelChanged = this.state?.levelId !== next.levelId;
-    const viewChanged = !this.active || this.root.parentElement !== host || focusChanged || levelChanged
+    const viewChanged = !this.active || projectChanged || this.root.parentElement !== host || focusChanged || levelChanged
       || this.state?.mode !== next.mode || this.state?.cutaway !== next.cutaway || this.state?.roofVisible !== next.roofVisible
       || JSON.stringify([this.state?.snapshot, this.state?.comparison]) !== JSON.stringify([next.snapshot, next.comparison]);
     if (viewChanged) { this.pointer.cancelClick(); this.hover(null); }
@@ -269,7 +271,7 @@ export class ModelViewer {
     }
     this.selection.value = next.selectedId;
     if (this.root.parentElement !== host) host.replaceChildren(this.root);
-    this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison); this.model.select(next.selectedId);
+    this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison, state.projectId ?? null); this.model.select(next.selectedId);
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
     if (focusChanged || levelChanged) this.model.frame(state.focusId);
     this.model.setCutaway(state.cutaway);

@@ -48,7 +48,7 @@ function killTree(roots: number[]): void {
 }
 
 export async function runCandidateProcess(options: {
-  candidate: Candidate; output: string; timeoutMs: number; executable: string; args: string[];
+  candidate: Candidate | 'production-individual' | 'production-retained'; output: string; timeoutMs: number; executable: string; args: string[];
 }): Promise<boolean> {
   const started = Date.now();
   let phase = 'launch'; let stdout = ''; let stderr = ''; let completed = false;
