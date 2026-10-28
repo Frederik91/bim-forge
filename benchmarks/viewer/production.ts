@@ -57,7 +57,7 @@ async function runWorker():Promise<void>{
         process.send?.({phase:'interaction'});
         await page.evaluate(()=>window.productionViewer.uiStart());
         const handle=page.locator('.model-reference-handle');await handle.waitFor({state:'visible'});
-        await page.waitForFunction(()=>document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready')==='true',{},{timeout:15000}).catch(async error=>{await fs.writeFile(path.join(dir,'interaction-dom.html'),await page.content());await page.screenshot({path:path.join(dir,'interaction-failure.png')});throw error;});
+        await page.waitForFunction(()=>document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready')==='true',{},{timeout:15000}).catch(async error=>{await fs.writeFile(path.join(dir,'interaction-readiness.json'),JSON.stringify(await page.evaluate(()=>window.productionViewer.uiReadiness()),null,2));await fs.writeFile(path.join(dir,'interaction-dom.html'),await page.content());await page.screenshot({path:path.join(dir,'interaction-failure.png')});throw error;});
         const box=await handle.boundingBox();if(!box)throw new Error('No reference handle bounds');
         await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
         let marked=false;

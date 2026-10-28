@@ -1,4 +1,5 @@
 import { Engine } from '@babylonjs/core/Engines/engine.js';
+import { EngineStore } from '@babylonjs/core/Engines/engineStore.js';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation.js';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
@@ -24,6 +25,7 @@ declare global {
       uiStart(): Promise<void>;
       uiSwitch(): Promise<void>;
       uiStatus(): { references: number; marking: boolean };
+      uiReadiness(): unknown;
     };
   }
 }
@@ -124,4 +126,11 @@ window.productionViewer = {
     ui.viewer.show(ui.host, ui.state);
   },
   uiStatus() { if (!ui) throw new Error('Missing UI fixture'); return { references: ui.references, marking: ui.viewer.root.dataset.marking === 'true' }; },
+  uiReadiness() {
+    const scene = EngineStore.LastCreatedScene;
+    return scene ? { ready: scene.isReady(), pending: scene.getWaitingItemsCount(),
+      meshes: scene.meshes.filter(mesh => !mesh.isReady(true)).map(mesh => ({ name: mesh.name, vertices: mesh.getTotalVertices(),
+        indices: mesh.getTotalIndices(), enabled: mesh.isEnabled(), visible: mesh.isVisible, material: mesh.material?.name })),
+      textures: scene.textures.map(texture => ({ name: texture.name.slice(0, 80), ready: texture.isReady() })) } : null;
+  },
 };

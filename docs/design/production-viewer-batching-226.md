@@ -66,3 +66,126 @@ open in #192. Private West Riverside data and images must not enter Git.
   `codex/issue-226-production-viewer`, based on the integrated benchmark stack.
 - Benchmark integration found a package.json test-command conflict with compact
   workspace #215; preserved both test sets and the browser test command.
+
+## Implementation and review outcome
+
+**Draft only; do not merge the production integration yet.** The implementation
+is in the existing ModelScene/ModelViewer path. Two code-review axes found no
+remaining source-level blockers after fixes, but repeated browser evidence still
+fails exact Realistic comparison parity and exposed one UI readiness timeout.
+The metadata-only evidence is [issue-226-production-viewer.json](../evidence/issue-226-production-viewer.json).
+All source models, images, traces and raw logs remain ignored and private.
+
+The validated fixture has 91 entities and 146 logical render parts, within the
+unchanged 100-item model array limit. Basic overview draw calls are 146 -> 25;
+Realistic overview calls, including the shadow pass, are 283 -> 48. Triangle
+counts remain 1,782 and 3,456 respectively. These counts describe this fixture;
+there is no general latency, FPS, laptop capacity or 200k+ sqm claim.
+
+Comparison rendering intentionally keeps all source meshes individual, including
+changed opaque parts. Context transparency, before wireframes and source caster
+order take priority over batching in that pass. This did **not** eliminate the
+small repeated Realistic comparison difference. Do not describe comparison draw
+calls as optimized or the current production change as pixel-identical.
+
+### Completed checks and fixes
+
+- 36 production scene tests pass: full triangle position/winding, normals and
+  UV equivalence; stable picking/highlights; index-only filtering; retained
+  untouched parts; changed level/support/host dependencies; mutable caller
+  snapshots; project identity replacement; 100-cycle resource recovery.
+- 13 existing real-browser chat/workspace checks pass with the installed
+  Playwright browser. No workspace mount or second product viewer was added.
+- Shared source geometry is captured before detaching GPU users. Detached
+  logical meshes release stale submeshes; selecting restores source geometry.
+- Final placement matrices are forced when capturing newly built geometry in
+  a scene that has already rendered. This fixes doors/stairs rebuilt at origin.
+- Rebuilt hidden batches invalidate their index-mask cache. Restoring visibility
+  restores all source triangles; the regression checks all 4,608 box indices.
+- Project changes cancel a live reference drag. Actual Chrome interaction reaches
+  a valid floor/wall target, switches only project identity, then releases with
+  zero reference callbacks and cleared marking state.
+- SourceShadowLight keeps the original logical caster bounds for projection,
+  preserving overview shadow coverage despite larger batch bounding boxes.
+- The diagnostic worker has a 180-second lifecycle watchdog and browser-process
+  tree cleanup. Failed output and cleanup errors are retained, never scored fast.
+- npm run validate passes. Accepted production model delta is zero. Validators,
+  model schema/storage, production CSP and dataset admission are unchanged.
+
+### Qualification attempts and escalation
+
+Three multi-session checks are retained in the evidence, with every completed
+candidate and failure. No further multi-session attempt is authorized under the
+repository's three-failure rule without escalation.
+
+1. `qualified-local-001`, source 7c24b53: ten candidate runs complete, including
+   100 cycles per mode on the last pair. Exact A/B fails: four Realistic
+   comparison images differ by 21-23 of 480,000 pixels. All other images match.
+2. `formal-local-002`, source 4f3288d: six candidates complete, then 4-retained
+   times out waiting 15 seconds for actual ModelViewer readiness. No page errors
+   are reported. The worker closes and its process tree is cleaned up. The
+   remaining candidates are not executed and this is a failed partial run.
+3. `readiness-diagnostic-001`, source 4f3288d plus recorded readiness diagnostic
+   file hashes: all ten candidates and actual UI drag checks complete, but four
+   Realistic comparison images again differ by 21-23 pixels. This uses only two
+   cycles in the final pair and is not the final 100-cycle qualification.
+
+The repeated difference remains after individual comparison rendering and
+canonical shadow caster ordering. The recorded changed pixels have channel
+changes up to three intensity values in the first failed pair. Root cause and
+acceptability remain open; the zero-difference check was not relaxed. The one
+intermittent UI readiness timeout also needs a reproducible cause, rather than
+being hidden by later passing checks. Basic, overview, preview and discard
+images match in the completed paired image sets; within-candidate discard
+restores baseline pixels and settled resource counts.
+
+**Next investigation:** capture failing actual-UI readiness details using the
+new bounded diagnostics; isolate Realistic comparison shadow/depth ordering
+from retained source ordering, with fixed camera and stable inputs. Resolve or
+explicitly review the image difference, then rerun five alternating pairs with
+100-cycle recovery on the final pair. Obtain a renewed qualification budget
+before attempting that rerun. Keep #192 and #226 open.
+
+### West Riverside overview diagnostic
+
+A separate one-load diagnostic uses all seven disciplines: 97,590 source render
+parts, 53,329 unique source geometries and 15,334,885 instanced triangles. The
+original individual adapter renders 97,590 calls; the old benchmark batch adapter
+renders 1,677; the production helper renders 1,679. All render the same triangle
+count. At 1,280 x 800, the old adapter reproduces 1,822 differing overview pixels;
+the production helper has zero. Source GPU float32 positions and absolute world
+coordinates avoid the old batch-origin rounding path.
+
+This diagnostic's exact compiled bundle and dataset hashes are retained. It was
+built from the working tree before the final logical-submesh cleanup and is not
+an exact-final-head production replay. Do not extend its result to proposal
+updates, engineering geometry equivalence or the full production UI. Private
+bundle, images and diagnostic sources are under
+`artifacts/private/production-viewer/west-fidelity-001`.
+
+The existing [West Riverside admission report](../evidence/viewer-benchmark/west-riverside-initial/README.md)
+continues to govern rights and suitability: gross area is unknown, the release
+chain for these IFC exports remains unresolved, discipline placement/physical
+identity and conversion completeness remain unqualified. Keep data local and
+retain attribution; do not sum floor area across disciplines.
+
+### Broader validation and merge sequence
+
+The complete Windows npm test invocation is **not green**: 739 pass, 38 fail,
+32 skip. Failures include SQLite EBUSY/EPERM cleanup and unavailable PDF tools;
+a hung server test process was explicitly stopped. The unchanged benchmark
+branch independently reproduces the SQLite source-store restart cleanup failure.
+No unrelated test or production code was changed to suppress these failures.
+Ubuntu CI installs Poppler and must pass independently before merge.
+
+Reproduce focused checks with `npm run validate`, `npm run test:production-viewer`
+and `npm run test:chat-browser` (install Playwright Chromium first). The bounded
+A/B command is `npm run benchmark:production-viewer -- --output <fresh-private-directory>
+--sessions 5 --cycles 100`; it currently has known blockers above and is listed
+for a renewed, explicitly authorized investigation, not another automatic retry.
+
+Merge order remains #214 -> #219 -> this production PR. GitHub requires an
+approving review from a reviewer with write access; chat authorization does not
+create that review record. After parent squash merges, retarget/rebase each
+child to main and rerun integration checks. The production PR remains draft
+until its browser blockers are addressed. Do not bypass repository protection.
