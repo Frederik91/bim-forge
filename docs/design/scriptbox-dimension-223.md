@@ -44,3 +44,25 @@ All builds/tests are server-container-only on `frederik@192.168.1.17`, with sour
 | Attempt | Source and commands | Outcome |
 | --- | --- | --- |
 | `a1` | `6f87fd0`; root validate, explicit three-path policy and focused command above | Root validation passed; 80/83 focused tests passed. The guest declaration writer emits an unnamed union of objects inside an array without parentheses; named the dependency union using the existing schema title mechanism so generated array types agree with the wire shape. A byte-string comparison incorrectly depended on key order after the bridge normalized schema fields; changed to exact structural comparison of an actual guest observation. The same-level scope fixture had no unreadable room; use a different building level to prove read refusal. No validators changed. |
+| `a2` | `2fb352e`; same root/policy/focused commands | Root validation, explicit three-path policy and all 83 tests passed (9 new, 74 existing), zero failures/skips. A bounded companion container retained generated declarations plus actual ready/unresolved/rejected guest observations and host audit evidence. Accepted repository bytes remained unchanged. |
+
+Evidence root: `/ssd1/bim-forge-qualification/issue223-scriptdimension/a2/`. Source bundle/checkout, runtime receipt, two source hashes, full logs, launcher and exact container inspections are retained there. Image ID: `sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`.
+
+```text
+Strict TypeScript valid. 278 source file(s) checked.
+tsc --noEmit: exit 0
+Policy valid. 3 changed file(s) checked. [explicit command]
+tests 83; pass 83; fail 0; skipped 0
+```
+
+Root validation's default policy invocation supplies zero paths; the additional explicit policy command checks all three changed paths against the unchanged policy. The product source SHA-256 is `b6d8ac1314a2d17b1f53d90e5974332782d594d85f806a3953b7c484d2955416`; the new guest test SHA-256 is `ca9932bc67c7bb05de532ded0a507cb1916bd2bdf1567bdb84d1206b2e98bb8f`.
+
+| Artifact under `a2/artifacts/` | SHA-256 |
+| --- | --- |
+| `validate.log` | `88e8cd20531b8823d1c48c3b8105b5404ba43f7d38b4f6163180db78d31aec15` |
+| `policy.log` | `33ee8018c571ff808154ec391113e98931c9d0ff5b09a5e8e9d84dcb1828569f` |
+| `focused.log` | `29fead4d89c1b6f01f627462b2f7d5ce7f1d5c92be4aaab12135e961ea47a230` |
+| `guest-dimension-observation.json` | `1b2b27e158d6c7bfcb888c45018565acf77bea1e2a5ae02aee88f107d729487f` |
+| `model-script-api.d.ts` | `1b8579b284f7781da474fab58d3760ebdfb6cca9b1b13c22193014692927512c` |
+
+Only this receipt changes after qualified product/test source `2fb352e`. Final documentation-head root validation and matching source hashes are reported in issue #223. Parent integrates the scoped commits and performs combined browser/proposal/evidence checks; no separate PR, preview cutover, merge or live model changes are included here.
