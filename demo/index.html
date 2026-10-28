@@ -16,11 +16,11 @@
       <a class="brand" href="./" aria-label="BIM Forge model workspace"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Model workspace</small></span></a>
       <div class="project-identity"><span class="workspace-label">SERVER PROJECT</span><strong id="project-title">No project open</strong><small id="server-save-status" role="status" aria-live="polite">Connecting to project server…</small></div>
       <div class="header-actions">
-        <button id="open-backlog" class="button quiet" type="button" disabled>Change requests</button>
+        <div id="design-views-mount"></div>
+        <button id="open-backlog" class="button quiet" type="button" disabled>Chats</button>
         <button id="project-overview" class="button quiet" type="button" disabled>Overview</button>
         <button id="auth-menu" class="button connection-button" type="button" aria-label="ChatGPT connection settings"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
         <details class="workspace-file-menu"><summary>Project tools <span aria-hidden="true">⌄</span></summary><div>
-        <div id="design-views-mount"></div>
         <button id="open-project-evidence" class="button quiet" type="button" disabled>Project evidence</button>
         <button id="retry-synthetic-evidence" class="button quiet" type="button" hidden>Prepare generated evidence</button>
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
@@ -35,14 +35,15 @@
     <main id="workbench" class="workbench" tabindex="-1">
       <div class="workspace-toolbar">
         <button id="workspace-navigation-toggle" class="button quiet" type="button" aria-controls="workspace-navigation" aria-expanded="true"><span aria-hidden="true">☷</span> Navigate</button>
-<nav id="journey" class="journey" aria-label="Model change process">
+        <button id="open-chat" class="button quiet" type="button">Chat</button>
+        <details class="workspace-history-menu"><summary>Activity &amp; history</summary><nav id="journey" class="journey" aria-label="Model change process">
         <button id="nav-request" type="button" aria-pressed="true"><span>1</span><b>Request</b><small>Show the intent</small></button>
         <i aria-hidden="true"></i>
         <button id="nav-backlog" type="button" aria-pressed="false" disabled>Backlog · 0 ready</button>
         <button id="nav-review" type="button" aria-pressed="false" disabled><span>3</span><b>Review</b><small>Understand the proposal</small></button>
         <i aria-hidden="true"></i>
         <button id="nav-history" type="button" aria-pressed="false" disabled><span>4</span><b>History</b><small>Trace every outcome</small></button>
-      </nav>
+      </nav></details>
         <button id="workspace-context-toggle" class="button quiet" type="button" aria-label="Toggle context panel" aria-controls="workspace-context" aria-expanded="true"><span aria-hidden="true">◧</span> <span id="workspace-context-toggle-label">Request</span></button>
       </div>
       <div id="workspace-shell" class="workspace-shell" data-navigation-open="true" data-context-open="true">
@@ -50,7 +51,7 @@
           <div class="workspace-panel-heading"><div><p class="eyebrow">PROJECT EXPLORER</p><h2 id="workspace-navigation-heading">Navigate model</h2></div><button id="workspace-navigation-close" class="icon-button" type="button" aria-label="Close model navigation">×</button></div>
           <div class="model-explorer-toolbar"><label class="roof-toggle" for="show-roof"><input id="show-roof" type="checkbox"> Show roof</label><small>Click to view · arrows to expand</small></div>
           <div id="model-explorer" class="model-explorer"></div>
-          <details id="element-inspector" class="element-inspector" open><summary>Element properties</summary><div id="element-properties"></div></details>
+          <details id="element-inspector" class="element-inspector"><summary>Element properties</summary><div id="element-properties"></div></details>
         </aside>
         <div class="workspace-stage" aria-label="Model workspace">
           <div id="design-readonly-banner" class="design-readonly-banner" hidden><span>Fixed baseline · read only. Create an alternative to request changes.</span><button id="fork-selected-baseline" class="button outline" type="button">Create alternative…</button></div>
@@ -68,6 +69,7 @@
             <header class="card-heading model-card-heading"><div><span class="card-kicker">SYNCHRONIZED MODEL VIEW</span><h2 id="selected-title">Room awaiting a request</h2><small id="model-revision">Revision —</small></div><div class="view-switch" role="group" aria-label="Model view"><button id="view-plan" type="button" aria-pressed="true">Plan</button><button id="view-3d" type="button" aria-pressed="false">3D</button></div><span id="selected-badge" class="pill teal">Not started</span></header>
 
             <div id="chat-proposal-tools" class="comparison-toolbar" hidden><strong id="chat-proposal-state" role="status">Following chat changes</strong><small id="chat-proposal-changes" title="Green: added · amber: changed · wireframe: previous geometry"></small><button id="chat-proposal-delta" class="button outline" type="button" aria-pressed="false">Show changes</button><button id="chat-proposal-return" class="button quiet" type="button">Back to request model</button><button id="chat-proposal-follow" class="button outline" type="button" hidden>Follow chat changes</button></div>
+            <div id="selection-context" class="selection-context" hidden><strong id="selection-context-label"></strong><button id="selection-ask" class="button quiet" type="button">Ask about this</button><button id="selection-move" class="button quiet" type="button">Suggest a move</button><button id="selection-properties" class="button quiet" type="button">Properties</button></div>
             <div id="proposal-drawing" class="drawing-surface" data-model-view="plan"><p class="canvas-empty">Create a project or load the sample to begin.</p></div>
             <div id="model-3d-controls" class="model-3d-controls" hidden><div class="view-switch" role="group" aria-label="Rendering quality"><button id="render-basic" type="button" aria-pressed="false">Basic</button><button id="render-realistic" type="button" aria-pressed="true">Realistic</button></div><div class="viewer-tools"><button id="cutaway" class="button quiet" type="button" aria-pressed="true">Cutaway</button><button id="reset-3d" class="button quiet" type="button">Frame model</button></div><span class="viewer-help">Drag to orbit · Right-drag / Ctrl-drag to pan · Scroll / pinch to zoom<br>Concept geometry and materials · not product-accurate visualization</span></div>
 
@@ -104,7 +106,7 @@
               <input id="request-source-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md,image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown" aria-label="Attach files to this chat" hidden disabled>
               <p id="request-source-status" class="composer-upload-status" role="status" aria-live="polite" aria-atomic="true"></p>
               <p id="request-source-error" class="source-error" role="alert" hidden></p>
-              <p id="proposal-help" class="composer-help">Paste files · @ reference · / shortcuts <span>Enter to send · Shift+Enter for a new line</span></p>
+              <p id="proposal-help" class="composer-help">Paste files · @ reference · / shortcuts <span>Sent files are kept with this project · Enter to send</span></p>
               <div class="proposal-connection composer-connection"><p><strong id="proposal-auth-copy">Connect ChatGPT</strong></p><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
               <details id="request-options" class="request-options"><summary>Request options <span id="request-options-summary"></span></summary>
               <details id="composer-scope-options" class="model-scope-panel"><summary>Model scope · optional</summary><div id="model-scope-builder"></div></details>

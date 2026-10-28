@@ -133,7 +133,10 @@ export class RequestChat {
     const root = node('section', undefined, 'request-chat'); root.id = 'request-chat';
     root.setAttribute('aria-label', 'Request conversation');
     if (this.#conversation) {
-      const header = node('header'); header.append(node('h3', this.#title), node('span', this.#state, 'pill')); root.append(header);
+      const header = node('header'); const title = node('h3', 'Chat'); title.title = this.#title;
+      header.append(title, node('span', this.#state, 'pill'),
+        node('span', `${this.#conversation.messages.filter(message => message.kind === 'user').length}/${CONVERSATION_LIMITS.userTurns} turns`, 'chat-turn-count'));
+      root.append(header);
       const activity = groupTurnActivity(this.#conversation, this.#activity);
       const latestUser = this.#conversation.messages.findLast(message => message.kind === 'user');
       const transcript = node('ol', undefined, 'request-chat-transcript'); transcript.id = 'request-chat-transcript';
@@ -143,8 +146,7 @@ export class RequestChat {
         this.#keyMessage(item, message.id);
         transcript.append(item);
       }
-      root.append(transcript, this.#status(latestUser ? activity.get(latestUser.requestId) ?? [] : []),
-        node('p', `${this.#conversation.messages.filter(message => message.kind === 'user').length}/${CONVERSATION_LIMITS.userTurns} turns · Proposals need your review`, 'chat-turn-count'));
+      root.append(transcript, this.#status(latestUser ? activity.get(latestUser.requestId) ?? [] : []));
     } else {
       const welcome = node('div', undefined, 'chat-welcome');
       welcome.append(node('span', '✦', 'chat-welcome-mark'), node('h3', 'What would you like to change?'),
@@ -186,7 +188,7 @@ export class RequestChat {
 
   #turnActivity(message: ConversationMessage, activity: readonly RequestActivity[]): HTMLElement {
     const details = node('details', undefined, 'request-chat-activity'); details.dataset.detailKey = `activity:${message.id}`;
-    details.append(node('summary', `Reported activity · ${activity.length} ${activity.length === 1 ? 'event' : 'events'}`));
+    details.append(node('summary', `Activity · ${activity.length}`));
     if (!activity.length) details.append(node('p', 'No activity was reported for this turn.'));
     else {
       const list = node('ol');
@@ -198,6 +200,7 @@ export class RequestChat {
       }
       details.append(list);
     }
+    details.append(node('p', `#${message.sequence} · ${new Date(message.at).toLocaleString()} · Message ${message.id} · Request ${message.requestId} · Base revision ${message.baseRevisionId}`));
     return details;
   }
 
@@ -214,20 +217,35 @@ export class RequestChat {
     const card = node('section', undefined, 'request-chat-proposal');
     if (message.kind !== 'assistant' || message.content.kind !== 'proposal') return card;
     const content = message.content;
-    card.append(node('h4', 'Model proposal'), node('p', content.text),
-      node('small', `Request ${message.requestId} · base ${message.baseRevisionId} · proposal ${content.proposalRevisionId}`));
     const review = matchingProposalReview(message, this.#review);
-    if (!review) {
-      card.append(this.#control('Inspect proposal', () => this.#actions.proposal(message)));
-      return card;
-    }
-    card.append(node('p', review.status, 'request-chat-review-status'));
+    const heading = node('header', undefined, 'request-chat-proposal-heading');
+    heading.append(node('h4', 'Proposal'));
+    if (review) heading.append(node('span', review.status, 'request-chat-review-status'));
+    card.append(heading, node('p', review?.summary ?? content.text, 'request-chat-outcome'));
+    const technical = node('details', undefined, 'request-chat-technical'); technical.dataset.detailKey = `proposal:${message.id}`;
+    technical.append(node('summary', 'Proposal details'));
     const details = node('dl', undefined, 'request-chat-review-details');
-    for (const [label, text] of [['Summary', review.summary], ['Rationale', review.rationale], ['Constraints', review.constraints], ['Uncertainty', review.uncertainty]]) {
+    if (review) {
+      for (const [label, text] of [['Rationale', review.rationale], ['Constraints', review.constraints], ['Uncertainty', review.uncertainty]]) {
+        details.append(node('dt', label), node('dd', text));
+      }
+      if (content.text.trim() !== review.summary.trim()) details.append(node('dt', 'Agent note'), node('dd', content.text));
+      if (review.target) details.append(node('dt', 'Target identity'), node('dd', review.target.target.kind === 'main'
+        ? 'Main design' : `Alternative ${review.target.target.id}`), node('dt', 'Target revision'), node('dd', review.target.revisionId));
+    }
+    for (const [label, text] of [['Message', message.id], ['Sequence', String(message.sequence)], ['Request', message.requestId], ['Base revision', message.baseRevisionId],
+      ['Proposal revision', content.proposalRevisionId], ['Proposal name', content.proposalName]]) {
       details.append(node('dt', label), node('dd', text));
     }
-    if (review.target) details.append(node('dt', 'Design'), node('dd', review.target.target.kind === 'main'
-      ? 'Main design' : `Alternative ${review.target.target.id}`));
+    technical.append(details);
+    if (!review) {
+      card.append(this.#control('Inspect proposal', () => this.#actions.proposal(message), 'inspect-proposal'), technical);
+      return card;
+    }
+    const targetLabel = review.targetLabel?.trim() || (review.target?.target.kind === 'main' ? 'Main design'
+      : review.target?.target.kind === 'alternative' ? 'selected alternative' : 'selected design');
+    card.append(node('p', `Target: ${targetLabel}`, 'request-chat-target'));
+    if (review.uncertainty.trim()) card.append(node('p', `Assumptions: ${review.uncertainty}`, 'request-chat-assumption'));
     if (review.evidenceUses?.length) {
       const choices = node('details'); choices.dataset.detailKey = `evidence:${message.id}`;
       choices.append(node('summary', `Evidence choices for this proposal · ${review.evidenceUses.length}`),
@@ -242,21 +260,24 @@ export class RequestChat {
       if (matchingProposalReview(message, this.#review)) this.#actions.delta(message.id);
     }, 'delta');
     delta.setAttribute('aria-pressed', String(review.delta)); actions.append(delta);
-    const decisions: readonly [RequestChatDecision, string][] = [['accept', 'Accept proposal'], ['reject', 'Reject proposal'], ['revise', 'Request revision']];
+    const decisions: readonly [RequestChatDecision, string][] = [['accept', `Accept into ${targetLabel}`], ['revise', 'Request revision'], ['reject', 'Reject proposal']];
     for (const [action, label] of decisions) {
       if (!canDecideProposal({ message, review, action, disabled: false, offline: false })) continue;
       actions.append(this.#control(label, () => {
         if (canDecideProposal({ message, review: this.#review, action, disabled: this.#disabled, offline: this.#offline })) this.#actions.decision(action, message.id);
-      }));
+      }, action));
     }
-    card.append(details, node('p', 'Accepting requires your explicit review decision. Replying never accepts a proposal.', 'chat-turn-count'), actions);
+    card.append(actions, node('p', 'Only explicit acceptance applies changes.', 'chat-turn-count'), technical);
     return card;
   }
 
   #message(message: ConversationMessage): HTMLElement {
     const item = node('li', undefined, `request-chat-message request-chat-${message.kind}`); item.dataset.messageId = message.id;
-    item.append(node('strong', message.kind === 'user' ? 'You' : message.kind === 'assistant' ? 'Assistant' : 'Review decision'),
-      node('small', `#${message.sequence} · ${new Date(message.at).toLocaleString()} · base ${message.baseRevisionId.slice(0, 10)}`));
+    const header = node('header', undefined, 'request-chat-message-heading');
+    const timestamp = node('time', new Date(message.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    timestamp.dateTime = new Date(message.at).toISOString(); timestamp.title = new Date(message.at).toLocaleString();
+    header.append(node('strong', message.kind === 'user' ? 'You' : message.kind === 'assistant' ? 'Assistant' : 'Review decision'), timestamp);
+    item.append(header);
     if (message.kind === 'user') {
       item.append(node('p', message.text)); const sources = node('section');
       renderSourceContext(sources, this.#projectId, { sources: message.sources }, true); item.append(sources);
@@ -269,15 +290,22 @@ export class RequestChat {
       if (message.visual) {
         const evidence = this.#visualEvidence(message.visual); evidence.dataset.detailKey = `visual:${message.id}`; item.append(evidence);
       }
-    } else if (message.kind === 'decision') item.append(node('p', `Recorded: ${message.action}. Decision ${message.decisionId}.`));
+    } else if (message.kind === 'decision') item.append(node('p', `Recorded: ${message.action}.`));
     else {
       const content = message.content;
       if (content.kind === 'clarification') {
         item.append(node('p', content.question)); const choices = node('div', undefined, 'ticket-actions');
         for (const option of content.options) choices.append(this.#control(option, () => this.#actions.answer(option)));
         item.append(choices);
-      } else if (content.kind === 'proposal') item.append(this.#proposalCard(message));
+      } else if (content.kind === 'proposal') { item.append(this.#proposalCard(message)); return item; }
       else item.append(node('p', content.text));
+    }
+    if (message.kind !== 'user') {
+      const metadata = node('details', undefined, 'request-chat-technical'); metadata.dataset.detailKey = `message:${message.id}`;
+      metadata.append(node('summary', 'Message details'), node('p', `#${message.sequence} · ${new Date(message.at).toLocaleString()}`),
+        node('p', `Message ${message.id} · Request ${message.requestId} · Base revision ${message.baseRevisionId}`));
+      if (message.kind === 'decision') metadata.append(node('p', `Decision ${message.decisionId}`));
+      item.append(metadata);
     }
     return item;
   }

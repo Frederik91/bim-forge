@@ -21,7 +21,9 @@ export function matchingCommands(query: string) {
 export interface ModelMention { id: string; name: string; type: string }
 interface Choice { id: string; label: string; detail: string; choose: () => boolean }
 interface ComposerUi { root: HTMLElement; input: HTMLTextAreaElement; add: HTMLButtonElement; menu: HTMLElement; visual: HTMLElement; form: HTMLFormElement }
-interface ComposerActions { items: () => readonly ModelMention[]; action: (action: ComposerAction) => boolean; mention: (id: string) => boolean; remove: (id: string | null) => void; changed: () => void }
+interface ComposerActions { items: () => readonly ModelMention[]; files?: () => readonly { id: string; name: string }[];
+  file?: (id: string) => boolean; action: (action: ComposerAction) => boolean; mention: (id: string) => boolean;
+  remove: (id: string | null) => void; changed: () => void }
 
 export class RequestComposer {
   readonly #ui: ComposerUi;
@@ -91,9 +93,13 @@ export class RequestComposer {
     if (!this.#query) { this.close(); return; }
     if (this.#query.kind === 'command') { this.#showActions(); return; }
     const query = this.#query.text.toLowerCase();
-    this.#show(this.#actions.items().filter(item => `${item.name} ${item.type} ${item.id}`.toLowerCase().includes(query)).slice(0, 8).map(item => ({
+    const files = (this.#actions.files?.() ?? []).filter(file => file.name.toLowerCase().includes(query)).map(file => ({
+      id: `file-${file.id}`, label: `@${file.name}`, detail: 'Project file', choose: () => this.#actions.file?.(file.id) ?? false,
+    }));
+    const items = this.#actions.items().filter(item => `${item.name} ${item.type} ${item.id}`.toLowerCase().includes(query)).map(item => ({
       id: item.id, label: `@${item.name}`, detail: `${item.type} · ${item.id}`, choose: () => this.#actions.mention(item.id),
-    })), 'Model items');
+    }));
+    this.#show([...files, ...items].slice(0, 8), 'Model items and project files');
   }
   #showActions(): void {
     this.#show(matchingCommands(this.#query?.text ?? '').map(action => ({ id: action.id, label: this.#query ? `/${action.id}` : action.label,
