@@ -249,3 +249,22 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
 - Latest bounded SSH probe still timed out. No server container started, no new preview was
   published, and no GitHub PR was merged. #232 versioned storage and #233 trusted proposal
   evidence/final publication wiring remain in their dedicated sessions.
+
+### Browser registration and connected-trial preflight
+
+- Parent integrated #234 follow-up `423bfc37c0de68c9e4bee805eded8a5418e7f2ec` and registered
+  `npm run test:geometry-workflow`. It requires the isolated server-container environment,
+  generated fixture files, a reserved converter spool, and a built demo. It is not a local
+  smoke test and does not silently replace the connected-provider or acceptance gates.
+- The source checks cover native-to-linked selection actions and exact unsent source pins,
+  including two sources reusing a GlobalId. Preserving the native picker is not proof of the
+  submitted request's intended native selection; actual payload context remains a live-UI gate.
+- The generated IFC is translated and elevated by its building/storey placements, whereas the
+  default native room is near the origin at zero elevation. Native assets require a bound room
+  and have no world-placement/elevation override. QA must generate an ordinary broad receiving
+  room at the proper level, validate it on server, and import through the normal project UI.
+  Do not reposition or axis-align the IFC for an answer-specific trial, or expose oracle facts.
+- Reviewed #231's staged asynchronous session source without treating it as a committed handback.
+  Construction/operation hard termination exists in the draft, but its default 60-second lifetime
+  is shorter than the existing 120-second provider turn. Owners must align the request lifecycle
+  and cleanup without disabling per-operation deadlines. No runtime timing claim is qualified.
