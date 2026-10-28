@@ -2,6 +2,23 @@
 
 Milestones are deliberately ordered around risk reduction and a usable factory, not around recreating every Revit feature at once.
 
+## Implementation status versus exit evidence
+
+The repository now contains bounded authoring/review and factory implementations. The roadmap below retains its goals and exit criteria; source presence does not mark a milestone complete or change factory authority.
+
+| Track | Current source/evidence position | Remaining qualification boundary |
+| --- | --- | --- |
+| M0 | Repository policy, templates, CI, and pause checks exist. | Source inspection does not confirm hosted branch protection or live operator readiness. |
+| M1 | Immutable native fixture revisions, branches, deltas, and a server-side versioned store exist. | General IFC exchange and full model/storage qualification remain open. |
+| M2 | Bounded project, accepted-history, model-scope, and evidence APIs support preview inspection. | Not a general large-project query/streaming API. |
+| M3 | Runner, advisory planner, isolated coding worker, and draft publisher are implemented. | End-to-end operational evidence and authorization are distinct; checked-in state remains L1. |
+| M4 | Bounded fixture authoring, proposal review, reconciliation, and explicit acceptance exist. | Not general safe BIM mutation, production model approval, or completion of every exit criterion. |
+| M5–M6 | Coordination/authority and controlled-automation goals remain roadmap work. | No broad coordination or unattended engineering-approval qualification is claimed. |
+| P1–P2 | Plan/3D workspace, selection/navigation, design targets, chat, sources, and proposal review are prototyped. | Full role/phase authority, provenance, device coverage, and all acceptance scenarios need their own evidence. |
+| P3–P6 | Some bounded source, dependency, and evidence work supports these directions. | Full multidisciplinary review, federation, governed analysis, and lifecycle delivery are not established. |
+
+Implementation entry points: [workspace guide](room-demo.md), [versioned house slice](design/versioned-house-slice-161.md), [compact workspace](design/compact-workspace-213.md), [runner](runner.md), [live planner](live-planner.md), [coding worker](coding-worker.md), and [publisher](publisher.md). These links include historical design/evidence records, not a declaration that every recorded rollout action happened. The [qualification program](experiments/README.md) is the source for reviewed experimental outcomes.
+
 ## M0 — Repository and safety foundation
 
 Goal: establish the project contract, issue taxonomy, CI checks, policy gates, and branch/review rules.
@@ -14,7 +31,7 @@ Goal: import a small IFC fixture, represent entities and relationships, create i
 
 Exit evidence: repeatable fixture tests, revision history, branch isolation, and a human-readable model delta.
 
-The [versioned model qualification program](experiments/README.md) records the proposed persistence design and experiments before schema adoption. It includes identity, exchange, concurrency, regeneration, recovery, and a detailed synthetic hospital database workload. Initial experiment status is not run.
+The [versioned model qualification program](experiments/README.md) records the proposed persistence design and experiments before schema adoption. It includes identity, exchange, concurrency, regeneration, recovery, and a detailed synthetic hospital database workload. Three execution rounds have been reviewed. Full hospital-scale admission and production adoption remain unqualified; consult the registry and linked reviews for current case-level outcomes rather than treating implementation-test success as qualification.
 
 ## M2 — Query and observation surface
 
