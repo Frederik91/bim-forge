@@ -22,10 +22,16 @@ export type GeometryRef = Static<typeof GeometryRefSchema>;
 export type GeometryPoint = Static<typeof GeometryPointSchema>;
 export type GeometryBounds = Static<typeof GeometryBoundsSchema>;
 export type GeometryMatrix = Static<typeof GeometryMatrixSchema>;
+export const GeometryCategorySchema = Type.Union([Type.Literal('wall'), Type.Literal('opening'), Type.Literal('slab'), Type.Literal('roof'),
+  Type.Literal('stair'), Type.Literal('equipment'), Type.Literal('furniture'), Type.Literal('asset'), Type.Literal('space'),
+  Type.Literal('level'), Type.Literal('site'), Type.Literal('building'), Type.Literal('other')]);
+export type GeometryCategory = Static<typeof GeometryCategorySchema>;
 
 export const GeometryQuerySchema = Type.Object({
   region: Type.Optional(GeometryBoundsSchema), classes: Type.Optional(Type.Array(token, { maxItems: 32, uniqueItems: true })),
   role: Type.Optional(Type.Union([Type.Literal('physical'), Type.Literal('context'), Type.Literal('all')])),
+  categories: Type.Optional(Type.Array(GeometryCategorySchema, { maxItems: 16, uniqueItems: true })),
+  exclude: Type.Optional(Type.Array(GeometryRefSchema, { maxItems: 32 })),
   // A level is a qualified object identity; names never establish correspondence.
   level: Type.Optional(GeometryRefSchema),
 }, exact);
@@ -61,7 +67,7 @@ export const GeometryCapabilitySchema = Type.Union([
 ]);
 export type GeometryCapability = Static<typeof GeometryCapabilitySchema>;
 export const GeometryDescriptionSchema = Type.Object({ ref: GeometryRefSchema, name: Type.String({ maxLength: 256 }),
-  class: token, role: Type.Union([Type.Literal('physical'), Type.Literal('context')]),
+  class: token, category: GeometryCategorySchema, role: Type.Union([Type.Literal('physical'), Type.Literal('context')]),
   frame: Type.Literal('project-engineering-metres'), sourceUnitsToMetres: Type.Number({ exclusiveMinimum: 0, maximum: 1e6 }),
   writeAuthority: Type.Union([Type.Literal('native-review'), Type.Literal('read-only')]),
   bounds: Type.Union([GeometryBoundsSchema, Type.Null()]), capability: GeometryCapabilitySchema,
@@ -79,7 +85,7 @@ export const GeometryProjectionSchema = Type.Union([Type.Literal('description'),
 export type GeometryProjection = Static<typeof GeometryProjectionSchema>;
 const objectRead = Type.Object({ kind: Type.Literal('object'), ref: GeometryRefSchema, projection: GeometryProjectionSchema, digest: hash }, exact);
 const queryRead = Type.Object({ kind: Type.Literal('query'), query: GeometryQuerySchema, digest: hash,
-  members: Type.Array(GeometryRefSchema, { maxItems: 4096 }), complete: Type.Boolean() }, exact);
+  members: Type.Array(GeometryRefSchema, { maxItems: 4096 }), unavailableSources: Type.Array(token, { maxItems: 64 }), complete: Type.Boolean() }, exact);
 const candidateRead = Type.Object({ kind: Type.Literal('candidate'), subject: GeometrySubjectSchema, digest: hash }, exact);
 export const GeometryReadSchema = Type.Union([objectRead, queryRead, candidateRead]);
 export type GeometryRead = Static<typeof GeometryReadSchema>;
