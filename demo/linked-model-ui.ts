@@ -1,6 +1,7 @@
 import { LinkedModelClient } from './linked-model-client.ts';
 import type { LinkedDisplay } from './linked-model-render.ts';
 import type { LinkedJob, LinkedPrepared, LinkedSelection } from '../src/linked-model.ts';
+import { linkedSelectionKey } from '../src/linked-model.ts';
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, text = ''): HTMLElementTagNameMap[K] { const node = document.createElement(tag); node.textContent = text; return node; }
 export class LinkedModelPanel {
@@ -27,7 +28,7 @@ export class LinkedModelPanel {
   }
   select(selection: LinkedSelection | null): void {
     if (selection && ![...this.prepared.values()].some(prepared => prepared.manifest.occurrence.id === selection.occurrence.id
-      && prepared.index.objects.some(object => JSON.stringify(object.ref) === JSON.stringify(selection.source)))) return;
+      && prepared.index.objects.some(object => linkedSelectionKey({ kind: 'ifc-reference', source: object.ref, occurrence: prepared.manifest.occurrence }) === linkedSelectionKey(selection)))) return;
     this.selection = selection; this.input.selected(selection); this.signature = ''; this.render();
   }
   private publish(): void { this.input.changed([...this.prepared].map(([id, prepared]) => ({ id, prepared, visible: !this.hidden.has(id) }))); }
@@ -81,10 +82,16 @@ export class LinkedModelPanel {
         for (const id of objects.keys()) add(id, tree, 0); section.append(tree);
         if (this.selection?.occurrence.id === link.id) {
           const selection = this.selection; const object = objects.get(selection.source.globalId);
-          const inspector = element('pre', JSON.stringify({ reference: selection, object, units: prepared.index.units,
-            propertyOwnership: 'Properties remain on their source object/type. Relationship inventory is uninterpreted context.',
-            relationships: prepared.index.relationships, georeferencing: prepared.index.georeferencing, diagnostics: prepared.manifest.diagnostics, losses: prepared.manifest.losses }, null, 2));
-          inspector.setAttribute('aria-label', 'Original IFC properties and conversion losses'); inspector.style.maxHeight = '22rem'; inspector.style.overflow = 'auto'; inspector.style.whiteSpace = 'pre-wrap';
+          const inspector = element('section'); inspector.setAttribute('aria-label', 'Original IFC properties and conversion losses');
+          inspector.append(element('h4', `${object?.name ?? object?.ifcClass ?? 'Source object'} · original properties`),
+            element('p', 'Properties belong to this source object. Type properties remain on the type object.'));
+          const properties = element('pre', JSON.stringify(object?.properties ?? [], null, 2));
+          properties.style.maxHeight = '22rem'; properties.style.overflow = 'auto'; properties.style.whiteSpace = 'pre-wrap'; properties.style.overflowWrap = 'anywhere';
+          const details = element('details'); details.append(element('summary', 'Source binding, units, relationships and conversion losses'));
+          const inventory = element('pre', JSON.stringify({ reference: selection, units: prepared.index.units, relationships: prepared.index.relationships,
+            georeferencing: prepared.index.georeferencing, diagnostics: prepared.manifest.diagnostics, losses: prepared.manifest.losses }, null, 2));
+          inventory.style.maxHeight = '22rem'; inventory.style.overflow = 'auto'; inventory.style.whiteSpace = 'pre-wrap'; inventory.style.overflowWrap = 'anywhere'; details.append(inventory);
+          inspector.append(properties, details);
           const reference = element('button', 'Reference in request'); reference.type = 'button'; reference.addEventListener('click', () => this.input.reference(selection)); section.append(inspector, reference);
         }
       }

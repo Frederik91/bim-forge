@@ -4,7 +4,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color.js';
-import { linkPoint } from '../src/linked-model.ts';
+import { linkPoint, linkedSelectionKey } from '../src/linked-model.ts';
 import type { LinkedPrepared, LinkedSelection } from '../src/linked-model.ts';
 
 export type LinkedDisplay = { id: string; prepared: LinkedPrepared; visible: boolean };
@@ -49,7 +49,7 @@ export class LinkedModelLayer {
   objectAt(x: number, y: number): LinkedSelection | null { return this.pick(this.scene.pick(x, y)?.pickedMesh ?? null); }
   select(selection: LinkedSelection | null): void {
     for (const [mesh, value] of this.parts) {
-      mesh.renderOutline = Boolean(selection && JSON.stringify(selection) === JSON.stringify(value));
+      mesh.renderOutline = Boolean(selection && linkedSelectionKey(selection) === linkedSelectionKey(value));
       mesh.outlineColor = Color3.FromHexString('#135b91'); mesh.outlineWidth = .025;
     }
   }

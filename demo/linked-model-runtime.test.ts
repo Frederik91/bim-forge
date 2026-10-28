@@ -87,10 +87,11 @@ test('real Chromium uploads, browses, inspects, picks and hides bounded derived 
   const page = await browser.newPage({ viewport: { width: 1360, height: 1000 } }); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(base); await page.getByLabel('Attach IFC reference').setInputFiles({ name: 'synthetic.ifc', mimeType: 'application/x-step', buffer: bytes });
   await page.locator('canvas[data-link-meshes="4"]').waitFor({ timeout: 30000 });
-  await page.getByRole('button', { name: /wall/i }).first().click();
-  assert.match(await page.getByLabel('Original IFC properties and conversion losses').innerText(), /IfcPropertyBoundedValue|globalId/);
+  await page.getByRole('button', { name: /wall-a/i }).click();
+  assert.match(await page.getByLabel('Original IFC properties and conversion losses').innerText(), /IfcPropertyBoundedValue/);
   await page.getByRole('button', { name: 'Reference in request' }).click(); assert.match(await page.locator('#context').innerText(), /no native edit authority.*originalSha256/);
   assert.equal(await page.locator('canvas').getAttribute('data-native-preserved'), 'true');
+  await page.screenshot({ path: path.join(process.env.IFC_EVIDENCE ?? root, 'ifc218-inspection.png'), fullPage: true });
   const picked = await page.locator('canvas').evaluate(canvas => {
     const raw: unknown = JSON.parse(canvas.getAttribute('data-pick-points') ?? '[]');
     if (!Array.isArray(raw)) throw new Error('Missing mesh pick locations.');
@@ -101,7 +102,6 @@ test('real Chromium uploads, browses, inspects, picks and hides bounded derived 
   await page.locator('canvas').click({ position: picked });
   assert.match(await page.locator('canvas').getAttribute('data-picked-source') ?? '', /ifc-reference.*originalSha256/);
   assert.equal(await page.getByLabel('Original IFC properties and conversion losses').count(), 1);
-  await page.screenshot({ path: path.join(process.env.IFC_EVIDENCE ?? root, 'ifc218-inspection.png'), fullPage: true });
   await page.getByLabel('Show linked geometry').uncheck(); assert.equal(await page.locator('canvas').getAttribute('data-link-meshes'), '0');
   await page.getByLabel('Show linked geometry').check(); assert.equal(await page.locator('canvas').getAttribute('data-link-meshes'), '4');
   assert.equal(await page.locator('canvas').count(), 1); assert.deepEqual(errors, []);

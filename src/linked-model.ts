@@ -100,3 +100,7 @@ export function parseLinkedJob(value: unknown): LinkedJob {
 export function linkedReferenceText(selection: LinkedSelection): string {
   return `Read-only IFC context (no native edit authority): ${JSON.stringify(selection)}`;
 }
+export function linkedSelectionKey(selection: LinkedSelection): string {
+  const { source, occurrence } = selection;
+  return JSON.stringify([source.namespace, source.revision, source.originalSha256, source.globalId, occurrence.id, occurrence.sourceToProjectMetres]);
+}
