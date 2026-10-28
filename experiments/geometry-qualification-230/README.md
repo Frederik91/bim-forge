@@ -22,6 +22,11 @@ red/green receipt; inspect failures before retrying. It does not reopen worker21
 - `demo/geometry-workflow-browser.test.ts`: actual public UI/server/sidecar attach,
   read-only properties, hostile property as source text, unsent reference pin,
   original bytes, Main preservation, cross-project source refusal and phone layout.
+  Starts with a native door selected, selects an IFC wall, checks its action strip,
+  hidden native Move, linked Properties navigation and exact source-bound Ask pin.
+  Native reselection clears linked selection. A second property-version source with
+  the same GlobalId keeps the first pin immutable and cannot mix old source binding
+  with new properties. These assertions require the parent's linked-selection fix.
   There is no fake provider or test-only product bypass. It does not qualify touch.
 - `requirements.tsv`: full matrix with narrow written checks and every pending row.
 - `run-server.sh`: bounded network-off/read-only server container supervisor; exact
@@ -110,6 +115,9 @@ once it exists; importing its math into the oracle would invalidate independence
 #232 proposed `snapshotCurrent`, `readVersion`, `withCatalogGuard`, including missing
 active sources, a short SQLite publication fence and thenable refusal. Browser
 candidate/adopt/history accessible names and route payloads are still pending.
+Stale selection after adoption of a changed source/version/occurrence transform is
+also pending those real public UI operations. Independent attachments are separate
+sources, not a substitute for repeated replacement of one stable project link.
 #233 proposal applicability and final publication must exercise relevant-only reads,
 absence membership and revalidation. Neither fabricated output nor a scripted fixture
 worker qualifies the parent's real connected-model request.
