@@ -821,3 +821,20 @@ body { display: flex; flex-direction: column; background: #e9eeeb; }
   .workspace-panel-resizer { top: calc(50% - 22px); bottom: auto; width: 44px; height: 44px; }
   .workspace-panel-resizer::after { left: 21px; }
 }
+
+.floor-plan-guide { min-width: 0; padding: 4px 8px; font-size: 12px; overflow-wrap: anywhere; }
+.floor-plan-guide[hidden], .floor-plan-guide [hidden] { display: none; }
+.floor-plan-guide > details { max-height: 42dvh; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: #f3faf7; }
+.floor-plan-guide summary { cursor: pointer; font-weight: 600; }
+.floor-plan-guide p { margin: 8px 0; }
+.floor-plan-measurement { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.floor-plan-measurement label { min-width: 0; font-size: 12px; }
+.floor-plan-measurement :is(input, select) { width: 100%; min-width: 0; margin-top: 4px; }
+.floor-plan-measurement label:first-child, .floor-plan-measurement label:nth-child(3) { grid-column: 1 / -1; }
+.floor-plan-guide [role="alert"] { color: #8b2b21; }
+.floor-plan-limits { color: var(--muted); font-size: 11px; }
+@media (max-width: 600px) {
+  .floor-plan-guide > details { max-height: 30dvh; }
+  .floor-plan-measurement { grid-template-columns: minmax(0, 1fr); }
+  .floor-plan-guide :is(button, summary) { min-height: 44px; }
+}
