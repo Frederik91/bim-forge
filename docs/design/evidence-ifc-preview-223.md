@@ -11,6 +11,7 @@ Base: merged PR #215, `882a50b7599ff926fb0648c2e070c51a2cffccfd`.
 | Dimension helper, PR #220 | `11c8e65` | Bounded complete-partition preview, conservative minimum clear spans and evaluated dependencies |
 | Read-only IFC, PR #221 | `ecd18db` | Source retention, isolated conversion, artifact validation, hierarchy, properties and disposable render layer |
 | ScriptBox integration | `ee2f694` | Typed guest method, atomic staging, frozen read/write scope and generated documentation |
+| Review-text contract | `b4de06f` | Shared unchanged text bounds, generated agent guidance and field-specific repair feedback |
 | Parent | This branch | Single-viewer/panel/server mounts, test registration, combined qualification and paired preview publication |
 
 Every component has an isolated worktree. The parent integrates original histories rather than copying partial final documentation commits.
@@ -89,11 +90,69 @@ Do not merge new geometry/storage/security work without human approval.
 - Parent check 6, `9140400`: root validation, explicit policy, build, 49 focused checks and all 15 browser checks passed with the refined UI. The full root suite passed 810 checks with two existing optional skips and one packaging failure: the Docker context allowlist omitted the new linked store/routes. Added the two explicit entries; no validator changed. Assets tests had not yet run because the root command stopped at that failure.
 - Parent check 7, `e99740f`: root validation, explicit 41-path policy, build and 51 focused checks passed. Full `npm test` passed: 5 qualification-contract checks, 811 of 813 main checks (two existing optional skips) and all 21 asset checks. The source-only image preflight initially referenced the pre-squash approved commit, absent from the bounded bundle; corrected the preflight to the merged base and checked unchanged production dependency metadata against the actual approved base image.
 - Parent check 8, same executable source: source-only image built with no pull/install and no new dependencies. Actual image plus a separate spool-only converter passed all three HTTP/security/conversion/recovery/preservation tests as UID 65032:33, under production app limits. Runtime/dependency file manifests were checked before enabling conversion.
-- Publication and live-provider interpretation: pending at this receipt; recorded separately on issue #223 and the integration PR.
+- Initial publication passed at `e99740f`, preserving the original eight projects, 22 requests and ChatGPT connection. Live IFC conversion, source properties and unsent context passed. The live floor-plan request generated valid geometry but twice failed the unchanged `review.constraints` text contract. Accepted Main remained at the initial root. The complete failed history remains in its conversation.
+- A separate scoped review-contract correction reproduced the failure through the actual guest and passed 61 focused checks. It derives agent guidance and field-specific repair diagnostics from one contract, retaining the exact existing limits and accepted grammar. See [the red/green evidence](review-text-contract-223.md).
+- Corrected combined source `c534eea`: root validation (290 TypeScript files), explicit 47-path policy, build, 59 focused checks and 15 browser checks passed. Full `npm test` passed 5 contract, 819 main and 21 asset checks, with two existing optional skips. Focused checks are a subset, not additional full-suite passes. Actual image with a separate converter passed all three server/security/recovery checks.
+- Corrected source publication passed on its first cutover attempt, preserving nine projects, 23 request identities, accepted models, sources and ChatGPT connection. The extra project/request at that point belonged to this synthetic QA workflow. Live-provider reconstruction, explicit Main acceptance, baseline capture and alternative-only partition acceptance subsequently passed as recorded below.
 
-### Final source and retained evidence
+### Current qualified source and live workflow
 
-Qualified executable source: `e99740fc952527f900bd891298248c9315417f18`.
+Deployed executable: `c534eeadf8e675ba09ebf9e108de389e331d251e`.
+Image: `bim-forge-preview-app:c534eeadf8e675ba09ebf9e108de389e331d251e`,
+ID `sha256:6aba31a8f280a30ced05ff5235c040c4f20cd507a7d5f5eb5cc9b504a7bdbdaa`.
+Paired browser/runtime publication is live at <https://192.168.1.17:9443/>. Later receipt-only
+commits do not change executable files. Corrected root/full/browser/image evidence and paired rollback
+are retained under `build-c534eeadf8e675ba09ebf9e108de389e331d251e/`, including `rollback-review-a1/`.
+
+| Corrected-source artifact | SHA-256 |
+| --- | --- |
+| `artifacts/full.log` | `27484e5aabb7bdb1572a186d326f325b344183808ebd44f8769f5a0babe0b614` |
+| `artifacts/image-canary.log` | `cd7b395b175bec94772b5d00ff530bfd23bef437b3e91f092b43eb293a05baf9` |
+| `artifacts/live-workflow-receipt.json` | `99ee3be606960c0c6c72c85e949d7960d107b08042f523d6366181949600d755` |
+
+The real connected ChatGPT workflow used only the separate invented project **Floor plan + IFC —
+preview verification — 28 Oct** (`a5af9d2f-39c2-44db-a4c3-80dd34a308b4`). All submission, target
+switching and acceptance happened through the UI. A separate resource-bounded network-off container
+then opened only SQLite database/WAL/shared-memory file mounts read-only and queried that project.
+The existing store/repository validators reconstructed its stored graph and verified revision hashes,
+target authority and the [retained semantic delta](fixtures/evidence-ifc-223/live-workflow-receipt.json).
+The probe made no database changes and did not read credentials or other project contents.
+
+1. Attach the synthetic drawing and confirm **overall width 6000 mm**, dimension provenance
+   **Dimension on drawing**, reference **Between wall centrelines**. Submit reconstruction in chat.
+2. After the contract fix, reply in the original conversation to retry the same reconstruction. The
+   retained earlier failures, drawing and measurement remain in history. Request
+   `95b9efa4-540d-432f-a23d-c32feb2b5985` produces a 6 m × 4 m floor, two rooms and two doors.
+   Inspect assumptions, then explicitly **Accept into Main**.
+3. **+ Alternative** captures the locked As-is baseline at Main revision
+   `0d9a3621ec7046724d065311a42f8ba5ee294a7427c7386d48792e49a4e5bcc5` and creates Alternative 1.
+4. Request `03fa4d7b-fe8b-4436-ae71-95a857ca2e46` asks for Living to be 3300 mm between
+   centrelines, Office at least 2500 mm clear, fixed outside footprint and entrance, and a shared
+   doorway that travels with its host without changing its offset. Inspect Plan and 3D, then
+   explicitly **Accept into Alternative 1**.
+5. Alternative revision becomes `7a735c70e705c971f677372c1d3c43c9fc45683e59576a4220552ba3212de1f6`.
+   Main and the immutable As-is baseline both retain the exact original revision above. Living changes
+   from 12 to 13.2 m² and Office from 12 to 10.8 m², with 2550 mm clear width. The stored delta is
+   exactly one partition and two room bounds; no additions, removals or relationship changes. The fourth
+   highlighted item is the hosted doorway's evaluated placement, whose stored identity/body/offset remain
+   unchanged. Its 850 mm host offset is preserved.
+
+This verifies workflow and isolation with a live provider, not survey reconstruction accuracy. The
+6000 mm width is the user-confirmed dimension; other dimensions and offsets retain their documented
+source interpretation or assumptions. Human acceptance is not construction/code approval.
+
+The same project retains a ready synthetic IFC source with hierarchy and original properties.
+Selecting `wall-a` and choosing **Reference in request** adds `IFC wall-a.txt` to an unsent message;
+it does not create a ticket. Linked visibility and native selection remain separate. Arbitrary exports
+and large-model performance remain unqualified.
+
+![Accepted live-provider alternative, retained chat decision and moved shared partition](fixtures/evidence-ifc-223/live-alternative-accepted.jpg)
+
+![Unchanged locked As-is baseline after alternative acceptance](fixtures/evidence-ifc-223/live-baseline-unchanged.jpg)
+
+### Initial qualified source and retained evidence
+
+Initial qualified executable source: `e99740fc952527f900bd891298248c9315417f18`.
 Image: `bim-forge-preview-app:e99740fc952527f900bd891298248c9315417f18`,
 ID `sha256:e56d752c1d5206a1a66ed4ff550410f250949a83e64ee9bc0ae4690e8bb13e93`.
 Later receipt-only commits do not change executable files.
@@ -104,8 +163,8 @@ The lockfile and production dependency metadata match. This avoids reinstalling 
 on a nearly full root filesystem; it is a retained preview build path, not a replacement for the clean
 repository Dockerfile. That Dockerfile and its context allowlist now include both new server modules.
 
-The 15 browser checks ran on `9140400`; all UI/domain/server/guest/worker files are identical to the
-final executable source. Only the Docker-context allowlist and receipt changed afterward. Browser source,
+The initial 15 browser checks ran on `9140400`; all UI/domain/server/guest/worker files are identical to
+the initial executable `e99740f`. Only the Docker-context allowlist and receipt changed afterward. Browser source,
 trace, screenshots and inspectable delta are retained under
 `build-9140400048c17591899ad96254e0fa25cc9cabaf/browser-a06/`.
 Final root/full/image/canary evidence is under `build-e99740fc952527f900bd891298248c9315417f18/`.
