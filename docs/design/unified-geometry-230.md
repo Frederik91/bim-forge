@@ -1,0 +1,172 @@
+# Unified geometry and external IFC revisions
+
+Parent [#230](https://github.com/Frederik91/bim-forge/issues/230). Exact base
+`f4285c644e52b5bdba8e4f6afeb6e099bc02b891`, research PR228 over unmerged PR224.
+This design is the coordination record; source contracts and qualified behavior must agree with it.
+No merge is authorized. The owner requests a complete, adversarially tested merge handoff.
+
+## Work phases
+
+- [x] Ground existing source, native acceptance, query research and deployment constraints.
+- [x] Compare immutable evaluated-read-model and per-source-provider design candidates.
+- [x] Synthesize the initial contract and publish separate ownership.
+- [ ] Implement the three tracks, reviewing material seam changes here.
+- [ ] Combine actual source, validate on the server and fix reproduced defects.
+- [ ] Exercise real connected-agent UI workflows and difficult external update cases.
+- [ ] Audit every requirement against retained evidence; publish a qualified preview/draft PR.
+- [ ] Replace the design if repeated implementation workarounds contradict its ownership.
+
+## Problem and authority
+
+The viewer already receives converted IFC meshes, but agent requests receive properties/identity.
+Native definitions and immutable external IFC sources remain authoritative in their own domains.
+`RoomRepository` retains native proposal/reconciliation/acceptance authority. The derived geometry
+read model has no acceptance or linked-write capability. Source text and user selection are context,
+not permissions or proof of geometry completeness.
+
+Native evaluation must include hosting, family/level placement and opening/roof dependencies. IFC
+evaluation composes product-to-source and occurrence-to-project once in engineering metres, with
+explicit source units, representation and approximation diagnostics. Viewer origin changes are not
+measurement transforms. Missing shape/placement and unsupported geometry remain explicit.
+
+## Usage and shape
+
+The AI uses one `geometry` namespace for native and linked objects. Source kind is reference metadata,
+not a second method family. The caller discovers/describes objects, queries relations and measures a
+candidate; the host owns spatial arithmetic, completeness, budgets, receipts and independent validation.
+
+```text
+native snapshot + current prepared IFC versions
+       -> immutable evaluated read context
+       -> describe / query / relations / measure
+       -> trusted object projections + predicate read observations
+       -> native proposal, relevant revalidation, explicit human acceptance
+```
+
+The shared source contract belongs to #231 (`src/geometry-contract.ts`). It derives wire types from
+TypeBox and supplies qualified native/IFC references, finite project-coordinate geometry, explicit
+complete/partial/unavailable unions, descriptions, queries, relations, measurements and read receipts.
+The constructor consumes an authorized native snapshot plus immutable prepared linked inputs. It
+must not read a second authoritative entity database or expose source storage internals to the guest.
+Exact exported names are published by #231 before consumer implementation freezes.
+
+Measurements bind the candidate shape and full obstacle query, not just IDs returned on a page.
+Bounds provide lower-bound discovery; narrow-phase shape checks establish the supported distance,
+intersection or containment predicate. Distinguish contact, inside, support and passage semantics.
+Return witnesses, numeric tolerance and representation limits. Mesh-relative correctness is not an
+exact-original-solid claim. Unsupported operations cannot become clearance certificates.
+
+One request uses a frozen read context; pagination shares its complete candidate-set signature.
+Host-generated receipts accumulate automatically, and the guest cannot omit or forge observations.
+Object projections fingerprint consumed geometry/transform/semantics and evaluated dependencies.
+Predicate observations fingerprint complete matching membership, including absence and missing data.
+An added obstacle/new active link/moved-in object can invalidate an empty-region result. Relevant
+native mutations require measurements of the final candidate, including after reconciliation.
+
+## External link lifecycle and freshness
+
+#232 owns a stable project link and occurrence, immutable source/prepared versions, versioned project
+placement, candidate jobs, correspondence and atomic adoption. Legacy installed links must remain
+available. A new version is prepared separately; failure/cancel/restart leaves current geometry intact.
+The UI shows a readable property inspector, candidate status, semantic/source delta, version history,
+original downloads and explicit adoption. Retention is bounded visibly without silently deleting pins.
+
+Historical references keep the exact version inspected. Applicability across replacements is a new
+attestation comparing relevant projections/predicates under verified identity correspondence. Do not
+rewrite old references, equate GlobalIds across namespaces/occurrences, infer correspondence from names
+or treat a whole-file source hash change as blanket model staleness. Ambiguity is a visible result.
+
+The linked store must expose small project-authorized seams for current catalog snapshots, historical
+prepared-version resolution and a final catalog/publication guard. A snapshot identifies current
+link/source/occurrence/placement versions and an optimistic catalog token. This catalog token is only
+a concurrency fence: it must not itself decide semantic staleness.
+
+Proposed coordination contract (implementation names may be improved by the owner):
+
+```text
+snapshotCurrent(projectId) -> immutable catalog token + current linked prepared inputs
+readVersion(projectId, qualified version reference) -> immutable historical prepared input
+withCatalogGuard(projectId, expectedCatalogToken, synchronousCommit) -> result | catalog-changed
+```
+
+#233 revalidates geometry observations against the current native/linked read context outside the
+short final publication critical section. It then publishes the already computed native decision
+under the guard and existing native transaction. A changed catalog restarts bounded revalidation;
+an unrelated source edit is not rejected merely for a changed catalog token. Relevant changes need
+fresh measurement/proposal evidence, never silent acceptance of stale clearance.
+
+The separate linked SQLite and native SQLite stores need a cross-process publication/adoption fence.
+A synchronous in-process callback alone is insufficient if another process can adopt. Candidate
+design: reserve the linked catalog with a short `BEGIN IMMEDIATE` transaction, compare the optimistic
+token and execute the synchronous native publication before releasing it. No geometry work or awaits
+inside that section. Both tracks must examine lock ordering, nested transactions, failure recovery
+and supported application-instance assumptions before committing to that mechanism. Parent will
+review the actual seam; no lock may create a second native acceptance authority.
+
+## Synthesis decision
+
+Two read-only design agents inspected exact base f4285c6. Candidate A materializes immutable normalized
+facts/indexes with shared shape references. Candidate B executes over per-source pinned providers.
+Both converge on one query surface, source-bound immutable reads, independent geometric refinement,
+predicate-based absence freshness and guarded publication. The parent selects A's coherent evaluated
+read context and grafts B's lazy source-local shape/acceleration reuse and source-capability handling.
+No second canonical entity store and no duplicated native-versus-IFC public query families.
+
+Rubric: uniform caller surface; evaluated dependency and absence correctness; relevant-only freshness;
+bounded resource/representation cost; atomic adoption/acceptance and maintainable ownership. A wins
+coherent query membership and consumer simplicity; B wins potential lazy shape reuse. Both need a new
+catalog guard and real IFC qualification. There was no independent cross-family judge: the available
+delegation tools require the inherited model unless the owner requests another model. Parent review
+screens both candidates for duplicated authority, exposed internals, duplicated method families and
+hand-maintained contract lists. Tests must try to disprove this synthesis.
+
+## Ownership and mount seams
+
+| Owner | Writable scope | Shared seam |
+| --- | --- | --- |
+| #231 geometry session | New `src/geometry-*.ts`, pure host read assembly and tests | TypeBox contract, normalized read context, query/measure, trusted receipt/revalidation primitives |
+| #232 IFC revisions session | `src/linked-model.ts`, linked store/routes/client/panel and tests, conversion worker only if needed | Current/historical prepared inputs, catalog guard, stable display/occurrence identity |
+| #233 ScriptBox/evidence session | Script/proposal/review evidence, native queue/versioned store acceptance plumbing and tests | Injected geometry context, automatic read receipts, final guarded publication |
+| Parent #230 | This record; `demo/server.ts`, `demo/room-app.ts`, viewer/render mounts, package/Docker registration, combined QA | One mounted viewer/chat, bound request selection, runtime wiring and final qualification |
+
+Every writer has its own checkout. Changes to ownership must be agreed and recorded before edits.
+Component PRs base on the parent branch once published; final integration remains one coherent issue.
+Research PR228 and foundation PR224 remain traceable dependencies, not silently closed/superseded PRs.
+
+## Requirements and evidence matrix
+
+All rows are unproven until exact current-source evidence is retained. A green narrow test cannot
+prove a broader row. Parent keeps raw red/green failures and an edge-case ledger with root cause,
+fix, source, command, result and remaining limitation.
+
+| Requirement | Required evidence | State |
+| --- | --- | --- |
+| One native/IFC geometry interface | Actual generated guest tools/docs and equivalent native/IFC tasks | Pending |
+| Coordinates, units, identity, occurrence | Real converted mm/metre, composed rotation/translation, duplicate GlobalId/occurrence fixtures | Pending |
+| Shape-aware measurements | Independent clearance/intersection/containment oracle, doorway/L-shape/enclosed-candidate/contact fixtures | Pending |
+| Complete bounded queries | Pagination, missing meshes, candidate-set absence, limits and hard deadline tests | Pending |
+| Repeated external update | UI v1/v2/v3 replacement, semantic delta, adoption, historical original/source pins | Pending |
+| Failure and concurrency | Conversion failure/restart/cancel, CAS adoption/placement races, cross-process publication fence | Pending |
+| Relevant-only freshness | Moved referenced wall/new obstruction/removed identity blocked; unrelated source edit remains acceptable | Pending |
+| Trusted proposal evidence | Forged receipt/source text, cross-project handle, stale/late result, final candidate/reconciled-state checks | Pending |
+| Real AI geometry use | UI linked-wall request, actual query activity, unaccepted native proposal, independently verified 500 mm clearance | Pending |
+| Baseline/accepted data preservation | Explicit alternative acceptance, unchanged Main/As-is, accepted/source/auth cutover receipts | Pending |
+| Usable desktop and phone UI | Browser screenshots/traces of properties, replacement/adoption and chat review, no overflow or duplicate viewer | Pending |
+| Repository and actual image | Server root validate, explicit changed paths, appropriate full suites, actual-image converter isolation/recovery | Pending |
+| Merge readiness | Exact combined draft head, required green CI/review evidence, retained rollback and qualified server preview | Pending |
+
+## Qualification boundary and initial ledger
+
+Build/test only in bounded isolated server containers, read-only source/dependencies and network off;
+all source bundles, cache, dependencies, artifacts and temp stay on `/ssd1`. Connected-provider/UI work
+uses synthetic test projects and the existing authorized connection. Do not copy credentials, mutate
+existing user projects, weaken validators, restart factory loops or touch the independent viewer work.
+
+Owner's ten-total-attempt allowance applies to each new interactive item, with cause inspection and
+retained failures. It does not reopen exhausted worker218. No GitHub merge or protection change is
+authorized. Publish qualified combined changes to preview under standing deployment authorization,
+with paired browser/runtime rollback and accepted/source/auth preservation.
+
+Initial resource probe: SSH to `192.168.1.17:22` timed out; a separate bounded HTTPS health connection
+also timed out. No test/container ran. Continue code/design work while the server is unavailable;
+do not substitute local tests or repeatedly consume attempts on an unreachable host.
