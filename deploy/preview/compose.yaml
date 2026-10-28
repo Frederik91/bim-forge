@@ -22,11 +22,17 @@ services:
       BIM_FORGE_SOCKET: /run/bim-preview/api.sock
       CODEX_HOME: /var/lib/bim-forge/codex
       BIM_FORGE_AGENT_WORKDIR: /tmp/bim-forge-agent
+      # Empty disables uploads. Set /spool only with the reviewed ifc profile running.
+      BIM_FORGE_IFC_SPOOL: ${BIM_FORGE_IFC_SPOOL:-}
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=192m,mode=1777
     volumes:
       - /run/bim-preview:/run/bim-preview:rw
       - /srv/bim-preview/state:/var/lib/bim-forge/codex:rw
+      - type: bind
+        source: ${BIM_FORGE_IFC_HOST_SPOOL:-/ssd1/bim-preview/ifc-spool}
+        target: /spool
+        bind: { create_host_path: false }
     healthcheck:
       test: ["CMD", "node", "scripts/container-healthcheck.ts"]
       interval: 15s
@@ -38,6 +44,59 @@ services:
       options:
         max-size: 4m
         max-file: "2"
+
+  # Optional retained-runtime seam; see docs/design/linked-model-packaging-223.md.
+  # Only /spool is writable persistent storage; no app state or Docker socket.
+  ifc-converter:
+    profiles: [ifc]
+    image: ${BIM_FORGE_IFC_IMAGE:-sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff}
+    user: "65032:33"
+    network_mode: none
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 2304m
+    memswap_limit: 2304m
+    pids_limit: 64
+    ulimits:
+      nofile: { soft: 128, hard: 128 }
+    working_dir: /converter
+    entrypoint: ["/qualification/python/bin/python", "runtime_worker.py", "/spool"]
+    environment:
+      HOME: /tmp
+      PYTHONPATH: /python-deps
+      PYTHONDONTWRITEBYTECODE: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    volumes:
+      - type: bind
+        source: ${BIM_FORGE_IFC_HOST_SPOOL:-/ssd1/bim-preview/ifc-spool}
+        target: /spool
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${BIM_FORGE_IFC_WORKER_RELEASE:-/ssd1/bim-preview/ifc-release}
+        target: /converter
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: /ssd1/bim-forge-qualification/qvm-20261025/python
+        target: /qualification/python
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: /ssd1/bim-forge-qualification/qvm-20261025/w2-runs/w2-source-unit-c30979d-20261025-01/python-deps
+        target: /python-deps
+        read_only: true
+        bind: { create_host_path: false }
+    logging:
+      driver: json-file
+      options: { max-size: 2m, max-file: "2" }
 
   static:
     image: nginx@sha256:84ed8c0dd296c188bfc24ed506f46589e9285fb0b11cf3a04d91d524d3067e11

@@ -10,6 +10,8 @@ import { MAX_SOURCE_BYTES, sourceMediaType, sourceName } from '../src/request-so
 import { parseModelScopeQuery } from '../src/model-scope-contract.ts';
 import { ScopeStoreConflict } from './model-scope-store.ts';
 import { parseWritableDesignTarget } from '../src/design-targets.ts';
+import { LinkedModelStore } from './linked-model-store.ts';
+import { handleLinkedModelRoute } from './linked-model-routes.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
@@ -80,6 +82,28 @@ export interface DemoServerOptions {
   runtimeMode?: DemoRuntimeMode;
   publicOrigin?: string | null;
   backlogFile?: string;
+  linkedModelRoot?: string;
+  linkedModelSpool?: string;
+}
+
+async function openLinkedModels(backlogFile: string, spool: string | undefined, privateRoot: string | undefined): Promise<LinkedModelStore | null> {
+  if (!spool) return null;
+  if (backlogFile === ':memory:' || !path.isAbsolute(spool)) throw new Error('IFC conversion requires persistent server state and an absolute dedicated spool.');
+  const state = await fs.realpath(path.dirname(path.resolve(backlogFile)));
+  // Require an operator-prepared mount; resolving symlinks prevents state aliases.
+  const shared = await fs.realpath(spool);
+  const contains = (parent: string, child: string) => {
+    const relative = path.relative(parent, child);
+    return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+  };
+  if (contains(state, shared) || contains(shared, state)) throw new Error('IFC spool must be separate from private server state.');
+  if (privateRoot && !path.isAbsolute(privateRoot)) throw new Error('IFC private root must be absolute.');
+  const candidate = privateRoot ?? path.join(state, 'ifc-links');
+  if (contains(candidate, shared) || contains(shared, candidate)) throw new Error('IFC spool must be separate from the private link root.');
+  await fs.mkdir(candidate, { recursive: true, mode: 0o700 });
+  const linkRoot = await fs.realpath(candidate);
+  if (contains(linkRoot, shared) || contains(shared, linkRoot)) throw new Error('IFC spool must be separate from the private link root.');
+  return LinkedModelStore.open({ root: linkRoot, spool: shared });
 }
 
 function sessionPayload(codex: DemoServerOptions['codex']): unknown { return codex?.publicSession() ?? disconnected; }
@@ -130,9 +154,14 @@ export async function createDemoServer({
   runtimeMode = 'local',
   publicOrigin = null,
   backlogFile = ':memory:',
+  linkedModelRoot,
+  linkedModelSpool,
 }: DemoServerOptions = {}): Promise<DemoServer> {
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
-  const backlog = await ChangeRequests.open(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null));
+  const links = await openLinkedModels(backlogFile, linkedModelSpool, linkedModelRoot);
+  let backlog: ChangeRequests;
+  try { backlog = await ChangeRequests.open(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null)); }
+  catch (error) { links?.close(); throw error; }
   let sourceUploads = 0;
   const server = http.createServer(async (request, response) => {
     const allowedHost = /^127\.0\.0\.1(?::[0-9]{1,5})?$|^localhost(?::[0-9]{1,5})?$/;
@@ -144,9 +173,27 @@ export async function createDemoServer({
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
     response.setHeader('Referrer-Policy', 'no-referrer');
+    let routeUrl: URL;
+    try { routeUrl = new URL(request.url ?? '/', 'http://localhost'); }
+    catch { send(response, 400, { error: 'Invalid request URL.' }); return; }
+    if (/^\/api\/projects\/[^/]+\/ifc-links(?:\/|$)/.test(routeUrl.pathname)) {
+      if (links) {
+        if (await handleLinkedModelRoute({ request, response, store: links,
+          hasProject: id => backlog.hasProject(id), authorize: request => sameOriginRequest(request, publicOrigin) })) return;
+        send(response, 404, { error: 'Unknown IFC route.' });
+      } else {
+        try {
+          sameOriginRequest(request, publicOrigin);
+          const projectId = routeUrl.pathname.split('/')[3] ?? '';
+          if (!backlog.hasProject(projectId)) send(response, 404, { error: 'Unknown project.' });
+          else send(response, 503, { error: 'IFC conversion is not configured. A dedicated spool and isolated converter are required.' });
+        } catch (error) { send(response, 400, { error: error instanceof Error ? error.message : 'IFC reference unavailable.' }); }
+      }
+      return;
+    }
     if (request.url === '/api/health') {
       if (request.method !== 'GET') { response.writeHead(405, { Allow: 'GET' }); response.end('Health endpoint requires GET.'); return; }
-      send(response, 200, { status: 'ok', runtimeMode, chatgptConnected: Boolean(codex?.publicSession().connected) });
+      send(response, 200, { status: 'ok', runtimeMode, chatgptConnected: Boolean(codex?.publicSession().connected), ifcLinks: links ? 'configured' : 'unavailable' });
       return;
     }
     if (request.url === '/api/auth/session') {
@@ -395,12 +442,13 @@ export async function createDemoServer({
       response.end(request.method === 'HEAD' ? undefined : bytes);
     } catch { response.writeHead(500); response.end('Demo asset unavailable.'); }
   });
+  const closeModelWorkers = async () => { try { links?.close(); } finally { await backlog.close(); } };
   server.on('close', () => {
-    void backlog.close().catch(() => {
+    void closeModelWorkers().catch(() => {
       console.error('The BIM Forge request workers could not shut down cleanly.'); process.exitCode = 1;
     });
   });
-  return Object.assign(server, { closeModelWorkers: () => backlog.close() });
+  return Object.assign(server, { closeModelWorkers });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -413,7 +461,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const backlogDirectory = config.codexHome ?? path.join(root, '.bim-preview');
   await fs.mkdir(backlogDirectory, { recursive: true, mode: 0o700 });
   const server = await createDemoServer({ codex, runtimeMode: config.runtimeMode, publicOrigin: config.publicOrigin,
-    backlogFile: path.join(backlogDirectory, 'bim-change-requests.sqlite') });
+    backlogFile: path.join(backlogDirectory, 'bim-change-requests.sqlite'),
+    ...(process.env.BIM_FORGE_IFC_SPOOL ? { linkedModelSpool: process.env.BIM_FORGE_IFC_SPOOL } : {}) });
   server.on('close', () => { void server.closeModelWorkers().finally(() => codex.close()).catch(() => {}); });
   server.on('error', () => { console.error('The BIM Forge preview runtime could not start.'); process.exitCode = 1; });
   const listen = config.listen;
