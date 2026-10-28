@@ -124,14 +124,33 @@ hand-maintained contract lists. Tests must try to disprove this synthesis.
 
 | Owner | Writable scope | Shared seam |
 | --- | --- | --- |
-| #231 geometry session | New `src/geometry-*.ts`, pure host read assembly and tests | TypeBox contract, normalized read context, query/measure, trusted receipt/revalidation primitives |
+| #231 geometry session | New `src/geometry-contract/query/math/native*.ts`, pure host read assembly and tests; excludes #233 evidence files | TypeBox contract, normalized read context, query/measure, trusted receipt/revalidation primitives |
 | #232 IFC revisions session | `src/linked-model.ts`, linked store/routes/client/panel and tests, conversion worker only if needed | Current/historical prepared inputs, catalog guard, stable display/occurrence identity |
 | #233 ScriptBox/evidence session | Script/proposal/review evidence, native queue/versioned store acceptance plumbing and tests | Injected geometry context, automatic read receipts, final guarded publication |
 | Parent #230 | This record; `demo/server.ts`, `demo/room-app.ts`, viewer/render mounts, package/Docker registration, combined QA | One mounted viewer/chat, bound request selection, runtime wiring and final qualification |
+| #234 independent QA | New `experiments/geometry-qualification-230/` and `demo/geometry-workflow-browser.test.ts` | Real deterministic IFC/version fixtures, independent geometry oracle and browser/edge-case evidence |
 
 Every writer has its own checkout. Changes to ownership must be agreed and recorded before edits.
 Component PRs base on the parent branch once published; final integration remains one coherent issue.
 Research PR228 and foundation PR224 remain traceable dependencies, not silently closed/superseded PRs.
+
+Sessions: [geometry](codex://threads/01a18417-ed3d-7c23-aa12-e49d80f1e6b3),
+[IFC revisions](codex://threads/01a18417-f0d3-73a2-83ed-878d92cf9026),
+[ScriptBox/evidence](codex://threads/01a18417-f76a-7250-9322-b99b2a4b857b),
+[independent QA](codex://threads/01a1841b-c906-7b93-be0f-fc8ee2ca5898).
+
+Initial concrete construction seam published by #231: `createGeometryContext` consumes authorized
+project/native snapshot/revision/target plus immutable linked prepared inputs, and exposes the same
+four operations plus host-retained receipts. Its `validateGeometryReceipts` checks relevant
+projections/predicate membership and requires verified correspondence across source versions. Exact
+TypeBox exports remain with #231; consumers must use those exports instead of duplicating schemas.
+#232 proposed `snapshot`/`resolve`, staged replacement review and synchronous CAS adoption/placement.
+#233 owns the injected request context and final native publication callback. Native frozen readable
+scopes remain enforced; obtaining a convenient full snapshot cannot widen guest permissions.
+
+Guard review must cover separate connections/processes, lock ordering and rejection of asynchronous
+callbacks/thenables at runtime. Existing converter job/source/occurrence identity coupling must be
+changed and tested at the actual artifact boundary where stable link occurrences span version jobs.
 
 ## Requirements and evidence matrix
 
