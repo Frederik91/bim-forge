@@ -40,8 +40,11 @@ def limits():
 
 
 def terminate(process):
-    if process.poll() is None:
+    # The leader may have exited while its descendants still occupy the group.
+    try:
         os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
     process.wait()
 
 
