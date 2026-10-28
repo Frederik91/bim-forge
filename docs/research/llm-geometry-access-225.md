@@ -65,7 +65,16 @@ Four isolated `gpt-6.1-sol` agents at high reasoning effort each handled the sam
 
 The eager/progressive control shares available helper facts and output contract. The helper supplies task-conditioned candidate coordinates, validity, and nearest IDs. Those values include host geometry computation. They are useful for testing retrieval and decision consumption, but would leak answers in a benchmark of unaided geometry reasoning. The helper is not the recommended production interface.
 
-All twenty raw model outputs, exact packets, call requests/replies, and available session-token telemetry are in [`llm-trials.json`](../../experiments/llm-geometry-225/receipts/llm-trials.json). Raw returned four proposals and a stale-reference abstention. Summary returned five abstentions, including the required stale abstention. Eager and progressive returned identical proposals/abstention. Progressive requested five candidate replies; eager supplied eight. Independent grades are retained in the final receipt.
+All twenty raw model outputs, exact packets, dispatched prompts, call requests/replies, and available session-token telemetry are in [`llm-trials.json`](../../experiments/llm-geometry-225/receipts/llm-trials.json). Independent grades are in [`qualification.json`](../../experiments/llm-geometry-225/receipts/qualification.json).
+
+| Connected-agent condition | Tasks solved / 5 | Proposals | Required stale abstentions | Other abstentions | Violations |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Raw solids | 5 | 4 | 1 | 0 | 0 |
+| Outer summaries | 1 | 0 | 1 | 4 | 0 |
+| Eager helper results | 5 | 4 | 1 | 0 | 0 |
+| Progressive helper results | 5 | 4 | 1 | 0 | 0 |
+
+Eager and progressive returned identical proposals/abstention. Progressive requested five candidate replies; eager supplied eight. Correct abstention is counted separately from task completion. Summary-only behavior is safe but unproductive here; its enclosure contract cannot certify all requested exact facts.
 
 Observed session input/output token totals were raw 88,767/1,009, summary 88,104/218, eager 86,857/805, and progressive 176,299/884. Most input was cached inherited system/tool context. Progressive has extra turns and resends context. These are complete agent-session counters, not payload tokens or prices. Seed, temperature, billed dollar cost, and isolated provider latency were unavailable. One generation per condition gives no model reliability estimate, significance test, fine-tuning recommendation, or production accuracy claim. There were no output repairs or invalid helper requests in acquisition.
 
@@ -117,5 +126,8 @@ All build/test commands run in new `/ssd1/bim-forge-qualification/issue225` dire
 | 1 | Mistyped `1d62548d...` | Preflight checkout failed before a container ran. The supplied full SHA was incorrect. Retained directory; corrected with `git rev-parse HEAD`. |
 | 2 | `1d6254808ad13f3a02e432764d9457d4d88105d6` | Root validation and 7-path policy passed. Guest compilation rejected an object argument where the generated ScriptBox method takes positional `1 | -1`. Retained full failure evidence. |
 | 3 | `084c18f849d3c6677b30f7a9947a3339a8766dc5` | Complete deterministic pilot and independent oracle passed. No validator was weakened. |
+| 4 | `6a6777796e704f2018d7dfc21dca22ec728cb075` | Root validation, 490 receipts, twenty external answer contracts/grades, and six sandbox controls passed. |
+| 5 | `ae6cc3eeb60e631900198af3264e30ecfa47db83` | Root typecheck caught an omitted SVG helper import after the geometry-module split. Pilot did not run. |
+| 6 | `168017389ef0c049effdba87458939834df495ee` | Root validation, explicit ten-path policy, all 490 receipts, twenty external contracts/grades, and six precise sandbox denial/limit assertions passed. |
 
-Final qualification adds schema checks for all external LLM answers and sandbox denial/limit controls. Its exact source, log digests, all per-case outcomes, and any later failures are recorded in `experiments/llm-geometry-225/receipts/qualification.json`. No exhausted issue218 tests were rerun. No production models, preview services, credentials, deployment configuration, or factory loops were changed.
+The qualified code covers 295 strict TypeScript sources. Sandbox controls proved the expected type-check error, absent process/fetch/require globals, capability denial, host-call budget, execution timeout, and source-byte budget. The container exited zero without an OOM kill. The exact source, log digests, all per-case outcomes, and retained failures are recorded in [`qualification.json`](../../experiments/llm-geometry-225/receipts/qualification.json). Later documentation/receipt publication runs root validation and the complete changed-path policy again, with an executable-source identity check against this full run. No exhausted issue218 tests were rerun. No production models, preview services, credentials, deployment configuration, or factory loops were changed.
