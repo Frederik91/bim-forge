@@ -112,7 +112,7 @@ const roomDimensionResult = Type.Union([
     dependencies: Type.Array(Type.Union([
       Type.Object({ ...dimensionDependency, kind: Type.Literal('room'), before: evaluatedRoomDimension, after: evaluatedRoomDimension }, { additionalProperties: false }),
       Type.Object({ ...dimensionDependency, kind: Type.Literal('opening'), before: evaluatedDimensionOpening, after: evaluatedDimensionOpening }, { additionalProperties: false }),
-    ]), { maxItems: 100 }),
+    ], { title: 'RoomDimensionDependency' }), { maxItems: 100 }),
   }, { additionalProperties: false }),
 ]);
 const inspection = Type.Object({

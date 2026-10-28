@@ -4,7 +4,7 @@ import { createRuntime } from '@frederik91/scriptbox';
 import { ModelScripts, modelScriptApi, modelWorkingGraph, summarizeModelDelta } from './model-script.ts';
 import { freezeModelScope } from './model-scope.ts';
 import type { FrozenModelScope, ModelScopeQuery } from './model-scope-contract.ts';
-import { residentialFloor } from './residential-floor.ts';
+import { multiStoreySnapshot } from './multi-storey-house.ts';
 import { roomDimensionFixture } from './room-dimension-fixture.ts';
 import { previewRoomDimensionChange } from './room-dimension-preview.ts';
 import type { RoomDimensionRequest } from './room-dimension-preview.ts';
@@ -19,15 +19,14 @@ const review = { summary: 'Preview a 3.3 m centreline room span.', rationale: 'M
     certainty: 80, basis: 'The synthetic fixture and explicit user interpretation supply metre dimensions.' } };
 const propose = `return {kind:'propose',review:${JSON.stringify(review)}};`;
 
-async function setup(base = roomDimensionFixture()) {
+async function setup(base = roomDimensionFixture(), requested?: RoomDimensionRequest) {
   const repo = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Dimension bridge fixture', snapshot: base });
   const baseRevisionId = repo.head('main');
   const host = base.relationships.find(item => item.source === 'door-between');
-  const wallId = identifier(host?.target ?? 'wall-living-kitchen');
-  const input: RoomDimensionRequest = { roomId: host ? 'room-a' : 'room-living', wallId, axis: 'x',
+  const input: RoomDimensionRequest = requested ?? { roomId: host ? 'room-a' : 'room-living', wallId: host?.target ?? 'wall-living-kitchen', axis: 'x',
     measurement: { kind: 'confirmed', metres: host ? 3.3 : 5.2, sourceRef: 'opaque-agent-interpretation' },
     minimumClearSpans: host ? [{ roomId: 'room-b', axis: 'x', metres: 2.5 }] : [] };
-  return { repo, base, input, binding: { baseRevisionId, selectedObjectIds: [wallId], visualIntent: { kind: 'selection' } satisfies { kind: 'selection' } } };
+  return { repo, base, input, binding: { baseRevisionId, selectedObjectIds: [identifier(input.wallId)], visualIntent: { kind: 'selection' } satisfies { kind: 'selection' } } };
 }
 
 function run(data: Awaited<ReturnType<typeof setup>>, source: string, options: {
@@ -52,16 +51,21 @@ test('typed guest dimension API, generated docs and host evidence agree on the e
   assert.match(declarations, /minimumClearSpans/); assert.match(declarations, /contradictory-evidence/);
   const details = { changes: summarizeModelDelta(expected.delta), impacts: expected.impacts, offsetMetres: expected.offsetMetres,
     measurement: expected.measurement, dependencies: expected.dependencies, clearSpanChecks: expected.clearSpanChecks };
-  const previews: (ModelSnapshot | null)[] = [];
-  const result = await run(data, `
+  const observation = await run(data, `
     const guide = await docs.read('/guides/model.md');
     if (!JSON.stringify(guide).includes('model.previewRoomDimensionChange')) throw new Error('Missing dimension guide.');
     const result = await model.previewRoomDimensionChange(${JSON.stringify(data.input)});
     if (result.status !== 'ready') throw new Error('Expected a ready interpretation.');
-    const details = {changes:result.changes,impacts:result.impacts,offsetMetres:result.offsetMetres,measurement:result.measurement,dependencies:result.dependencies,clearSpanChecks:result.clearSpanChecks};
-    if (JSON.stringify(details) !== ${JSON.stringify(JSON.stringify(details))}) throw new Error('Lost evaluated dependency evidence.');
-    ${propose}
-  `, { onPreview: snapshot => previews.push(snapshot) });
+    return {kind:'observe',observation:{changes:result.changes,impacts:result.impacts,offsetMetres:result.offsetMetres,measurement:result.measurement,dependencies:result.dependencies,clearSpanChecks:result.clearSpanChecks}};
+  `);
+  assert.equal(observation.kind, 'observation', JSON.stringify(observation));
+  if (observation.kind !== 'observation') return;
+  assert.deepEqual(observation.observation, details);
+  assert.deepEqual(observation.evidence.calls.filter(item => item.method.startsWith('model.')),
+    [{ sequence: 2, method: 'model.previewRoomDimensionChange', disposition: 'completed' }]);
+  const previews: (ModelSnapshot | null)[] = [];
+  const result = await run(data, `await model.previewRoomDimensionChange(${JSON.stringify(data.input)}); ${propose}`,
+    { onPreview: snapshot => previews.push(snapshot) });
   assert.equal(result.kind, 'proposal', JSON.stringify(result)); if (result.kind !== 'proposal') return;
   assert.deepEqual(result.snapshot, expected.snapshot); assert.deepEqual(validateSnapshot(result.snapshot), expected.snapshot);
   assert.deepEqual(previews, [null, expected.snapshot]);
@@ -70,7 +74,7 @@ test('typed guest dimension API, generated docs and host evidence agree on the e
   assert.equal(result.evidence.runtime.guestAbi, 2); assert.match(result.evidence.runtime.artifactSha256, /^[a-f0-9]{64}$/);
   assert.equal(result.evidence.validation, 'passed'); assert.equal(result.evidence.disposition, 'proposal');
   assert.deepEqual(result.evidence.calls.filter(item => item.method.startsWith('model.')),
-    [{ sequence: 2, method: 'model.previewRoomDimensionChange', disposition: 'completed' }]);
+    [{ sequence: 1, method: 'model.previewRoomDimensionChange', disposition: 'completed' }]);
 });
 
 test('unresolved scale, ambiguity and contradictions emit no model or mutation, including after an earlier valid draft', async () => {
@@ -189,8 +193,9 @@ test('explicit partition and adjacent-room targets stage a scoped dimension prop
 });
 
 test('unreadable named minimum constraints cannot expose dimensions outside frozen scope', async () => {
-  const data = await setup(residentialFloor());
-  const scope = scopeFor(data, [data.input.wallId, 'room-living', 'room-kitchen']);
+  const data = await setup(multiStoreySnapshot(), { roomId: 'level-ground-west', wallId: 'level-ground-wall-inner', axis: 'x',
+    measurement: { kind: 'confirmed', metres: 4.2, sourceRef: 'opaque' }, minimumClearSpans: [] });
+  const scope = scopeFor(data, [data.input.wallId, 'level-ground-west', 'level-ground-east']);
   const hidden = data.base.entities.find(item => item.type === 'Space' && !modelWorkingGraph(data.base, scope).entities.some(visible => visible.id === item.id));
   assert.ok(hidden, 'fixture must include a room outside the readable closure');
   const result = await run(data, `

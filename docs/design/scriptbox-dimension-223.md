@@ -43,4 +43,4 @@ All builds/tests are server-container-only on `frederik@192.168.1.17`, with sour
 
 | Attempt | Source and commands | Outcome |
 | --- | --- | --- |
-| Pending | Root validate, explicit three-path policy and focused command above | Not yet qualified |
+| `a1` | `6f87fd0`; root validate, explicit three-path policy and focused command above | Root validation passed; 80/83 focused tests passed. The guest declaration writer emits an unnamed union of objects inside an array without parentheses; named the dependency union using the existing schema title mechanism so generated array types agree with the wire shape. A byte-string comparison incorrectly depended on key order after the bridge normalized schema fields; changed to exact structural comparison of an actual guest observation. The same-level scope fixture had no unreadable room; use a different building level to prove read refusal. No validators changed. |
