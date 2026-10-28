@@ -108,7 +108,7 @@ export class FloorPlanGuide {
     this.#invalidate(); this.#enabled = value.enabled;
     this.#source.input.value = value.sourceId; this.#page.input.value = value.page; this.#feature.input.value = value.feature;
     this.#length.input.value = value.length; this.#provenance.input.value = value.provenance; this.#basis.input.value = value.basis;
-    this.#confirmation = value.confirmation; this.#details.open = value.enabled; this.#render();
+    this.#confirmation = value.confirmation; this.#details.open = value.enabled && !value.confirmation; this.#render();
   }
   request(instruction: string, sources: readonly RequestSource[]) {
     if (!this.#enabled) return null;

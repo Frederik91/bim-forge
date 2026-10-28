@@ -102,6 +102,7 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   await page.reload(); await page.locator('#open-chat').click();
   assert.equal(await page.locator('#request-text').inputValue(), 'Reconstruct this synthetic floor. Retain all original sources.');
   assert.match(await page.locator('#floor-plan-guide summary').textContent() ?? '', /6000 mm.*wall-centrelines/);
+  assert.equal(await page.locator('#floor-plan-guide details').getAttribute('open'), null, 'Recovered confirmation stays compact; details remain available.');
   await page.screenshot({ path: path.join(artifacts, 'desktop-confirmed.png'), fullPage: true });
   const ticket = await send(page);
   const before = await savedProject(page, base, ticket.projectId);
@@ -121,6 +122,7 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   const noteUrl = await sourceLinks.first().getAttribute('href'); assert.ok(noteUrl);
   const noteText = await (await page.request.get(base + noteUrl)).text();
   assert.ok(noteText.includes('Overall north width') && noteText.includes('wall-centrelines') && noteText.includes('sha256'));
+  await fs.writeFile(path.join(artifacts, 'floor-plan-measurement.txt'), noteText);
   await inspectAndAccept(page, 'Main');
   const asIs = await savedProject(page, base, ticket.projectId); validateSnapshot(asIs.view(asIs.head('main')).snapshot);
   assert.equal(asIs.view(asIs.head('main')).snapshot.entities.filter(item => item.type === 'Space').length, 2);
@@ -130,6 +132,7 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   await page.locator('#request-text').fill('Move shared partition 200 mm east.');
   await send(page); await inspectAndAccept(page, 'Alternative 1');
   const accepted = await savedProject(page, base, ticket.projectId);
+  await fs.writeFile(path.join(artifacts, 'accepted-project.json'), accepted.serialize());
   const baseline = accepted.designTargets().find(view => view.target.kind === 'baseline');
   const alternative = accepted.designTargets().find(view => view.target.kind === 'alternative'); assert.ok(baseline && alternative);
   assert.equal(baseline.revisionId, asIs.head('main')); assert.equal(accepted.head('main'), asIs.head('main'));
