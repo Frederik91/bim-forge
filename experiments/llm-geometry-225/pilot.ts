@@ -40,7 +40,6 @@ export function inspectCandidate(scene: Scene,side: 1|-1,mode: 'summary'|'tools'
   let collision=false;
   for (const object of scene.objects) {
     const box=aggregate(object.cells);
-    const broad=box.some(b=>penetrates(c,b));
     const cells=mode==='summary'?box:object.cells;
     if (mode!=='summary') exactChecks+=cells.length;
     if (object.pin.object!==scene.task.support && cells.some(b=>penetrates(c,b))) collision=true;

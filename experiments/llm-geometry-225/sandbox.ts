@@ -10,7 +10,7 @@ const geometry=api.namespace({name:'geometry',description:'Read-only synthetic f
 }});
 const runtimePromise=createRuntime<Scene>({apis:[geometry],docs:[new DocsTree().addFile('/pilot.md','Read-only candidate checking','Return chosen side and nearest or abstain.')],contractVersion:'geometry225-v1',policyVersion:'readonly225-v1',compilerWorkers:1,sealResults:true,
   limits:{memoryBytes:32*1024*1024,compilerHeapMb:256,sourceBytes:4096,resultBytes:8192,hostCalls:4,evidenceRecords:4,timeoutMs:5000}});
-const source='const a=await geometry.inspect({side:1}); const b=await geometry.inspect({side:-1}); const c=a.valid?a:b.valid?b:null; return c?{side:c.side,nearest:c.nearest}:null;';
+const source='const a=await geometry.inspect(1); const b=await geometry.inspect(-1); const c=a.valid?a:b.valid?b:null; return c?{side:c.side,nearest:c.nearest}:null;';
 export async function runSandbox(scene:Scene) {
   const runtime=await runtimePromise;
   const session=runtime.createSession({context:structuredClone(scene),capabilities:['geometry.inspect']});
