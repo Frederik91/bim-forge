@@ -1,69 +1,55 @@
-# Request and review a room model change
+# Model workspace: request, review, and accept
 
-This disposable demo turns a visual gesture and written request into input for a model-working AI. The human sketch is never committed directly. The AI can inspect the request's exact base revision, use a bounded rectangular-room tool, and either return a validated separate proposal or explain why it cannot.
+The current prototype provides a model-first plan/3D workspace with request chat, bounded AI-prepared proposals, and explicit human acceptance. It has grown beyond the original single-room, browser-only demo. This guide describes the current entry point; issue-specific design and validation records retain the scope of their original work.
 
-## Start the model-backed server
+## Start locally
 
-Use Node.js 24 or newer. Start the local server without an API key:
+Use Node.js 24 or newer. From the repository root:
 
 ```sh
+npm ci
+npm run build:demo
 node demo/server.ts
 ```
 
-Open `http://127.0.0.1:4173`, choose **Connect ChatGPT → Continue with ChatGPT**, and approve the displayed one-time code at OpenAI. Scan the QR from another device or open the link on the same device. The pinned Codex runtime handles device authorization and rotating credentials. The app checks completion automatically; no API key, local package, or terminal is needed by the person connecting.
+Open `http://127.0.0.1:4173`. The server binds to loopback by default; `PORT` can select another local port. Rebuild the browser bundle after frontend source changes. For a trusted private Docker installation, follow the [preview deployment guide](../deploy/preview/README.md), including matching frontend/runtime releases and state backup requirements.
 
-The private Docker preview uses the same device flow. The QR contains only `https://auth.openai.com/codex/device`; enter the separate short code there. Codes expire after at most 15 minutes and can be cancelled or retried. Cancelling or expiring an attempt makes later completion notifications ineffective. The account belongs to this server installation and is shared by its trusted users behind the firewall/Twingate gate.
+You can open a disposable project and inspect the workspace without connecting a model account. To prepare AI proposals, choose **Connect ChatGPT → Continue with ChatGPT**, complete the device flow at the displayed OpenAI page, and select an available model. The server's pinned Codex runtime owns account persistence and refresh; no API key should be copied into the browser. A displayed model candidate is not proof of account entitlement.
 
-Open the deployed preview at:
+The prototype uses one shared server account and does not implement independent BIM Forge user authorization. Keep it restricted to trusted users. Account connection is not project permission or engineering authority. Review the deployment guide's integration restrictions before offering a commercial or hosted service.
 
-```sh
-https://192.168.1.17:9443
-```
+## Work with a disposable model
 
-Credentials remain in `/srv/bim-preview/state`, outside the image, browser, project, and static releases. No credential transfer helper remains. The model catalog is a list of candidates, not proof of entitlement; a completed proposal verifies access to the chosen model.
+1. Open or create a project through the project controls. Use a sample or generated fixture rather than a production BIM model.
+2. Inspect the accepted model in **Plan** or **3D**. The model explorer and selection context expose stable object identities and properties; the 3D view is concept geometry, not product-accurate visualization.
+3. Select the design target in the header. Fixed baselines are read-only; create an alternative when you want to work from a frozen baseline. An alternative is a separate writable design, not an implicit replacement of the accepted design.
+4. Open **Chat**, select relevant objects, and describe the desired outcome. Attach available model context or source files where useful. Selection and visual markup capture intent; they do not directly change accepted geometry.
+5. Send the request to prepare a proposal. It is bound to its design target and source revision. The worker can ask for clarification, return a bounded validated proposal, or explain why the request is unsupported. Available operations depend on the fixture and worker contract; this is not unrestricted BIM editing.
+6. Inspect the proposal, model delta, assumptions, uncertainty, source references, and validator evidence. Chat keeps decision actions close to the outcome; detailed evidence remains inspectable. **Activity & history** exposes the supporting workflow views.
+7. Accept only the intended target-specific proposal after review, or request a revision. Acceptance is an explicit server-side decision, not a side effect of sending a message or viewing a preview. Stale or conflicting work must be reconciled or refused rather than silently replacing accepted changes.
 
-This integration is for the private self-hosted open-source prototype. OpenAI documents Codex app-server authentication for local/open-source applications and excludes commercial or hosted services. Before offering BIM Forge as a service, use [Sign in with ChatGPT](https://developers.openai.com/siwc) and the approved hosted-service integration. See the [Codex app-server auth contract](https://learn.chatgpt.com/docs/app-server#auth-endpoints) and [deployment instructions](../deploy/preview/README.md).
+The model remains visible while chat and navigation panels provide context. Retained source files can be found through the library and bounded context suggestions; temporary composer attachments are not sent until the request is submitted. Source retention does not turn an uploaded document into an accepted design fact.
 
-## Request, review and revise
+For specific bounded workflows, see [model intent](model-intent.md), [residential floor preview](residential-floor-preview.md), [multi-storey houses](multi-storey-house.md), and [generated families](generated-families.md). The [compact workspace design](design/compact-workspace-213.md) describes the current model/chat interaction changes.
 
-1. Create a project or load the sample in the opening dialog. The main navigation then leads through **Request**, **Review** and **History** instead of exposing every control at once.
-2. On **Request**, select a stable wall or door identity in the plan. On narrow screens, **Mark up model** and **Describe request** are separate substeps rather than one long page. The preserved original is available in its own dialog.
-3. Drag a handle or enter dimensions to sketch the intended move or size. The sketch is visual intent, like markup with an arrow; it is not authoritative model geometry.
-4. Describe the desired outcome and choose a new proposal name.
-5. Connect an eligible ChatGPT plan, choose an available model, then choose **Prepare proposal**. The request includes the exact base revision, selected object identity, written instruction and visual layout intent.
-6. The model-working AI can inspect the bound snapshot, try complete rectangular layouts through the validator, and submit only its latest valid preview. It can also decline when the bounded tools cannot safely represent the request.
-7. On **Review**, inspect what changed, why, proposal-specific constraints, uncertainty, the request identity, base revision and selected objects. Open the detailed model-delta dialog when field-level evidence is useful.
-8. Choose **Accept this version** to advance the current model pointer to the proposal revision. The original revision and proposal branch remain available. Choose **Request a revision** to start another request from the selected proposal; use a new proposal name so the earlier proposal stays unchanged.
+## Storage and recovery
 
-Escape cancels an active drag and restores the pre-drag request sketch. Invalid dimensions retain the last valid sketch and block submission. Wall height and thickness, door height and hosting remain unchanged by the bounded tool. Shortening a wall never silently shrinks or repositions the door.
+The server is authoritative for saved projects, design targets, request/review state, and accepted history. The current preview uses SQLite with immutable model bodies, revision changes, document references, and compare-and-swap publication of accepted state. Acceptance and retained decision evidence share the queue/store transaction. See the [versioned house implementation](design/versioned-house-slice-161.md) for the persistence contract.
 
-## Model-working AI seam
+The local command-line server stores project/request state in `.bim-preview/bim-change-requests.sqlite` by default, or below `CODEX_HOME` if configured. Account credentials are managed separately by Codex; the private container places persistent state outside its image and frontend release. Back up state privately and consistently before migrations. An image rollback alone does not undo a database migration.
 
-The proposal module presents four strict tools:
+Legacy IndexedDB data is read-only recovery material. An old browser copy cannot overwrite the server's existing accepted head. Use project export/import for supported portable model data, but do not treat an exported document as a complete backup of server-side source bytes, external evidence, or credentials. Retained sources/evidence have their own server stores and references.
 
-- `inspect_model` reads the exact bound revision and selected identities.
-- `preview_rectangle` applies a complete millimetre layout to an immutable copy and runs deterministic model validation.
-- `submit_proposal` records the last valid preview as a separate revision with a plain-language summary, rationale, constraints and uncertainty.
-- `decline_request` ends without changing model history.
+Portable model documents remain bounded to 256 KiB with limits including 32 revisions and 32 branches; model collections have additional schema bounds. Complete portable documents are still reconstructed for bounded operations. These safeguards do not establish hospital-scale storage, level streaming, or disconnected multi-installation synchronization.
 
-The model cannot send arbitrary snapshots, choose a different base revision, alter stable identifiers, bypass hosting checks or write browser storage. A twelve-call tool budget, eight-turn provider budget, 30-second timeout per provider request and 256 KiB provider-response ceiling bound each request. The ChatGPT plan route does not support a client-set output-token ceiling. Provider response identities and reported token usage are recorded with the proposal. The application persists only a validated returned repository, using the existing compare-and-swap browser save.
+## Validation and privacy
 
-## Storage and evidence
+Run `npm run validate` and `npm test` before proposing code changes; the dedicated chat/workspace browser suite is separate. See [CONTRIBUTING.md](../CONTRIBUTING.md) for commands and prerequisites. Automated checks do not substitute for manual review of the actual proposal or qualify every browser/device combination.
 
-The demo saves one project in browser IndexedDB. Saving checks the expected generation and replaces the complete project atomically, so a stale tab cannot overwrite a newer save. Invalid or damaged saved data is not silently overwritten. Import remains limited to 256 KiB of encoded JSON, 32 revisions, 32 branches and 100 entities per snapshot; revision hashes and ancestry are rechecked.
-
-Each AI proposal persists its request binding, summary, rationale, constraints, uncertainty, worker identity, provider response identities and token usage, bounded tool evidence, validator identity and human decision. These review records are included in export and restored after reload. ChatGPT account credentials are held separately in protected local server storage and are not exported. Shared project storage and multi-user authorization remain future work.
-
-When configured, request text and the bounded room snapshot are sent to the selected OpenAI model. This demo must not be used with production, confidential or regulated model data.
-
-## What the model represents
-
-Dimensions use metres on a 1 mm grid. The fixture is 6 m by 4 m, with four connected axis-aligned walls and one hosted entry door. Each revision contains a full immutable snapshot and its parent's identity. The original root remains addressable after an accepted proposal advances `main`.
-
-Comparisons include added, removed and modified entities and relationships. Conflict inspection conservatively flags different changes to the same whole object. It does not merge proposals, resolve fields automatically or certify combined geometry.
+When AI work is requested, request text, bounded model context, and applicable source inputs are sent to the selected provider. Treat uploaded source contents as untrusted evidence, not instructions that can override application policy. Use only disposable, non-confidential data in this prototype.
 
 ## Boundaries
 
-This is the bounded issue #40 flow built from the useful model, validation, comparison and visual-request parts of the preserved experiment. The experiment's failed touch-drag assertion is not treated as passed; physical touch, pointer cancellation and cross-browser behavior remain unqualified.
+The repository includes fixture authoring, a Babylon.js 3D viewer, and durable shared-installation project storage. It does not thereby provide a general IFC import/export authoring pipeline, unrestricted geometry editing, production BIM file editing, building-code certification, construction approval, independent multi-user authorization, or proven large-project performance.
 
-The demo does not parse or export IFC, render 3D solids, perform building-code or clash checks, edit production BIM files, authenticate BIM Forge users, or implement shared durable storage. The ChatGPT connection authorizes model-plan usage only; it is not project authorization. Schematic fit validation is not construction approval. The source remains an unapproved draft for human change review and is separate from factory readiness.
+Proposal checks establish the supported schematic/model invariants, not structural adequacy, fire/life safety, or statutory compliance. Production readiness, factory autonomy, and storage qualification are separate gates. The checked-in factory operating level remains L1; using this workspace does not authorize an unattended factory run or merge.
