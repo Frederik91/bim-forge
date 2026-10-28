@@ -83,6 +83,8 @@ All builds/tests run in isolated server containers at `frederik@192.168.1.17`; a
 | a03 | `9771f97` | Root validation, scoped policy, build, 26 Python tests and three actual runtime tests passed. Chromium launch lacked desktop libraries. |
 | a04 | `886e940` | Same checks passed; Chromium first page crashed at the 128-PID / 1-CPU envelope. Inspect and rerun with browser diagnostics and bounded 256 PIDs / 2 CPUs. No code workaround. |
 | a05 | `27a657b` | Root validation, 12-path policy, build, 26 Python tests and all four runtime/browser tests passed; exit 0, no OOM. |
+| a06 | `53244d6` | Root validation, 14-path policy, build, 27 Python tests and 47 focused/native/runtime/browser tests passed. Separate app/converter containers also passed the spool-only workflow and ready-state restart recovery. Screenshot inspection prompted a UI readability correction and better fixture framing. |
+| a07 | `963d995` | Final code: root validation (279 strict TypeScript sources), 14-path policy, build, 27 Python tests and 47 focused/native/runtime/browser tests passed; exit 0, no OOM. Original properties are visible first; diagnostics are expandable. |
 
 The reusable browser bundle is `/ssd1/bim-forge-qualification/issue218/browser-deps/extracted`, downloaded/extracted using the exact Debian12 tools base with apt lists/cache/packages on SSD. No system install or Docker layer was created. Mount it read-only at `/browser-libs` and set `LD_LIBRARY_PATH=/browser-libs/usr/lib/x86_64-linux-gnu:/browser-libs/lib/x86_64-linux-gnu`. Mount retained `compact213/browsers` read-only at `/browsers`; executable `/browsers/chromium-1248/chrome-linux64/chrome`. `ldd.log` has no missing libraries; Chrome reports 156.0.8078.4. The package hash-manifest hash is `b2f87a5c38a895e7d5137b2412ae23165619afa4a60983ecb511e8c04f22ccc3`. Only dependency download used network; all qualification runs use `network:none`.
 
@@ -104,3 +106,29 @@ node --test --test-concurrency=1 demo/linked-model-runtime.test.ts
 Retained a05 logs: `/ssd1/bim-forge-qualification/issue218/a05/evidence/`. Validator hash `88e8cd20531b8823d1c48c3b8105b5404ba43f7d38b4f6163180db78d31aec15`, runtime/browser log hash `6afe381540492141adf6cd57283fdecfbe5d6f586e08dfd7d65203f7a621ddf0`. The source-bound synthetic original is 7,593 bytes, hash `a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5`. It yields nine indexed objects and four meshes; no capacity or arbitrary-vendor claim follows. Existing Python cases cover missing/duplicate GlobalIds, unsupported units/contexts/placements, source/geometry/artifact/time limits and source preservation.
 
 The browser mount is deliberately disposable and uses the existing `ModelScene` class with one canvas. Parent integration and paired static/runtime preview publication require their own combined checks. Human review is required before merging this coordination/storage/runtime-security change. No live data, deployment, automation, model acceptance or merge was performed.
+
+### Final retained evidence
+
+Final code is `963d995`; later receipt-only documentation commits do not change executable code. The a07 source tar SHA-256 is `cd1ed5693c3e544015b02d26b1925ad60ec55acbc9f2915a3f1ca80b71c282b8`. Run root: `/ssd1/bim-forge-qualification/issue218/a07/`; `run.sh` retains every Docker mount/limit/environment/command and `evidence/container-inspect.json` records network/resource/exit state. Source and dependencies were read-only; evidence, home, temporary files and dist outputs were SSD-backed. Final envelope: network none, UID/GID 1000, dropped capabilities, no-new-privileges, 2 CPUs, 3 GiB memory with no extra swap, 256 PIDs and an outer 240-second timeout/5-second kill grace. The earlier 128-PID browser crash is retained as a04 evidence; increasing a qualification container's bounded process budget did not alter runtime converter limits or validators.
+
+```text
+Strict TypeScript valid. 279 source file(s) checked.
+tsc --noEmit: exit 0
+Policy valid. 14 changed file(s) checked.
+Python: Ran 27 tests ... OK
+Node focused/native/runtime/browser: tests 47, pass 47, fail 0, skipped 0
+Separate app/converter containers: tests 1, pass 1, fail 0, skipped 0
+```
+
+The 47 Node tests include the four new runtime/browser checks plus existing `demo/model-scene.test.ts`, `src/design-targets.test.ts` and `demo/request-context.test.ts`. Python adds hard termination of a child and its descendant, cancellation and an actual worker restart to the existing 24 importer cases. The source/model delta is inspectable in the browser: the blue derived IFC and native room share one scene; the native portable document including As-is baseline is byte-identical after linking/inspection/reference. No linked entity appears in a native snapshot or accepted head. The original hash remains separate from the derived geometry/index hashes, which are rechecked on private reads.
+
+The separate-container check is retained in a06 `sidecar.sh`, `evidence/sidecar-test.log`, and the app/converter inspect JSON. The app container has no Python worker/dependency mounts and uses only the store API. The converter has read-only worker/Python dependencies, a temporary filesystem and the dedicated spool; it has no application-private state, fixture mount, network, credential or Docker socket access. Its own envelope is 0.5 CPU / 2304 MiB / 64 PIDs. The app test queues a new source, waits for actual conversion, reads four meshes, closes/reopens the private store, and confirms ready status, unchanged original and read-only manifest. Store, worker and sidecar test bytes are unchanged between a06 and final a07. These are correctness/isolation checks; the optional new converter Dockerfile/compose fragment was not built or deployed.
+
+| Retained artifact | SHA-256 |
+| --- | --- |
+| a07 `evidence/validate.log` | `043e839af97db1038b1bf9918058b9912ee6480f8c93be7f43085b0a75878dec` |
+| a07 `evidence/runtime-tests.log` | `ac384cc540186f388c8f0db5f06f396ba60465a4c5fb2aea64c79823a7ac963c` |
+| a07 `evidence/ifc218-inspection.png` | `8831eeb167debced9146f33329e42bf5306ef872663a8d9abd09bc2823d43d86` |
+| a06 `evidence/sidecar-test.log` | `d2bfe1bef2c86f3c114dfc62d9d7b115e68c1db248c6dcaf2bb89e6b236e8de9` |
+
+All seven attempts are retained under `/ssd1/bim-forge-qualification/issue218/`; three of the ten authorized attempts remain. No full `npm test` suite was claimed: the root validators, browser build, meaningful native-focused cases, real importer/runtime/browser checks and isolated-sidecar recovery check above were executed.
