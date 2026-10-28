@@ -37,6 +37,9 @@ export type LinkedManifest = Static<typeof ManifestSchema>;
 export type LinkedIndex = Static<typeof IndexSchema>;
 export type LinkedGeometry = Static<typeof GeometrySchema>;
 export type LinkedPrepared = { manifest: LinkedManifest; index: LinkedIndex; geometry: LinkedGeometry };
+export function assertLinkedDisplayOccurrence(id: string, prepared: LinkedPrepared): void {
+  if (id !== prepared.manifest.occurrence.id) throw new Error('IFC display/job ID must match its source occurrence ID.');
+}
 export type LinkedSelection = { kind: 'ifc-reference'; source: Static<typeof ref>; occurrence: LinkedManifest['occurrence'] };
 export const IDENTITY_LINK_TRANSFORM = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
 

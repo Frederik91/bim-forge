@@ -12,6 +12,9 @@ import { chromium } from 'playwright';
 import { LinkedModelStore } from './linked-model-store.ts';
 import { handleLinkedModelRoute } from './linked-model-routes.ts';
 import { parseLinkedPrepared } from '../src/linked-model.ts';
+import { LinkedModelLayer } from './linked-model-render.ts';
+import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
+import { Scene } from '@babylonjs/core/scene.js';
 
 const python = process.env.IFC_PYTHON ?? '/qualification/python/bin/python';
 const fixture = process.env.IFC_FIXTURE;
@@ -39,6 +42,19 @@ test('actual bounded converter retains original, binds properties and derived ge
   assert.equal(result.manifest.source.originalSha256, createHash('sha256').update(bytes).digest('hex'));
   assert.equal(result.geometry.meshes.length, 4); assert.equal(result.index.objects.length, 9); assert.ok(result.index.spatial.length > 0);
   assert.match(JSON.stringify(result.index.objects), /IfcPropertyBoundedValue/); assert.equal(result.index.georeferencing.applied, false);
+  const engine = new NullEngine({ renderWidth: 800, renderHeight: 600, textureSize: 256, deterministicLockstep: true, lockstepMaxSteps: 4 });
+  const scene = new Scene(engine); const layer = new LinkedModelLayer(scene);
+  try {
+    layer.setLinks([{ id: job.id, prepared: result, visible: true }]); const meshes = [...scene.meshes];
+    assert.equal(meshes.length, 4);
+    assert.throws(() => layer.setLinks([{ id: randomUUID(), prepared: result, visible: false }]), /display\/job ID must match/);
+    assert.deepEqual(scene.meshes, meshes, 'Reject mismatched display/occurrence IDs before changing existing geometry');
+    for (let repeat = 0; repeat < 3; repeat++) {
+      layer.setLinks([{ id: job.id, prepared: result, visible: false }]); assert.ok(meshes.every(mesh => !mesh.isEnabled()));
+      layer.setLinks([{ id: job.id, prepared: result, visible: true }]); assert.ok(meshes.every(mesh => mesh.isEnabled()));
+      assert.deepEqual(scene.meshes, meshes, 'Repeated setLinks/hide/show preserves the same owned meshes');
+    }
+  } finally { layer.dispose(); scene.dispose(); engine.dispose(); }
   const corrupt = structuredClone(result); const mesh = corrupt.geometry.meshes[0]; assert.ok(mesh); mesh.ref.originalSha256 = 'a'.repeat(64);
   assert.throws(() => parseLinkedPrepared(corrupt), /identity/);
   fs.chmodSync(path.join(data, 'prepared', job.id, 'geometry.json'), 0o600); fs.appendFileSync(path.join(data, 'prepared', job.id, 'geometry.json'), ' ');
@@ -75,9 +91,15 @@ test('real Chromium uploads, browses, inspects, picks and hides bounded derived 
       if (await handleLinkedModelRoute({ request, response, store, hasProject: id => id === project, authorize: req => {
         const origin = req.headers.origin; if (origin && origin !== `http://${req.headers.host}`) throw new Error('Cross-origin request refused.');
       } })) return;
+      if (request.url === '/poll-fixture') {
+        const job = store.list(project).find(link => link.kind === 'ready'); assert.ok(job);
+        const clone = (name: string) => { const id = randomUUID(); return { ...job, id, name, occurrence: id, source: { ...job.source, namespace: id } }; };
+        response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ readyA: { ...job, name: 'Healthy A.ifc' }, readyB: clone('Broken B.ifc'),
+          runningC: { ...clone('Running C.ifc'), kind: 'running', progress: 'index' }, mismatchedD: clone('Mismatched D.ifc'), prepared: store.prepared(project, job.id) })); return;
+      }
       if (request.url === '/test.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(script); return; }
       response.setHeader('Content-Type', 'text/html');
-      response.end(`<body data-project="${project}" style="display:flex;gap:16px;font-family:sans-serif"><main style="width:800px;flex:none"><canvas width="800" height="600"></canvas><pre id="context" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></main><aside id="links" style="width:480px;flex:none"></aside><script type="module" src="/test.mjs"></script></body>`);
+      response.end(`<body data-project="${project}" data-poll-fixture="${request.url === '/?panel-poll'}" style="display:flex;gap:16px;font-family:sans-serif"><main style="width:800px;flex:none"><canvas width="800" height="600"></canvas><pre id="context" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></main><aside id="links" style="width:480px;flex:none"></aside><script type="module" src="/test.mjs"></script></body>`);
     })().catch(error => { response.statusCode = 500; response.end(String(error)); });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
@@ -107,4 +129,18 @@ test('real Chromium uploads, browses, inspects, picks and hides bounded derived 
   assert.equal(await page.locator('canvas').count(), 1); assert.deepEqual(errors, []);
   const wrong = await fetch(`${base}/api/projects/${randomUUID()}/ifc-links`); assert.equal(wrong.status, 404);
   const denied = await fetch(`${base}/api/projects/${project}/ifc-links`, { headers: { Origin: 'https://elsewhere.invalid' } }); assert.equal(denied.status, 400);
+  await page.goto(`${base}/?panel-poll`);
+  await page.getByText('Artifacts unavailable · Ready B artifact read failed.', { exact: true }).waitFor();
+  await page.getByText('Artifacts unavailable · IFC display/job ID must match its source occurrence ID.', { exact: true }).waitFor();
+  await page.getByText('Converting · index', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Healthy A.ifc spatial hierarchy').count(), 1);
+  assert.equal(await page.getByLabel('Mismatched D.ifc spatial hierarchy').count(), 0);
+  await page.getByRole('button', { name: /wall-a/i }).click();
+  await page.getByRole('button', { name: 'Reference in request' }).click(); assert.match(await page.locator('#context').innerText(), /no native edit authority/);
+  await page.getByRole('button', { name: 'Advance running C' }).click();
+  await page.getByText('Converting · geometry', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Healthy A.ifc spatial hierarchy').count(), 1, 'A stays usable while B keeps failing and C advances');
+  assert.equal(await page.getByRole('button', { name: 'Cancel conversion' }).count(), 1, 'Running C keeps its cancel action');
+  assert.match(await page.locator('#links').getAttribute('data-selected') ?? '', /^[0-3][0-9A-Za-z_$]{21}$/);
+  assert.deepEqual(errors, []);
 });

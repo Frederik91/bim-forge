@@ -4,7 +4,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color.js';
-import { linkPoint, linkedSelectionKey } from '../src/linked-model.ts';
+import { assertLinkedDisplayOccurrence, linkPoint, linkedSelectionKey } from '../src/linked-model.ts';
 import type { LinkedPrepared, LinkedSelection } from '../src/linked-model.ts';
 
 export type LinkedDisplay = { id: string; prepared: LinkedPrepared; visible: boolean };
@@ -19,6 +19,7 @@ export class LinkedModelLayer {
     this.material.diffuseColor = Color3.FromHexString('#4b91ab'); this.material.alpha = .65; this.material.backFaceCulling = false;
   }
   setLinks(links: readonly LinkedDisplay[]): void {
+    for (const link of links) assertLinkedDisplayOccurrence(link.id, link.prepared);
     const present = new Set(links.map(link => link.id));
     for (const [mesh, selection] of this.parts) if (!present.has(selection.occurrence.id)) { mesh.dispose(); this.parts.delete(mesh); }
     for (const id of this.signatures.keys()) if (!present.has(id)) this.signatures.delete(id);

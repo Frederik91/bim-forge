@@ -7,9 +7,32 @@ import { LinkedModelPanel } from './linked-model-ui.ts';
 import { LinkedModelClient } from './linked-model-client.ts';
 import { RoomRepository } from '../src/room-model.ts';
 import { linkedReferenceText } from '../src/linked-model.ts';
+import { parseLinkedJob, parseLinkedPrepared } from '../src/linked-model.ts';
+import type { LinkedJob, LinkedPrepared } from '../src/linked-model.ts';
 
 const canvas = document.querySelector('canvas'); const host = document.getElementById('links'); const context = document.getElementById('context');
 if (!canvas || !host || !context) throw new Error('Qualification mount missing.');
+if (document.body.dataset.pollFixture === 'true') {
+  const value: unknown = await (await fetch('/poll-fixture')).json();
+  if (typeof value !== 'object' || value === null || !('readyA' in value) || !('readyB' in value) || !('runningC' in value) || !('mismatchedD' in value) || !('prepared' in value)) throw new Error('Invalid poll qualification fixture.');
+  const readyA = parseLinkedJob(value.readyA); const readyB = parseLinkedJob(value.readyB);
+  const runningC = parseLinkedJob(value.runningC); const mismatchedD = parseLinkedJob(value.mismatchedD); const prepared = parseLinkedPrepared(value.prepared);
+  let advanced = false;
+  class PartialArtifactClient extends LinkedModelClient {
+    override async list(): Promise<LinkedJob[]> { return [readyA, readyB, { ...runningC, kind: 'running', progress: advanced ? 'geometry' : 'index' }, mismatchedD]; }
+    override async prepared(_projectId: string, id: string): Promise<LinkedPrepared> {
+      if (id === readyB.id) throw new Error('Ready B artifact read failed.');
+      return prepared;
+    }
+  }
+  const panel = new LinkedModelPanel({ host, client: new PartialArtifactClient(),
+    changed: links => { host.dataset.displayed = links.map(link => link.id).join(','); },
+    selected: selection => { host.dataset.selected = selection?.source.globalId ?? ''; },
+    reference: selection => { context.textContent = linkedReferenceText(selection); } });
+  panel.setProject(readyA.projectId);
+  const advance = document.createElement('button'); advance.textContent = 'Advance running C';
+  advance.addEventListener('click', () => { advanced = true; void panel.refresh(); }); document.body.append(advance);
+} else {
 const repository = await RoomRepository.create('Native preservation fixture');
 const native = repository.captureBaseline({ id: 'as-is', name: 'As-is', from: repository.freezeDesignTarget({ kind: 'main' }) });
 const original = native.serialize();
@@ -32,3 +55,4 @@ engine.runRenderLoop(() => {
     return { x: screen.x, y: screen.y, globalId: layer.pick(mesh)?.source.globalId };
   }); canvas.dataset.pickPoints = JSON.stringify(points);
 });
+}

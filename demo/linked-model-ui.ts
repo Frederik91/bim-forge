@@ -1,7 +1,7 @@
 import { LinkedModelClient } from './linked-model-client.ts';
 import type { LinkedDisplay } from './linked-model-render.ts';
 import type { LinkedJob, LinkedPrepared, LinkedSelection } from '../src/linked-model.ts';
-import { linkedSelectionKey } from '../src/linked-model.ts';
+import { assertLinkedDisplayOccurrence, linkedSelectionKey } from '../src/linked-model.ts';
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, text = ''): HTMLElementTagNameMap[K] { const node = document.createElement(tag); node.textContent = text; return node; }
 export class LinkedModelPanel {
@@ -10,12 +10,14 @@ export class LinkedModelPanel {
   private controller = new AbortController();
   private readonly prepared = new Map<string, LinkedPrepared>();
   private readonly hidden = new Set<string>();
+  private readonly artifactErrors = new Map<string, string>();
   private links: LinkedJob[] = [];
   private selection: LinkedSelection | null = null;
   private readonly timer: ReturnType<typeof setInterval>;
   private busy = false;
   private signature = '';
   private message = '';
+  private pollError = '';
   constructor(input: LinkedModelPanel['input']) {
     this.input = input; this.timer = setInterval(() => { void this.refresh(); }, 500);
     this.render();
@@ -23,7 +25,7 @@ export class LinkedModelPanel {
   setProject(projectId: string | null): void {
     if (this.projectId === projectId) return;
     this.controller.abort(); this.controller = new AbortController(); this.projectId = projectId;
-    this.prepared.clear(); this.links = []; this.hidden.clear(); this.selection = null; this.message = ''; this.signature = '';
+    this.prepared.clear(); this.artifactErrors.clear(); this.links = []; this.hidden.clear(); this.selection = null; this.message = ''; this.pollError = ''; this.signature = '';
     this.input.changed([]); this.input.selected(null); this.render(); void this.refresh();
   }
   select(selection: LinkedSelection | null): void {
@@ -37,12 +39,28 @@ export class LinkedModelPanel {
     this.busy = true; const projectId = this.projectId; const signal = this.controller.signal;
     try {
       const links = await this.input.client.list(projectId, signal);
-      const ready: [string, LinkedPrepared][] = [];
-      for (const link of links) if (link.kind === 'ready' && !this.prepared.has(link.id)) ready.push([link.id, await this.input.client.prepared(projectId, link.id, signal)]);
       if (signal.aborted || projectId !== this.projectId) return;
-      this.links = links; for (const [id, prepared] of ready) this.prepared.set(id, prepared);
-      if (ready.length) this.publish(); this.render();
-    } catch (error) { if (!signal.aborted) { this.message = error instanceof Error ? error.message : 'IFC references unavailable.'; this.render(); } }
+      this.links = links; this.pollError = '';
+      const readyIds = new Set(links.filter(link => link.kind === 'ready').map(link => link.id)); let removed = false;
+      for (const id of this.prepared.keys()) if (!readyIds.has(id)) { this.prepared.delete(id); removed = true; }
+      for (const id of this.artifactErrors.keys()) if (!readyIds.has(id)) this.artifactErrors.delete(id);
+      if (removed) {
+        if (this.selection && !this.prepared.has(this.selection.occurrence.id)) { this.selection = null; this.input.selected(null); }
+        this.publish();
+      }
+      this.render();
+      await Promise.all(links.filter(link => link.kind === 'ready' && !this.prepared.has(link.id)).map(async link => {
+        try {
+          const prepared = await this.input.client.prepared(projectId, link.id, signal);
+          if (signal.aborted || projectId !== this.projectId) return;
+          assertLinkedDisplayOccurrence(link.id, prepared);
+          if (link.occurrence !== link.id) throw new Error('IFC job ID must match its source occurrence ID.');
+          this.prepared.set(link.id, prepared); this.artifactErrors.delete(link.id); this.publish(); this.render();
+        } catch (error) {
+          if (!signal.aborted && projectId === this.projectId) { this.artifactErrors.set(link.id, error instanceof Error ? error.message : 'IFC artifacts unavailable.'); this.render(); }
+        }
+      }));
+    } catch (error) { if (!signal.aborted) { this.pollError = error instanceof Error ? error.message : 'IFC references unavailable.'; this.render(); } }
     finally { this.busy = false; }
   }
   private async action(work: (projectId: string, signal: AbortSignal) => Promise<void>): Promise<void> {
@@ -53,15 +71,17 @@ export class LinkedModelPanel {
     if (!signal.aborted) { this.signature = ''; this.render(); await this.refresh(); }
   }
   private render(): void {
-    const signature = JSON.stringify([this.projectId, this.links, this.selection, [...this.hidden], this.message, [...this.prepared.keys()]]);
+    const signature = JSON.stringify([this.projectId, this.links, this.selection, [...this.hidden], this.message, this.pollError, [...this.prepared.keys()], [...this.artifactErrors]]);
     if (signature === this.signature) return; this.signature = signature;
     const root = element('section'); root.setAttribute('aria-label', 'Read-only IFC references');
     root.append(element('h3', 'IFC references'), element('p', 'Read-only source context · IFC4 metre/mm · up to 2 MiB. Derived meshes do not change the native model.'));
     const upload = element('input'); upload.type = 'file'; upload.accept = '.ifc'; upload.disabled = !this.projectId; upload.setAttribute('aria-label', 'Attach IFC reference');
     upload.addEventListener('change', () => { const file = upload.files?.[0]; if (file) void this.action((project, signal) => this.input.client.attach(project, file, signal)); }); root.append(upload);
-    const status = element('p', this.message); status.setAttribute('role', 'status'); root.append(status);
+    const status = element('p', this.pollError || this.message); status.setAttribute('role', 'status'); root.append(status);
     for (const link of this.links) {
       const section = element('section'); section.append(element('h4', link.name), element('p', link.kind === 'running' ? `Converting · ${link.progress}` : link.kind === 'failed' ? `Failed · ${link.error}` : link.kind));
+      const artifactError = this.artifactErrors.get(link.id);
+      if (artifactError) { const error = element('p', `Artifacts unavailable · ${artifactError}`); error.setAttribute('role', 'status'); section.append(error); }
       if (link.kind === 'queued' || link.kind === 'running') {
         const cancel = element('button', 'Cancel conversion'); cancel.type = 'button'; cancel.addEventListener('click', () => { void this.action((project, signal) => this.input.client.cancel(project, link.id, signal)); }); section.append(cancel);
       }
