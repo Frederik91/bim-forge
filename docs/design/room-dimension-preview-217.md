@@ -64,3 +64,4 @@ Builds/tests run only in isolated server containers over SSH, with source/depend
 | Attempt | Source / commands | Result |
 | --- | --- | --- |
 | `a1` | `b7aa472`; `npm run validate`, explicit four-path policy check; new dimensions, wall dependencies, floor layout, building levels and ScriptBox wall tests | 52/53 tests passed; typecheck refused an inferred heterogeneous test tuple. The one runtime failure incorrectly inferred level ownership from an ID prefix (the ground entry door is named `door-entry`). Corrected the test tuple type and asserted actual `entityLevel` ownership. No product or validator changes. |
+| `a2` | `18846d9`; same commands | 53/53 tests and four-path policy passed. Typing the expected endpoint cases alone did not resolve TS7022 on the loop-local dependency lookup. Added the exported `RoomDimensionDependency` annotation directly to that lookup, as required by the compiler diagnostic. No product or validator changes. |

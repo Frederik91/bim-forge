@@ -5,7 +5,7 @@ import { multiStoreySnapshot } from './multi-storey-house.ts';
 import { residentialFloor } from './residential-floor.ts';
 import { roomDimensionFixture } from './room-dimension-fixture.ts';
 import { previewRoomDimensionChange } from './room-dimension-preview.ts';
-import type { RoomDimensionRequest } from './room-dimension-preview.ts';
+import type { RoomDimensionDependency, RoomDimensionRequest } from './room-dimension-preview.ts';
 import { diffSnapshots, validateSnapshot } from './room-model.ts';
 import type { ModelSnapshot, Point } from './room-model.ts';
 import { previewWallShift } from './wall-dependencies.ts';
@@ -42,7 +42,7 @@ test('confirmed centreline span drives a bounded move with deterministic room an
     { id: 'door-between', start: [3, 1], end: [3, 1.9] }, { id: 'window-between', start: [3, 2.4], end: [3, 3] },
   ];
   for (const { id, start, end } of expectedOpenings) {
-    const opening = result.dependencies.find((item) => item.id === id);
+    const opening: RoomDimensionDependency | undefined = result.dependencies.find((item) => item.id === id);
     assert.ok(opening?.kind === 'opening');
     assert.deepEqual(opening.before.start, start); assert.deepEqual(opening.before.end, end);
     assert.equal(opening.after.start[0], 3.3); assert.equal(opening.after.end[0], 3.3);
