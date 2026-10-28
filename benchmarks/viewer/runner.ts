@@ -14,7 +14,7 @@ import type { Candidate } from './metrics.ts';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
-const known = new Set(['--candidate', '--dataset', '--output', '--channel', '--cycles', '--timeout-ms', '--elements', '--headed', '--serve', '--fragments']);
+const known = new Set(['--candidate', '--dataset', '--output', '--channel', '--cycles', '--timeout-ms', '--elements', '--headed', '--serve', '--fragments', '--no-trace', '--profile']);
 for (const argument of args.filter(item => item.startsWith('--'))) if (!known.has(argument)) throw new Error('Unknown option: ' + argument);
 function option(name: string, fallback: string): string {
   const index = args.indexOf(name); if (index === -1) return fallback;
@@ -27,7 +27,7 @@ function integer(name: string, fallback: number, maximum: number): number {
   return result;
 }
 const candidate = option('--candidate', 'both');
-if (candidate !== 'both' && candidate !== 'babylon' && candidate !== 'fragments') throw new Error('Candidate must be babylon, fragments, or both');
+if (candidate !== 'both' && candidate !== 'babylon' && candidate !== 'babylon-batched' && candidate !== 'fragments') throw new Error('Candidate must be babylon, babylon-batched, fragments, or both');
 const candidates: Candidate[] = candidate === 'both' ? ['babylon', 'fragments'] : [candidate];
 const cycles = integer('--cycles', 3, 100);
 const timeout = integer('--timeout-ms', 120000, 600000);
@@ -60,7 +60,7 @@ await fs.writeFile(path.join(output, 'run.json'), JSON.stringify({ version: 1, i
     grossFloorAreaM2: model.grossFloorAreaM2, provenance: model.provenance,
     disciplines: Object.fromEntries([...new Set(model.elements.map(item => item.discipline))].map(discipline =>
       [discipline, model.elements.filter(item => item.discipline === discipline).length])) },
-  profile, candidates, cycles, timeout, fragmentsInput, fragmentsLodMode: 'ALL_GEOMETRY', node: process.version, os: { platform: os.platform(), release: os.release(), arch: os.arch(),
+  profile, candidates, cycles, timeout, tracing: !args.includes('--no-trace'), cpuProfile: args.includes('--profile'), fragmentsInput, fragmentsLodMode: 'ALL_GEOMETRY', node: process.version, os: { platform: os.platform(), release: os.release(), arch: os.arch(),
     cpu: os.cpus()[0]?.model ?? 'unavailable', totalMemoryBytes: os.totalmem() },
   network: 'loopback, unshaped', memory: 'not-measured', status: 'started',
 }, null, 2) + '\n');
@@ -70,7 +70,7 @@ await fs.copyFile(path.join(root, 'node_modules/@thatopen/fragments/dist/Worker/
 const pageHtml = `<!doctype html><html lang="en"><meta charset="utf-8"><title>BIM Forge viewer benchmark</title>
 <style>body{font:16px system-ui;margin:16px;background:#f0f2f5}canvas{display:block;width:1280px;height:800px}button{padding:10px;margin:8px}pre{white-space:pre-wrap}</style>
 <h1>Viewer benchmark setup</h1><p>Synthetic smoke replay or an explicitly supplied dataset. No large-project qualification.</p>
-<button data-candidate="babylon">Run Babylon</button><button data-candidate="fragments">Run Fragments</button>
+<button data-candidate="babylon">Run Babylon</button><button data-candidate="babylon-batched">Run batched Babylon</button><button data-candidate="fragments">Run Fragments</button>
 <canvas width="1280" height="800" aria-label="Benchmark model"></canvas><pre>Ready. Select a candidate.</pre>
 <script type="module" src="/browser.mjs"></script></html>`;
 const assetNames = new Set(await fs.readdir(assets));
@@ -100,7 +100,7 @@ if (args.includes('--serve')) {
     for (const engine of candidates) {
       const passed = await runCandidateProcess({ candidate: engine, output, timeoutMs: timeout, executable: process.execPath,
         args: [fileURLToPath(new URL('./runner-candidate.ts', import.meta.url)), JSON.stringify({
-          candidate: engine, url, output, channel, headed: args.includes('--headed'), cycles, timeout,
+          candidate: engine, url, output, channel, headed: args.includes('--headed'), cycles, timeout, tracing: !args.includes('--no-trace'), cpuProfile: args.includes('--profile'),
         })],
       });
       if (!passed) failed = true;

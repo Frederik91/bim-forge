@@ -70,6 +70,10 @@ export type Proposal = Static<typeof ProposalSchema>;
 export interface Changes { upsert: Element[]; remove: string[] }
 export interface Camera { eye: Vec3; target: Vec3 }
 export interface Readback { id: string; position: Vec3; min: Vec3; max: Vec3 }
+export interface ResourceWork {
+  rebuiltBatches: number; uploadedVertices: number; uploadedIndices: number; preservedBatches: number;
+  batches: number; elements: number; storedTriangles: number;
+}
 export interface Adapter {
   load(model: Model): Promise<void>;
   apply(changes: Changes): Promise<void>;
@@ -82,6 +86,7 @@ export interface Adapter {
   readback(): Promise<Readback[]>;
   frame(): Promise<void>;
   stats(): { drawCalls: number; triangles: number };
+  resources?(): ResourceWork;
   dispose(): Promise<void>;
 }
 

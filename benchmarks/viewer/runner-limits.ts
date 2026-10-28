@@ -55,7 +55,7 @@ export async function runCandidateProcess(options: {
   const roots = new Set<number>();
   const worker = spawn(options.executable, options.args, { detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   if (worker.pid) roots.add(worker.pid);
-  worker.stdout?.on('data', chunk => { stdout = (stdout + String(chunk)).slice(-65536); });
+  worker.stdout?.on('data', chunk => { stdout = (stdout + String(chunk)).slice(-65536); process.stdout.write(String(chunk)); });
   worker.stderr?.on('data', chunk => { stderr = (stderr + String(chunk)).slice(-65536); });
   worker.on('message', (message: unknown) => {
     if (!message || typeof message !== 'object') return;
