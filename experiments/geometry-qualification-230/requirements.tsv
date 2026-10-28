@@ -1,0 +1,25 @@
+id	requirement	fixture_or_trigger	expected_independent_evidence	status
+G01	true doorway subtraction	m-v1,mm-v1	wall volume 4.74m3; void/material ray probes; .2m passage clearance	written-unrun
+G02	L recess bounding-box trap	m-v1 L solid	volume 10m3; recess .5m from material despite enclosure overlap	written-unrun
+G03	nested transforms and units	m/mm; occurrence a/b	independent composed coordinates; volume and distance invariant	written-unrun
+G04	same GlobalId different source/occurrence	v1 namespaces discipline-a/b and occurrences a/b	qualified refs distinct; no cross namespace remap	fixture-written-product-check-pending
+G05	contained/touching/above/rotated-side	private analytical probes	0/0/.5/.5m; containment must not be positive shell distance	oracle-written-product-check-pending
+G06	immutable real versions	v1/property/unrelated/motion/placement/added/removed/reidentified	original hashes differ; referenced-wall mesh stable only for unrelated/property; removed ID absent	written-unrun
+G07	partial/unsupported/empty source	partial/unsupported/empty; missing artifacts after active attach	no certainty for incomplete matching set; no-mesh source poisons absence proof	converter-written-product-check-pending
+G08	malformed/oversize/budget/duplicate/huge	malformed,oversize,budget,duplicate,huge	bounded refusal; no completed manifest; current source bytes intact	written-unrun
+G09	read-only property/context UI	UI attach/select/reference, hostile source text	one viewer; unsent context source-bound; no auto request or approval; originals equal	browser-written-unrun
+G10	desktop/phone layout	1440x1000 and 390x844	no horizontal page overflow; visible properties and attach controls	browser-written-unrun
+G11	candidate stage/adopt/history	v1 -> property -> wall-motion; malformed staged	old current ready until explicit adoption; failed candidate keeps old geometry; prior originals accessible	pending-232-ui-contract
+G12	frequent revisions while working/ready	property/unrelated vs wall-motion/placement/removed/reidentified	relevant receipts revalidate; unrelated geometry remains acceptable; historical pin immutable	pending-233-runtime
+G13	absence membership	v1 then added-obstruction	new matching obstruction invalidates previous empty-region evidence	pending-231-233-runtime
+G14	cancel/restart recovery	cancel conversion; restart disposable server mid-stage	no late publish; old current retained; status recovers	pending-232-runtime
+G15	concurrent adoption/placement	stale catalog generation, two candidates, two app processes	only one CAS winner; conflicting revalidate; synchronous guard no await	pending-232-runtime
+G16	acceptance/adoption race	adoption after validation before final native commit	shared catalog fence prevents stale acceptance across processes	pending-parent-integration
+G17	cross-project refusal	project B requests A prepared/original/adopt/history	no read/source disclosure or cross-project acceptance	browser-read-paths-written-mutations-pending
+G18	guest evidence forgery/text injection	fake receipt, cross-project/stale handle, hostile property	trusted host reads only; no source edit/approval authority	pending-233-runtime
+G19	pagination/cursor/budgets	more than one page; moved-in member; invalid cursor; deadline	receipt binds full membership independent of page; explicit incomplete result	pending-231-runtime
+G20	native evaluated dependencies	wall/hosted opening/level transforms/final reconciliation	independent final candidate geometry; consumed dependency changes invalidate	pending-parent-integration
+G21	connected-provider live workflow	UI inspect IFC; request native 500mm clear; external update	actual host query receipts and final native geometry independently measured; explicit alternative-only acceptance	parent-reserved-not-run
+G22	Main/As-is preservation	attach/update/review/explicit synthetic alternative acceptance	unchanged accepted Main/baseline bytes and source originals before/after restart	attach-main-written-remaining-parent-pending
+G23	root validation and changed paths	committed source hash server run	root npm run validate and explicit all-changed-path gate logs	pending-server-unreachable
+G24	actual-image isolation/recovery	parent combined candidate image and sidecar	read-only sources/deps; network off; spool-only converter; all temp/artifacts /ssd1	pending-parent-reservation
