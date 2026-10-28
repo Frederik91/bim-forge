@@ -99,6 +99,7 @@ test('real Chromium uploads, browses, inspects, picks and hides bounded derived 
     return { x: point.x, y: point.y };
   });
   await page.locator('canvas').click({ position: picked });
+  assert.match(await page.locator('canvas').getAttribute('data-picked-source') ?? '', /ifc-reference.*originalSha256/);
   assert.equal(await page.getByLabel('Original IFC properties and conversion losses').count(), 1);
   await page.screenshot({ path: path.join(process.env.IFC_EVIDENCE ?? root, 'ifc218-inspection.png'), fullPage: true });
   await page.getByLabel('Show linked geometry').uncheck(); assert.equal(await page.locator('canvas').getAttribute('data-link-meshes'), '0');

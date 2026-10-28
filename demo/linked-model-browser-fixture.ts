@@ -21,7 +21,7 @@ const panel = new LinkedModelPanel({ host, client: new LinkedModelClient(), chan
 }, selected: selection => layer.select(selection), reference: selection => { context.textContent = linkedReferenceText(selection); } });
 panel.setProject(document.body.dataset.project ?? null);
 model.camera.target = new Vector3(10, 1.5, 23); model.camera.radius = 22; model.camera.attachControl(canvas, false);
-canvas.addEventListener('click', event => { const rect = canvas.getBoundingClientRect(); const selection = layer.objectAt(event.clientX - rect.left, event.clientY - rect.top); if (selection) panel.select(selection); });
+canvas.addEventListener('click', event => { const rect = canvas.getBoundingClientRect(); const selection = layer.objectAt(event.clientX - rect.left, event.clientY - rect.top); if (selection) { canvas.dataset.pickedSource = JSON.stringify(selection); panel.select(selection); } });
 engine.runRenderLoop(() => {
   model.scene.render(); canvas.dataset.sceneReady = String(model.scene.isReady());
   const points = model.scene.meshes.filter(mesh => mesh.name.startsWith('ifc:') && mesh.isEnabled()).map(mesh => {
