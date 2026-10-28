@@ -6,6 +6,7 @@
   "docsBase": "e43dd859a631ff8676d080011607447806beeb34",
   "attemptAllowance": 10,
   "runtimeAttemptsStarted": 0,
+  "initialUnqualifiedCommit": "faa6a80274adce99aaf8758d786e52d082e17391",
   "qualification": {
     "fixtureGeneration": "not-run",
     "independentOracle": "not-run",

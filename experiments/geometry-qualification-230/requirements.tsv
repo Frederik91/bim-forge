@@ -23,3 +23,4 @@ G21	connected-provider live workflow	UI inspect IFC; request native 500mm clear;
 G22	Main/As-is preservation	attach/update/review/explicit synthetic alternative acceptance	unchanged accepted Main/baseline bytes and source originals before/after restart	attach-main-written-remaining-parent-pending
 G23	root validation and changed paths	committed source hash server run	root npm run validate and explicit all-changed-path gate logs	pending-server-unreachable
 G24	actual-image isolation/recovery	parent combined candidate image and sidecar	read-only sources/deps; network off; spool-only converter; all temp/artifacts /ssd1	pending-parent-reservation
+G25	linked selection action authority	previous native door -> IFC wall -> Ask/Properties -> native reselect -> second source same GlobalId	exact selected source/version/occurrence/transform pin; hidden native Move; linked Properties; no old-binding/new-property mix	browser-written-unrun-stale-adoption-pending
