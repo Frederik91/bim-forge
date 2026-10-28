@@ -15,6 +15,7 @@ import { Texture } from '@babylonjs/core/Materials/Textures/texture.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator.js';
+import { FxaaPostProcess } from '@babylonjs/core/PostProcesses/fxaaPostProcess.js';
 import { SceneMeshBatches, SourceShadowLight } from './model-scene-batches.ts';
 import '@babylonjs/core/Rendering/outlineRenderer.js';
 import { modelChanges } from '../src/model-delta-view.ts';
@@ -161,6 +162,7 @@ export class ModelScene {
     this.scene.imageProcessingConfiguration.toneMappingType = 1;
     this.scene.imageProcessingConfiguration.exposure = 1.15;
     this.camera = new ArcRotateCamera('room-camera', -Math.PI / 2.4, .86, 10, new Vector3(3, .5, 2), this.scene);
+    if (engine.getRenderingCanvas()) new FxaaPostProcess('model-antialiasing', 1, this.camera);
     this.camera.minZ = .05; this.camera.maxZ = 500;
     this.camera.lowerBetaLimit = .08; this.camera.upperBetaLimit = Math.PI / 2 - .02;
     this.camera.lowerRadiusLimit = 1; this.camera.upperRadiusLimit = 150;

@@ -189,3 +189,51 @@ approving review from a reviewer with write access; chat authorization does not
 create that review record. After parent squash merges, retarget/rebase each
 child to main and rerun integration checks. The production PR remains draft
 until its browser blockers are addressed. Do not bypass repository protection.
+
+## Renewed diagnostic pass (maintainer approved continuation)
+
+The renewed attempt uses `codex/issue-226-diagnostics` in its own worktree,
+continuing PR #227. Scope: ModelViewer's readiness transition, ModelScene's GPU
+anti-aliasing, and the production browser/worker harness. Keep accepted model
+state, geometry generators, validators and the three-frame/pixel gates intact.
+Re-run focused checks first, then at most three full qualification attempts.
+
+The diagnostic loop reproduces the old readiness failure by holding Babylon's
+public scene readiness check false until the viewer's draw budget is exhausted.
+After release, the old implementation reports scene readiness true but leaves
+the DOM flag false and can idle before rendering the ready transition. The fix
+renders that transition before idling. This is exercised in the actual browser
+UI through `uiDeferredReadiness`, with no timeout increase.
+
+A separate GPU readback probe captures twelve identical-input frames and records
+camera matrices, transparent draw order and pixels. Default-framebuffer MSAA
+produces two pixel states even after settling; matrices and draw order stay
+unchanged. Turning off shadows, dithering or canvas alpha does not remove it.
+Turning off MSAA makes all twelve frame hashes equal from the first frame on
+both renderer configurations. Explicit FXAA with an unmultisampled default
+framebuffer also makes all twelve hashes equal while retaining anti-aliasing.
+This locates the observed instability in the default multisampled framebuffer
+path on the local Chrome/ANGLE/NVIDIA configuration; it does not diagnose a
+specific upstream driver defect. Preserve the original failed evidence.
+
+The real ModelViewer and benchmark both use ModelScene-owned FXAA. This changes
+the anti-aliasing method and adds one postprocess draw call. It does not change
+model geometry, identity or picking. The before/after images require review as
+part of the existing renderer PR. NullEngine has no rendering canvas and does
+not create this GPU postprocess; it cannot qualify AA or shader behavior.
+
+The benchmark also omitted engine beginFrame/endFrame. It now performs the same
+engine lifecycle as the real runRenderLoop, still submitting three scene frames.
+The old engine counter stayed zero, and Babylon's ObjectRenderer could not reset
+its frame-keyed scene-UBO pool. New samples assert and record frame progression;
+resource checks include live uniform-buffer counts. This corrects the harness,
+not a claim that the missing lifecycle alone caused every pixel difference.
+WebGL's optional general UBO tracking feature is disabled in this configuration;
+the ObjectRenderer's scene-UBO pool independently keys on engine.frameId.
+
+Acceptance for this pass: controlled late-readiness regression passes; strict
+A/B and discard image checks remain zero-difference; both modes retain source
+triangles and visible proposals; 100-cycle live resources, including uniform
+buffers, recover; applicable tests and CI pass. The final five alternating pairs
+are pending at this implementation freeze. #192's dataset/device qualification
+and GitHub's required human approving review remain separate merge conditions.

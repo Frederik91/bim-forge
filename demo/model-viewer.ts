@@ -109,7 +109,8 @@ export class ModelViewer {
     this.selection.className = 'model-object-picker'; this.selection.setAttribute('aria-label', 'Select 3D object');
     this.selection.addEventListener('change', () => this.select(this.selection.value));
     this.root.append(this.canvas, this.handle, this.caption, this.selection);
-    this.engine = new Engine(this.canvas, true, { preserveDrawingBuffer: false, stencil: true, powerPreference: 'high-performance' });
+    // ModelScene owns FXAA; the default framebuffer does not need MSAA.
+    this.engine = new Engine(this.canvas, false, { preserveDrawingBuffer: false, stencil: true, powerPreference: 'high-performance' });
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 1.5));
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
@@ -227,7 +228,11 @@ export class ModelViewer {
     const camera = this.model.camera; camera.update();
     const signature = `${camera.alpha}:${camera.beta}:${camera.radius}:${camera.target.toString()}`;
     if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; this.hover(null); }
-    if (this.frames <= 0 && this.model.scene.isReady()) return;
+    const ready = this.model.scene.isReady();
+    // Async shaders/textures can become ready after the last budgeted frame.
+    // Render that transition before publishing readiness or going idle.
+    if (ready && this.root.dataset.sceneReady !== 'true') this.frames = Math.max(1, this.frames);
+    if (this.frames <= 0 && ready) return;
     this.model.scene.render(false); this.frames -= 1;
     this.root.dataset.sceneReady = String(this.model.scene.isReady());
     this.root.dataset.activeMeshes = String(this.model.scene.getActiveMeshes().length);

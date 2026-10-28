@@ -11,7 +11,7 @@ import type { ViewerState } from '../../demo/model-viewer.ts';
 
 type Configuration = 'individual' | 'retained';
 type Stage = 'baseline' | 'preview' | 'comparison' | 'discard';
-interface Sample { operation: string; cpuMs: number; readyFrameMs: number; drawCalls: number; triangles: number; resources: ReturnType<ModelScene['renderResources']> }
+interface Sample { operation: string; cpuMs: number; readyFrameMs: number; engineFrameStart: number; engineFrameEnd: number; drawCalls: number; triangles: number; resources: ReturnType<ModelScene['renderResources']> }
 declare global {
   interface Window {
     productionViewer: {
@@ -26,6 +26,7 @@ declare global {
       uiSwitch(): Promise<void>;
       uiStatus(): { references: number; marking: boolean };
       uiReadiness(): unknown;
+      uiDeferredReadiness(): Promise<{ heldFrame: number; completedFrame: number }>;
     };
   }
 }
@@ -38,25 +39,30 @@ let current: {
 let ui: { viewer: ModelViewer; host: HTMLElement; state: ViewerState; references: number } | null = null;
 function loaded() { if (!current) throw new Error('No production scene'); return current; }
 async function frame(): Promise<void> {
-  const { viewer } = loaded();
+  const { viewer, engine } = loaded();
   // Match ModelViewer's three scheduled frames after a state change, including
   // shadow/projection readiness; a single submitted frame can capture stale light state.
   for (let index=0;index<3;index++) {
-    await viewer.scene.whenReadyAsync(); viewer.scene.render();
+    await viewer.scene.whenReadyAsync();
+    engine.beginFrame();
+    try { viewer.scene.render(); } finally { engine.endFrame(); }
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   }
 }
 async function measure(operation: string, work: () => void): Promise<void> {
   const state = loaded(); const start = performance.now(); work(); const cpuMs = performance.now() - start;
-  const ready = performance.now(); await frame();
+  const ready = performance.now(); const engineFrameStart = state.engine.frameId; await frame();
+  const engineFrameEnd = state.engine.frameId;
+  if (engineFrameEnd - engineFrameStart !== 3) throw new Error('Diagnostic frames omitted the engine frame lifecycle');
   state.samples.push({ operation, cpuMs, readyFrameMs: performance.now() - ready,
+    engineFrameStart, engineFrameEnd,
     drawCalls: state.instrumentation.drawCallsCounter.current, triangles: state.viewer.scene.getActiveIndices() / 3, resources: state.viewer.renderResources() });
 }
 function counts() {
   const { viewer } = loaded(); const sun = viewer.scene.lights.find(light => light instanceof DirectionalLight);
   return { meshes: viewer.scene.meshes.length, geometries: viewer.scene.geometries.length, materials: viewer.scene.materials.length,
     textures: viewer.scene.textures.length, parts: viewer.renderResources().parts, cachedVertices: viewer.renderResources().cachedVertices,
-    batches: viewer.renderResources().batches,
+    batches: viewer.renderResources().batches, uniformBuffers: viewer.scene.getEngine()._uniformBuffers.length,
     shadowCasters: sun instanceof DirectionalLight ? sun.getShadowGenerator()?.getShadowMap()?.renderList?.length ?? 0 : 0 };
 }
 function sourceRows() {
@@ -81,7 +87,7 @@ async function dispose(): Promise<void> {
 window.productionViewer = {
   async start(configuration) {
     await dispose(); const fixture = await productionViewerFixture();
-    const engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true }); engine.setHardwareScalingLevel(1);
+    const engine = new Engine(canvas, false, { preserveDrawingBuffer: false, stencil: true }); engine.setHardwareScalingLevel(1);
     const viewer = new ModelScene(engine, configuration === 'individual' ? 'off' : 'auto');
     const instrumentation = new SceneInstrumentation(viewer.scene);
     current = { viewer, fixture, engine, instrumentation, configuration, original: JSON.stringify(fixture.accepted), samples: [] };
@@ -91,6 +97,7 @@ window.productionViewer = {
     return { qualified: false, source: 'validated production ModelSnapshot fixture', entities: fixture.accepted.entities.length,
       projectId: fixture.projectId, inputSha256: Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([fixture.accepted,fixture.proposed]))))).map(byte => byte.toString(16).padStart(2,'0')).join(''),
       renderer: typeof renderer === 'string' ? renderer : 'unavailable', viewport: [canvas.width,canvas.height], devicePixelRatio,
+      antialiasing: { defaultFramebuffer: gl?.getContextAttributes()?.antialias ?? null, postProcess: 'FXAA' },
       initial: { drawCalls: instrumentation.drawCallsCounter.current, triangles: viewer.scene.getActiveIndices()/3, counts: counts(), sourceRows: sourceRows() } };
   },
   async mode(mode) {
@@ -126,6 +133,25 @@ window.productionViewer = {
     ui.viewer.show(ui.host, ui.state);
   },
   uiStatus() { if (!ui) throw new Error('Missing UI fixture'); return { references: ui.references, marking: ui.viewer.root.dataset.marking === 'true' }; },
+  async uiDeferredReadiness() {
+    const scene = EngineStore.LastCreatedScene;
+    if (!ui || !scene) throw new Error('Missing UI fixture');
+    const viewer = ui.viewer;
+    const check = { isReady: () => false };
+    const first = scene.getFrameId(); const deadline = performance.now() + 2000;
+    const tick = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    scene.addIsReadyCheck(check);
+    try {
+      while (scene.getFrameId() < first + 4 && performance.now() < deadline) await tick();
+      const heldFrame = scene.getFrameId();
+      if (heldFrame < first + 4 || viewer.root.getAttribute('data-scene-ready') !== 'false') throw new Error('Deferred readiness did not exhaust the frame budget');
+      scene.removeIsReadyCheck(check);
+      while (viewer.root.getAttribute('data-scene-ready') !== 'true' && performance.now() < deadline) await tick();
+      const completedFrame = scene.getFrameId();
+      if (!scene.isReady() || viewer.root.getAttribute('data-scene-ready') !== 'true' || completedFrame <= heldFrame) throw new Error('Ready transition was not rendered and published');
+      return { heldFrame, completedFrame };
+    } finally { scene.removeIsReadyCheck(check); }
+  },
   uiReadiness() {
     const scene = EngineStore.LastCreatedScene;
     return scene ? { ready: scene.isReady(), pending: scene.getWaitingItemsCount(),
