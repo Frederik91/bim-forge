@@ -164,6 +164,7 @@ fix, source, command, result and remaining limitation.
 | Coordinates, units, identity, occurrence | Real converted mm/metre, composed rotation/translation, duplicate GlobalId/occurrence fixtures | Pending |
 | Shape-aware measurements | Independent clearance/intersection/containment oracle, doorway/L-shape/enclosed-candidate/contact fixtures | Pending |
 | Complete bounded queries | Pagination, missing meshes, candidate-set absence, limits and hard deadline tests | Pending |
+| Authorized geometry domain | Frozen native readable IDs and relations only, private host/family evaluation, explicit restricted-domain coverage and domain-bound freshness | Pending |
 | Repeated external update | UI v1/v2/v3 replacement, semantic delta, adoption, historical original/source pins | Pending |
 | Failure and concurrency | Conversion failure/restart/cancel, CAS adoption/placement races, cross-process publication fence | Pending |
 | Relevant-only freshness | Moved referenced wall/new obstruction/removed identity blocked; unrelated source edit remains acceptable | Pending |
@@ -226,6 +227,21 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
   volume overlap can reach the nonnegative distance comparison and report satisfied clearance.
   Sent to #231 and independent QA for explicit contained/overlapping/contact/separated cases.
   This is an inspection finding, not a reproduced failure or verified correction.
+- Static inspection also found semantic context discovery marked partial whenever a Level or
+  Space intentionally has no solid representation. Its owner must separate complete identity
+  discovery from proof of a spatial predicate or solid clearance; accepting incomplete physical
+  clearance receipts is not an acceptable workaround.
+- The initial native input has no authorized readable-ID domain. Filtering the snapshot before
+  evaluation can lose hosts/families; exposing the complete private graph violates frozen request
+  scope. #231 and #233 must supply full private evaluation input plus a host-derived public domain,
+  prune unreadable relations, identify restricted coverage, and bind that domain into freshness.
+  Scoped absence must never be presented as a whole-project clearance certificate. This structural
+  gap was observed in committed source; no leakage test has yet executed.
+- Initial UI submission still includes the preceding implicit native selection while a linked
+  object is selected. The existing parser requires a native anchor. Parent and #233 are resolving
+  the legitimate authoring context without silently targeting the preceding door/desk, discarding
+  explicitly attached native visuals, or weakening the validator to hide the mismatch. Browser
+  qualification must inspect the actual submitted context, not just the visible action label.
 - Parent UI source `1b58d0bb322bb410f80a745bee3e43efb7aa56eb` aligns Ask, Properties and
   native Move visibility with the actual linked selection. Context attachment checks the full
   source/occurrence/placement pin before combining it with current properties. Independent
