@@ -1,0 +1,34 @@
+/** Disposable browser qualification mount; production uses the existing viewer's scene. */
+import { Engine } from '@babylonjs/core/Engines/engine.js';
+import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector.js';
+import { ModelScene } from './model-scene.ts';
+import { LinkedModelLayer } from './linked-model-render.ts';
+import { LinkedModelPanel } from './linked-model-ui.ts';
+import { LinkedModelClient } from './linked-model-client.ts';
+import { RoomRepository } from '../src/room-model.ts';
+import { linkedReferenceText } from '../src/linked-model.ts';
+
+const canvas = document.querySelector('canvas'); const host = document.getElementById('links'); const context = document.getElementById('context');
+if (!canvas || !host || !context) throw new Error('Qualification mount missing.');
+const repository = await RoomRepository.create('Native preservation fixture');
+const native = repository.captureBaseline({ id: 'as-is', name: 'As-is', from: repository.freezeDesignTarget({ kind: 'main' }) });
+const original = native.serialize();
+const engine = new Engine(canvas, true); const model = new ModelScene(engine); model.setMode('basic'); model.setModel(native.view(native.head('main')).snapshot);
+const layer = new LinkedModelLayer(model.scene);
+const panel = new LinkedModelPanel({ host, client: new LinkedModelClient(), changed: links => {
+  layer.setLinks(links); canvas.dataset.linkMeshes = String(model.scene.meshes.filter(mesh => mesh.name.startsWith('ifc:') && mesh.isEnabled()).length);
+  canvas.dataset.nativePreserved = String(native.serialize() === original);
+}, selected: selection => layer.select(selection), reference: selection => { context.textContent = linkedReferenceText(selection); } });
+panel.setProject(document.body.dataset.project ?? null);
+model.camera.target = new Vector3(10, 1.5, 23); model.camera.radius = 22; model.camera.attachControl(canvas, false);
+canvas.addEventListener('click', event => { const rect = canvas.getBoundingClientRect(); const selection = layer.objectAt(event.clientX - rect.left, event.clientY - rect.top); if (selection) panel.select(selection); });
+engine.runRenderLoop(() => {
+  model.scene.render(); canvas.dataset.sceneReady = String(model.scene.isReady());
+  const points = model.scene.meshes.filter(mesh => mesh.name.startsWith('ifc:') && mesh.isEnabled()).map(mesh => {
+    const positions = mesh.getVerticesData('position') ?? []; const indices = mesh.getIndices() ?? [];
+    const vertices = indices.slice(0, 3).map(i => new Vector3(positions[i * 3] ?? 0, positions[i * 3 + 1] ?? 0, positions[i * 3 + 2] ?? 0));
+    const center = vertices.reduce((sum, point) => sum.add(point), Vector3.Zero()).scale(1 / 3);
+    const screen = Vector3.Project(center, Matrix.Identity(), model.scene.getTransformMatrix(), model.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
+    return { x: screen.x, y: screen.y, globalId: layer.pick(mesh)?.source.globalId };
+  }); canvas.dataset.pickPoints = JSON.stringify(points);
+});
