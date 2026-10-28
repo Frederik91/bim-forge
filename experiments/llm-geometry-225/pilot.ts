@@ -3,7 +3,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fixtures } from './fixtures.ts';
 import type { Answer } from './contract.ts';
-import { arms, bytes, context, hash, inspectCandidate, proposal } from './geometry.ts';
+import { arms, bytes, context, hash, inspectCandidate, proposal, svg } from './geometry.ts';
 import { runSandbox, disposeSandbox, sandboxControls } from './sandbox.ts';
 async function main() {
   const out=process.argv[2]; if(!out) throw new Error('output directory required'); fs.mkdirSync(out,{recursive:true});

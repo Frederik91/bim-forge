@@ -56,7 +56,7 @@ export function context(scene: Scene, arm: Arm): unknown {
   if(arm==='summary') return {...common,objects:scene.objects.map(o=>({pin:o.pin,kind:o.kind,level:o.level,room:o.room,text:o.text,localBounds:aggregate(o.cells),projectAabb:bounds(vertices(scene,o.cells))}))};
   return {...common,objects:scene.objects.map(o=>({pin:o.pin,kind:o.kind,level:o.level,room:o.room,text:o.text})),api:'inspect(side: 1|-1) -> {valid,nearest}; read-only geometry oracle, not write authority',...(arm==='hybrid'?{view:svg(scene)}:{})};
 }
-function svg(scene: Scene): string {
+export function svg(scene: Scene): string {
   const shapes=scene.objects.filter(o=>!o.hidden && o.kind!=='Slab').flatMap(o=>o.cells.filter(c=>c.low<1.5 && c.high>0).map(c=>`<polygon points="${c.polygon.map(([x,y])=>`${80+x*60},${220-y*60}`).join(' ')}" fill="${o.pin.object==='w1'?'#587ca2':'#b98263'}" stroke="white"/><text x="${80+(c.polygon[0]?.[0]??0)*60}" y="${210-(c.polygon[0]?.[1]??0)*60}" font-size="12">${o.pin.object}</text>`));
   return `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="420"><rect width="480" height="420" fill="#eee"/>${shapes.join('')}<text x="10" y="400">top segmentation; w1 wall; display is not complete geometry</text></svg>`;
 }
