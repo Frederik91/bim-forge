@@ -46,6 +46,7 @@ import { ModelScopeBuilder, renderScopeEvidence, requestScopeContext, reviewScop
 import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
 import { RequestChat, conversationFromTicket } from './request-chat.ts';
 import { RequestComposer } from './request-composer.ts';
+import { FloorPlanGuide, parseFloorGuideDraft } from './floor-plan-guide-ui.ts';
 import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
 import { parseConversationReply } from '../src/request-conversation.ts';
 import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
@@ -392,6 +393,7 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
     } catch (error) { report(error); return false; }
   },
   action: action => {
+    if (action === 'floor') { floorGuide.start(); return true; }
     if (action === 'evidence') { showPage('evidence'); return true; }
     if (action === 'files') return sourcePicker.chooseFiles();
     if (action === 'view') return attachChatContext(selectedObject ? [selectedObject] : []);
@@ -402,6 +404,17 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
   mention: id => attachChatContext([...new Set([...(chatVisual?.selectedObjectIds ?? []), id])]),
   remove: id => { chatVisual = id && chatVisual ? { ...chatVisual, selectedObjectIds: chatVisual.selectedObjectIds.filter(item => item !== id) } : null; composer.setVisual(chatVisual); updateControls(); },
   changed: updateControls,
+});
+
+const floorGuide = new FloorPlanGuide(generic('floor-plan-guide'), {
+  changed: updateControls,
+  enable: () => {
+    ui['request-reconstruct'].checked = true; ui['reconstruction-scope'].value = 'floor-plan-reconstruction';
+    if (!ui['request-text'].value.trim()) ui['request-text'].value = 'Reconstruct the attached floor as a reviewable proposal.';
+    composer.refresh();
+  },
+  cancel: () => { ui['request-reconstruct'].checked = false; forgetFloorDraft(currentChatKey()); },
+  attach: () => { sourcePicker.chooseFiles(); },
 });
 
 function assertEvidenceDestination(context: ProjectEvidenceContext | null, signal: AbortSignal): void {
@@ -539,9 +552,11 @@ function attachChatContext(ids: readonly string[]): boolean {
     composer.setVisual(chatVisual); status(`Attached ${visualLabel(chatVisual)}. The model is unchanged.`); return true;
   } catch (error) { report(error); return false; }
 }
-ui['request-reconstruct'].addEventListener('change', updateControls);
+ui['request-reconstruct'].addEventListener('change', () => { if (!ui['request-reconstruct'].checked) floorGuide.clear(); updateControls(); });
+ui['reconstruction-scope'].addEventListener('change', () => { if (ui['reconstruction-scope'].value !== 'floor-plan-reconstruction') floorGuide.clear(); updateControls(); });
 
 function clearRequestSources(): void {
+  floorGuide.clear();
   chatEvidencePins = []; chatEvidenceEdited = false;
   ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear(); scopeBuilder.reset();
 }
@@ -551,6 +566,44 @@ function requestDirty(): boolean {
 }
 
 function currentChatKey(): string { return `${repo?.projectId ?? 'none'}:${chatTicketId ?? newDraftId}`; }
+const FLOOR_DRAFT_KEY = 'bim-forge-floor-plan-draft-v1:';
+function rememberFloorDraft(): void {
+  if (!repo || busy || chatTicketId || !floorGuide.enabled || !sourcePicker.ready || selectedDesignTarget.kind === 'baseline') return;
+  try {
+    sessionStorage.setItem(FLOOR_DRAFT_KEY + repo.projectId, JSON.stringify({ binding: currentChatKey(), projectId: repo.projectId,
+      revisionId: selectedDesignHead(), target: selectedDesignTarget, text: ui['request-text'].value, name: ui['proposal-name'].value,
+      sources: sourcePicker.sources, guide: floorGuide.capture() }));
+  } catch { /* Tab recovery is optional; source bytes remain private on the server. */ }
+}
+function forgetFloorDraft(binding: string): void {
+  if (!repo) return;
+  try {
+    const saved = sessionStorage.getItem(FLOOR_DRAFT_KEY + repo.projectId);
+    const value: unknown = saved ? JSON.parse(saved) : null;
+    if (isRecord(value) && value.binding === binding) sessionStorage.removeItem(FLOOR_DRAFT_KEY + repo.projectId);
+  } catch { /* A storage failure cannot block an explicit user action. */ }
+}
+function recoverFloorDraft(): boolean {
+  if (!repo) return false;
+  try {
+    const saved = sessionStorage.getItem(FLOOR_DRAFT_KEY + repo.projectId); if (!saved) return false;
+    const value: unknown = JSON.parse(saved);
+    if (!isRecord(value) || value.projectId !== repo.projectId || typeof value.binding !== 'string'
+        || !value.binding.startsWith(`${repo.projectId}:`) || typeof value.text !== 'string' || value.text.length > 1000
+        || typeof value.name !== 'string' || value.name.length > 64) throw new Error('The saved floor-plan draft is invalid. Start a new chat.');
+    const target = parseDesignTarget(value.target); const view = repo.designView(target);
+    if (target.kind === 'baseline' || view.revisionId !== value.revisionId) throw new Error('A saved floor-plan draft belongs to an older design. Its recovery data is retained; start a new chat against the current design.');
+    const sources = Array.isArray(value.sources) && value.sources.length === 0 ? [] : parseRequestSources(value.sources);
+    const guide = parseFloorGuideDraft(value.guide);
+    selectedDesignTarget = target; selectedRevision = view.revisionId;
+    newDraftId = value.binding.slice(repo.projectId.length + 1); sourcePicker.switchDraft(currentChatKey());
+    sourcePicker.restore(repo.projectId, sources); resetEditor();
+    floorGuide.update({ binding: currentChatKey(), projectId: repo.projectId, sources, disabled: busy }); floorGuide.restore(guide);
+    ui['request-text'].value = value.text; ui['proposal-name'].value = value.name;
+    ui['request-reconstruct'].checked = guide.enabled; ui['reconstruction-scope'].value = 'floor-plan-reconstruction';
+    render(); composer.refresh(); return true;
+  } catch (error) { report(error); return false; }
+}
 function captureChatDraft() {
   return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, designTarget: selectedDesignTarget, conversationTarget, selection: selectedObject,
@@ -559,7 +612,7 @@ function captureChatDraft() {
     review: activeReview, reviewTicketId: activeTicketId, proposalMessageId: activeChatProposalMessageId,
     geometryValues: [ui['door-width'].value, ui['door-offset'].value, ui['wall-position'].value, ui['wall-length'].value],
     scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
-    reconstructionScope: ui['reconstruction-scope'].value, updatedAt: Date.now() };
+    reconstructionScope: ui['reconstruction-scope'].value, floorGuide: floorGuide.capture(), updatedAt: Date.now() };
 }
 function saveChatDraft(): void {
   if (!repo) return;
@@ -579,6 +632,8 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
   ui['request-reconstruct'].checked = draft.reconstruction; ui['reconstruction-scope'].value = draft.reconstructionScope;
   scopeBuilder.restoreDraft(draft.scope); composer.setVisual(chatVisual); composer.refresh();
+  floorGuide.update({ binding: currentChatKey(), projectId: draft.model.projectId, sources: sourcePicker.ready ? sourcePicker.sources : [], disabled: busy });
+  floorGuide.restore(draft.floorGuide);
   inspectedComparison = null; syncInspector(); render();
   for (const [index, control] of [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']].entries()) control.value = draft.geometryValues[index] ?? '';
 }
@@ -630,7 +685,7 @@ async function discardRequest(message: string): Promise<boolean> {
   generic('discard-request-message').textContent = message;
   target.returnValue = 'keep';
   return new Promise<boolean>((resolve) => {
-    target.addEventListener('close', () => { if (target.returnValue === 'discard') chatDrafts.delete(currentChatKey()); resolve(target.returnValue === 'discard'); }, { once: true });
+    target.addEventListener('close', () => { if (target.returnValue === 'discard') { forgetFloorDraft(currentChatKey()); chatDrafts.delete(currentChatKey()); } resolve(target.returnValue === 'discard'); }, { once: true });
     openDialog(target);
   });
 }
@@ -954,11 +1009,14 @@ function updateControls() {
   scopeBuilder.setDisabled(!authoring || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
   ui['request-reconstruct'].disabled = !authoring || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
+  floorGuide.update({ binding: currentChatKey(), projectId: repo?.projectId ?? '', sources: sourcePicker.ready ? sourcePicker.sources : [],
+    disabled: ui['request-reconstruct'].disabled });
   ui['show-roof'].disabled = !(liveChatPreview?.snapshot ?? preview)?.entities.some(item => item.type === 'Roof');
-  ui['save-proposal'].disabled = !authoring || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready || !ui['request-text'].value.trim();
+  ui['save-proposal'].disabled = !authoring || !preview || invalidInput || Boolean(gesture) || !sourcePicker.ready || !scopeBuilder.ready || !floorGuide.ready || !ui['request-text'].value.trim();
   ui['save-proposal'].textContent = sourcePicker.uploading || busy ? '…' : '↑';
   ui['save-proposal'].setAttribute('aria-label', sourcePicker.uploading ? 'Uploading attachments' : busy ? 'Sending message' : 'Send message');
   composer.setDisabled(!authoring || !preview); composer.refresh();
+  rememberFloorDraft();
   button('new-chat').disabled = busy || !repo; button('chat-switcher-button').disabled = busy || !repo;
   renderChatSwitcher();
   generic('request-options-summary').textContent = [scopeBuilder.dirty ? 'Scope enabled' : '', ui['request-reconstruct'].checked ? 'Reconstruction enabled' : ''].filter(Boolean).join(' · ');
@@ -1311,7 +1369,8 @@ async function openServerProject(next: RoomRepository): Promise<void> {
   if (projectChoices.some(choice => choice.projectId === next.projectId)) ui['saved-projects'].value = next.projectId;
   closeDialog(ui['start-dialog']); showPage('request');
   await refreshBacklog();
-  status('Latest accepted model reopened from the server. Pending work remains in the backlog; unsent sketches are not saved.');
+  status(recoverFloorDraft() ? 'Unsent floor-plan chat recovered in this tab. Review its source and confirmed dimension before sending.'
+    : 'Latest accepted model reopened from the server. Pending work remains in Chats.');
 }
 
 async function readLegacyRecovery(): Promise<void> {
@@ -1596,9 +1655,11 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
     if (name && (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main')) throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
-    const instruction = ui['request-text'].value.trim();
+    let instruction = ui['request-text'].value.trim();
     if (!instruction || instruction.length > 1000) throw new Error('Describe the outcome in 1 to 1000 characters.');
-    const sources = sourcePicker.sources;
+    let sources = sourcePicker.sources;
+    const guided = floorGuide.request(instruction, sources);
+    if (guided) { instruction = guided.instruction; sources = guided.sources; }
     const scope = scopeBuilder.request();
     const contextLevelId = activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null;
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
@@ -1629,6 +1690,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const submittedName = submittedTicket.request.proposalName;
     chatTicketId = submittedTicket.id;
     submission = null;
+    forgetFloorDraft(draftKey);
     clearRequestSources();
     chatEvidencePins = submittedTicket.request.evidencePins ?? []; chatEvidenceEdited = false;
     chatDrafts.delete(draftKey); sourcePicker.switchDraft(currentChatKey());
