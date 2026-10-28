@@ -26,7 +26,7 @@ engine.runRenderLoop(() => {
   model.scene.render(); canvas.dataset.sceneReady = String(model.scene.isReady());
   const points = model.scene.meshes.filter(mesh => mesh.name.startsWith('ifc:') && mesh.isEnabled()).map(mesh => {
     const positions = mesh.getVerticesData('position') ?? []; const indices = mesh.getIndices() ?? [];
-    const vertices = indices.slice(0, 3).map(i => new Vector3(positions[i * 3] ?? 0, positions[i * 3 + 1] ?? 0, positions[i * 3 + 2] ?? 0));
+    const vertices = Array.from(indices).slice(0, 3).map(i => new Vector3(positions[i * 3] ?? 0, positions[i * 3 + 1] ?? 0, positions[i * 3 + 2] ?? 0));
     const center = vertices.reduce((sum, point) => sum.add(point), Vector3.Zero()).scale(1 / 3);
     const screen = Vector3.Project(center, Matrix.Identity(), model.scene.getTransformMatrix(), model.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
     return { x: screen.x, y: screen.y, globalId: layer.pick(mesh)?.source.globalId };
