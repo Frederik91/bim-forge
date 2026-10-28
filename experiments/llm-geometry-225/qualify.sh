@@ -24,7 +24,8 @@ docker run --name "$name" --network none --read-only --cpus 2 --memory 3g --memo
     npm run validate > /evidence/validate.log 2>&1
     node scripts/validate-policy.ts --changed-files $(cat /evidence/changed-paths.txt) > /evidence/policy.log 2>&1
     timeout 240 node experiments/llm-geometry-225/pilot.ts /evidence/pilot > /evidence/pilot.log 2>&1
-    timeout 120 python3 experiments/llm-geometry-225/oracle.py /evidence/pilot > /evidence/oracle.log 2>&1
+    node experiments/llm-geometry-225/contract.ts --check-trials experiments/llm-geometry-225/receipts/llm-trials.json > /evidence/trial-contract.log 2>&1
+    timeout 120 python3 experiments/llm-geometry-225/oracle.py /evidence/pilot experiments/llm-geometry-225/receipts/llm-trials.json > /evidence/oracle.log 2>&1
   '
 status=$?
 set -e

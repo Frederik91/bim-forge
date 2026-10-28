@@ -1,5 +1,6 @@
 import { Type, type Static } from 'typebox';
 import { Check } from 'typebox/value';
+import fs from 'node:fs';
 import type { Pin, V3 } from './fixtures.ts';
 
 // Executable pilot output contract; the production API sketch is in the research note.
@@ -15,3 +16,10 @@ export function parseAnswer(value: unknown): Answer { if (!Check(AnswerSchema, v
 export type Candidate = { center: V3; yawDegrees: number; side: 1 | -1; wall: Pin };
 export type Failure = 'missing' | 'stale' | 'invalid-id' | 'limit' | 'unsupported';
 export type ReadResult<T> = { kind: 'ok'; value: T; complete: boolean; toleranceMetres: number } | { kind: 'unavailable'; reason: Failure };
+const TrialsSchema = Type.Object({ trials: Type.Array(Type.Object({arm:Type.String(),scene:Type.String(),answer:AnswerSchema},{additionalProperties:false})) });
+if(process.argv[2]==='--check-trials') {
+  const filename=process.argv[3]; if(!filename) throw new Error('trial receipt required');
+  const value:unknown=JSON.parse(fs.readFileSync(filename,'utf8'));
+  if(!Check(TrialsSchema,value)) throw new Error('Invalid external LLM trial contract');
+  console.log(`Validated ${value.trials.length} external LLM answers.`);
+}

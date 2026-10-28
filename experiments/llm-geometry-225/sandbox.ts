@@ -2,6 +2,7 @@ import { createApiKit, createRuntime, DocsTree, Type } from '@frederik91/scriptb
 import type { Scene } from './fixtures.ts';
 import { inspectCandidate, proposal } from './pilot.ts';
 import { parseAnswer } from './contract.ts';
+import assert from 'node:assert/strict';
 
 const api=createApiKit<Scene>();
 const geometry=api.namespace({name:'geometry',description:'Read-only synthetic fixture queries. No files, network or model writes.',methods:{
@@ -24,3 +25,24 @@ export async function runSandbox(scene:Scene) {
   } finally { await session.dispose(); }
 }
 export async function disposeSandbox() { await (await runtimePromise).dispose(); }
+export async function sandboxControls(scene:Scene) {
+  const runtime=await runtimePromise;
+  const cases=[
+    {name:'invalid-side-type',source:'return await geometry.inspect(0);',capabilities:['geometry.inspect'],hostCalls:4,timeoutMs:1000,completed:false},
+    {name:'no-host-globals',source:'return ["process","fetch","require"].map(k => k in globalThis);',capabilities:[],hostCalls:4,timeoutMs:1000,completed:true},
+    {name:'denied-capability',source:'return await geometry.inspect(1);',capabilities:[],hostCalls:4,timeoutMs:1000,completed:false},
+    {name:'call-budget',source:'await geometry.inspect(1); return await geometry.inspect(-1);',capabilities:['geometry.inspect'],hostCalls:1,timeoutMs:1000,completed:false},
+    {name:'timeout',source:'while (true) {}',capabilities:[],hostCalls:4,timeoutMs:100,completed:false},
+    {name:'source-budget',source:`return ${JSON.stringify('x'.repeat(5000))};`,capabilities:[],hostCalls:4,timeoutMs:1000,completed:false},
+  ];
+  const results=[];
+  for(const item of cases) {
+    const session=runtime.createSession({context:scene,capabilities:item.capabilities,limits:{hostCalls:item.hostCalls,timeoutMs:item.timeoutMs}});
+    try { const result=await session.execute({language:'typescript',source:item.source});
+      assert.equal(result.status==='completed',item.completed,item.name);
+      if(item.name==='no-host-globals' && result.status==='completed') assert.deepEqual(result.value,[false,false,false]);
+      results.push({name:item.name,outcome:result});
+    } finally { await session.dispose(); }
+  }
+  return results;
+}
