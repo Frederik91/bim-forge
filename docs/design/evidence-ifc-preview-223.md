@@ -87,7 +87,44 @@ Do not merge new geometry/storage/security work without human approval.
 - Parent check 5, same source: all 15 actual-browser checks passed, including desktop/phone layout, baseline/alternative isolation, linked canvas picking/visibility and no submission on reference.
 - Screenshot inspection prompted compact IFC controls, a corrected reference-frame enable state and named source-context attachments instead of raw JSON in the message field. Final-source qualification follows.
 - Parent check 6, `9140400`: root validation, explicit policy, build, 49 focused checks and all 15 browser checks passed with the refined UI. The full root suite passed 810 checks with two existing optional skips and one packaging failure: the Docker context allowlist omitted the new linked store/routes. Added the two explicit entries; no validator changed. Assets tests had not yet run because the root command stopped at that failure.
-- Final combined qualification and publication: pending.
+- Parent check 7, `e99740f`: root validation, explicit 41-path policy, build and 51 focused checks passed. Full `npm test` passed: 5 qualification-contract checks, 811 of 813 main checks (two existing optional skips) and all 21 asset checks. The source-only image preflight initially referenced the pre-squash approved commit, absent from the bounded bundle; corrected the preflight to the merged base and checked unchanged production dependency metadata against the actual approved base image.
+- Parent check 8, same executable source: source-only image built with no pull/install and no new dependencies. Actual image plus a separate spool-only converter passed all three HTTP/security/conversion/recovery/preservation tests as UID 65032:33, under production app limits. Runtime/dependency file manifests were checked before enabling conversion.
+- Publication and live-provider interpretation: pending at this receipt; recorded separately on issue #223 and the integration PR.
+
+### Final source and retained evidence
+
+Qualified executable source: `e99740fc952527f900bd891298248c9315417f18`.
+Image: `bim-forge-preview-app:e99740fc952527f900bd891298248c9315417f18`,
+ID `sha256:e56d752c1d5206a1a66ed4ff550410f250949a83e64ee9bc0ae4690e8bb13e93`.
+Later receipt-only commits do not change executable files.
+
+The image is a source-only layer over the exact already-qualified approved preview image
+`sha256:c3497c848dceca6fbf01c08f64649a444e69cfe65570ffca63b2f4b36508bcc3`.
+The lockfile and production dependency metadata match. This avoids reinstalling unchanged dependencies
+on a nearly full root filesystem; it is a retained preview build path, not a replacement for the clean
+repository Dockerfile. That Dockerfile and its context allowlist now include both new server modules.
+
+The 15 browser checks ran on `9140400`; all UI/domain/server/guest/worker files are identical to the
+final executable source. Only the Docker-context allowlist and receipt changed afterward. Browser source,
+trace, screenshots and inspectable delta are retained under
+`build-9140400048c17591899ad96254e0fa25cc9cabaf/browser-a06/`.
+Final root/full/image/canary evidence is under `build-e99740fc952527f900bd891298248c9315417f18/`.
+Containers had read-only roots/source/dependencies, no network, bounded CPU/memory/PIDs, and SSD-backed
+private state, spool and artifacts. The actual image app has no Python mounts; the converter has no app
+state, credentials, native database or Docker socket.
+
+| Retained artifact | SHA-256 |
+| --- | --- |
+| Final `artifacts/full.log` | `bf78e019863c0f285159a239bbc1b37780982cfa13d56e8f050358bf35768519` |
+| Actual-image `artifacts/image-canary.log` | `a1ec95376dd836068b66edd8707f712e82539a037458017f502f9b8fd4f8e7fa` |
+
+These [synthetic model deltas](fixtures/evidence-ifc-223/floor-alternative-delta.json) show Main and
+the fixed As-is baseline retaining their revision while only Alternative 1 accepts the shared-wall move.
+They contain invented test data, not the owner's house.
+
+![Linked reference with a named unsent attachment](fixtures/evidence-ifc-223/linked-desktop.png)
+
+![Phone layout retains the model above the composer](fixtures/evidence-ifc-223/linked-phone.png)
 
 The owner permits ten attempts per interactive item, without weakening validators or changing factory
 policy. IFC worker #218 used all ten and handed back its final passing source; this parent work does
