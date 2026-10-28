@@ -77,7 +77,7 @@ test('real Chromium uploads, browses, inspects, picks and hides bounded derived 
       } })) return;
       if (request.url === '/test.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(script); return; }
       response.setHeader('Content-Type', 'text/html');
-      response.end(`<body data-project="${project}" style="display:flex;font-family:sans-serif"><main><canvas width="800" height="600"></canvas><pre id="context"></pre></main><aside id="links" style="width:480px"></aside><script type="module" src="/test.mjs"></script></body>`);
+      response.end(`<body data-project="${project}" style="display:flex;gap:16px;font-family:sans-serif"><main style="width:800px;flex:none"><canvas width="800" height="600"></canvas><pre id="context" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></main><aside id="links" style="width:480px;flex:none"></aside><script type="module" src="/test.mjs"></script></body>`);
     })().catch(error => { response.statusCode = 500; response.end(String(error)); });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
