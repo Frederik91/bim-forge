@@ -1,4 +1,5 @@
 import type { DesignTarget, DesignTargetView } from '../src/design-targets.ts';
+import { DesignCommands } from './design-command.ts';
 
 interface DesignActions {
   select(target: DesignTarget): Promise<void>;
@@ -23,6 +24,9 @@ function nameInput(label: string): { label: HTMLLabelElement; input: HTMLInputEl
 export class DesignWorkspace {
   readonly #actions: DesignActions;
   readonly #trigger: HTMLButtonElement;
+  readonly #select = document.createElement('select');
+  readonly #quickAlternative: HTMLButtonElement;
+  readonly #switcher = document.createElement('div');
   readonly #dialog = document.createElement('dialog');
   readonly #list = document.createElement('div');
   readonly #status = document.createElement('p');
@@ -34,12 +38,23 @@ export class DesignWorkspace {
   #views: readonly DesignTargetView[] = [];
   #selected: DesignTarget = { kind: 'main' };
   #busy = false;
-  #captureCommand = crypto.randomUUID();
-  #forkCommand = crypto.randomUUID();
+  readonly #commands = new DesignCommands();
+  #projectId = '';
 
   constructor(mount: HTMLElement, actions: DesignActions) {
     this.#actions = actions;
-    this.#trigger = button('Design views', () => this.#open());
+    this.#trigger = button('Manage', () => this.#open());
+    this.#trigger.setAttribute('aria-label', 'Manage design versions');
+    this.#select.className = 'design-workspace-select';
+    this.#select.setAttribute('aria-label', 'Active design');
+    this.#select.addEventListener('change', () => {
+      const view = this.#views.find(item => key(item.target) === this.#select.value);
+      if (view) void this.#run('Opening design…', () => actions.select(view.target));
+    });
+    this.#quickAlternative = button('+ Alternative', () => this.createAlternative());
+    this.#quickAlternative.title = 'Explore a separate design; the starting version stays unchanged';
+    this.#switcher.className = 'design-workspace-switcher';
+    this.#switcher.append(this.#select, this.#quickAlternative, this.#trigger);
     this.#trigger.setAttribute('aria-haspopup', 'dialog');
     this.#dialog.className = 'design-workspace-dialog';
     this.#dialog.setAttribute('aria-label', 'Design views and alternatives');
@@ -50,16 +65,17 @@ export class DesignWorkspace {
     this.#status.setAttribute('role', 'status'); this.#status.setAttribute('aria-live', 'polite');
     this.#saveBaseline = button('Capture baseline', () => {
       void this.#run('Capturing baseline…', async () => {
-        await actions.capture({ name: this.#capture.input.value.trim() || 'As-is', commandId: this.#captureCommand });
-        this.#captureCommand = crypto.randomUUID();
+        const name = this.#capture.input.value.trim() || 'As-is';
+        await actions.capture({ name, commandId: this.#captureId(name) });
+        this.#commands.complete('capture');
       });
     });
     this.#baselines.setAttribute('aria-label', 'Baseline for the new alternative');
     this.#createAlternative = button('Create alternative', () => {
       void this.#run('Creating alternative…', async () => {
-        await actions.fork({ baselineId: this.#baselines.value,
-          name: this.#alternative.input.value.trim() || 'Alternative', commandId: this.#forkCommand });
-        this.#forkCommand = crypto.randomUUID();
+        const baselineId = this.#baselines.value; const name = this.#alternative.input.value.trim() || 'Alternative';
+        await actions.fork({ baselineId, name, commandId: this.#commands.id({ kind: 'fork', projectId: this.#projectId, baselineId, name }) });
+        this.#commands.complete('fork');
       });
     });
     const capture = document.createElement('section'); capture.className = 'design-workspace-create';
@@ -68,30 +84,59 @@ export class DesignWorkspace {
     fork.append(this.#baselines, this.#alternative.label, this.#createAlternative);
     const close = button('Close', () => this.#dialog.close());
     this.#dialog.append(heading, introduction, this.#list, capture, fork, this.#status, close);
-    this.#capture.input.addEventListener('input', () => { this.#captureCommand = crypto.randomUUID(); });
-    this.#alternative.input.addEventListener('input', () => { this.#forkCommand = crypto.randomUUID(); });
-    this.#baselines.addEventListener('change', () => { this.#forkCommand = crypto.randomUUID(); });
-    mount.replaceChildren(this.#trigger, this.#dialog);
+    mount.replaceChildren(this.#switcher);
+    document.body.append(this.#dialog);
   }
 
-  update(views: readonly DesignTargetView[], selected: DesignTarget): void {
+  update(views: readonly DesignTargetView[], selected: DesignTarget, projectId: string): void {
+    this.#projectId = projectId;
     this.#views = views; this.#selected = selected;
     const current = views.find(view => key(view.target) === key(selected));
-    this.#trigger.textContent = `${current?.name ?? 'Design views'} ▾`;
-    this.#trigger.setAttribute('aria-label', `Design views. Current: ${current?.name ?? 'unavailable'}`);
+    this.#select.title = current ? `${current.name} · ${current.target.kind === 'baseline' ? 'fixed baseline' : 'editable design'}` : 'Open a project';
     this.#trigger.disabled = this.#busy || views.length === 0;
     this.#render();
+  }
+
+  createAlternative(): void {
+    void this.#run('Creating alternative…', async () => {
+      if (this.#selected.kind !== 'baseline') {
+        const current = this.#views.find(view => key(view.target) === key(this.#selected));
+        const name = (current?.target.kind === 'main' ? 'As-is' : `${current?.name ?? 'Design'} baseline`).slice(0, 80);
+        await this.#actions.capture({ name, commandId: this.#captureId(name) });
+        this.#commands.complete('capture');
+      }
+      const selected = this.#selected;
+      if (selected.kind !== 'baseline') throw new Error('The starting baseline could not be confirmed. Reopen the project.');
+      const name = `Alternative ${this.#views.filter(view => view.target.kind === 'alternative').length + 1}`;
+      await this.#actions.fork({ baselineId: selected.id, name,
+        commandId: this.#commands.id({ kind: 'fork', projectId: this.#projectId, baselineId: selected.id, name }) });
+      this.#commands.complete('fork');
+    });
   }
 
   #open(): void {
     this.#capture.input.value = 'As-is';
     this.#alternative.input.value = `Alternative ${this.#views.filter(view => view.target.kind === 'alternative').length + 1}`;
-    this.#captureCommand = crypto.randomUUID(); this.#forkCommand = crypto.randomUUID();
     this.#status.textContent = ''; this.#render(); this.#dialog.showModal();
+  }
+
+  #captureId(name: string): string {
+    const current = this.#views.find(view => key(view.target) === key(this.#selected));
+    if (!current || this.#selected.kind === 'baseline' || !this.#projectId) throw new Error('Open an editable design first.');
+    return this.#commands.id({ kind: 'capture', projectId: this.#projectId, target: this.#selected, revisionId: current.revisionId, name });
   }
 
   #render(): void {
     this.#trigger.disabled = this.#busy || this.#views.length === 0;
+    this.#select.disabled = this.#trigger.disabled;
+    this.#quickAlternative.disabled = this.#trigger.disabled;
+    this.#quickAlternative.textContent = this.#busy ? 'Working…' : '+ Alternative';
+    this.#select.replaceChildren();
+    for (const view of this.#views) {
+      const option = document.createElement('option'); option.value = key(view.target);
+      option.textContent = `${view.name}${view.target.kind === 'baseline' ? ' · locked' : ''}`;
+      option.selected = key(view.target) === key(this.#selected); this.#select.append(option);
+    }
     this.#list.replaceChildren();
     for (const view of this.#views) {
       const row = button('', () => { void this.#run('Opening design…', () => this.#actions.select(view.target)); });
@@ -124,13 +169,14 @@ export class DesignWorkspace {
     if (this.#busy) return;
     this.#busy = true; this.#status.textContent = message; this.#render();
     try {
-      await action(); this.#dialog.close();
+      await action(); if (this.#dialog.open) this.#dialog.close();
     } catch (error) {
       this.#status.textContent = error instanceof Error ? error.message : 'The design action could not finish. Try again.';
+      if (!this.#dialog.open) this.#dialog.showModal();
     } finally {
-      this.#busy = false; this.update(this.#views, this.#selected);
+      this.#busy = false; this.update(this.#views, this.#selected, this.#projectId);
     }
   }
 
-  dispose(): void { this.#dialog.remove(); this.#trigger.remove(); }
+  dispose(): void { this.#dialog.remove(); this.#switcher.remove(); }
 }
