@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { IDENTITY_LINK_TRANSFORM, MAX_LINK_OUTPUT_BYTES, MAX_LINK_SOURCE_BYTES, MAX_LINK_REVISIONS, assertRigidLinkTransform, linkedDelta, parseLinkedJob, parseLinkedPrepared, parseLinkedState } from '../src/linked-model.ts';
+import { Check } from 'typebox/value';
+import { IDENTITY_LINK_TRANSFORM, LinkedTransformSchema, MAX_LINK_OUTPUT_BYTES, MAX_LINK_SOURCE_BYTES, MAX_LINK_REVISIONS, assertRigidLinkTransform, linkedDelta, parseLinkedJob, parseLinkedPrepared, parseLinkedState } from '../src/linked-model.ts';
 import type { LinkedCatalogItem, LinkedJob, LinkedPrepared, LinkedSelection, LinkedState } from '../src/linked-model.ts';
 
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+const SHA256 = /^[a-f0-9]{64}$/;
+const MAX_RETAINED_HISTORY_ROWS = 64 + MAX_LINK_REVISIONS;
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 function readBounded(filename: string, max: number): Buffer {
   const descriptor = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
@@ -33,6 +36,10 @@ export type LinkedCurrentSnapshot = {
 };
 export type LinkedVersionResolution = { kind: 'ok'; versionId: string; prepared: LinkedPrepared }
   | { kind: 'unavailable'; reason: 'missing' | 'stale' | 'ambiguous' };
+export type LinkedRetainedPin = {
+  namespace: string; revision: string; originalSha256: string;
+  occurrenceId: string; globalId: string; placementDigest: string;
+};
 export type LinkedGuardResult<T> = { kind: 'committed'; value: T } | { kind: 'catalog-changed' };
 
 /** SQLite serializes catalog writes across processes. Artifacts remain separate from native storage. */
@@ -280,18 +287,39 @@ export class LinkedModelStore {
     return result;
   }
   readVersion(projectId: string, selection: LinkedSelection): LinkedVersionResolution {
-    const state = this.states(projectId).find(item => item.namespace === selection.source.namespace && item.occurrence === selection.occurrence.id);
+    return this.retained(projectId, { ...selection.source, occurrenceId: selection.occurrence.id,
+      placementDigest: sha(Buffer.from(JSON.stringify(selection.occurrence.sourceToProjectMetres))) });
+  }
+  /** Host-only exact version lookup. The stored history owns the placement matrix. */
+  resolveRetained(projectId: string, pin: LinkedRetainedPin): LinkedVersionResolution {
+    return this.retained(projectId, pin);
+  }
+  private retained(projectId: string, pin: LinkedRetainedPin): LinkedVersionResolution {
+    if (!SHA256.test(pin.originalSha256) || !SHA256.test(pin.placementDigest)) return { kind: 'unavailable', reason: 'missing' };
+    const state = this.states(projectId).find(item => item.namespace === pin.namespace && item.occurrence === pin.occurrenceId);
     if (!state) return { kind: 'unavailable', reason: 'missing' };
-    const versions = this.versionJobs(state).filter(version => version.job.kind === 'ready' && version.job.source.revision === selection.source.revision
-      && version.job.source.originalSha256 === selection.source.originalSha256);
-    const rows = this.database.prepare('SELECT version,transform FROM link_history WHERE link=? AND project=?').all(state.id, projectId);
-    const matches = versions.filter(version => rows.some(row => row.version === version.job.id && row.transform === JSON.stringify(selection.occurrence.sourceToProjectMetres)));
-    if (matches.length > 1) return { kind: 'unavailable', reason: 'ambiguous' };
-    const retained = matches[0]; if (!retained) return { kind: 'unavailable', reason: 'missing' };
+    const versions = new Set(this.versionJobs(state).filter(version => version.job.kind === 'ready' && version.job.source.namespace === pin.namespace
+      && version.job.occurrence === pin.occurrenceId && version.job.source.revision === pin.revision
+      && version.job.source.originalSha256 === pin.originalSha256).map(version => version.job.id));
+    const rows = this.database.prepare('SELECT version,transform FROM link_history WHERE link=? AND project=? LIMIT ?').all(state.id, projectId, MAX_RETAINED_HISTORY_ROWS + 1);
+    if (rows.length > MAX_RETAINED_HISTORY_ROWS) return { kind: 'unavailable', reason: 'missing' };
+    const matches = new Map<string, { versionId: string; transform: number[][] }>();
+    for (const row of rows) {
+      if (typeof row.version !== 'string' || !versions.has(row.version) || typeof row.transform !== 'string' || row.transform.length > 4096) continue;
+      try {
+        const transform: unknown = JSON.parse(row.transform);
+        if (!Check(LinkedTransformSchema, transform)) continue;
+        assertRigidLinkTransform(transform);
+        const serialized = JSON.stringify(transform); if (sha(Buffer.from(serialized)) !== pin.placementDigest) continue;
+        matches.set(JSON.stringify([row.version, serialized]), { versionId: row.version, transform });
+      } catch { continue; }
+    }
+    if (matches.size > 1) return { kind: 'unavailable', reason: 'ambiguous' };
+    const match = matches.values().next().value; if (!match) return { kind: 'unavailable', reason: 'missing' };
     try {
-      const prepared = this.placed(this.preparedVersion(projectId, retained.job.id), selection.occurrence.sourceToProjectMetres);
-      if (!prepared.index.objects.some(object => object.ref.globalId === selection.source.globalId)) return { kind: 'unavailable', reason: 'missing' };
-      return { kind: 'ok', versionId: retained.job.id, prepared };
+      const prepared = this.placed(this.preparedVersion(projectId, match.versionId), match.transform);
+      if (!prepared.index.objects.some(object => object.ref.globalId === pin.globalId)) return { kind: 'unavailable', reason: 'missing' };
+      return { kind: 'ok', versionId: match.versionId, prepared };
     } catch { return { kind: 'unavailable', reason: 'missing' }; }
   }
   resolve(projectId: string, selection: LinkedSelection, mode: 'current' | 'historical'): LinkedVersionResolution {
