@@ -14,10 +14,11 @@ import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
 const doorScript = `const view = await model.inspect(); if(!view.placement.layout) throw new Error('Fixture layout');
   await model.previewRectangle({...view.placement.layout,door:{...view.placement.layout.door,widthMm:1200}});
   return {kind:'propose',review:${JSON.stringify(geometryReview)}};`;
-function agent(script = geometryProposalScript): ModelWorker {
+function agent(script = geometryProposalScript, onSuccess: () => void = () => {}): ModelWorker {
   return { identity: { provider: 'test', model: 'geometry-evidence-queue' }, async run(session) {
     const result = await session.executeTool('run_model_script', { language: 'typescript', source: script });
     assert.equal(result.ok, true, JSON.stringify(result));
+    onSuccess();
   } };
 }
 function request(repository: RoomRepository, id: string) {
@@ -102,15 +103,17 @@ test('final native endpoint replay is symmetric for object order and query membe
         if(page.kind === 'unavailable') throw new Error('Missing source wall');
         const wall = page.items.find(item => item.ref.kind === 'ifc'); if(!wall) throw new Error('Missing source wall');
         const measured = await geometry.measure({subject:${subject},against:${against},operation:${JSON.stringify(operation)},clearanceMetres:.5});
-        if(measured.kind !== 'complete' || (${JSON.stringify(operation)} === 'clearance' && measured.value.clearance !== 'satisfied-mesh')) throw new Error('Initial measurement not proven');
+        if(measured.kind !== 'complete'${operation === 'clearance' ? " || measured.value.clearance !== 'satisfied-mesh'" : ''}) throw new Error('Initial measurement not proven');
         await model.previewAssets(${JSON.stringify({ families: [], instances: [{ ...instance, position: [x, 2] }], removeInstanceIds: [] })});
         return {kind:'propose',review:${JSON.stringify(geometryReview)}};`;
       const source = new FixtureGeometrySource(); source.replace([evidenceWall({ x: 2 })]);
       const file = path.join(directory, `${endpoint}-${operation}-${x}.sqlite`);
-      const queue = await ChangeRequests.open(file, () => agent(script), { geometry: source }); queues.push(queue);
+      let guestSucceeded = false;
+      const queue = await ChangeRequests.open(file, () => agent(script, () => { guestSucceeded = true; }), { geometry: source }); queues.push(queue);
       const ticket = await queue.submit(repository.serialize(), { ...request(repository, `${endpoint}-${operation}-${x === 3.5 ? 'safe' : 'overlap'}`), selectedObjectIds: [instance.id] });
       if (x === 3.5) {
         await ready(queue, ticket.id);
+        assert.equal(guestSucceeded, true, 'The actual TypeScript guest must succeed before final validation.');
         const result = await accept(queue, ticket.id); const saved = await RoomRepository.restore(result.project);
         const evidence = readGeometryEvidence(saved.review(ticket.request.proposalName).geometryEvidence);
         assert.equal(evidence.measurements[0]?.result.kind, 'complete');
@@ -134,6 +137,7 @@ test('final native endpoint replay is symmetric for object order and query membe
         while (queue.get(ticket.id).state === 'queued' || queue.get(ticket.id).state === 'working') {
           assert.ok(Date.now() < deadline, `Endpoint case ${endpoint} did not finish`); await new Promise(resolve => setTimeout(resolve, 10));
         }
+        assert.equal(guestSucceeded, true, 'An unsafe final candidate must be rejected after successful guest execution.');
         assert.equal(queue.get(ticket.id).state, 'failed', endpoint);
         assert.equal(queue.get(ticket.id).result, null); assert.equal(queue.project(repository.projectId), repository.serialize());
       }
