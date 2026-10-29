@@ -31,6 +31,9 @@ import { parseEvidenceUses } from './model-evidence.ts';
 import type { EvidenceUse } from './model-evidence.ts';
 import { GEOMETRY_SCRIPT_METHODS, GEOMETRY_SCRIPT_CAPABILITIES, GEOMETRY_SCRIPT_GUIDANCE } from './geometry-evidence-api.ts';
 import type { GeometryEvidenceSession } from './geometry-evidence.ts';
+import { GeometryEvidenceConflict, GeometryProposalValidationError } from './geometry-evidence.ts';
+import { GeometryEvidenceLimitError } from './geometry-evidence-contract.ts';
+import { GeometrySessionError } from './geometry-session.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -586,7 +589,18 @@ export class ModelScripts {
         if (binding.scope) assertModelScopeWrites({ before: input.base, after: candidate, binding: binding.scope });
         const delta = summarizeModelDelta(diffSnapshots(input.base, candidate));
         if (!Object.values(delta).some((collection) => Object.values(collection).some((ids) => ids.length))) throw new Error('The proposed model is identical to the bound revision.');
-        input.signal.throwIfAborted();
+        try {
+          input.signal.throwIfAborted();
+          await input.geometry?.seal(candidate);
+          input.signal.throwIfAborted();
+        } catch (error) {
+          const correctable = error instanceof GeometryProposalValidationError && !input.signal.aborted;
+          const controlled = correctable || error instanceof GeometryEvidenceConflict
+            || error instanceof GeometryEvidenceLimitError || error instanceof GeometrySessionError;
+          return failed({ code: correctable ? 'invalid-proposal' : 'host-failure',
+            message: publicMessage(controlled && error instanceof Error ? error.message : 'Host proposal validation failed. Staged changes discarded.'),
+            line: null, column: null }, 'failed');
+        }
         const proposal: ModelScriptResult = { kind: 'proposal', snapshot: candidate, review: result.review, evidence: evidence('proposal', 'passed', null) };
         retainPreview = true;
         return proposal;
