@@ -123,8 +123,15 @@ All assertions below are **unrun**.
 | Finite against-object loophole and missing host-authenticated evidence | `demo/geometry-evidence-queue.test.ts` |
 | Real linked cross-process reservation, converter, app UI, connected agent and independent oracle | #232 / #234 / parent #230 |
 
-Qualification attempts consumed: **0 of 10** for this new component.
-Parent SSH and HTTPS probes timed out; no local build/test substitute was used.
+No independent #233 qualification run has been started. The parent owns the serial server slot and combined attempt ledger.
+Initial parent SSH/HTTPS probes timed out; connectivity subsequently returned. No local build/test substitute was used.
+Parent combined attempt 2 at `256071ce2ec5581e468d69d21e03e459d4e755bf` passed strict lint over 314 sources, then failed TypeScript
+before tests/builds. Its four #233 diagnostics were missing typed schema metadata access, an unbranded test request binding,
+and a receipt-digest await inside the synchronous native state parser. Schema limits now use validated own data descriptors,
+the test binding goes through the real request parser, and digest verification stays in the public async restore/proposal paths.
+The synchronous storage-authority parser remains synchronous. Parent fixes its separate provider fixture constructor errors.
+Exact red log: `/ssd1/bim-forge-qualification/issue230/run-256071ce2ec5581e468d69d21e03e459d4e755bf-component-02/artifacts/validate.log`.
+These corrections have not been rerun; the parent will assign the next bounded qualification attempt.
 Static verification performed: source/diff inspection and `git -c core.whitespace=cr-at-eol diff --check`.
 The app worktree creation failed during Git configuration discovery; direct isolated Git worktree creation succeeded.
 The shell profile initially reset relative paths to MacType; explicit non-login shell and absolute owned paths resolved it.
