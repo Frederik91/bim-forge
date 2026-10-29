@@ -36,6 +36,12 @@ red/green receipt; inspect failures before retrying. It does not reopen worker21
   Native reselection clears linked selection. A second property-version source with
   the same GlobalId keeps the first pin immutable and cannot mix old source binding
   with new properties. These assertions require the parent's linked-selection fix.
+  The external-data JSON is parsed and schema-validated. Its full `geometryRef` must
+  match the project, prepared source/revision/hash/GlobalId and occurrence. The host
+  computes SHA-256 of the prepared matrix array independently of production digest
+  helpers and compares the placement binding. The original selection marker and
+  source properties/units must agree with the same prepared object. Both old and new
+  attachment handles are retained in the browser receipt; old pins stay immutable.
   The receiving project enters through the existing `#import-file` UI. It uses a
   fresh disposable UUID for live runs; the generator records the actual ID and hash.
   There is no fake provider or test-only product bypass. It does not qualify touch.
