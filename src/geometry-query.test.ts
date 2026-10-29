@@ -10,7 +10,8 @@ import type { Triangle } from './geometry-math.ts';
 import { parseLinkedPrepared } from './linked-model.ts';
 import type { LinkedPrepared } from './linked-model.ts';
 import { validateSnapshot } from './room-model.ts';
-import { createGeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
+import { createGeometrySession, GeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
+import { residentialFloor } from './residential-floor.ts';
 
 const projectId = '00000000-0000-4000-8000-000000000231';
 const identity: GeometryMatrix = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
@@ -100,7 +101,7 @@ test('L shaped non-convex mesh leaves its notch free despite broad-phase AABB ov
   assert.equal(result.relation, 'separated'); assert.equal(result.clearance, 'satisfied-mesh'); assert.ok(Math.abs((result.distanceMetres ?? 0) - .5) < 1e-8);
 });
 
-test('real triangulated opening boundary preserves passage and lintel distance', () => {
+test('independent triangulated opening boundary preserves passage and lintel distance', () => {
   // U-profile is independent of native wall-section code: a rectangular doorway open at floor level.
   const u = prism([[0, 0], [2, 0], [2, 2], [4, 2], [4, 0], [6, 0], [6, 3], [0, 3]], [[0, 1, 2], [0, 2, 7], [2, 3, 6], [2, 6, 7], [3, 4, 5], [3, 5, 6]], .2);
   // Prism helper's Z extrusion becomes wall thickness Y; swap Y/Z and reverse winding to preserve handedness.
@@ -205,8 +206,86 @@ test('worker keeps the public four-method contract, trusted receipts and bounded
 test('worker abortion and hard startup deadline prevent publication of successful partial history', async () => {
   const aborted = new AbortController(); aborted.abort();
   await assert.rejects(createGeometrySession(input(), { signal: aborted.signal }), /aborted/);
-  await assert.rejects(createGeometrySession(input(), { constructionTimeoutMs: 1 }), /deadline/);
   const controller = new AbortController(); const session = await createGeometrySession(input(), { signal: controller.signal });
   await session.query({ query: {} }); controller.abort();
   assert.throws(() => session.receipts(), /aborted/); await session.close();
+});
+
+test('semantic level/space discovery is complete without solids; spatial context queries expose missing bounds', () => {
+  const native = residentialFloor();
+  const readableIds = native.entities.filter(entity => entity.type === 'Level' || entity.type === 'Space').map(entity => entity.id);
+  const nativeContext = createGeometryContext({ ...input([]), native: { snapshot: native, revisionId, target: { kind: 'main' }, readableIds } });
+  const linkedContext = createGeometryContext(input([prepared({ ifcClass: 'IfcBuildingStorey', missing: true }),
+    prepared({ namespace: 'space-source', ifcClass: 'IfcSpace', missing: true })]));
+  for (const context of [nativeContext, linkedContext]) {
+    const page = context.query({ query: { role: 'context', categories: ['level', 'space'] } });
+    assert.equal(page.kind, 'complete');
+    if (page.kind !== 'complete') continue;
+    assert.ok(page.items.length >= 2); assert.equal(validateGeometryReceipts({ receipts: context.receipts(), current: context }).kind, 'fresh');
+    const spatial = context.query({ query: { role: 'context', categories: ['level', 'space'], region: { min: [0, 0, 0], max: [2, 2, 2] } } });
+    assert.equal(spatial.kind, 'partial');
+  }
+});
+
+test('scope reads evaluate hidden hosts privately, hide identities/relations and bind coverage to receipts', () => {
+  const snapshot = validateSnapshot({ units: 'm', entities: [
+    { id: 'wall-private', type: 'Wall', name: 'PRIVATE HOST NAME', start: [0, 0], end: [3, 0], thickness: .2, height: 3 },
+    { id: 'door-visible', type: 'Door', name: 'Visible void', width: 1, height: 2 },
+  ], relationships: [{ id: 'host-private', type: 'hosted-by', source: 'door-visible', target: 'wall-private', offset: 1 }] });
+  const contextInput = { ...input([]), native: { snapshot, revisionId, target: { kind: 'main' }, readableIds: ['door-visible'] } } satisfies GeometryContextInput;
+  const context = createGeometryContext(contextInput);
+  const page = context.query({ query: { role: 'all' } }); assert.equal(page.kind, 'complete'); if (page.kind !== 'complete') return;
+  assert.equal(page.total, 1); assert.equal(page.domain.kind, 'authorized-native-scope');
+  const ref = page.items[0].ref; assert.equal(ref.kind, 'native');
+  assert.deepEqual(page.items[0].bounds, { min: [1, -.1, 0], max: [2, .1, 2] });
+  assert.equal(JSON.stringify(page).includes('PRIVATE HOST NAME'), false); assert.equal(JSON.stringify(page).includes('wall-private'), false);
+  assert.equal(context.describe({ kind: 'native', projectId, target: { kind: 'main' }, revisionId, entityId: 'wall-private' }).kind, 'unavailable');
+  const related = context.relations(ref); assert.equal(related.kind, 'complete'); if (related.kind === 'complete') assert.deepEqual(related.items, []);
+  const clean = createGeometryContext(contextInput); clean.describe(ref);
+  const moved = validateSnapshot({ ...snapshot, entities: snapshot.entities.map(entity => entity.type === 'Wall'
+    ? { ...entity, start: [0, 1], end: [3, 1] } : entity) });
+  const current = createGeometryContext({ ...contextInput, native: { ...contextInput.native, snapshot: moved, revisionId: 'e'.repeat(64) } });
+  assert.equal(validateGeometryReceipts({ receipts: clean.receipts(), current }).kind, 'stale');
+  const full = createGeometryContext({ ...input([]), native: { snapshot, revisionId, target: { kind: 'main' } } });
+  assert.equal(validateGeometryReceipts({ receipts: clean.receipts(), current: full }).kind, 'stale');
+  assert.deepEqual(snapshot.relationships[0].target, 'wall-private');
+});
+
+test('candidate object receipts require final reconciled geometry rather than a fabricated box binding', () => {
+  const snapshot = validateSnapshot({ units: 'm', entities: [
+    { id: 'candidate-native', type: 'Wall', name: 'Proposal object', start: [1.5, .5], end: [2, .5], thickness: 1, height: 1 },
+  ], relationships: [] });
+  const candidateInput = { ...input(), native: { snapshot, revisionId, target: { kind: 'main' } } } satisfies GeometryContextInput;
+  const context = createGeometryContext(candidateInput);
+  const ref: GeometryRef = { kind: 'native', projectId, target: { kind: 'main' }, revisionId, entityId: 'candidate-native' };
+  const result = context.measure({ subject: { kind: 'object', ref }, against: { kind: 'query', query: {} }, operation: 'clearance', clearanceMetres: .5 });
+  assert.equal(measurement(result).clearance, 'satisfied-mesh');
+  const current = createGeometryContext(input());
+  assert.equal(validateGeometryReceipts({ receipts: context.receipts(), current }).kind, 'stale');
+  assert.equal(validateGeometryReceipts({ receipts: context.receipts(), current, candidate: context }).kind, 'fresh');
+  const changed = validateSnapshot({ ...snapshot, entities: snapshot.entities.map(entity => entity.type === 'Wall' ? { ...entity, thickness: .8 } : entity) });
+  const final = createGeometryContext({ ...candidateInput, native: { ...candidateInput.native, snapshot: changed } });
+  assert.equal(validateGeometryReceipts({ receipts: context.receipts(), current, candidate: final }).kind, 'stale');
+});
+
+test('hard startup timeout terminates a worker before a late ready event can make it usable', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const session = new GeometrySession(input(), { constructionTimeoutMs: 10 });
+  const rejected = assert.rejects(session.ready, /hard deadline/);
+  t.mock.timers.tick(10); await rejected;
+  assert.throws(() => session.receipts(), /hard deadline/); await session.close();
+});
+
+test('idle lifetime covers thinking separately from hard operation deadlines and fences late worker replies', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const session = await createGeometrySession(input(), { lifetimeMs: 2000, operationTimeoutMs: 10 });
+  try {
+    t.mock.timers.tick(1900);
+    const pending = session.query({ query: {} });
+    // Let the async host dispatch microtasks run, without delivering a worker message event to the parent.
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    const rejected = assert.rejects(pending, /hard worker deadline/);
+    t.mock.timers.tick(10); await rejected;
+    assert.throws(() => session.receipts(), /hard worker deadline/);
+  } finally { await session.close(); }
 });

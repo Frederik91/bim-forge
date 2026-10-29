@@ -12,7 +12,8 @@ const exact = { additionalProperties: false };
 const small = Type.String({ minLength: 1, maxLength: 128 });
 const bound = Type.Integer({ minimum: 1, maximum: 2000000 });
 const contextSchema = Type.Object({ projectId: small,
-  native: Type.Object({ snapshot: Type.Unknown(), revisionId: Type.String({ pattern: '^[a-f0-9]{64}$' }), target: DesignTargetSchema }, exact),
+  native: Type.Object({ snapshot: Type.Unknown(), revisionId: Type.String({ pattern: '^[a-f0-9]{64}$' }), target: DesignTargetSchema,
+    readableIds: Type.Optional(Type.Array(small, { maxItems: 100, uniqueItems: true })) }, exact),
   linked: Type.Array(Type.Unknown(), { maxItems: 64 }), unavailableSources: Type.Optional(Type.Array(Type.Object({ id: small, reason: Type.String({ maxLength: 1024 }) }, exact), { maxItems: 64 })),
   limits: Type.Optional(Type.Object({ maxObjects: Type.Optional(bound), maxTriangles: Type.Optional(bound), maxWork: Type.Optional(bound), maxPairs: Type.Optional(bound),
     maxMilliseconds: Type.Optional(bound), maxResponseBytes: Type.Optional(bound), maxReceipts: Type.Optional(bound) }, exact)) }, exact);

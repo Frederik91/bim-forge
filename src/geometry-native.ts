@@ -9,7 +9,7 @@ import type { GeometryMesh, GeometryShape, GeometryWork, Vec3 } from './geometry
 
 export type GeometryRecord = { description: GeometryDescription; shape: GeometryShape | null; relations: GeometryRelation[];
   dependencies: unknown };
-export type NativeGeometryInput = { snapshot: ModelSnapshot; revisionId: string; target: Extract<GeometryRef, { kind: 'native' }>['target'] };
+export type NativeGeometryInput = { snapshot: ModelSnapshot; revisionId: string; target: Extract<GeometryRef, { kind: 'native' }>['target']; readableIds?: readonly string[] };
 export function geometryCategory(type: string): GeometryCategory {
   if (/^(?:Ifc)?Wall/.test(type)) return 'wall';
   if (/^(?:Ifc)?(?:Door|Window|Opening)/.test(type)) return 'opening';
@@ -149,7 +149,11 @@ export function nativeGeometryRecords(projectId: string, input: NativeGeometryIn
       bounds: derived.shape?.bounds ?? null, capability: derived.shape ? { kind: 'mesh', closed: derived.shape.meshes.every(mesh => mesh.closed),
         representation: derived.representation, numericToleranceMetres: 1e-7, sourceErrorMetres: derived.error,
         limitation: 'Prepared representation only. Open surfaces do not establish containment or solid clearance. Internal component faces can underestimate surface separation.' } : absent,
-      surfaceSamples: [], surfaceSamplesTruncated: false },
+      semantics: entity.type === 'Level' ? { kind: 'level', elevationMetres: entity.elevation }
+        : entity.type === 'Space' ? { kind: 'space', footprintProjectMetres: [
+          [entity.bounds.minX, entity.bounds.minY, level?.elevation ?? 0], [entity.bounds.maxX, entity.bounds.minY, level?.elevation ?? 0],
+          [entity.bounds.maxX, entity.bounds.maxY, level?.elevation ?? 0], [entity.bounds.minX, entity.bounds.maxY, level?.elevation ?? 0]] }
+          : { kind: 'none' }, surfaceSamples: [], surfaceSamplesTruncated: false },
       shape: derived.shape, relations, dependencies: entity.type === 'Space' ? { bounds: entity.bounds, level: level?.elevation ?? 0 }
         : entity.type === 'Level' ? { elevation: entity.elevation } : null };
   });
