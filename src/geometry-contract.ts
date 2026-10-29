@@ -112,7 +112,7 @@ export const GeometryMeasurementSchema = Type.Object({
   nearest: Type.Union([GeometryRefSchema, Type.Null()]),
   distanceMetres: Type.Union([Type.Number({ minimum: 0, maximum: 4e6 }), Type.Null()]),
   witness: Type.Union([Type.Object({ subject: GeometryPointSchema, obstacle: GeometryPointSchema }, exact), Type.Null()]),
-  relation: Type.Union([Type.Literal('separated'), Type.Literal('subject-inside'), Type.Literal('obstacle-inside'),
+  relation: Type.Union([Type.Literal('separated'), Type.Literal('contact'), Type.Literal('subject-inside'), Type.Literal('obstacle-inside'),
     Type.Literal('volume-overlap'), Type.Literal('contact-or-overlap'), Type.Literal('unknown'), Type.Literal('empty-set')]),
   clearance: Type.Union([Type.Literal('satisfied-mesh'), Type.Literal('violated-mesh'), Type.Literal('unknown'), Type.Literal('not-requested')]),
   numericToleranceMetres: Type.Number({ minimum: 0, maximum: 1 }),
