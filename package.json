@@ -21,7 +21,7 @@
     "test:geometry-workflow": "node --test --test-concurrency=1 demo/geometry-workflow-browser.test.ts",
     "test:geometry": "node --test src/geometry-query.test.ts",
     "test:linked-revisions": "node --test demo/linked-model-revisions.test.ts",
-    "test:geometry-evidence": "node --test --test-concurrency=1 src/geometry-evidence.test.ts demo/geometry-evidence-queue.test.ts demo/geometry-source.test.ts",
+    "test:geometry-evidence": "node --test --test-concurrency=1 src/geometry-evidence.test.ts src/model-script-geometry.test.ts demo/geometry-evidence-queue.test.ts demo/geometry-source.test.ts",
     "test:assets": "node --test src/asset-family.test.ts src/asset-history.test.ts src/asset-placement.test.ts src/asset-schema.test.ts src/asset-agent.test.ts",
     "factory": "node factory/cli.ts",
     "factory:plan": "node factory/live.ts",
