@@ -54,6 +54,7 @@ missing objects, and unavailable artifacts fail closed. Historic original hashes
 unchanged. `resolve(projectId, selection, 'current' | 'historical')` adds an exact-current check.
 
 `prepareReplacement({projectId,linkId,expectedGeneration,name,bytes})` retains a separate candidate.
+Repeating the same bytes and expected generation returns an existing live or ready candidate.
 `reviewCandidate(projectId,linkId,candidateId)` returns its delta and conversion diagnostics.
 `adopt({projectId,linkId,candidateId,expectedGeneration})` checks both the caller's generation and
 the generation against which the candidate was prepared. Repeating a successful adoption request
@@ -62,6 +63,8 @@ returns the same current state. A placement change also makes a previously prepa
 `place({projectId,linkId,expectedGeneration,sourceToProjectMetres})` accepts only a finite, bounded,
 right-handed rigid transform. The placed geometry must remain within the existing coordinate envelope.
 The source file and product-to-source transforms stay unchanged.
+A retry of the most recent successful placement returns the existing state. A stale command after
+source adoption still fails, even when its requested transform happens to equal the current transform.
 
 `originalVersion(projectId,versionId)` reads exact retained source bytes. `original(projectId,linkId)`
 reads the current source. HTTP history downloads use `originalVersion`, including the first version
@@ -136,9 +139,17 @@ The new focused test file is `demo/linked-model-revisions.test.ts`. It covers st
 historical originals, same-ID namespace separation, duplicate IDs, bad or interrupted candidates,
 placement bounds, optimistic conflicts, retention, deterministic legacy upgrade, callback misuse,
 and exclusion across SQLite connections and processes. These are synthetic prepared-artifact tests.
+HTTP tests cover every new route's origin check, project and version separation, bounded malformed
+commands, candidate adoption, and exact historic downloads after source replacement.
 They do not establish real IFC conversion, source placement, or geometry accuracy.
 
 Before a draft PR, required server commands include `npm run validate`, the explicit complete changed-path
 policy check, and `node --test demo/linked-model-revisions.test.ts`. Parent-owned package registration,
 actual-image converter checks, real IFC fixtures, application/server regressions, and desktop/phone
 replacement and adoption checks remain required. No validator or policy was weakened.
+
+The new Python `test_runtime_worker.RevisionRequests` class checks actual command bindings for distinct
+job, namespace, and occurrence IDs. It also checks malformed, extra-field, and oversized requests.
+The server command from `experiments/ifc-link` is
+`python -m unittest test_runtime_worker.RevisionRequests`. Its subprocess launch is intercepted to inspect
+the exact command. Actual converter execution remains a separate qualification requirement.

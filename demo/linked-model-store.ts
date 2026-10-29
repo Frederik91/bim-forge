@@ -21,6 +21,10 @@ function atomic(filename: string, value: unknown): void {
   fs.writeFileSync(temp, JSON.stringify(value), { mode: 0o600, flag: 'wx' }); fs.renameSync(temp, filename);
 }
 function pending(job: LinkedJob): boolean { return job.kind === 'queued' || job.kind === 'running'; }
+function validateUpload(input: { name: string; bytes: Uint8Array }): void {
+  if (!input.name.trim() || input.name.length > 160 || /[\x00-\x1f]/.test(input.name) || !/\.ifc$/i.test(input.name)) throw new Error('Choose an IFC file with a short filename.');
+  if (input.bytes.length < 1 || input.bytes.length > MAX_LINK_SOURCE_BYTES) throw new Error('IFC source must be between 1 byte and 2 MiB.');
+}
 
 export type LinkedCurrentSnapshot = {
   catalogToken: string;
@@ -131,8 +135,12 @@ export class LinkedModelStore {
     });
   }
   prepareReplacement(input: { projectId: string; linkId: string; expectedGeneration: number; name: string; bytes: Uint8Array }): LinkedJob {
+    validateUpload(input);
     return this.transaction(() => {
       const state = this.state(input.projectId, input.linkId); this.expect(state, input.expectedGeneration);
+      const same = this.versionJobs(state).find(version => version.expectedGeneration === state.generation && version.job.source.originalSha256 === sha(input.bytes)
+        && version.job.kind !== 'failed' && version.job.kind !== 'cancelled');
+      if (same) return same.job;
       if (this.versionJobs(state).length >= MAX_LINK_REVISIONS) throw new Error(`IFC revision retention limit reached (${MAX_LINK_REVISIONS}); historical source dependencies are retained.`);
       if (this.versionJobs(state).some(version => pending(version.job))) throw new Error('This IFC link already has a candidate converting.');
       return this.enqueue(input, state, randomUUID());
@@ -143,8 +151,7 @@ export class LinkedModelStore {
   }
   private enqueue(input: { projectId: string; name: string; bytes: Uint8Array }, state: LinkedState, id: string): LinkedJob {
     if (this.closed || !UUID.test(input.projectId)) throw new Error('Project unavailable.');
-    if (!input.name.trim() || input.name.length > 160 || /[\x00-\x1f]/.test(input.name) || !/\.ifc$/i.test(input.name)) throw new Error('Choose an IFC file with a short filename.');
-    if (input.bytes.length < 1 || input.bytes.length > MAX_LINK_SOURCE_BYTES) throw new Error('IFC source must be between 1 byte and 2 MiB.');
+    validateUpload(input);
     const jobs = this.all();
     if (jobs.length >= 256) throw new Error('IFC retained revision limit reached (256 per installation).');
     if (fs.readdirSync(path.join(this.root, 'sources')).length >= 256 || fs.readdirSync(this.spool).length >= 256) throw new Error('IFC retained source/spool limit reached (256); no historical sources are deleted.');
@@ -234,7 +241,10 @@ export class LinkedModelStore {
   place(input: { projectId: string; linkId: string; expectedGeneration: number; sourceToProjectMetres: number[][] }): LinkedState {
     assertRigidLinkTransform(input.sourceToProjectMetres);
     return this.transaction(() => {
-      const state = this.state(input.projectId, input.linkId); this.expect(state, input.expectedGeneration);
+      const state = this.state(input.projectId, input.linkId);
+      const previous = this.database.prepare('SELECT version FROM link_history WHERE link=? AND generation=?').get(state.id, input.expectedGeneration);
+      if (state.generation === input.expectedGeneration + 1 && previous?.version === state.currentVersionId && JSON.stringify(state.sourceToProjectMetres) === JSON.stringify(input.sourceToProjectMetres)) return state;
+      this.expect(state, input.expectedGeneration);
       if (!state.currentVersionId) throw new Error('Prepare a current IFC version before placing its occurrence.');
       this.placed(this.preparedVersion(input.projectId, state.currentVersionId), input.sourceToProjectMetres);
       if (JSON.stringify(state.sourceToProjectMetres) === JSON.stringify(input.sourceToProjectMetres)) return state;
@@ -287,7 +297,7 @@ export class LinkedModelStore {
     const historical = this.readVersion(projectId, selection); if (historical.kind !== 'ok' || mode === 'historical') return historical;
     const state = this.states(projectId).find(item => item.namespace === selection.source.namespace && item.occurrence === selection.occurrence.id);
     const current = this.all().find(job => job.projectId === projectId && job.id === state?.currentVersionId);
-    if (!state || current?.source.originalSha256 !== selection.source.originalSha256 || current.source.revision !== selection.source.revision || JSON.stringify(state.sourceToProjectMetres) !== JSON.stringify(selection.occurrence.sourceToProjectMetres)) return { kind: 'unavailable', reason: 'stale' };
+    if (!state || !current || current.source.originalSha256 !== selection.source.originalSha256 || current.source.revision !== selection.source.revision || JSON.stringify(state.sourceToProjectMetres) !== JSON.stringify(selection.occurrence.sourceToProjectMetres)) return { kind: 'unavailable', reason: 'stale' };
     return historical;
   }
   /** Lock order: linked catalog first, then the caller's native transaction. Never await or reenter. */
