@@ -8,8 +8,8 @@ function readableProperties(value: unknown): HTMLElement {
   const list = element('dl'); let rows = 0;
   const visit = (item: unknown, label: string, depth: number): void => {
     if (rows >= 128) return;
-    if (depth > 5) { list.append(element('dt', label), element('dd', 'Expand source details for nested values.')); rows++; return; }
     if (item !== null && typeof item === 'object') {
+      if (depth > 5) { list.append(element('dt', label), element('dd', 'Expand source details for nested values.')); rows++; return; }
       const entries: [string, unknown][] = Object.entries(item);
       for (const [key, child] of entries) { if (rows >= 128) break; visit(child, label ? `${label} · ${key}` : key, depth + 1); }
     } else { list.append(element('dt', label || 'Value'), element('dd', String(item ?? 'Not supplied').slice(0, 512))); rows++; }
