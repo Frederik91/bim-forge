@@ -19,9 +19,16 @@ export const GEOMETRY_SCRIPT_METHODS = {
     params: { input: GeometryMeasureRequestSchema }, result: GeometryMeasureResultSchema },
 };
 export const GEOMETRY_SCRIPT_CAPABILITIES = Object.values(GEOMETRY_SCRIPT_METHODS).map(method => method.capability);
+function schemaLimit(schema: object, keyword: 'maximum' | 'maxItems'): number {
+  const descriptor = Object.getOwnPropertyDescriptor(schema, keyword);
+  if (!descriptor || !Object.hasOwn(descriptor, 'value')) throw new Error(`Geometry schema requires an explicit ${keyword} limit.`);
+  const value: unknown = descriptor.value;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) throw new Error(`Invalid geometry schema ${keyword} limit.`);
+  return value;
+}
 export const GEOMETRY_SCRIPT_LIMITS = {
-  pageMaximum: GeometryPageRequestSchema.properties.limit.maximum,
-  receiptMaximum: GeometryReceiptsSchema.maxItems,
+  pageMaximum: schemaLimit(GeometryPageRequestSchema.properties.limit, 'maximum'),
+  receiptMaximum: schemaLimit(GeometryReceiptsSchema, 'maxItems'),
   aggregateScriptHostCalls: MAX_SCRIPT_HOST_CALLS,
   scriptExecutions: MAX_SCRIPT_EXECUTIONS,
   evidenceBytes: MAX_GEOMETRY_EVIDENCE_BYTES,

@@ -1241,7 +1241,11 @@ export class RoomRepository {
       const validated = await revision(parentId, validateSnapshot(item.snapshot));
       if (validated.id !== id) fail('Saved revision content does not match its hash.');
     }
-    return RoomRepository.#restoreState(value);
+    const repository = RoomRepository.#restoreState(value);
+    for (const review of repository.reviews()) if (review.geometryEvidence !== undefined) {
+      await assertGeometryEvidenceBound(readGeometryEvidence(review.geometryEvidence), repository.view(review.proposalRevisionId).snapshot);
+    }
+    return repository;
   }
 
   /** Storage has already verified revision hashes; synchronously check native authority. */
@@ -1318,11 +1322,6 @@ export class RoomRepository {
       const requests = new Set<RequestId>(); const proposals = new Set<BranchName>();
       for (const item of reviewValues) {
         const review = reviewRecord(item, revisions, branches, projectId);
-        if (review.geometryEvidence !== undefined) {
-          const proposal = revisions.get(review.proposalRevisionId);
-          if (!proposal) fail('Geometry evidence proposal revision is missing.');
-          await assertGeometryEvidenceBound(readGeometryEvidence(review.geometryEvidence), proposal.snapshot);
-        }
         if (requests.has(review.requestId) || proposals.has(review.proposalName)) fail('Duplicate proposal review identity.');
         requests.add(review.requestId); proposals.add(review.proposalName); reviews.push(review);
       }

@@ -64,7 +64,7 @@ test('guest source cannot add geometry authority to its review or call linked wr
     "await geometry.accept({}); return {kind:'observe',observation:null};",
     `const inspection = await model.inspect(); await model.previewRectangle({...inspection.placement.layout,door:{widthMm:1200,offsetMm:2400}});
      return {kind:'propose',review:${JSON.stringify({ ...geometryReview, geometryEvidence: 'forged' })}};`]) {
-    const result = await scripts.run({ base: repository.view(repository.head('main')).snapshot, binding: request(repository), source,
+    const result = await scripts.run({ base: repository.view(repository.head('main')).snapshot, binding: validateModelProposalRequest(repository, request(repository)), source,
       language: 'typescript', signal: new AbortController().signal, remainingHostCalls: 48, onActivity: () => {} });
     assert.equal(result.kind, 'failed');
   }
