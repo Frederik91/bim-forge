@@ -97,8 +97,14 @@ test('real converted rotated metre/mm geometry matches independent prism distanc
       expectedDistanceMetres: probe.expectedDistanceMetres, result: zero });
     await fs.writeFile(path.join(input.output, 'private-runtime-measurements.json'), JSON.stringify(retained, null, 2) + '\n');
     if (zero.kind !== 'complete') throw new Error(JSON.stringify(zero));
-    if (!probe.nonPenetrating || !probe.strictlySeparated) {
+    if (!probe.nonPenetrating) {
       assert.notEqual(zero.value.clearance, 'satisfied-mesh', JSON.stringify({ probe: probe.id, zero }));
+    } else if (!probe.strictlySeparated) {
+      // The private prism control establishes a boundary-only touching case.
+      // A satisfied zero-clearance result additionally requires the public
+      // certified-contact relation; ambiguous contact cannot certify clearance.
+      if (zero.value.clearance === 'satisfied-mesh') assert.equal(zero.value.relation, 'contact');
+      else assert.ok(zero.value.clearance === 'unknown' || zero.value.clearance === 'violated-mesh');
     } else assert.equal(zero.value.clearance, 'satisfied-mesh');
   }
 });
