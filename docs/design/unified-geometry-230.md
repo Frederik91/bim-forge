@@ -268,3 +268,17 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
   Construction/operation hard termination exists in the draft, but its default 60-second lifetime
   is shorter than the existing 120-second provider turn. Owners must align the request lifecycle
   and cleanup without disabling per-operation deadlines. No runtime timing claim is qualified.
+
+### Source integration after command approvals cleared
+
+- Owner cleared the expected command approvals. #233 confirmed that its geometry-evidence source
+  write had been waiting for approval and has now returned. Component sessions are progressing;
+  none was restarted. Server SSH still timed out on the fresh connectivity check.
+- Parent composed #231 `3cb9db6f15fa51b14b2f2123a6ff76c9e04d2b63`: asynchronous geometry session,
+  private worker message protocol, worker-based receipt replay and adversarial query tests.
+  Registered `npm run test:geometry` and included it in the standard `npm test` chain so these
+  checks cannot be omitted from the combined default suite. No dependency or lockfile change.
+- That committed core explicitly refuses zero-clearance satisfaction for volume overlap and
+  containment. Its tests and worker boundary remain unrun. Native readable-domain, semantic
+  discovery and extended-lifetime corrections are still in #231's next source handback; do not
+  infer that those fixes are present merely because the worker files have been integrated.
