@@ -42,6 +42,14 @@ red/green receipt; inspect failures before retrying. It does not reopen worker21
   helpers and compares the placement binding. The original selection marker and
   source properties/units must agree with the same prepared object. Both old and new
   attachment handles are retained in the browser receipt; old pins stay immutable.
+  After verifying zero automatic dispatch, an intentional UI Send inspects the real
+  POST, router acknowledgement and stored ticket. The receiving case retains its
+  deliberately chosen native hall/level and omits the previous Door. A separate
+  legacy room has no Level/Space and sends `selectedObjectIds: []`. Submitted source
+  hashes and exact attachment bytes are read back. No fake auth/provider/worker is
+  injected; queued/failed unconfigured-provider input handling is the narrow scope.
+  If the actual Send control is gated, its public UI/session evidence is recorded
+  and submission coverage stays pending; the test never enables or bypasses it.
   The receiving project enters through the existing `#import-file` UI. It uses a
   fresh disposable UUID for live runs; the generator records the actual ID and hash.
   There is no fake provider or test-only product bypass. It does not qualify touch.
@@ -173,8 +181,10 @@ the narrow browser assertion. Review `requirements.tsv` before interpreting any 
 test as broader qualification.
 
 Preserving the previous native picker value under linked selection is a background
-navigation check. It does **not** prove correct submitted `selectedObjectIds` or
-proposal anchor semantics. The real connected-provider trial must inspect that payload
-and the host's geometry/evidence refs, with intentional native context retained and
-no implicit targeting of the previously selected Door. No fake worker is added here
-to hide the parent's outstanding anchor contract.
+navigation check. Input-context coverage additionally requires the actual Send and
+stored-ticket assertions; a gated or unrun path remains pending. Even a passing
+unconfigured-provider input check does not qualify the real provider's selection,
+geometry use, scope or proposal anchors. The parent's connected trial must inspect
+the actual payload and trusted geometry/evidence refs with intentional native context
+retained and no implicit targeting of the previously selected Door. #233's deliberate
+empty-selection parser/rebase contract must be integrated before these checks run.
