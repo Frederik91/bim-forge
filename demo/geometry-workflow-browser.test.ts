@@ -12,6 +12,7 @@ import { createDemoServer } from './server.ts';
 import { RoomRepository } from '../src/room-model.ts';
 import { parseLinkedPrepared } from '../src/linked-model.ts';
 import { GeometryRefSchema, parseGeometryRef } from '../src/geometry-contract.ts';
+import { parseRequestSources } from '../src/request-sources.ts';
 
 // This slice uses the real isolated server + external converter. It never injects a
 // provider, scripts a fake proposal, reads oracle facts into chat, or opens a live preview.
@@ -57,6 +58,77 @@ function inspectLinkedAttachment(text: string, expected: {
   assert.deepEqual(value.properties, object.properties, 'Properties and geometryRef must describe the same prepared source object.');
   assert.deepEqual(value.units, expected.prepared.index.units);
   return { geometryRef, placementDigest };
+}
+
+const SubmittedRequestSchema = Type.Object({ requestId: Type.String(), selectedObjectIds: Type.Array(Type.String()),
+  instruction: Type.String(), sources: Type.Array(Type.Unknown(), { minItems: 1, maxItems: 4 }) });
+const SubmittedPayloadSchema = Type.Object({ project: Type.String(), request: SubmittedRequestSchema });
+const TicketEnvelopeSchema = Type.Object({ ticket: Type.Object({ id: Type.String(), projectId: Type.String(),
+  state: Type.String(), request: SubmittedRequestSchema }) });
+type SubmitContextOutcome = { kind: 'submitted'; ticketId: string; selectedObjectIds: string[] }
+  | { kind: 'pending-ui-gate'; reason: string };
+
+async function submitContextThroughUI(input: {
+  page: Page; base: string; artifacts: string; caseId: string; projectId: string; expectedIds: string[]; previousDoorId: string;
+  expectedSourceTexts: readonly string[];
+}): Promise<SubmitContextOutcome> {
+  const { page, base } = input;
+  const collection = `${base}/api/projects/${input.projectId}/change-requests`;
+  const before: unknown = await (await page.request.get(collection)).json();
+  assert.ok(before !== null && typeof before === 'object' && 'tickets' in before && Array.isArray(before.tickets));
+  assert.equal(before.tickets.length, 0, 'Attachment/Ask must not dispatch before the intentional UI Send.');
+  await page.locator('#request-text').fill('Inspect the selected linked wall as read-only project context. Do not change or propose native geometry.');
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  if (await send.isDisabled()) {
+    // Keep real UI gating. Never enable the control, synthesize a submit event,
+    // call the handler, inject provider/auth, or POST around it for coverage.
+    const session: unknown = await (await page.request.get(base + '/api/auth/session')).json();
+    const copy = await page.locator('#proposal-auth-copy').innerText();
+    const gate = { kind: 'pending-ui-gate', reason: 'Actual Send control disabled; preserve gate for parent connected phase.', session, copy };
+    await fs.writeFile(path.join(input.artifacts, `${input.caseId}-submit-gate.json`), JSON.stringify(gate, null, 2) + '\n');
+    assert.ok(session !== null && typeof session === 'object' && 'status' in session && typeof session.status === 'string'
+      && ['disconnected', 'pending', 'failed'].includes(session.status)
+      && /connect|sign.?in/i.test(copy), 'Unexpected disabled Send is a test failure, not automatically an authentication skip.');
+    return { kind: 'pending-ui-gate', reason: gate.reason };
+  }
+  const response = page.waitForResponse(item => item.url() === `${base}/api/change-requests` && item.request().method() === 'POST');
+  await send.click();
+  const sent = await response;
+  const payload: unknown = sent.request().postDataJSON();
+  const acknowledgement: unknown = await sent.json();
+  await fs.writeFile(path.join(input.artifacts, `${input.caseId}-actual-submit.json`), JSON.stringify({
+    status: sent.status(), payload, acknowledgement,
+  }, null, 2) + '\n');
+  assert.equal(sent.status(), 202, 'Real public router must accept the actual UI payload.');
+  assert.ok(Check(SubmittedPayloadSchema, payload));
+  assert.ok(Check(TicketEnvelopeSchema, acknowledgement));
+  assert.equal((await RoomRepository.restore(payload.project)).projectId, input.projectId);
+  assert.deepEqual([...payload.request.selectedObjectIds].sort(), [...input.expectedIds].sort());
+  assert.ok(!payload.request.selectedObjectIds.includes(input.previousDoorId), 'Linked context cannot silently target the previous native Door.');
+  assert.equal(acknowledgement.ticket.projectId, input.projectId);
+  assert.equal(acknowledgement.ticket.request.requestId, payload.request.requestId);
+  assert.deepEqual(acknowledgement.ticket.request.selectedObjectIds, payload.request.selectedObjectIds);
+  const submittedSources = parseRequestSources(payload.request.sources);
+  assert.deepEqual(parseRequestSources(acknowledgement.ticket.request.sources), submittedSources);
+  const retainedTexts: string[] = [];
+  for (const source of submittedSources) {
+    const download = await page.request.get(`${base}/api/projects/${input.projectId}/sources/${encodeURIComponent(source.id)}`);
+    assert.equal(download.status(), 200);
+    const bytes = await download.body();
+    assert.equal(bytes.byteLength, source.byteLength);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), source.sha256);
+    retainedTexts.push(bytes.toString('utf8'));
+  }
+  assert.deepEqual(retainedTexts.sort(), [...input.expectedSourceTexts].sort(), 'Real submitted source refs retain the exact earlier qualified geometry attachments.');
+  const storedResponse = await page.request.get(`${base}/api/change-requests/${encodeURIComponent(acknowledgement.ticket.id)}`);
+  assert.equal(storedResponse.status(), 200);
+  const stored: unknown = await storedResponse.json();
+  assert.ok(Check(TicketEnvelopeSchema, stored));
+  assert.deepEqual(stored.ticket.request.selectedObjectIds, payload.request.selectedObjectIds);
+  assert.deepEqual(parseRequestSources(stored.ticket.request.sources), submittedSources);
+  assert.ok(['queued', 'failed'].includes(stored.ticket.state), 'An unconfigured provider may queue/fail; no fabricated proposal is permitted.');
+  await fs.writeFile(path.join(input.artifacts, `${input.caseId}-persisted-ticket.json`), JSON.stringify(stored, null, 2) + '\n');
+  return { kind: 'submitted', ticketId: stored.ticket.id, selectedObjectIds: stored.ticket.request.selectedObjectIds };
 }
 
 async function createProject(page: Page, base: string, name: string) {
@@ -131,6 +203,8 @@ test('real IFC properties and historical context preserve Main and refuse cross-
   const projectId = first.repository.projectId;
   const nativeDoor = first.repository.view(first.repository.head('main')).snapshot.entities.find(item => item.type === 'Door');
   assert.ok(nativeDoor, 'The receiving fixture must provide a native door for the previous-selection trap.');
+  await page.locator('#model-explorer [data-node-id="receiving-level"] > .model-tree-row .model-tree-name').click();
+  await page.locator('.model-object-picker').selectOption('receiving-hall');
   await page.locator('.model-object-picker').selectOption(nativeDoor.id);
   assert.ok((await page.locator('#selection-context-label').innerText()).includes(nativeDoor.name));
   assert.equal(await page.locator('#selection-move').isHidden(), false);
@@ -231,6 +305,12 @@ test('real IFC properties and historical context preserve Main and refuse cross-
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.screenshot({ path: path.join(artifacts, 'issue234-properties-phone.png'), fullPage: true });
+  // Intentional submission follows all zero-automatic-dispatch assertions. It
+  // qualifies input context only; this server has no auth/provider/proposal worker.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const receivingSubmit = await submitContextThroughUI({ page, base, artifacts, caseId: 'receiving', projectId,
+    expectedIds: ['receiving-hall', 'receiving-level'], previousDoorId: nativeDoor.id, expectedSourceTexts: [pinnedBefore, changedPin] });
+  if (receivingSubmit.kind === 'pending-ui-gate') t.diagnostic(`Receiving input-context coverage remains pending: ${receivingSubmit.reason}`);
   // Cross-project requests go through the actual public router; no store bypass.
   const secondContext = await browser.newContext();
   const secondPage = await secondContext.newPage();
@@ -243,6 +323,26 @@ test('real IFC properties and historical context preserve Main and refuse cross-
   const foreignPrepared = foreignOriginal.replace(/\/original$/, '/prepared');
   const refusedPrepared = await secondPage.request.get(base + foreignPrepared);
   assert.ok(refusedPrepared.status() >= 400 && refusedPrepared.status() < 500);
+  const legacySnapshot = second.repository.view(second.repository.head('main')).snapshot;
+  assert.equal(legacySnapshot.entities.filter(item => item.type === 'Level' || item.type === 'Space').length, 0);
+  const legacyDoor = legacySnapshot.entities.find(item => item.type === 'Door');
+  assert.ok(legacyDoor);
+  await secondPage.locator('.model-object-picker').selectOption(legacyDoor.id);
+  await secondPage.locator('#linked-model-references > summary').click();
+  await secondPage.getByLabel('Attach IFC reference', { exact: true }).setInputFiles({ name: 'Legacy-context-234.ifc', mimeType: 'application/x-step', buffer: fixture });
+  const legacyTree = secondPage.getByRole('list', { name: 'Legacy-context-234.ifc spatial hierarchy', exact: true });
+  await legacyTree.waitFor({ timeout: 60_000 });
+  await legacyTree.getByRole('button', { name: 'Invented wall · IfcWall', exact: true }).click();
+  await secondPage.locator('#selection-ask').click();
+  await secondPage.getByText('1 of 4 files ready', { exact: true }).waitFor();
+  const legacySourceHref = await secondPage.locator('#request-source-list a').first().getAttribute('href');
+  assert.ok(legacySourceHref);
+  const legacySourceText = await (await secondPage.request.get(base + legacySourceHref)).text();
+  const legacySubmit = await submitContextThroughUI({ page: secondPage, base, artifacts, caseId: 'legacy-no-level',
+    projectId: second.repository.projectId, expectedIds: [], previousDoorId: legacyDoor.id, expectedSourceTexts: [legacySourceText] });
+  if (legacySubmit.kind === 'pending-ui-gate') t.diagnostic(`Legacy empty-context coverage remains pending: ${legacySubmit.reason}`);
+  const legacyAfter: unknown = await (await secondPage.request.get(`${base}/api/projects/${second.repository.projectId}`)).json();
+  assert.equal((await RoomRepository.restore(serializedProject(legacyAfter))).serialize(), second.repository.serialize());
   await secondContext.close();
   const after: unknown = await (await page.request.get(`${base}/api/projects/${projectId}`)).json();
   assert.equal((await RoomRepository.restore(serializedProject(after))).serialize(), first.repository.serialize());
@@ -253,6 +353,7 @@ test('real IFC properties and historical context preserve Main and refuse cross-
     projectId, secondProjectId: second.repository.projectId, mainUnchanged: true,
     propertyHash, receivingContextImportedVia: '#import-file', selectionContext: 'IFC Ask pins exact selected source/version/occurrence/transform; native reselect clears linked selection; independent source preserves prior pin',
     attachmentBindings: { first: firstBinding, changed: changedBinding, validation: 'Schema parser plus independent host SHA-256 of each prepared occurrence matrix; exact project/source/occurrence/ref/property agreement' },
+    inputContextSubmissions: { receiving: receivingSubmit, legacyNoLevel: legacySubmit, provider: 'Unconfigured, no fake worker/auth/provider/proposal. UI gate outcomes remain pending.' },
     qualification: 'attach/read-only-properties/selection-action-strip/unsent-context/cross-project-original-and-prepared/layout only',
-    pending: ['actual submitted selectedObjectIds/anchor semantics with linked selection', 'same-link source/version/transform stale selection after adoption', 'candidate/adopt/history', 'restart/cancel/concurrent adoption', 'trusted freshness/acceptance races', 'connected-provider 500mm proposal', 'As-is and alternative acceptance'] }, null, 2) + '\n');
+    pending: ['connected-provider selectedObjectIds/anchor semantics (isolated UI queue coverage alone does not prove provider behavior)', 'same-link source/version/transform stale selection after adoption', 'candidate/adopt/history', 'restart/cancel/concurrent adoption', 'trusted freshness/acceptance races', 'connected-provider 500mm proposal', 'As-is and alternative acceptance'] }, null, 2) + '\n');
 });
