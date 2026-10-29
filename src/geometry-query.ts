@@ -6,7 +6,7 @@ import type { LinkedPrepared } from './linked-model.ts';
 import { validateSnapshot } from './room-model.ts';
 import { GeometryMatrixSchema, GeometryPageRequestSchema, geometryPlainData, parseGeometryMeasureRequest, parseGeometryQuery, parseGeometryReceipts, parseGeometryRef } from './geometry-contract.ts';
 import type { GeometryDescription, GeometryDescriptionResult, GeometryDomain, GeometryFailure, GeometryMeasureRequest, GeometryMeasureResult, GeometryMeasurement,
-  GeometryPageRequest, GeometryProjection, GeometryQuery, GeometryQueryResult, GeometryRead, GeometryReceipt, GeometryRef, GeometryRelation, GeometryRelationsResult } from './geometry-contract.ts';
+  GeometryPageRequest, GeometryProjection, GeometryQuery, GeometryQueryResult, GeometryRead, GeometryReceipt, GeometryRef, GeometryRelation, GeometryRelationsResult, GeometryResult } from './geometry-contract.ts';
 import { GeometryLimitError, NUMERIC_TOLERANCE_METRES, add, assertRigidTransform, boundsOverlap, boxMesh, createMesh, cross, dot,
   geometryWork, measureShapes, scale, shapeOf, sub, transformPoint } from './geometry-math.ts';
 import type { GeometryShape, GeometryWork, Triangle, Vec3 } from './geometry-math.ts';
@@ -21,6 +21,11 @@ function canonical(value: unknown): string {
   throw new Error('Geometry digest requires finite JSON.');
 }
 export const geometryDigest = (value: unknown): string => createHash('sha256').update(canonical(value)).digest('hex');
+/** Canonical wire payload hash. Receipt metadata is excluded to avoid a recursive digest. */
+export function geometryPublicResultDigest(result: GeometryResult): string {
+  const { receipt, ...payload } = result;
+  return geometryDigest(payload);
+}
 export function geometryIdentityKey(ref: GeometryRef): string {
   return canonical(ref.kind === 'native' ? [ref.kind, ref.projectId, ref.target, ref.entityId]
     : [ref.kind, ref.projectId, ref.namespace, ref.occurrenceId, ref.globalId]);
@@ -128,6 +133,14 @@ class GeometryUnavailableError extends Error {
 type Outcome<T> = { kind: 'complete'; value: T } | { kind: 'partial'; value: T; reason: GeometryFailure; detail: string }
   | { kind: 'unavailable'; reason: GeometryFailure; detail: string };
 type Selection = { records: GeometryRecord[]; uncertain: number; complete: boolean; read: Extract<GeometryRead, { kind: 'query' }> };
+type QueryPurpose = Extract<GeometryRead, { kind: 'query' }>['purpose'];
+type QueryPage = { items: GeometryDescription[]; domain: GeometryDomain; total: number; uncertainMembers: number; nextCursor: string | null };
+function publicQueryPayload(outcome: Outcome<QueryPage>) {
+  return outcome.kind === 'unavailable' ? outcome : { kind: outcome.kind, ...outcome.value };
+}
+function publicRelationsPayload(outcome: Outcome<GeometryRelation[]>) {
+  return outcome.kind === 'unavailable' ? outcome : ({ kind: 'complete', items: outcome.value } satisfies { kind: 'complete'; items: GeometryRelation[] });
+}
 
 /** A request-local derived read model. No DB, authoring, external fetch, or acceptance authority. */
 export class GeometryContext {
@@ -188,10 +201,12 @@ export class GeometryContext {
     const read: GeometryRead = { kind: 'object', ref: record.description.ref, projection: kind, digest: geometryDigest(projection(record, kind)) };
     if (!reads.some(existing => canonical(existing) === canonical(read))) reads.push(read);
   }
-  #select(query: GeometryQuery, work: GeometryWork): Selection {
+  #select(query: GeometryQuery, work: GeometryWork, purpose: QueryPurpose = 'discovery', candidateExclusion?: GeometryRef): Selection {
     if (query.level) this.#resolve(query.level);
-    if (query.exclude?.some(ref => ref.projectId !== this.projectId)) throw new GeometryUnavailableError('invalid-input', 'Excluded identities must belong to this project.');
+    // Explicit caller exclusions require exact live pins. Only the host's separately receipted candidate can be absent from the accepted read model.
+    for (const ref of query.exclude ?? []) this.#resolve(ref);
     const excluded = new Set(query.exclude?.map(geometryIdentityKey));
+    if (candidateExclusion) excluded.add(geometryIdentityKey(candidateExclusion));
     const records: GeometryRecord[] = []; let uncertain = 0;
     for (const record of this.#records.values()) {
       work.tick(); const d = record.description;
@@ -204,23 +219,25 @@ export class GeometryContext {
         else if (!levels.some(relation => geometryIdentityKey(relation.target) === geometryIdentityKey(query.level))) continue;
       }
       if (query.region && d.bounds && !boundsOverlap(query.region, d.bounds)) continue;
-      records.push(record); if (query.region && !record.shape || unknownLevel) uncertain++;
+      records.push(record); if (((query.region !== undefined || purpose === 'measurement') && !record.shape) || unknownLevel) uncertain++;
     }
     records.sort((a, b) => geometryIdentityKey(a.description.ref).localeCompare(geometryIdentityKey(b.description.ref)));
     const complete = uncertain === 0 && this.#unavailable.length === 0;
-    const digest = geometryDigest({ query: queryIdentity(query), members: records.map(record => ({ key: geometryIdentityKey(record.description.ref),
-      geometry: projection(record, 'geometry'), category: record.description.category, class: record.description.class })), unavailableSources: this.#unavailable });
-    return { records, uncertain, complete, read: { kind: 'query', query, digest, members: records.map(record => record.description.ref),
+    const digest = geometryDigest({ query: queryIdentity(query), purpose, candidateExclusion: candidateExclusion ? geometryIdentityKey(candidateExclusion) : null,
+      members: records.map(record => purpose === 'measurement' ? { key: geometryIdentityKey(record.description.ref), geometry: projection(record, 'geometry') }
+        : geometryIdentityKey(record.description.ref)), uncertain, unavailableSources: this.#unavailable });
+    return { records, uncertain, complete, read: { kind: 'query', query, digest, purpose, ...(candidateExclusion ? { candidateExclusion } : {}), members: records.map(record => record.description.ref),
       unavailableSources: this.#unavailable.map(source => source.id), complete } };
   }
-  #run<T>(method: string, input: unknown, calculate: (value: unknown, reads: GeometryRead[], work: GeometryWork) => Outcome<T>): { outcome: Outcome<T>; receipt: GeometryReceipt } {
+  #run<T>(method: string, input: unknown, calculate: (value: unknown, reads: GeometryRead[], work: GeometryWork) => Outcome<T>,
+    publicPayload: (outcome: Outcome<T>) => unknown = outcome => outcome): { outcome: Outcome<T>; receipt: GeometryReceipt } {
     let reads: GeometryRead[] = []; let operationDigest = geometryDigest({ method, invalid: true }); let outcome: Outcome<T>;
     try {
       if (this.#exhausted || this.#log.length >= this.#limits.maxReceipts - 1) { this.#exhausted = true; throw new GeometryLimitError('budget'); }
       const value = geometryPlainData(input); operationDigest = geometryDigest({ method, input: value });
       const work = this.#work(); outcome = calculate(value, reads, work); work.tick();
       if (reads.length > 128) throw new GeometryLimitError('budget');
-      const replyBytes = Buffer.byteLength(canonical({ outcome, reads }));
+      const replyBytes = Buffer.byteLength(canonical({ outcome: publicPayload(outcome), reads }));
       if (replyBytes > this.#limits.maxResponseBytes || this.#logBytes + replyBytes > 1024 * 1024) throw new GeometryUnavailableError('response-limit', 'Geometry reply or accumulated evidence exceeds the byte limit.');
     } catch (error) {
       reads = [];
@@ -228,7 +245,7 @@ export class GeometryContext {
         detail: error instanceof Error ? error.message.slice(0, 1024) : 'Invalid geometry operation.' };
     }
     const receipt: GeometryReceipt = { version: 1, projectId: this.projectId, domain: structuredClone(this.domain), reads: structuredClone(reads), operationDigest,
-      resultDigest: geometryDigest(outcome), status: outcome.kind };
+      resultDigest: geometryDigest(publicPayload(outcome)), status: outcome.kind };
     if (this.#log.length < this.#limits.maxReceipts) { this.#log.push(receipt); this.#logBytes += Buffer.byteLength(canonical(receipt)); }
     return { outcome: structuredClone(outcome), receipt: structuredClone(receipt) };
   }
@@ -241,7 +258,7 @@ export class GeometryContext {
     return { ...outcome, receipt };
   }
   query(input: unknown): GeometryQueryResult {
-    const { outcome, receipt } = this.#run<{ items: GeometryDescription[]; domain: GeometryDomain; total: number; uncertainMembers: number; nextCursor: string | null }>('query', input, (value, reads, work) => {
+    const { outcome, receipt } = this.#run<QueryPage>('query', input, (value, reads, work) => {
       if (!Check(GeometryPageRequestSchema, value)) throw new Error('Invalid bounded geometry page request.');
       const query = parseGeometryQuery(value.query); const selection = this.#select(query, work); reads.push(selection.read);
       const contextDigest = geometryDigest([...this.#records.values()].map(record => record.description.ref));
@@ -253,16 +270,16 @@ export class GeometryContext {
       const result = { items: page.map(record => record.description), domain: this.domain, total: selection.records.length, uncertainMembers: selection.uncertain + this.#unavailable.length,
         nextCursor: offset + limit < selection.records.length ? `${prefix}${offset + limit}` : null };
       return selection.complete ? { kind: 'complete', value: result } : { kind: 'partial', value: result, reason: 'missing-geometry', detail: 'One or more potentially relevant objects or active sources lack geometry.' };
-    });
-    return outcome.kind === 'unavailable' ? { ...outcome, receipt } : { kind: outcome.kind, ...outcome.value, receipt };
+    }, publicQueryPayload);
+    return { ...publicQueryPayload(outcome), receipt };
   }
   relations(input: unknown): GeometryRelationsResult {
     const { outcome, receipt } = this.#run<GeometryRelation[]>('relations', input, (value, reads) => {
       const record = this.#resolve(parseGeometryRef(value)); this.#objectRead(record, 'relations', reads);
       if (record.relations.length > 128) throw new GeometryLimitError('budget');
       return { kind: 'complete', value: record.relations };
-    });
-    return outcome.kind === 'unavailable' ? { ...outcome, receipt } : { kind: 'complete', items: outcome.value, receipt };
+    }, publicRelationsPayload);
+    return { ...publicRelationsPayload(outcome), receipt };
   }
   measure(input: unknown): GeometryMeasureResult {
     const { outcome, receipt } = this.#run<GeometryMeasurement>('measure', input, (value, reads, work) => {
@@ -276,9 +293,8 @@ export class GeometryContext {
       let candidates: GeometryRecord[]; let complete = true;
       if (request.against.kind === 'query') {
         const query = structuredClone(request.against.query);
-        if (request.subject.kind === 'object') query.exclude = [...(query.exclude ?? []), request.subject.ref];
-        if (query.exclude && query.exclude.length > 32) throw new GeometryLimitError('budget');
-        const selected = this.#select(query, work); reads.push(selected.read); candidates = selected.records; complete = selected.complete;
+        const selected = this.#select(query, work, 'measurement', request.subject.kind === 'object' ? request.subject.ref : undefined);
+        reads.push(selected.read); candidates = selected.records; complete = selected.complete;
         if (request.operation === 'clearance' && query.region) {
           const gap = (request.clearanceMetres ?? 0) + NUMERIC_TOLERANCE_METRES;
           if (subject.bounds.min.some((n, i) => query.region && (query.region.min[i] > n - gap || query.region.max[i] < subject.bounds.max[i] + gap))) {
@@ -318,8 +334,8 @@ export class GeometryContext {
     return record ? { ref: structuredClone(record.description.ref), digest: geometryDigest(projection(record, kind)) } : null;
   }
   /** Host-only predicate replay used by trusted receipt revalidation, with complete membership. */
-  currentQuery(query: GeometryQuery): Extract<GeometryRead, { kind: 'query' }> {
-    return structuredClone(this.#select(query, this.#work()).read);
+  currentQuery(query: GeometryQuery, purpose: QueryPurpose = 'discovery', candidateExclusion?: GeometryRef): Extract<GeometryRead, { kind: 'query' }> {
+    return structuredClone(this.#select(query, this.#work(), purpose, candidateExclusion).read);
   }
 }
 function subjectRecordRequired(record: GeometryRecord | null): GeometryRecord {
@@ -357,7 +373,23 @@ export function validateGeometryReceipts(input: { receipts: unknown; current: Ge
             if (!level || !correspondence(query.level, level.ref)) return { kind: 'stale', reason: 'Query level identity changed.' };
             query.level = level.ref;
           }
-          const current = input.current.currentQuery(query);
+          if (query.exclude) {
+            const rebound: GeometryRef[] = [];
+            for (const excluded of query.exclude) {
+              const current = input.current.currentProjection(excluded, 'relations');
+              if (!current || !correspondence(excluded, current.ref)) return { kind: 'stale', reason: 'An explicit exclusion lacks verified current identity correspondence.' };
+              rebound.push(current.ref);
+            }
+            query.exclude = rebound;
+          }
+          if (read.candidateExclusion) {
+            const candidateRef = read.candidateExclusion;
+            const candidateRead = receipt.reads.find(item => item.kind === 'candidate' && item.subject.kind === 'object' && exactRef(item.subject.ref, candidateRef));
+            const currentCandidate = input.candidate?.currentProjection(candidateRef, 'geometry');
+            if (!candidateRead || candidateRead.kind !== 'candidate' || !currentCandidate || currentCandidate.digest !== candidateRead.digest
+              || !correspondence(candidateRef, currentCandidate.ref)) return { kind: 'stale', reason: 'The implicit exclusion is not bound to the final measured candidate.' };
+          }
+          const current = input.current.currentQuery(query, read.purpose, read.candidateExclusion);
           if (!current.complete || current.digest !== read.digest || current.members.length !== read.members.length) return { kind: 'stale', reason: 'Complete spatial candidate membership or a relevant geometry projection changed.' };
           const members = new Map(current.members.map(ref => [geometryIdentityKey(ref), ref]));
           for (const ref of read.members) { const member = members.get(geometryIdentityKey(ref)); if (!member || !correspondence(ref, member)) return { kind: 'stale', reason: 'A candidate lacks verified source identity correspondence.' }; }

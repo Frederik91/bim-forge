@@ -92,6 +92,7 @@ export const GeometryProjectionSchema = Type.Union([Type.Literal('description'),
 export type GeometryProjection = Static<typeof GeometryProjectionSchema>;
 const objectRead = Type.Object({ kind: Type.Literal('object'), ref: GeometryRefSchema, projection: GeometryProjectionSchema, digest: hash }, exact);
 const queryRead = Type.Object({ kind: Type.Literal('query'), query: GeometryQuerySchema, digest: hash,
+  purpose: Type.Union([Type.Literal('discovery'), Type.Literal('measurement')]), candidateExclusion: Type.Optional(GeometryRefSchema),
   members: Type.Array(GeometryRefSchema, { maxItems: 4096 }), unavailableSources: Type.Array(token, { maxItems: 64 }), complete: Type.Boolean() }, exact);
 const candidateRead = Type.Object({ kind: Type.Literal('candidate'), subject: GeometrySubjectSchema, digest: hash }, exact);
 export const GeometryReadSchema = Type.Union([objectRead, queryRead, candidateRead]);
@@ -149,6 +150,7 @@ export type GeometryDescriptionResult = Static<typeof GeometryDescriptionResultS
 export type GeometryQueryResult = Static<typeof GeometryQueryResultSchema>;
 export type GeometryRelationsResult = Static<typeof GeometryRelationsResultSchema>;
 export type GeometryMeasureResult = Static<typeof GeometryMeasureResultSchema>;
+export type GeometryResult = GeometryDescriptionResult | GeometryQueryResult | GeometryRelationsResult | GeometryMeasureResult;
 
 export function parseGeometryRef(input: unknown): GeometryRef {
   const value = geometryPlainData(input);

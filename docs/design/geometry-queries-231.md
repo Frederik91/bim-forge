@@ -43,6 +43,8 @@ Nonspatial identity discovery does not require physical meshes.
 A spatial predicate without known geometry remains partial rather than excluding an unknown obstruction.
 An unavailable active source also makes discovery partial because its membership cannot be established.
 Cursor identity includes the exact frozen references and predicate. Each page receipts the full candidate set.
+Explicit exclusions require current revision, source hash, and placement pins during dispatch.
+An automatic measured-candidate exclusion is recorded separately and requires the final candidate context during freshness replay.
 
 `describe(ref)` supplies project bounds, units, source authority, capability, and at most twelve triangle surface samples.
 Each sample supplies a point, a unit normal in mesh winding order, and triangle area.
@@ -93,6 +95,10 @@ The pure executor has additional object, triangle, pair, work, reply, receipt-co
 These are configured caps, not measured resource use or latency claims.
 
 Successful replies must match the private pending operation, project, schema, and operation digest.
+`geometryPublicResultDigest` hashes every public result field except `receipt`.
+The producer hashes the same public payload that each method returns, including flattened query and relation replies.
+The session checks that hash against `receipt.resultDigest` before collecting an observation.
+The receipt hash is a consistency check on the private worker transport, not an independent authentication credential.
 Abort, timeout, malformed reply, or worker failure prevents receipt publication, including earlier successful observations.
 `receipts()` is host-only and requires all calls to have completed. The host captures receipts before closing the session.
 Source validation, BVH work, containment, and freshness replay run outside the app event loop.
@@ -102,6 +108,10 @@ The Docker image must include `geometry-worker.ts` next to the session module.
 ## Receipts and relevant freshness
 
 Receipts record consumed object projections and complete query membership, including an empty set.
+Discovery membership records identities and predicate completeness. It does not fingerprint unreturned object geometry.
+The descriptions returned on a page have separate object observations.
+An off-page height edit that leaves membership unchanged therefore does not invalidate identity discovery alone.
+Measurement predicate observations additionally fingerprint all matching candidate geometry, including objects outside the returned page or nearest result.
 Geometry projections contain evaluated world geometry and relevant dependencies.
 Description and relation projections retain the facts the caller consumed.
 File and native revision metadata remain pinned but do not alone decide staleness.
@@ -113,6 +123,8 @@ Unrelated objects outside a spatial predicate do not change its signature.
 Its input contains `current`, optional final `candidate`, `receipts`, and optional verified IFC `correspondences`.
 Each correspondence is an exact historical and current reference pair supplied by the source-version owner.
 Matching names or GlobalIds alone do not authorize correspondence across external revisions.
+Freshness replay rebinds historical explicit exclusions only through the same verified identity policy.
+Dispatch never accepts a stale exclusion directly.
 
 Object candidate receipts require a matching final reconciled candidate context.
 Box receipts bind that descriptor alone. They do not prove that the final native object equals the guest box.
@@ -156,7 +168,7 @@ High-complexity containment can exhaust the bounded work budget. No hospital-sca
 | Solid distance and witnesses | Analytic cube gap and containment invariants | Unrun |
 | Contact and penetration | Zero-gap and positive-gap overlap, containment, and contact controls | Unrun |
 | Identity and scope | Namespace, occurrence, stale reference, private host, filtered relations, and scope-domain tests | Unrun |
-| Complete candidate membership | Absence, new obstruction, far-away addition, missing mesh, and unavailable source tests | Unrun |
+| Complete candidate membership | Absence, new obstruction, off-page membership changes, discovery-only height change, measurement geometry change, missing mesh, and unavailable source tests | Unrun |
 | Relevant updates | Verified correspondence, property-only change, and moved source controls | Unrun |
 | Final candidate binding | Object candidate versus changed reconciled geometry test | Unrun |
 | Budgets and termination | Work and pair limits, deterministic deadline, abort, and late-reply controls | Unrun |
@@ -173,6 +185,9 @@ Source inspection found the following defects before any test run:
 | Semantic context discovery inherited missing-solid uncertainty | Nonspatial membership and solid capability are distinct | Assertion authored; unrun |
 | Full native graph could expose private scope identities | Private evaluation followed by authorized record and relation filtering | Assertion authored; unrun |
 | Worker lifetime could expire during a valid provider turn | Separate 180 s default lifetime and hard per-operation deadline | Lifecycle controls authored; unrun |
+| A stale exclusion could hide a current obstruction | Resolve explicit pins before selection and rebind only during verified replay | Assertions authored; unrun |
+| Discovery inherited unconsumed off-page geometry dependencies | Separate discovery membership from measurement geometry observations | Positive and negative freshness controls authored; unrun |
+| A schema-valid changed reply could retain its prior receipt hash | Hash the canonical public payload and check it before collecting receipts | Four-method digest controls and private-worker transport mutation test authored; unrun |
 
 ## Qualification record
 

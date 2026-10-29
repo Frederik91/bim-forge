@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Worker } from 'node:worker_threads';
 import { Check } from 'typebox/value';
-import { GeometryDescriptionResultSchema, GeometryMeasureResultSchema, GeometryQueryResultSchema, parseGeometryReceipts } from './geometry-contract.ts';
+import { GeometryDescriptionResultSchema, GeometryMeasureResultSchema, GeometryQueryResultSchema, GeometryRelationsResultSchema, parseGeometryReceipts } from './geometry-contract.ts';
 import type { GeometryBounds, GeometryMatrix, GeometryMeasureResult, GeometryPoint, GeometryRef } from './geometry-contract.ts';
-import { createGeometryContext, geometryDigest, validateGeometryReceipts } from './geometry-query.ts';
+import { createGeometryContext, geometryDigest, geometryPublicResultDigest, validateGeometryReceipts } from './geometry-query.ts';
 import type { GeometryContextInput } from './geometry-query.ts';
 import { createMesh, geometryWork, measureShapes, shapeOf } from './geometry-math.ts';
 import type { Triangle } from './geometry-math.ts';
 import { parseLinkedPrepared } from './linked-model.ts';
 import type { LinkedPrepared } from './linked-model.ts';
 import { validateSnapshot } from './room-model.ts';
-import { createGeometrySession, GeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
+import { createGeometrySession, geometryReplyMatchesReceipt, GeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
 import { residentialFloor } from './residential-floor.ts';
 
 const projectId = '00000000-0000-4000-8000-000000000231';
@@ -290,12 +291,26 @@ test('idle lifetime covers thinking separately from hard operation deadlines and
   } finally { await session.close(); }
 });
 
-test('pagination receipts detect changes on an unread page and bounded replies never silently truncate membership', () => {
+test('discovery binds full membership, returned descriptions, and not unconsumed off-page geometry', () => {
   const before = createGeometryContext(input([prepared(), prepared({ occurrence: 'second' })]));
   const page = before.query({ query: {}, limit: 1 }); assert.equal(page.kind, 'complete');
-  const moved: GeometryMatrix = [[1, 0, 0, 2], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
-  const current = createGeometryContext(input([prepared(), prepared({ occurrence: 'second', matrix: moved })]));
+  const taller = prepared({ occurrence: 'second', vertices: cubeVertices.map((n, i) => i % 3 === 2 ? n * 2 : n), revision: 'v2', originalSha256: 'd'.repeat(64) });
+  const current = createGeometryContext(input([prepared(), taller]));
+  assert.equal(validateGeometryReceipts({ receipts: before.receipts(), current, verifyCorrespondence: () => true }).kind, 'fresh');
   assert.equal(validateGeometryReceipts({ receipts: before.receipts(), current }).kind, 'stale');
+  const changedReturned = createGeometryContext(input([prepared({ name: 'A consumed description changed' }), prepared({ occurrence: 'second' })]));
+  assert.equal(validateGeometryReceipts({ receipts: before.receipts(), current: changedReturned }).kind, 'stale');
+  const measured = createGeometryContext(input([prepared(), prepared({ occurrence: 'second' })]));
+  assert.equal(measured.measure({ subject: box({ min: [4, 0, 0], max: [5, 1, 1] }), against: { kind: 'query', query: {} }, operation: 'distance' }).kind, 'complete');
+  assert.equal(validateGeometryReceipts({ receipts: measured.receipts(), current, verifyCorrespondence: () => true }).kind, 'stale');
+  const scoped = createGeometryContext(input([prepared(), prepared({ occurrence: 'second' })]));
+  scoped.query({ query: { region: { min: [0, 0, 0], max: [2, 2, 2] } }, limit: 1 });
+  const moved: GeometryMatrix = [[1, 0, 0, 10], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+  const removedFromRegion = createGeometryContext(input([prepared(), prepared({ occurrence: 'second', matrix: moved })]));
+  assert.equal(validateGeometryReceipts({ receipts: scoped.receipts(), current: removedFromRegion }).kind, 'stale');
+});
+
+test('bounded replies never silently truncate predicate membership', () => {
   const bounded = createGeometryContext({ ...input(), limits: { maxResponseBytes: 1 } });
   const rejected = bounded.query({ query: {} }); assert.equal(rejected.kind, 'unavailable');
   if (rejected.kind === 'unavailable') assert.equal(rejected.reason, 'response-limit');
@@ -308,4 +323,64 @@ test('touching at one obstacle cannot hide penetration at a different obstacle',
   const result = measurement(context.measure({ subject: box({ min: [1, 0, 0], max: [3, 2, 2] }),
     against: { kind: 'query', query: {} }, operation: 'clearance', clearanceMetres: 0 }));
   assert.equal(result.clearance, 'violated-mesh');
+});
+
+test('explicit exclusions require exact live pins while verified replay rebinds historical exclusions', () => {
+  const context = createGeometryContext(input()); const ref = discovered(context); assert.equal(ref.kind, 'ifc');
+  if (ref.kind !== 'ifc') return;
+  for (const stale of [{ ...ref, revision: 'obsolete' }, { ...ref, originalSha256: 'e'.repeat(64) }, { ...ref, placementDigest: 'f'.repeat(64) }]) {
+    const rejected = context.query({ query: { exclude: [stale] } }); assert.equal(rejected.kind, 'unavailable');
+    if (rejected.kind === 'unavailable') assert.equal(rejected.reason, 'stale-reference');
+    assert.equal(context.measure({ subject: box({ min: [2, 0, 0], max: [3, 1, 1] }), against: { kind: 'query', query: { exclude: [stale] } }, operation: 'distance' }).kind, 'unavailable');
+  }
+  const clean = createGeometryContext(input()); const emptyPage = clean.query({ query: { exclude: [ref] } });
+  assert.equal(emptyPage.kind, 'complete'); if (emptyPage.kind === 'complete') assert.equal(emptyPage.total, 0);
+  const replaced = createGeometryContext(input([prepared({ revision: 'v2', originalSha256: 'd'.repeat(64), name: 'Unrelated property edit' })]));
+  assert.equal(validateGeometryReceipts({ receipts: clean.receipts(), current: replaced }).kind, 'stale');
+  assert.equal(validateGeometryReceipts({ receipts: clean.receipts(), current: replaced, verifyCorrespondence: () => true }).kind, 'fresh');
+  assert.equal(validateGeometryReceipts({ receipts: clean.receipts(), current: createGeometryContext(input([])), verifyCorrespondence: () => true }).kind, 'stale');
+});
+
+test('all four methods hash their public wire payload and schema-valid payload changes fail receipt binding', () => {
+  const context = createGeometryContext(input()); const ref = discovered(context);
+  const description = context.describe(ref); const page = context.query({ query: {} }); const relations = context.relations(ref);
+  const measured = context.measure({ subject: box({ min: [1.5, 0, 0], max: [2, 1, 1] }), against: { kind: 'object', ref }, operation: 'distance' });
+  const missing = createGeometryContext(input([prepared({ missing: true })]));
+  const partial = missing.query({ query: { region: { min: [0, 0, 0], max: [2, 2, 2] } } });
+  const unavailable = context.describe({ ...ref, projectId: 'outside' });
+  for (const result of [description, page, relations, measured, partial, unavailable]) {
+    assert.equal(result.receipt.resultDigest, geometryPublicResultDigest(result));
+    assert.equal(geometryReplyMatchesReceipt(result, { projectId, operationDigest: result.receipt.operationDigest }), true);
+  }
+  assert.equal(description.kind, 'complete'); assert.equal(page.kind, 'complete'); assert.equal(relations.kind, 'complete'); assert.equal(measured.kind, 'complete');
+  if (description.kind !== 'complete' || page.kind !== 'complete' || relations.kind !== 'complete' || measured.kind !== 'complete') return;
+  const changedDescription = structuredClone(description); changedDescription.value.name = 'Changed after receipt creation';
+  const changedPage = structuredClone(page); changedPage.total++;
+  const changedRelations = structuredClone(relations); changedRelations.items.push({ kind: 'level', target: ref, basis: 'declared' });
+  const changedMeasurement = structuredClone(measured); changedMeasurement.value.distanceMetres = .75;
+  assert.ok(Check(GeometryDescriptionResultSchema, changedDescription)); assert.ok(Check(GeometryQueryResultSchema, changedPage));
+  assert.ok(Check(GeometryRelationsResultSchema, changedRelations)); assert.ok(Check(GeometryMeasureResultSchema, changedMeasurement));
+  for (const result of [changedDescription, changedPage, changedRelations, changedMeasurement]) {
+    assert.equal(geometryReplyMatchesReceipt(result, { projectId, operationDigest: result.receipt.operationDigest }), false);
+  }
+});
+
+test('the actual worker session rejects a schema-valid changed measurement and fences all receipt publication', async t => {
+  const originalEmit = Worker.prototype.emit;
+  t.mock.method(Worker.prototype, 'emit', function(this: Worker, event: string | symbol, ...args: unknown[]): boolean {
+    const frame = args[0];
+    if (event === 'message' && typeof frame === 'object' && frame !== null && 'kind' in frame && frame.kind === 'result'
+      && 'value' in frame && Check(GeometryMeasureResultSchema, frame.value) && frame.value.kind === 'complete') {
+      const changed = structuredClone(frame.value); changed.value.distanceMetres = .75;
+      return originalEmit.call(this, event, { ...frame, value: changed }, ...args.slice(1));
+    }
+    return originalEmit.call(this, event, ...args);
+  });
+  const session = await createGeometrySession(input());
+  try {
+    const page = await session.query({ query: {} }); assert.equal(page.kind, 'complete'); if (page.kind !== 'complete') return;
+    await assert.rejects(session.measure({ subject: box({ min: [1.5, 0, 0], max: [2, 1, 1] }),
+      against: { kind: 'object', ref: page.items[0].ref }, operation: 'distance' }), /does not match/);
+    assert.throws(() => session.receipts(), /does not match/);
+  } finally { await session.close(); }
 });

@@ -13,10 +13,18 @@ candidate associations, and adopted source and occurrence-placement history. Ope
 upgrades legacy jobs in one transaction. Existing ready links retain their IDs and source pins.
 The upgrade does not touch native model storage or rewrite source bytes.
 
+New jobs set `source.revision` to their unique job/version UUID. `originalSha256` remains the content
+integrity and deduplication hash. Repeated exports of identical bytes therefore retain separate,
+unambiguous immutable version pins. Exact base `f4285c6` used the original hash as the revision for
+pre-feature jobs. The additive upgrade preserves those stored source pins unchanged.
+
 Every link has one occurrence. Separate attachments have separate namespaces and occurrences,
 even when their original bytes and GlobalIds match. Occurrence placement changes independently
 of source preparation. The private worker request now separates the job UUID from the stable
 namespace and occurrence UUIDs. Result validation checks all three bindings.
+Private worker revisions use the same bounded source-token grammar as stored source metadata.
+New requests carry the version UUID; retained pre-feature hash tokens remain valid source tokens.
+The worker checks `originalSha256` against the actual bytes independently of the revision token.
 
 The first successfully prepared version becomes current, preserving the existing attach workflow.
 Replacement candidates leave current unchanged until explicit adoption. Preparation failure,
@@ -47,11 +55,17 @@ availability metadata. It excludes staged candidate progress and failures. Missi
 artifacts appear in `unavailable`; consumers must preserve that incomplete coverage. A changed token
 requires outside-lock revalidation. The token does not decide semantic staleness.
 
-`readVersion(projectId, selection: LinkedSelection): LinkedVersionResolution` resolves an exact
-adopted source and occurrence-transform pin. The result is `{kind:'ok',versionId,prepared}` or
+`readVersion(projectId, selection: LinkedSelection): LinkedVersionResolution` resolves an adopted
+source and occurrence-transform pin only when it identifies one retained preparation. The result is `{kind:'ok',versionId,prepared}` or
 `{kind:'unavailable',reason}`. Cross-project pins, fabricated occurrence bindings, unadopted candidates,
 missing objects, and unavailable artifacts fail closed. Historic original hashes and transforms stay
 unchanged. `resolve(projectId, selection, 'current' | 'historical')` adds an exact-current check.
+If genuinely ambiguous retained data contains multiple adopted preparation jobs claiming one identical
+source-version and transform pin, historical resolution returns `ambiguous`. New version UUIDs prevent
+that state when the same original file is prepared across generations. The store does not guess a
+historical preparation when retained version metadata is ambiguous.
+Exact original downloads remain available because the original source bytes remain authoritative.
+Current resolution loads `currentVersionId` directly and never falls back to an older preparation.
 
 `prepareReplacement({projectId,linkId,expectedGeneration,name,bytes})` retains a separate candidate.
 Repeating the same bytes and expected generation returns an existing live or ready candidate.
@@ -59,6 +73,8 @@ Repeating the same bytes and expected generation returns an existing live or rea
 `adopt({projectId,linkId,candidateId,expectedGeneration})` checks both the caller's generation and
 the generation against which the candidate was prepared. Repeating a successful adoption request
 returns the same current state. A placement change also makes a previously prepared candidate stale.
+An adoption retry must also match the candidate's recorded preparation generation. A subsequent
+placement cannot make a stale adoption request succeed merely because its candidate remains current.
 
 `place({projectId,linkId,expectedGeneration,sourceToProjectMetres})` accepts only a finite, bounded,
 right-handed rigid transform. The placed geometry must remain within the existing coordinate envelope.
@@ -153,3 +169,12 @@ job, namespace, and occurrence IDs. It also checks malformed, extra-field, and o
 The server command from `experiments/ifc-link` is
 `python -m unittest test_runtime_worker.RevisionRequests`. Its subprocess launch is intercepted to inspect
 the exact command. Actual converter execution remains a separate qualification requirement.
+
+Parent static review identified two source defects after the initial handback: same-source generations
+could resolve an older preparation as current, and an adoption retry could mistake a later placement
+for its own transition. The store now selects actual current preparation, rejects ambiguous historical
+preparations, and checks the recorded candidate generation on retries. Unique source revision UUIDs fix
+the identity cause of repeated identical exports. Focused regression sources cover exact history and
+current resolution over identical original bytes, genuine retained ambiguity, actual pre-feature hash
+pins, corrupt current artifacts, and adoption followed by placement. These regressions remain unrun
+while the server is unavailable.

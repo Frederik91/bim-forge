@@ -21,7 +21,7 @@ class RevisionRequests(unittest.TestCase):
             content = b'new synthetic IFC revision'
             digest = hashlib.sha256(content).hexdigest()
             request = {'id': directory.name, 'source': {'namespace': 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',
-                       'revision': digest, 'originalSha256': digest}, 'occurrence': 'cccccccc-cccc-4ccc-cccc-cccccccccccc'}
+                       'revision': directory.name, 'originalSha256': digest}, 'occurrence': 'cccccccc-cccc-4ccc-cccc-cccccccccccc'}
             (directory / 'request.json').write_text(json.dumps(request))
             (directory / 'input.ifc').write_bytes(content)
             with patch('runtime_worker.supervise', return_value={'kind': 'complete'}) as run:
@@ -29,19 +29,21 @@ class RevisionRequests(unittest.TestCase):
             command = run.call_args.args[1]
             self.assertEqual(command[command.index('--namespace') + 1], request['source']['namespace'])
             self.assertEqual(command[command.index('--occurrence') + 1], request['occurrence'])
-            self.assertEqual(command[command.index('--revision') + 1], digest)
+            self.assertEqual(command[command.index('--revision') + 1], directory.name)
             self.assertEqual(json.loads((directory / 'terminal.json').read_text()), {'kind': 'complete'})
 
     def test_malformed_requests_fail_as_bounded_input_errors_without_crashing_worker(self):
         with tempfile.TemporaryDirectory() as root:
             directory = Path(root) / 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
             directory.mkdir()
-            valid = {'id': directory.name, 'source': {'namespace': directory.name, 'revision': 'a' * 64,
+            valid = {'id': directory.name, 'source': {'namespace': directory.name, 'revision': directory.name,
                      'originalSha256': 'a' * 64}, 'occurrence': directory.name}
             cases = [None, [], 'source text', {}, {**valid, 'occurrence': 17}, {**valid, 'source': []},
                      {**valid, 'source': {**valid['source'], 'namespace': 12}},
                      {**valid, 'source': {**valid['source'], 'revision': None}},
-                     {**valid, 'source': {**valid['source'], 'originalSha256': 'b' * 64}},
+                     {**valid, 'source': {**valid['source'], 'originalSha256': 'not-a-hash'}},
+                     {**valid, 'source': {**valid['source'], 'revision': '../outside'}},
+                     {**valid, 'source': {**valid['source'], 'revision': 'a' * 129}},
                      {**valid, 'id': 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'}, {**valid, 'fetch': 'https://example.invalid'}]
             for value in cases:
                 with self.subTest(value=value):
@@ -51,6 +53,24 @@ class RevisionRequests(unittest.TestCase):
             (directory / 'request.json').write_bytes(b' ' * 4097)
             with self.assertRaisesRegex(ValueError, 'budget'):
                 read_request(directory)
+
+    def test_retained_legacy_source_tokens_remain_valid_and_hash_integrity_is_independent_of_version(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
+            directory.mkdir()
+            content = b'legacy immutable source bytes'
+            digest = hashlib.sha256(content).hexdigest()
+            request = {'id': directory.name, 'source': {'namespace': directory.name,
+                       'revision': digest, 'originalSha256': digest}, 'occurrence': directory.name}
+            (directory / 'request.json').write_text(json.dumps(request))
+            self.assertEqual(read_request(directory)['source']['revision'], digest)
+            request['source']['revision'] = directory.name
+            (directory / 'request.json').write_text(json.dumps(request))
+            (directory / 'input.ifc').write_bytes(content + b'corrupt')
+            with patch('runtime_worker.supervise') as run:
+                with self.assertRaisesRegex(ValueError, 'integrity'):
+                    convert(directory)
+                run.assert_not_called()
 
 
 class Supervision(unittest.TestCase):

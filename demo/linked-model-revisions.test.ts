@@ -96,6 +96,75 @@ test('corrupt, cancelled, oversize and interrupted candidates preserve usable cu
   assert.deepEqual(second.prepared(projectId, first.job.id), first.prepared);
 });
 
+test('same original bytes in distinct version generations retain exact historical preparations and actual current resolution', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool, data } = input;
+  const pin = selection(first.prepared);
+  const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'same-source.ifc', bytes: first.bytes });
+  complete({ spool, job: candidate, bytes: first.bytes, offset: 3 }); store.refresh();
+  assert.equal(first.job.source.revision, first.job.id); assert.equal(candidate.source.revision, candidate.id);
+  assert.notEqual(candidate.source.revision, first.job.source.revision); assert.equal(candidate.source.originalSha256, first.job.source.originalSha256);
+  // Unadopted preparations cannot make an adopted historical pin ambiguous.
+  assert.equal(store.readVersion(projectId, pin).kind, 'ok');
+  store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
+  const currentPin = selection(store.prepared(projectId, first.job.id));
+  const current = store.resolve(projectId, currentPin, 'current'); assert.equal(current.kind, 'ok');
+  if (current.kind !== 'ok') assert.fail('Current source must resolve its actual adopted preparation.');
+  assert.equal(current.versionId, candidate.id); assert.deepEqual(current.prepared, store.prepared(projectId, first.job.id));
+  assert.equal(current.prepared.geometry.meshes[0]?.productToSourceMetres[0]?.[3], 3);
+  const historical = store.readVersion(projectId, pin); assert.equal(historical.kind, 'ok');
+  if (historical.kind === 'ok') { assert.equal(historical.versionId, first.job.id); assert.deepEqual(historical.prepared, first.prepared); }
+  const retainedCurrent = store.readVersion(projectId, currentPin); assert.equal(retainedCurrent.kind, 'ok');
+  if (retainedCurrent.kind === 'ok') assert.equal(retainedCurrent.versionId, candidate.id);
+  assert.deepEqual(store.resolve(projectId, pin, 'current'), { kind: 'unavailable', reason: 'stale' });
+  assert.deepEqual(store.originalVersion(projectId, first.job.id), first.bytes); assert.deepEqual(store.originalVersion(projectId, candidate.id), first.bytes);
+  const filename = path.join(data, 'prepared', candidate.id, 'geometry.json'); fs.chmodSync(filename, 0o600); fs.appendFileSync(filename, ' ');
+  assert.deepEqual(store.resolve(projectId, currentPin, 'current'), { kind: 'unavailable', reason: 'missing' }, 'current corruption must never fall back to an older preparation');
+  assert.equal(store.readVersion(projectId, pin).kind, 'ok', 'current corruption must not corrupt distinct historic preparation');
+});
+
+test('identical original bytes and preparation content still have distinct immutable version pins', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool } = input;
+  const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'identical.ifc', bytes: first.bytes });
+  complete({ spool, job: candidate, bytes: first.bytes }); store.refresh();
+  store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
+  const historic = store.readVersion(projectId, selection(first.prepared)); assert.equal(historic.kind, 'ok');
+  if (historic.kind === 'ok') assert.equal(historic.versionId, first.job.id);
+  const currentPin = selection(store.prepared(projectId, first.job.id));
+  assert.notEqual(currentPin.source.revision, first.job.source.revision);
+  const current = store.resolve(projectId, currentPin, 'current'); assert.equal(current.kind, 'ok');
+  if (current.kind === 'ok') assert.equal(current.versionId, candidate.id);
+  const repeated = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 2, name: 'again.ifc', bytes: first.bytes });
+  assert.equal(repeated.source.originalSha256, first.job.source.originalSha256); assert.notEqual(repeated.source.revision, candidate.source.revision);
+  assert.equal(store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 2, name: 'again.ifc', bytes: first.bytes }).id, repeated.id);
+});
+
+test('genuinely ambiguous retained version pins fail closed without guessing a historical preparation', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool, data } = input;
+  const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'ambiguous-retained.ifc', bytes: first.bytes });
+  // Disposable old/corrupt catalog fixture: two preparation jobs claim one source-version pin.
+  const ambiguousJob: LinkedJob = { ...candidate, source: { ...candidate.source, revision: first.job.source.revision } };
+  const database = new DatabaseSync(path.join(data, 'links.sqlite'));
+  database.prepare('UPDATE links SET body=? WHERE id=?').run(JSON.stringify(ambiguousJob), candidate.id); database.close();
+  complete({ spool, job: ambiguousJob, bytes: first.bytes, offset: 2 }); store.refresh();
+  store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
+  assert.deepEqual(store.readVersion(projectId, selection(first.prepared)), { kind: 'unavailable', reason: 'ambiguous' });
+  const current = store.resolve(projectId, selection(first.prepared), 'current'); assert.equal(current.kind, 'ok');
+  if (current.kind === 'ok') { assert.equal(current.versionId, candidate.id); assert.equal(current.prepared.geometry.meshes[0]?.productToSourceMetres[0]?.[3], 2); }
+});
+
+test('adoption retry must match the recorded candidate transition rather than a later placement generation', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool } = input;
+  const bytes = source('adopt B'); const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'B.ifc', bytes });
+  complete({ spool, job: candidate, bytes }); store.refresh();
+  const adopted = store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
+  assert.deepEqual(store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 }), adopted);
+  const placed = store.place({ projectId, linkId: first.job.id, expectedGeneration: 2, sourceToProjectMetres: [[1, 0, 0, 4], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]] });
+  const token = store.snapshotCurrent(projectId).catalogToken;
+  assert.throws(() => store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 2 }), /changed/);
+  assert.throws(() => store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 }), /changed/);
+  assert.equal(store.snapshotCurrent(projectId).catalogToken, token); assert.deepEqual(store.catalog(projectId)[0]?.state, placed);
+});
+
 test('placement is independent, rigid, bounded, CAS protected and retains historical occurrence transform', t => {
   const input = setup(t); const first = attachReady(input); const { store, projectId, spool } = input;
   const candidateBytes = source('next'); const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'next.ifc', bytes: candidateBytes });
@@ -136,11 +205,18 @@ test('catalog guard fences separate SQLite connections/processes and rejects sta
 });
 
 test('legacy ready rows upgrade deterministically and retained revision budgets fail without deleting originals', t => {
-  const input = setup(t); const first = attachReady(input); const { store, projectId, spool, data } = input;
+  const input = setup(t); const { store, projectId, spool, data } = input;
+  const bytes = source('legacy'); const attached = store.attach({ projectId, name: 'legacy.ifc', bytes });
+  const legacy: LinkedJob = { ...attached, source: { ...attached.source, revision: sha(bytes) } };
+  const fixtureDatabase = new DatabaseSync(path.join(data, 'links.sqlite'));
+  fixtureDatabase.prepare('UPDATE links SET body=? WHERE id=?').run(JSON.stringify(legacy), legacy.id); fixtureDatabase.close();
+  complete({ spool, job: legacy, bytes }); store.refresh();
+  const first = { job: legacy, bytes, prepared: store.prepared(projectId, legacy.id) };
   store.close(); const database = new DatabaseSync(path.join(data, 'links.sqlite'));
   database.exec('DROP TABLE link_history; DROP TABLE link_versions; DROP TABLE link_catalog'); database.close();
   const upgraded = LinkedModelStore.open({ root: data, spool }); t.after(() => upgraded.close());
   assert.deepEqual(upgraded.prepared(projectId, first.job.id), first.prepared); assert.deepEqual(upgraded.original(projectId, first.job.id), first.bytes);
+  assert.equal(upgraded.prepared(projectId, first.job.id).manifest.source.revision, sha(bytes), 'retain actual pre-feature hash revision pins unchanged');
   for (let i = 1; i < MAX_LINK_REVISIONS; i++) {
     const job = upgraded.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: `${i}.ifc`, bytes: source(String(i)) }); upgraded.cancel(projectId, job.id);
   }
