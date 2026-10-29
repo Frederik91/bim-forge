@@ -429,3 +429,29 @@ Parent has also composed #233 continuation/endpoint/tolerance fixes through `4e7
 required describe geometry-read producer `063f8b3`. Static follow-ups confirmed the original
 continuation finding closed; remaining endpoint/refinement review and actual guest/queue tests
 are still required. New source code has not inherited the earlier kernel pass automatically.
+
+The upstream change is now [draft ScriptBox PR25](https://github.com/Frederik91/ScriptBox/pull/25)
+at exact qualified `486679ea`. Its build-wasm, .NET build-and-test and Node CI checks also passed.
+Owner approval for the separate public merge/release has been requested; no response is assumed.
+
+The BIM dependency cache is an isolated copy of the previously qualified cache. Its ScriptBox
+public files match the clean npm-installed consumer exactly; all 16,164 other installed files,
+including the nested TypeScript 6.0.3 compiler, remain unchanged. Source version, root lock digest
+and exact candidate integrity are checked before validation. No source adapter or hidden runtime
+patch is used. This cache does not change the existing cache or the deployed preview.
+
+Root component attempt 5 at `6763d6b` passed validation, explicit all-path policy, browser build,
+geometry 35/35 and IFC revisions 12/12. Real guest/queue/provider evidence tests passed 28/31.
+The three failures were: an alternative fixture publishing a client-created target without the
+required target CAS; endpoint scenario names containing forbidden numeric punctuation; and an
+assertion that an earlier accepted review stays the current target status after a later acceptance.
+#233 correction `db9ea2f` uses the authoritative design command, valid names, and strengthens the
+unrelated-acceptance proof with exact native deltas, revision ancestry, preserved decision IDs and
+both completed tickets. It preserves the existing superseded-review invariant and all validators.
+The previously blocked endpoint cases and those fixture corrections remain unrun at this checkpoint.
+
+Root attempt 6 ran the previously unrun default legacy regression segment at the same executable
+source, while the new evidence fixtures were corrected. Validation/policy/build passed; legacy
+tests passed 819 with two optional skips, and all 21 asset tests passed. This was explicitly not
+a claim that the full default chain passed: it did not rerun or hide the known failing evidence
+segment. The next gate is the complete default `npm test` at the corrected combined head.
