@@ -68,8 +68,10 @@ test('cancelled and restarted jobs cannot publish late results; original source 
   fs.writeFileSync(path.join(spool, job.id, 'terminal.json'), JSON.stringify({ kind: 'complete' })); store.refresh();
   assert.equal(store.get(project, job.id).kind, 'cancelled'); assert.throws(() => store.prepared(project, job.id), /not ready/);
   const interrupted = store.attach({ projectId: project, name: 'restart.ifc', bytes });
-  // Simulate abrupt loss by opening a second process-equivalent reader before orderly shutdown.
+  // A second application process cannot claim that the first process has restarted.
   const recovered = LinkedModelStore.open({ root: data, spool }); t.after(() => recovered.close());
+  assert.equal(recovered.get(project, interrupted.id).kind, 'queued');
+  fs.writeFileSync(path.join(spool, interrupted.id, 'terminal.json'), JSON.stringify({ kind: 'failed', error: 'Converter interrupted by restart.' })); recovered.refresh();
   assert.equal(recovered.get(project, interrupted.id).kind, 'failed');
   fs.writeFileSync(path.join(spool, interrupted.id, 'terminal.json'), JSON.stringify({ kind: 'complete' })); recovered.refresh();
   assert.equal(recovered.get(project, interrupted.id).kind, 'failed'); assert.deepEqual(recovered.original(project, interrupted.id), bytes);
