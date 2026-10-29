@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Check } from 'typebox/value';
+import { Type } from 'typebox';
 import { parseLinkedPrepared } from './linked-model.ts';
 import type { LinkedPrepared } from './linked-model.ts';
 import { validateSnapshot } from './room-model.ts';
@@ -50,6 +51,10 @@ function linkedRecords(projectId: string, input: LinkedPrepared, work: GeometryW
   const placementDigest = geometryDigest(occurrence.sourceToProjectMetres);
   const ref = (globalId: string): GeometryRef => ({ kind: 'ifc', projectId, ...source, occurrenceId: occurrence.id, globalId, placementDigest });
   const meshes = new Map(prepared.geometry.meshes.map(mesh => [mesh.ref.globalId, mesh]));
+  const placementIdentitySchema = Type.Object({ globalId: Type.String() });
+  const products = new Set(prepared.index.placements.flatMap(value => Check(placementIdentitySchema, value) ? [value.globalId] : []));
+  const completeProductInventory = products.size === prepared.manifest.counts.products && products.size === prepared.index.placements.length
+    && [...products].every(id => prepared.index.objects.some(object => object.ref.globalId === id));
   return prepared.index.objects.map(object => {
     work.tick(); const raw = meshes.get(object.ref.globalId);
     let shape: GeometryShape | null = null;
@@ -73,7 +78,8 @@ function linkedRecords(projectId: string, input: LinkedPrepared, work: GeometryW
       catch (error) { if (error instanceof GeometryLimitError) throw error; detail = 'Prepared mesh has degenerate or unsupported topology.'; }
     }
     const category = geometryCategory(object.ifcClass);
-    const context = ['IfcProject', 'IfcSite', 'IfcBuilding', 'IfcBuildingStorey', 'IfcSpace', 'IfcOpeningElement'].includes(object.ifcClass);
+    const context = ['IfcProject', 'IfcSite', 'IfcBuilding', 'IfcBuildingStorey', 'IfcSpace', 'IfcOpeningElement'].includes(object.ifcClass)
+      || completeProductInventory && !products.has(object.ref.globalId);
     const relations: GeometryRecord['relations'] = prepared.index.spatial.filter(edge => edge.child === object.ref.globalId).map(edge => ({ kind: edge.kind, target: ref(edge.parent), basis: 'declared' }));
     // A declared storey ancestor is a semantic level; no geometric containment is asserted.
     const ancestors = new Set<string>([object.ref.globalId]);
@@ -270,6 +276,7 @@ export class GeometryContext {
       }
       const clearance = request.operation !== 'clearance' ? 'not-requested' : !complete ? 'unknown'
         : !best ? 'satisfied-mesh' : best.relation === 'contact-or-overlap' && (request.clearanceMetres ?? 0) === 0 ? 'unknown'
+          : best.relation === 'volume-overlap' || best.relation === 'subject-inside' || best.relation === 'obstacle-inside' ? 'violated-mesh'
           : best.distance + NUMERIC_TOLERANCE_METRES >= (request.clearanceMetres ?? 0) ? 'satisfied-mesh' : 'violated-mesh';
       const measurement: GeometryMeasurement = { nearest: nearest?.description.ref ?? null, distanceMetres: best?.distance ?? null,
         witness: best ? { subject: best.subject, obstacle: best.obstacle } : null, relation: best?.relation ?? (complete ? 'empty-set' : 'unknown'),
