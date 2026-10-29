@@ -93,8 +93,8 @@ def convert(directory):
         return
     request = json.loads(bounded(directory / 'request.json', 4096))
     source = request.get('source', {})
-    if (request.get('id') != directory.name or request.get('occurrence') != directory.name
-            or source.get('namespace') != directory.name or not HASH.fullmatch(source.get('revision', ''))
+    if (request.get('id') != directory.name or not UUID.fullmatch(request.get('occurrence', ''))
+            or not UUID.fullmatch(source.get('namespace', '')) or not HASH.fullmatch(source.get('revision', ''))
             or source.get('revision') != source.get('originalSha256')):
         raise ValueError('Invalid private worker request')
     content = bounded(directory / 'input.ifc', 2 * 1024**2)
@@ -103,8 +103,8 @@ def convert(directory):
     atomic(directory / 'running.json', {'started': time.time()})
     result = supervise(directory, [sys.executable, str(Path(__file__).with_name('link.py')),
                        str(directory / 'input.ifc'), str(directory / 'output'),
-                       '--namespace', directory.name, '--revision', source['revision'],
-                       '--occurrence', directory.name, '--cancel-file', str(directory / 'cancel.json')])
+                       '--namespace', source['namespace'], '--revision', source['revision'],
+                       '--occurrence', request['occurrence'], '--cancel-file', str(directory / 'cancel.json')])
     atomic(directory / 'terminal.json', result)
 
 
