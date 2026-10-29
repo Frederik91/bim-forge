@@ -13,6 +13,7 @@ import { RoomRepository } from '../src/room-model.ts';
 import { parseLinkedPrepared } from '../src/linked-model.ts';
 import { GeometryRefSchema, parseGeometryRef } from '../src/geometry-contract.ts';
 import { parseRequestSources } from '../src/request-sources.ts';
+import { qualifyLinkedVersions } from '../experiments/geometry-qualification-230/linked-version-controls.ts';
 
 // This slice uses the real isolated server + external converter. It never injects a
 // provider, scripts a fake proposal, reads oracle facts into chat, or opens a live preview.
@@ -159,7 +160,7 @@ async function importReceivingProject(page: Page, base: string, filename: string
   return { repository };
 }
 
-test('real IFC properties and historical context preserve Main and refuse cross-project reads', { timeout: 180_000 }, async t => {
+test('real IFC properties, version UI and historical context preserve Main and refuse cross-project reads', { timeout: 240_000 }, async t => {
   assert.equal(process.env.QUAL_SERVER_CONTAINER, 'issue234', 'Only run in the reserved network-off server container.');
   assert.ok(await fs.stat('/.dockerenv'));
   const spool = required('IFC_EXTERNAL_SPOOL');
@@ -308,8 +309,16 @@ test('real IFC properties and historical context preserve Main and refuse cross-
   // Intentional submission follows all zero-automatic-dispatch assertions. It
   // qualifies input context only; this server has no auth/provider/proposal worker.
   await page.setViewportSize({ width: 1440, height: 1000 });
+  const revisions = await qualifyLinkedVersions({ page, base, projectId, originalHref: href, artifacts, fixtures,
+    historicalPinHref: pin, historicalPinText: pinnedBefore });
+  const revisedBinding = inspectLinkedAttachment(revisions.currentPin, { projectId, prepared: revisions.prepared, objectName: 'Invented wall' });
+  assert.equal(revisedBinding.geometryRef.namespace, firstBinding.geometryRef.namespace);
+  assert.equal(revisedBinding.geometryRef.occurrenceId, firstBinding.geometryRef.occurrenceId);
+  assert.notEqual(revisedBinding.geometryRef.originalSha256, firstBinding.geometryRef.originalSha256);
+  assert.notEqual(revisedBinding.placementDigest, firstBinding.placementDigest);
   const receivingSubmit = await submitContextThroughUI({ page, base, artifacts, caseId: 'receiving', projectId,
-    expectedIds: ['receiving-hall', 'receiving-level'], previousDoorId: nativeDoor.id, expectedSourceTexts: [pinnedBefore, changedPin] });
+    expectedIds: ['receiving-hall', 'receiving-level'], previousDoorId: nativeDoor.id,
+    expectedSourceTexts: [pinnedBefore, changedPin, revisions.currentPin] });
   if (receivingSubmit.kind === 'pending-ui-gate') t.diagnostic(`Receiving input-context coverage remains pending: ${receivingSubmit.reason}`);
   // Cross-project requests go through the actual public router; no store bypass.
   const secondContext = await browser.newContext();
@@ -352,8 +361,11 @@ test('real IFC properties and historical context preserve Main and refuse cross-
   await fs.writeFile(path.join(artifacts, 'issue234-browser-receipt.json'), JSON.stringify({ source, originalHash,
     projectId, secondProjectId: second.repository.projectId, mainUnchanged: true,
     propertyHash, receivingContextImportedVia: '#import-file', selectionContext: 'IFC Ask pins exact selected source/version/occurrence/transform; native reselect clears linked selection; independent source preserves prior pin',
-    attachmentBindings: { first: firstBinding, changed: changedBinding, validation: 'Schema parser plus independent host SHA-256 of each prepared occurrence matrix; exact project/source/occurrence/ref/property agreement' },
+    attachmentBindings: { first: firstBinding, changed: changedBinding, revised: revisedBinding,
+      validation: 'Schema parser plus independent host SHA-256 of each prepared occurrence matrix; exact project/source/occurrence/ref/property agreement' },
+    revisionUI: { linkId: revisions.linkId, finalGeneration: revisions.finalGeneration,
+      scope: 'Staged failure preserves current; property/motion adoption; historical originals; actual UI placement wins over delayed unmodified stale UI adoption' },
     inputContextSubmissions: { receiving: receivingSubmit, legacyNoLevel: legacySubmit, provider: 'Unconfigured, no fake worker/auth/provider/proposal. UI gate outcomes remain pending.' },
     qualification: 'attach/read-only-properties/selection-action-strip/unsent-context/cross-project-original-and-prepared/layout only',
-    pending: ['connected-provider selectedObjectIds/anchor semantics (isolated UI queue coverage alone does not prove provider behavior)', 'same-link source/version/transform stale selection after adoption', 'candidate/adopt/history', 'restart/cancel/concurrent adoption', 'trusted freshness/acceptance races', 'connected-provider 500mm proposal', 'As-is and alternative acceptance'] }, null, 2) + '\n');
+    pending: ['connected-provider selectedObjectIds/anchor semantics (isolated UI queue coverage alone does not prove provider behavior)', 'restart/cancel/concurrent adoption across app processes', 'trusted freshness/acceptance races', 'connected-provider 500mm proposal', 'As-is and alternative acceptance'] }, null, 2) + '\n');
 });

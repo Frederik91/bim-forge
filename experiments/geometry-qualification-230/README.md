@@ -24,6 +24,11 @@ red/green receipt; inspect failures before retrying. It does not reopen worker21
   `GeometryContext` to the independent metre/mm/occurrence/distance controls. Retains
   every result before asserting, including zero-clearance containment/penetration and
   contact cases. Tests missing sources and meshless Level/Space semantic discovery.
+  A separate private scope control validates a hosted door and an ordinary unit-box
+  instance against full hidden host/family/room/level dependencies. It checks declared
+  bounds, hidden direct-reference/query/relation refusals and receipt invalidation
+  for expanded, whole-project and empty native read domains. These private control
+  assets never enter the generated receiving project or live-provider context.
 - `receiving-native.ts`: writes an ordinary broad named receiving hall/service room
   at elevation 3.5 m, with shell, slab and doors. Existing validators and portable
   roundtrip check the generated context. No assets, candidate locations, normals,
@@ -54,6 +59,17 @@ red/green receipt; inspect failures before retrying. It does not reopen worker21
   fresh disposable UUID for live runs; the generator records the actual ID and hash.
   There is no fake provider or test-only product bypass. It does not qualify touch.
 - `requirements.tsv`: full matrix with narrow written checks and every pending row.
+- `linked-version-controls.ts`: real UI replacement/review/adoption/placement controls
+  with public read routes for independent observations. A failed malformed candidate
+  leaves current source/usable properties unchanged. Property-only then wall-motion
+  versions are reviewed and explicitly adopted; stable namespace/occurrence and
+  historical original hashes are checked. A second browser UI commits placement
+  while the first UI's actual adoption request is delayed without changing its body,
+  headers, URL or response. The stale adoption must be refused. A fresh candidate is
+  then adopted under the retained nonidentity placement; the final Ask handle gets
+  the same independent hash/ref checks while the original pin remains byte-identical.
+  This proves one planned UI interleaving only when executed, not multi-process
+  publication/acceptance, worker restart, cancellation or provider freshness.
 - `run-server.sh`: bounded network-off/read-only server container supervisor; exact
   source archive/hash, image inspect, raw log, exit code and append-only attempts.
 - `ledger.json`: initial availability and defect/attempt status. Never replace red logs.
@@ -166,18 +182,20 @@ project points, queries, measurements/witnesses and trusted receipts. The unqual
 `createGeometryContext` runtime was integrated from the parent at f5c3210. Host runtime
 tests consume its public interface as the system under test. Its geometry math is
 never imported by the oracle. Scoped `readableIds` exposure and receipt-domain binding
-remain pending a concrete implementation contract; the full private graph must still
+are now concrete and have owned source controls. The full private graph must still
 evaluate hosts/families while hidden IDs and relation targets remain unreadable.
+Execution is pending.
 
 #232 proposed `snapshotCurrent`, `readVersion`, `withCatalogGuard`, including missing
 active sources, a short SQLite publication fence and thenable refusal. The announced
 route family adds `/catalog`, `/:linkId/candidate` with `X-Expected-Generation`,
 `/:linkId/versions/:jobId/review|original|adopt`, and `/:linkId/placement` under the
-existing project-authorized prefix. Source handback and accessible UI names remain
-pending; do not manufacture an adoption flow or treat an API-only replay as UI proof.
-Stale selection after adoption of a changed source/version/occurrence transform is
-also pending those real public UI operations. Independent attachments are separate
-sources, not a substitute for repeated replacement of one stable project link.
+existing project-authorized prefix. Source handback and accessible UI names now
+support the owned same-link controls. Those controls drive actual inputs,
+review/adopt buttons and placement fields. Their read-only observations use public
+routes; the delayed race request originates from the real UI and is forwarded
+unmodified. Execution is pending. Independent attachments remain separate sources
+and are not substituted for repeated replacement of one stable project link.
 #233 proposal applicability and final publication must exercise relevant-only reads,
 absence membership and revalidation. Neither fabricated output nor a scripted fixture
 worker qualifies the parent's real connected-model request.
@@ -188,13 +206,16 @@ missing-geometry diagnostics; **job completion is not geometric completeness**.
 An active link with missing index/mesh or unavailable artifacts must make complete
 absence/clearance unprovable. A failed staged candidate must preserve current geometry,
 its readiness and historical original; the converter artifact check alone does not
-prove the app lifecycle. Those product assertions remain pending rows G07/G11.
+prove the app lifecycle. The G11 UI source control is written but unrun; G07 also
+has unrun runtime source controls. Neither is qualified by converter job status.
 
 No runtime defect has been reproduced here yet. Static harness corrections are not
 product defect evidence. No generated fixture, root validation, converter, browser,
 provider, proposal, race, restart, accepted alternative or As-is preservation run has
-been performed while the server is unreachable. Main-only attachment preservation is
-the narrow browser assertion. Review `requirements.tsv` before interpreting any green
+been performed by this child. Connectivity is now restored according to the parent,
+who retains the single qualification slot and has run separate combined-source
+checks. Those receipts must be assessed at their exact source; they do not turn this
+child's unrun controls green. Review `requirements.tsv` before interpreting any narrow
 test as broader qualification.
 
 Preserving the previous native picker value under linked selection is a background
