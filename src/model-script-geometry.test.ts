@@ -10,6 +10,7 @@ import { GeometrySessionError } from './geometry-session.ts';
 import { GeometryEvidenceLimitError } from './geometry-evidence-contract.ts';
 import { FixtureGeometrySource, evidenceWall, geometryProposalScript } from './geometry-evidence.fixture.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
+import type { ActivityUpdate } from './request-activity.ts';
 
 function request(repository: RoomRepository) {
   return { requestId: 'geometry-preseal', proposalName: 'geometry-preseal', baseRevisionId: repository.head('main'),
@@ -24,17 +25,20 @@ test('the worker receives final geometry failure before success and corrects its
   const repository = await RoomRepository.create(); const accepted = repository.serialize();
   const source = new FixtureGeometrySource(); const scripts = new ModelScripts(); t.after(() => scripts.dispose());
   const executions: ScriptExecutionEvidence[] = []; const previews: (ModelSnapshot | null)[] = [];
+  const activities: ActivityUpdate[] = [];
   const result = await prepareModelProposal(repository, request(repository), worker(async session => {
     const first = await session.executeTool('run_model_script', { language: 'typescript', source: unsafeScript });
     assert.equal(first.ok, false, JSON.stringify(first)); assert.equal(first.done, undefined);
     const failed = executions[0]; assert.ok(failed);
     assert.equal(failed.status, 'completed'); assert.equal(failed.disposition, 'discarded'); assert.equal(failed.validation, 'failed');
     assert.equal(failed.diagnostic?.code, 'invalid-proposal'); assert.deepEqual(first.execution, failed);
+    assert.ok(failed.diagnostic); assert.match(failed.diagnostic.message, /\[clearance-violated\]/);
+    assert.ok(activities.some(event => event.stage === 'validation-failed' && event.message === failed.diagnostic?.message));
     assert.equal(previews.at(-1), null); assert.equal(repository.serialize(), accepted);
     const corrected = await session.executeTool('run_model_script', { language: 'typescript', source: geometryProposalScript });
     assert.equal(corrected.ok, true, JSON.stringify(corrected)); assert.equal(corrected.done, true);
     assert.equal(repository.serialize(), accepted);
-  }), () => {}, { geometry: { source }, scripts, onExecution: evidence => executions.push(evidence), onPreview: snapshot => previews.push(snapshot) });
+  }), event => activities.push(event), { geometry: { source }, scripts, onExecution: evidence => executions.push(evidence), onPreview: snapshot => previews.push(snapshot) });
   assert.equal(result.status, 'ready'); assert.equal(repository.serialize(), accepted);
   assert.equal(result.repository.head('main'), repository.head('main'));
   assert.equal(executions.length, 2); assert.equal(executions[1]?.disposition, 'proposal'); assert.equal(executions[1]?.validation, 'passed');
@@ -89,6 +93,7 @@ test('fatal host geometry failures retain discarded execution evidence and canno
   for (const failure of failures) await t.test(failure.message, async child => {
     const repository = await RoomRepository.create(); const accepted = repository.serialize();
     const executions: ScriptExecutionEvidence[] = []; const previews: (ModelSnapshot | null)[] = [];
+    const activities: ActivityUpdate[] = [];
     const original = GeometryEvidenceSession.prototype.seal; let seals = 0;
     child.mock.method(GeometryEvidenceSession.prototype, 'seal', async function (this: GeometryEvidenceSession, candidate: ModelSnapshot) {
       if (++seals === 1) throw failure;
@@ -102,11 +107,14 @@ test('fatal host geometry failures retain discarded execution evidence and canno
       assert.equal(evidence.diagnostic?.code, 'host-failure'); assert.deepEqual(output.execution, evidence);
       if (failure.constructor === Error) assert.ok(!JSON.stringify(output).includes('PRIVATE'));
       else assert.equal(evidence.diagnostic?.message, failure.message);
+      assert.ok(activities.some(event => event.stage === 'validation-failed' && event.message === evidence.diagnostic?.message));
+      assert.ok(!JSON.stringify(activities).includes('PRIVATE'));
       assert.equal(previews.at(-1), null);
       const replay = await session.executeTool('run_model_script', { language: 'typescript', source: geometryProposalScript });
       assert.equal(replay.ok, false, JSON.stringify(replay));
-    }), () => {}, { geometry: { source: new FixtureGeometrySource() }, scripts,
+    }), event => activities.push(event), { geometry: { source: new FixtureGeometrySource() }, scripts,
       onExecution: evidence => executions.push(evidence), onPreview: snapshot => previews.push(snapshot) }), /authority|ended/);
     assert.equal(seals, 1); assert.equal(executions.length, 1); assert.equal(repository.serialize(), accepted);
+    assert.ok(!JSON.stringify(activities).includes('PRIVATE'));
   });
 });

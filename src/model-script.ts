@@ -597,8 +597,9 @@ export class ModelScripts {
           const correctable = error instanceof GeometryProposalValidationError && !input.signal.aborted;
           const controlled = correctable || error instanceof GeometryEvidenceConflict
             || error instanceof GeometryEvidenceLimitError || error instanceof GeometrySessionError;
-          return failed({ code: correctable ? 'invalid-proposal' : 'host-failure',
-            message: publicMessage(controlled && error instanceof Error ? error.message : 'Host proposal validation failed. Staged changes discarded.'),
+          const message = publicMessage(controlled && error instanceof Error ? error.message : 'Host proposal validation failed. Staged changes discarded.');
+          input.onActivity({ stage: 'validation-failed', message });
+          return failed({ code: correctable ? 'invalid-proposal' : 'host-failure', message,
             line: null, column: null }, 'failed');
         }
         const proposal: ModelScriptResult = { kind: 'proposal', snapshot: candidate, review: result.review, evidence: evidence('proposal', 'passed', null) };
