@@ -8,8 +8,9 @@ import { Check } from 'typebox/value';
 import { parseLinkedPrepared } from '../../src/linked-model.ts';
 import type { LinkedPrepared } from '../../src/linked-model.ts';
 import { GeometryBoundsSchema, GeometryMatrixSchema } from '../../src/geometry-contract.ts';
-import type { GeometryDescription, GeometryMeasureResult } from '../../src/geometry-contract.ts';
-import { createGeometryContext } from '../../src/geometry-query.ts';
+import type { GeometryDescription, GeometryMeasureResult, GeometryRef } from '../../src/geometry-contract.ts';
+import { createGeometryContext, validateGeometryReceipts } from '../../src/geometry-query.ts';
+import { RoomRepository, validateSnapshot } from '../../src/room-model.ts';
 import { receivingProject } from './receiving-native.ts';
 
 // Production calculation is the system under test. All expected distances and box
@@ -158,4 +159,81 @@ test('receiving native project is ordinary valid context, matching floor elevati
     assert.ok(wall.bounds.min[1] > hall.bounds.minY && wall.bounds.max[1] < hall.bounds.maxY);
     assert.ok(Math.abs(wall.bounds.min[2] - level.elevation) <= 1e-7);
   }
+});
+
+test('scoped geometry privately evaluates hosts/families without exposing their IDs or claiming whole-project completeness', async () => {
+  const input = await inputs();
+  // This private authorization control is not written into the receiving project,
+  // imported through UI, or supplied as a live-provider proposal/candidate answer.
+  const snapshot = validateSnapshot({ ...input.native.snapshot, entities: [...input.native.snapshot.entities,
+    { id: 'scope-private-family', type: 'AssetFamily', name: 'PRIVATE FAMILY NAME', description: 'Private dependency control.',
+      parts: [{ id: 'body', kind: 'box', min: [0, 0, 0], size: [1, 1, 1], color: '#546778' }] },
+    { id: 'scope-visible-instance', type: 'AssetInstance', name: 'Readable instance', familyId: 'scope-private-family',
+      position: [30, 30], rotationDeg: 0, size: { width: 1, depth: 1, height: 1 }, placement: { kind: 'room', roomId: 'receiving-hall' } },
+  ] });
+  const privateProject = await RoomRepository.createProject({ projectId: input.projectId,
+    name: 'Private scope authorization control', snapshot });
+  const revisionId = privateProject.head('main');
+  const readableIds = ['receiving-entry', 'scope-visible-instance'];
+  const native = { ...input.native, snapshot, revisionId, readableIds } satisfies Parameters<typeof createGeometryContext>[0]['native'];
+  const context = createGeometryContext({ projectId: input.projectId, native, linked: [] });
+  const nativeRef = (entityId: string): GeometryRef => ({ kind: 'native', projectId: input.projectId,
+    target: { kind: 'main' }, revisionId, entityId });
+  const discovered = context.query({ query: { role: 'all' }, limit: 32 });
+  if (discovered.kind !== 'complete') throw new Error(JSON.stringify(discovered));
+  assert.equal(discovered.domain.kind, 'authorized-native-scope');
+  assert.deepEqual(discovered.domain, context.domain);
+  assert.deepEqual(discovered.receipt.domain, context.domain);
+  assert.equal(discovered.total, 2);
+  assert.equal(discovered.nextCursor, null);
+  assert.deepEqual(discovered.items.map(item => item.ref.kind === 'native' ? item.ref.entityId : '').sort(), [...readableIds].sort());
+  const instance = discovered.items.find(item => item.ref.kind === 'native' && item.ref.entityId === 'scope-visible-instance');
+  const door = discovered.items.find(item => item.ref.kind === 'native' && item.ref.entityId === 'receiving-entry');
+  assert.ok(instance && door);
+  assert.equal(instance.capability.kind, 'mesh');
+  // Independently declared unit box at a known named-room floor. Resolving it
+  // requires the hidden family + room + level in the private full graph.
+  assert.deepEqual(instance.bounds, { min: [29.5, 29.5, 3.5], max: [30.5, 30.5, 4.5] });
+  assert.equal(door.capability.kind, 'mesh');
+  assert.deepEqual(door.bounds, { min: [2, -.1, 3.5], max: [3.2, .1, 5.7] });
+  const hidden = ['receiving-south', 'receiving-level', 'receiving-hall', 'scope-private-family'];
+  const publicPage = JSON.stringify(discovered);
+  for (const id of hidden) {
+    assert.ok(!publicPage.includes(id), `Hidden ID leaked through discovery/receipt: ${id}`);
+    assert.equal(context.describe(nativeRef(id)).kind, 'unavailable');
+    assert.equal(context.relations(nativeRef(id)).kind, 'unavailable');
+  }
+  assert.ok(!publicPage.includes('PRIVATE FAMILY NAME'));
+  for (const object of [door, instance]) {
+    const relations = context.relations(object.ref);
+    if (relations.kind !== 'complete') throw new Error(JSON.stringify(relations));
+    for (const relation of relations.items) {
+      assert.ok(relation.target.kind === 'native' && readableIds.includes(relation.target.entityId));
+    }
+  }
+  const hiddenClassQuery = context.query({ query: { role: 'all', classes: ['Wall', 'AssetFamily'] } });
+  if (hiddenClassQuery.kind !== 'complete') throw new Error(JSON.stringify(hiddenClassQuery));
+  assert.equal(hiddenClassQuery.total, 0);
+  assert.equal(hiddenClassQuery.domain.kind, 'authorized-native-scope', 'An empty authorized domain is not a whole-project absence claim.');
+  assert.equal(context.query({ query: { role: 'all', level: nativeRef('receiving-level') } }).kind, 'unavailable');
+  const clean = createGeometryContext({ projectId: input.projectId, native, linked: [] });
+  const observation = clean.query({ query: { role: 'all' } });
+  if (observation.kind !== 'complete') throw new Error(JSON.stringify(observation));
+  assert.equal(validateGeometryReceipts({ receipts: [observation.receipt], current: clean }).kind, 'fresh');
+  const expanded = createGeometryContext({ projectId: input.projectId,
+    native: { ...native, readableIds: [...readableIds, 'receiving-south'] }, linked: [] });
+  assert.notEqual(expanded.domain.digest, clean.domain.digest);
+  assert.equal(validateGeometryReceipts({ receipts: [observation.receipt], current: expanded }).kind, 'stale');
+  const wholeProject = createGeometryContext({ projectId: input.projectId, native: { ...input.native, snapshot, revisionId }, linked: [] });
+  assert.equal(validateGeometryReceipts({ receipts: [observation.receipt], current: wholeProject }).kind, 'stale');
+  const empty = createGeometryContext({ projectId: input.projectId, native: { ...native, readableIds: [] }, linked: [] });
+  const emptyPage = empty.query({ query: { role: 'all' } });
+  if (emptyPage.kind !== 'complete') throw new Error(JSON.stringify(emptyPage));
+  assert.equal(emptyPage.total, 0);
+  assert.equal(emptyPage.domain.kind, 'authorized-native-scope');
+  assert.equal(empty.describe(door.ref).kind, 'unavailable');
+  await fs.writeFile(path.join(input.output, 'scope-domain-controls.json'), JSON.stringify({ source: input.source, revisionId,
+    scopedDomain: clean.domain, expandedDomain: expanded.domain, emptyDomain: empty.domain,
+    directHiddenReferencesRefused: hidden, hiddenHostAndFamilyEvaluation: 'Independent door/unit-box bounds',
+    limits: 'Native read-domain behavior only; IFC/source access and write authority have separate checks' }, null, 2) + '\n');
 });
