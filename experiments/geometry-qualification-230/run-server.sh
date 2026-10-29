@@ -64,7 +64,7 @@ mkdir -p "$run/source/node_modules" "$run/source/dist"
 git -C "$source_checkout" diff --name-only e43dd859a631ff8676d080011607447806beeb34 "$sha" > "$run/changed-paths.txt"
 tar -C "$run/source" --exclude=node_modules --exclude=dist -cf "$run/source.tar" .
 sha256sum "$run/source.tar" > "$run/source.tar.sha256"
-common=(--pull=never --rm --log-driver none --network none --read-only --cpus 2 --memory 4g --pids-limit 256
+common=(--pull=never --rm --log-driver none --network none --read-only --cpus 2 --memory 3g --memory-swap 3g --pids-limit 256
   --cap-drop ALL --security-opt no-new-privileges --user "$(id -u):$(id -g)"
   --mount "type=bind,src=$run/source,dst=/src,readonly"
   --mount "type=bind,src=$deps,dst=/src/node_modules,readonly"

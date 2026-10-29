@@ -102,6 +102,9 @@ does not grant access to the private oracle or native acceptance authority.
 The owner/parent must reserve the server and combined source first. All storage is
 under `/ssd1`; supply a clean committed server checkout, cached dependencies/image,
 and compatible cached Python executable. No installs or image pulls are performed.
+Each container is limited to two CPUs and 3 GiB RAM with total memory+swap also
+3 GiB, so it cannot consume swap. The parent permits one serial qualification slot;
+do not start a container, build, test or server probe before explicit slot handoff.
 Inspect the image/Python paths before the first attempt; they are configuration,
 not evidence that the cached venv works in an arbitrary base image.
 

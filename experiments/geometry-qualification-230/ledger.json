@@ -1,7 +1,7 @@
 {
   "issue": 234,
   "parent": 230,
-  "status": "unqualified-static-source-only",
+  "status": "unqualified-awaiting-parent-serial-reservation",
   "implementationBase": "f4285c644e52b5bdba8e4f6afeb6e099bc02b891",
   "docsBase": "e43dd859a631ff8676d080011607447806beeb34",
   "attemptAllowance": 10,
@@ -26,6 +26,11 @@
       "source": "parent kickoff and bounded parent recheck, 2026-10-28",
       "condition": "SSH and HTTPS to 192.168.1.17 timed out; parent reports Twingate /32 route ahead of WiFi",
       "action": "No child network reprobe, no local build/test substitution. Continue static source work."
+    },
+    {
+      "source": "parent report, 2026-10-29",
+      "condition": "SSH restored; parent verified fun-server and healthy preview. One serial slot, max two CPUs and 3 GiB RAM with no swap.",
+      "action": "No child probe/container/build/test. Runner limits updated; await explicit parent reservation handoff. Previous unrun results remain unchanged."
     }
   ],
   "defectsReproduced": [],
