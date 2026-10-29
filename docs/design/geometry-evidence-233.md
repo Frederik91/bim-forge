@@ -174,6 +174,13 @@ retained original review/evidence/decision identities, completed queue states an
 The earlier review's `superseded` status follows the existing target-local `RoomRepository.#advance` contract; the later review is `accepted`.
 No production implementation, validator or CAS rule changed. These fixture corrections and all eight previously blocked endpoint cases remain
 **unrun** until the parent assigns the next bounded server attempt. Attempt 5 and its failed output remain part of the cumulative budget.
+
+Parent full attempt 7 at `04d71ca` passed validation/contracts and geometry 35/35 plus linked 12/12 before stopping at evidence 30/31.
+The endpoint loop reached its observational distance cases but generated the constant comparison `"distance" === "clearance"`,
+which TypeScript 6 correctly rejected before host calls. The fixture now generates that clearance-only condition on the host side.
+Every endpoint scenario also records successful real guest execution; negative cases must fail only after that point, so a compiler failure
+cannot count as rejection of unsafe final geometry. All eight corrected endpoint scenarios remain unrun pending parent full attempt 8.
+No checker, validator, script language, implementation constraint or failed-run evidence was relaxed or removed.
 The app worktree creation failed during Git configuration discovery; direct isolated Git worktree creation succeeded.
 The shell profile initially reset relative paths to MacType; explicit non-login shell and absolute owned paths resolved it.
 No source was edited in saved Main, parent integration or another worker checkout.
