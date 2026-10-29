@@ -287,8 +287,8 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
 
 | Component | Exact locally composed source | Implementation present; runtime evidence still missing |
 | --- | --- | --- |
-| Geometry #231 | `c4b4ba0e0589393b863961560134b857f2285d7e` | Readable native domain, filtered relations, semantic discovery, domain receipts, worker lifecycle/concurrency and focused tests |
-| IFC updates #232 | `50f862e5a50fafc26e6fc54a8ad80a4523b8250d` | Immutable versions, staged review/adopt/history/placement UI, availability-sensitive catalog token, publication guard and reviewed retry/resolution fixes |
+| Geometry #231 | `c150e715ccb9a60f5c85f31ba4f07587c95b9da3` | Readable native domain, filtered relations, discovery/measurement receipts, canonical public-result verification, worker lifecycle/concurrency and focused tests |
+| IFC updates #232 | `8556f7d53eca98d799a7fb883b35bf90c4747d90` | Immutable unique versions, retained legacy pins, staged review/adopt/history/placement UI, catalog guard and retry/resolution fixes |
 | Independent QA #234 | `52c5da0ff493880c45c0524b6fd17a0c5c6bd7c3` | Receiving-native generator, real-IFC versus withheld prism runtime probes, prerequisite-bound server runner and UI import source |
 
 `npm run test:linked-revisions` is registered in the default `npm test` chain alongside geometry.
@@ -304,11 +304,12 @@ The bounded static reviews found five additional issues, with no runtime reprodu
   #232 source `50f862e` fixes both and adds controls; those controls remain unrun.
 - Geometry query exclusions could discard stale pins by reducing them to identity; discovery
   receipts consumed unreturned geometry; worker replies did not verify their public payload
-  against the receipt result digest. #231 owns these corrections and their focused controls.
+  against the receipt result digest. #231 source `c150e71` adds explicit-pin checks, separate
+  discovery/measurement observations and verified public result digests, with unrun controls.
 - Source-version identity must use the immutable version/job ID, with `originalSha256` reserved
   for integrity and content deduplication. Reusing the content hash as the revision token makes
   exact historical preparation identity ambiguous after repeated unchanged exports. #232 is
-  updating the unpublished producer/private-worker contract and tests together. Exact-base
+  source `8556f7d` updates the unpublished producer/private-worker contract and tests together. Exact-base
   inspection corrected an earlier parent assumption: pre-feature jobs used the content hash
   as revision. Preserve those retained records/pins; the worker validates one general bounded
   revision token, which naturally accepts existing hashes and new IDs. No live data conversion
@@ -329,3 +330,10 @@ array, avoiding a Node-only dependency in the browser and allowing the agent to 
 current source identity after hashing; Send stays gated until preparation/upload completes.
 This changes no accepted model or approval authority. Independent browser assertions are being
 extended; the new UI behavior has not yet been built or exercised on the server.
+
+Primary IFC selection now clears the native 3D highlight and omits the preceding implicit native
+object from a new request. Explicit native visual attachments and room/level navigation context
+are retained. The matching #233 input contract must allow deliberate project-context requests
+with no selected native objects; a formerly nonempty selection lost during rebase must not
+silently broaden into project context. That parser/rebase change and actual sent-payload UI
+evidence are still pending, so the source combination is not ready for deployment.

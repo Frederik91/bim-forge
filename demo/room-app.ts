@@ -1744,7 +1744,8 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const guided = floorGuide.request(instruction, sources);
     if (guided) { instruction = guided.instruction; sources = guided.sources; }
     const scope = scopeBuilder.request();
-    const contextLevelId = activeLevelId ?? entityLevel(preview, selectedObject)?.id ?? null;
+    const implicitNativeSelection = linkedSelection === null && selectedObject ? [selectedObject] : [];
+    const contextLevelId = activeLevelId ?? (linkedSelection === null ? entityLevel(preview, selectedObject)?.id ?? null : null);
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const frozenTarget = repo.freezeDesignTarget(selectedDesignTarget);
@@ -1752,7 +1753,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (explicitTarget && selectedRevision !== frozenTarget.revisionId) throw new Error('Open the current selected design or start a new chat before submitting.');
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: explicitTarget ? frozenTarget.revisionId : selectedRevision,
       ...(explicitTarget ? { target: frozenTarget } : {}),
-      selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...(selectedObject ? [selectedObject] : []), ...(focusedRoomId ? [focusedRoomId] : []),
+      selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...implicitNativeSelection, ...(focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
       ...(chatEvidencePins.length ? { evidencePins: chatEvidencePins } : {}),
