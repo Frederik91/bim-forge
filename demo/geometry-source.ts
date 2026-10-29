@@ -67,6 +67,9 @@ export function createGeometryEvidenceSource(options: {
     },
     withCatalogGuard(projectId, catalogToken, commit) {
       authorize(projectId);
+      if (Object.prototype.toString.call(commit) === '[object AsyncFunction]') {
+        throw new GeometryEvidenceConflict('Geometry publication must commit synchronously.');
+      }
       if (options.links) return options.links.withCatalogGuard(projectId, catalogToken, commit);
       if (catalogToken !== nativeToken(projectId)) return { kind: 'catalog-changed' };
       const value = commit();

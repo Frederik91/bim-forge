@@ -28,6 +28,8 @@ test('native-only source preserves explicit read domain and guards project publi
   assert.deepEqual(source.withCatalogGuard(input.projectId, 'different', () => ++committed), { kind: 'catalog-changed' });
   assert.equal(committed, 0);
   assert.deepEqual(source.withCatalogGuard(input.projectId, snapshot.catalogToken, () => ++committed), { kind: 'committed', value: 1 });
+  assert.throws(() => source.withCatalogGuard(input.projectId, snapshot.catalogToken, async () => ++committed), /synchronously/);
+  assert.equal(committed, 1, 'an async publication callback never starts');
   await assert.rejects(source.snapshot({ ...input, projectId: 'other' }), /Unknown geometry project/);
   assert.throws(() => source.withCatalogGuard('other', snapshot.catalogToken, () => ++committed), /Unknown geometry project/);
   const canceled = new AbortController(); canceled.abort();
