@@ -1,6 +1,6 @@
 import { parseEvidenceReadSet, parseEvidenceUses, evidenceCanonical } from './model-evidence.ts';
 import type { EvidenceReadSet, EvidenceUse } from './model-evidence.ts';
-import { readGeometryEvidence, geometrySnapshotHash } from './geometry-evidence.ts';
+import { readGeometryEvidence, assertGeometryEvidenceBound } from './geometry-evidence-contract.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 import type { WallShiftRequest, WallShiftImpact } from './wall-dependencies.ts';
 import { parseDesignTarget, parseWritableDesignTarget, parseFrozenDesignTarget, parseDesignTargets, sameDesignTarget } from './design-targets.ts';
@@ -471,7 +471,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   if (!proposal) fail('Review is not bound to its proposal history.');
   if (proposal.parentId !== base.id || branch?.revisionId !== proposal.id) fail('Review is not bound to its proposal history.');
   const selectedValues = review.selectedObjectIds;
-  if (!Array.isArray(selectedValues) || selectedValues.length < 1 || selectedValues.length > 16) fail('Invalid reviewed object identities.');
+  if (!Array.isArray(selectedValues) || selectedValues.length > 16) fail('Invalid reviewed object identities.');
   const selectedObjectIds = selectedValues.map(identifier);
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid reviewed object identities.');
   const baseObjects = new Set(base.snapshot.entities.map((entity) => entity.id));
@@ -515,7 +515,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   const evidence = hasEvidence ? parseEvidenceReadSet(review.evidence) : undefined;
   const geometryEvidence = hasGeometryEvidence ? readGeometryEvidence(review.geometryEvidence) : undefined;
   if (geometryEvidence && (geometryEvidence.projectId !== projectId || geometryEvidence.requestId !== requestId
-      || geometryEvidence.baseRevisionId !== baseRevisionId || geometryEvidence.proposalSnapshotSha256 !== geometrySnapshotHash(proposal.snapshot))) {
+      || geometryEvidence.baseRevisionId !== baseRevisionId)) {
     fail('Geometry read evidence must match the exact proposal project, request, base and final authored snapshot.');
   }
   if (evidence && (evidence.projectId !== projectId || evidence.revisionId !== baseRevisionId
@@ -1318,6 +1318,11 @@ export class RoomRepository {
       const requests = new Set<RequestId>(); const proposals = new Set<BranchName>();
       for (const item of reviewValues) {
         const review = reviewRecord(item, revisions, branches, projectId);
+        if (review.geometryEvidence !== undefined) {
+          const proposal = revisions.get(review.proposalRevisionId);
+          if (!proposal) fail('Geometry evidence proposal revision is missing.');
+          await assertGeometryEvidenceBound(readGeometryEvidence(review.geometryEvidence), proposal.snapshot);
+        }
         if (requests.has(review.requestId) || proposals.has(review.proposalName)) fail('Duplicate proposal review identity.');
         requests.add(review.requestId); proposals.add(review.proposalName); reviews.push(review);
       }
@@ -1717,6 +1722,7 @@ export class RoomRepository {
       ...(hasGeometryEvidence ? { geometryEvidence: details.geometryEvidence } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches), this.projectId);
+    if (record.geometryEvidence !== undefined) await assertGeometryEvidenceBound(readGeometryEvidence(record.geometryEvidence), next.view(record.proposalRevisionId).snapshot);
     const reviews = [...next.reviews(), record];
     if (reviews.some((item, index) => reviews.findIndex((other) => other.requestId === item.requestId || other.proposalName === item.proposalName) !== index)) {
       fail('Duplicate proposal review identity.');

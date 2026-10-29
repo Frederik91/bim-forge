@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RoomRepository, previewRectangle, rectangleLayout } from './room-model.ts';
-import { prepareModelProposal } from './model-proposal.ts';
+import { prepareModelProposal, validateModelProposalRequest } from './model-proposal.ts';
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
 import { ModelScripts } from './model-script.ts';
 import { GeometryEvidenceSession, geometryNativeInput, readGeometryEvidence, encodeGeometryEvidence,
   parseGeometryEvidence, geometrySnapshotHash, publishWithGeometryGuard } from './geometry-evidence.ts';
-import { FixtureGeometrySource, evidenceWall, geometryProposalScript, cubeAuthoring, cubeMeasurement, geometryReview } from './geometry-evidence.fixture.ts';
+import type { GeometryEvidenceSource } from './geometry-evidence.ts';
+import type { GeometryRef } from './geometry-contract.ts';
+import { assertGeometryEvidenceBound, readGeometryEvidence as readWireGeometryEvidence } from './geometry-evidence-contract.ts';
+import { FixtureGeometrySource, evidenceWall, geometryProposalScript, cubeMeasurement, geometryReview } from './geometry-evidence.fixture.ts';
 
 function request(repository: RoomRepository, id = 'geometry-evidence') {
   return { requestId: id, proposalName: id, baseRevisionId: repository.head('main'), selectedObjectIds: ['wall-west'],
@@ -41,6 +44,17 @@ test('real generated guest has one four-method namespace; trusted geometry evide
   assert.equal(evidence.measurements.length, 1);
   assert.equal(evidence.proposalSnapshotSha256, geometrySnapshotHash(result.repository.view(review.proposalRevisionId).snapshot));
   assert.equal((await RoomRepository.restore(result.repository.serialize())).serialize(), result.repository.serialize());
+  const tampered = structuredClone(evidence); const measurement = tampered.measurements[0];
+  assert.ok(measurement && measurement.result.kind === 'complete');
+  measurement.result.value.distanceMetres = 1;
+  const decoded = readWireGeometryEvidence(JSON.stringify(tampered));
+  await assert.rejects(assertGeometryEvidenceBound(decoded, result.repository.view(review.proposalRevisionId).snapshot), /digest changed/);
+  const portable: unknown = JSON.parse(result.repository.serialize());
+  assert.ok(portable && typeof portable === 'object' && 'reviews' in portable && Array.isArray(portable.reviews));
+  const stored = portable.reviews[0];
+  assert.ok(stored && typeof stored === 'object' && 'geometryEvidence' in stored);
+  stored.geometryEvidence = JSON.stringify(tampered);
+  await assert.rejects(RoomRepository.restore(JSON.stringify(portable)), /digest changed/);
   assert.equal(repository.serialize(), original); assert.equal(result.repository.head('main'), repository.head('main'));
 });
 
@@ -56,8 +70,33 @@ test('guest source cannot add geometry authority to its review or call linked wr
   }
 });
 
+test('deliberate project context uses no native anchor; unknown identities and frozen write limits remain enforced', async () => {
+  const repository = await RoomRepository.create(); const source = new FixtureGeometrySource();
+  const input = { ...request(repository), selectedObjectIds: [] };
+  assert.deepEqual(validateModelProposalRequest(repository, input).selectedObjectIds, []);
+  for (const selectedObjectIds of [['missing-object'], ['wall-west', 'wall-west'], null, undefined]) {
+    assert.throws(() => validateModelProposalRequest(repository, { ...input, selectedObjectIds }));
+  }
+  const result = await prepareModelProposal(repository, input, worker(async session => {
+    const input = session.input;
+    assert.ok(input && typeof input === 'object' && 'selectedObjects' in input);
+    assert.deepEqual(input.selectedObjects, []); await propose(session);
+  }), () => {}, { geometry: { source } });
+  assert.deepEqual(result.repository.review('geometry-evidence').selectedObjectIds, []);
+  assert.equal((await RoomRepository.restore(result.repository.serialize())).serialize(), result.repository.serialize());
+  const scopedInput = { ...input, requestId: 'empty-scope', proposalName: 'empty-scope',
+    scope: { query: { version: 1, allOf: [{ kind: 'ids', ids: ['wall-west'] }], anyOf: [], excludeIds: [] } } };
+  const scoped = validateModelProposalRequest(repository, scopedInput);
+  const selected = validateModelProposalRequest(repository, { ...scopedInput, selectedObjectIds: ['wall-west'] });
+  assert.deepEqual(scoped.scope, selected.scope);
+  await assert.rejects(prepareModelProposal(repository, scopedInput, worker(async session => {
+    const output = await session.executeTool('run_model_script', { language: 'typescript', source: geometryProposalScript });
+    assert.equal(output.ok, false, 'empty selection cannot authorize new objects outside frozen writable identities');
+  }), () => {}, { geometry: { source } }));
+});
+
 test('relevant changes after asynchronous tool success cannot bind a proposal; property-only revision changes can', async () => {
-  for (const change of ['moved', 'removed', 'added-obstruction', 'property-only', 'unrelated-object']) {
+  for (const change of ['moved', 'removed', 'added-obstruction', 'property-only', 'unrelated-object', 'same-bytes-new-version']) {
     const repository = await RoomRepository.create(change); const source = new FixtureGeometrySource();
     if (change === 'unrelated-object') source.replace([evidenceWall(), evidenceWall({ namespace: 'far-source', x: 20 })]);
     const task = prepareModelProposal(repository, request(repository), worker(async session => {
@@ -67,11 +106,35 @@ test('relevant changes after asynchronous tool success cannot bind a proposal; p
       if (change === 'added-obstruction') source.replace([evidenceWall(), evidenceWall({ namespace: 'new-source', x: .9 })]);
       if (change === 'property-only') source.replace([evidenceWall({ version: 'v2', name: 'Renamed, unchanged physical shape' })]);
       if (change === 'unrelated-object') source.replace([evidenceWall(), evidenceWall({ namespace: 'far-source', version: 'v2', x: 30 })]);
+      if (change === 'same-bytes-new-version') source.replace([evidenceWall({ version: 'new-job-id', originalSha256: evidenceWall().manifest.source.originalSha256 })]);
     }), () => {}, { geometry: { source } });
-    if (change === 'property-only' || change === 'unrelated-object') assert.equal((await task).status, 'ready', change);
+    if (['property-only', 'unrelated-object', 'same-bytes-new-version'].includes(change)) assert.equal((await task).status, 'ready', change);
     else await assert.rejects(task, /changed|candidate|correspondence|geometry|Geometry|observation/);
     assert.equal(repository.reviews().length, 0);
   }
+});
+
+test('historical resolver receives only deduplicated consumed IFC refs, including a measured subject and excluded member', async () => {
+  const repository = await RoomRepository.create(); const source = new FixtureGeometrySource();
+  let captured: readonly Extract<GeometryRef, { kind: 'ifc' }>[] | undefined;
+  const provider: GeometryEvidenceSource = { snapshot: async input => { captured = input.historicalRefs; return source.snapshot(input); },
+    withCatalogGuard: (projectId, token, commit) => source.withCatalogGuard(projectId, token, commit) };
+  const native = geometryNativeInput({ snapshot: repository.view(repository.head('main')).snapshot,
+    revisionId: repository.head('main'), target: { kind: 'main' } });
+  const session = await GeometryEvidenceSession.open({ source: provider, projectId: repository.projectId, requestId: 'bounded-history', native,
+    signal: new AbortController().signal });
+  try {
+    assert.equal(captured, undefined);
+    const page = await session.query({ query: { categories: ['wall'], region: { min: [0, 1, 0], max: [.3, 3, 2] } } });
+    if (page.kind === 'unavailable') assert.fail(page.detail);
+    const ref = page.items.find(item => item.ref.kind === 'ifc')?.ref;
+    assert.ok(ref?.kind === 'ifc');
+    await session.query({ query: { exclude: [ref], region: { min: [0, 1, 0], max: [.3, 3, 2] } } });
+    await session.measure({ subject: { kind: 'object', ref }, against: { kind: 'query', query: { exclude: [ref], region: { min: [20, 1, 0], max: [21, 2, 1] } } }, operation: 'distance' });
+    await session.assertFresh();
+    assert.deepEqual(captured, [ref]);
+  } finally { await session.close(); }
+  await assert.rejects(session.query({ query: {} }), /revoked/);
 });
 
 test('a newly obstructed previously empty predicate invalidates even when the measured wall is unchanged', async () => {
@@ -115,6 +178,16 @@ test('corrected trial measurements retain history while the final candidate sati
   assert.equal(evidence.measurements[0]?.result.kind, 'complete');
 });
 
+test('exploratory distance at an earlier pose does not become a conflicting final clearance constraint', async () => {
+  const repository = await RoomRepository.create(); const source = new FixtureGeometrySource();
+  const trial = { ...structuredClone(cubeMeasurement), operation: 'distance',
+    subject: { ...structuredClone(cubeMeasurement.subject), bounds: { min: [.6, 1.75, 0], max: [1.1, 2.25, .5] } } };
+  const result = await prepareModelProposal(repository, request(repository), worker(async session => {
+    await propose(session, `await geometry.measure(${JSON.stringify(trial)}); ${geometryProposalScript}`);
+  }), () => {}, { geometry: { source } });
+  assert.equal(result.status, 'ready');
+});
+
 test('scope keeps full private host dependencies while guest cannot discover or describe another native object', async () => {
   const repository = await RoomRepository.create(); const source = new FixtureGeometrySource();
   const binding = { snapshot: repository.view(repository.head('main')).snapshot, revisionId: repository.head('main'),
@@ -154,6 +227,11 @@ test('unavailable sources, cross-project contexts, forged receipt bodies and can
     assert.equal(output.ok, false);
   }), () => {}, { geometry: { source } }));
   const controller = new AbortController(); const valid = new FixtureGeometrySource();
+  const crossProject: GeometryEvidenceSource = { snapshot: async input => {
+    const snapshot = await valid.snapshot(input); return { ...snapshot, input: { ...snapshot.input, projectId: 'another-project' } };
+  }, withCatalogGuard: (projectId, token, commit) => valid.withCatalogGuard(projectId, token, commit) };
+  await assert.rejects(prepareModelProposal(repository, request(repository), worker(async session => { await propose(session); }),
+    () => {}, { geometry: { source: crossProject } }), /authorized native read binding/);
   await assert.rejects(prepareModelProposal(repository, request(repository), worker(async session => {
     await propose(session); controller.abort();
   }), () => {}, { signal: controller.signal, geometry: { source: valid } }), /cancel|abort|Abort/i);
@@ -174,5 +252,10 @@ test('catalogue token races retry semantic validation, exhaust boundedly, and ne
   source.onGuard = () => { source.generation += 1; };
   await assert.rejects(publishWithGeometryGuard({ source, projectId: repository.projectId, signal: new AbortController().signal,
     validate: () => source.snapshot({ projectId: repository.projectId, native, signal: new AbortController().signal }), commit: () => ++writes }), /kept changing/);
+  assert.equal(writes, 1);
+  const controller = new AbortController();
+  await assert.rejects(publishWithGeometryGuard({ source, projectId: repository.projectId, signal: controller.signal,
+    validate: async () => { const value = await source.snapshot({ projectId: repository.projectId, native, signal: controller.signal }); controller.abort(); return value; },
+    commit: () => ++writes }), /abort|Abort/);
   assert.equal(writes, 1);
 });

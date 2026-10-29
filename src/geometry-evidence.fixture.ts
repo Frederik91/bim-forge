@@ -5,8 +5,8 @@ import type { GeometryRef } from './geometry-contract.ts';
 import type { GeometryEvidenceSource, GeometryPublication, GeometryReadSnapshot } from './geometry-evidence.ts';
 import type { GeometrySessionInput } from './geometry-session.ts';
 
-export function evidenceWall(options: { version?: string; x?: number; namespace?: string; name?: string; missing?: boolean } = {}): LinkedPrepared {
-  const source = { namespace: options.namespace ?? 'evidence-wall', revision: options.version ?? 'v1', originalSha256: geometryDigest(options.version ?? 'v1') };
+export function evidenceWall(options: { version?: string; x?: number; namespace?: string; name?: string; missing?: boolean; originalSha256?: string } = {}): LinkedPrepared {
+  const source = { namespace: options.namespace ?? 'evidence-wall', revision: options.version ?? 'v1', originalSha256: options.originalSha256 ?? geometryDigest(options.version ?? 'v1') };
   const ref = { ...source, globalId: '0123456789012345678901' };
   const transform = [[1, 0, 0, options.x ?? 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
   const vertices = [0, .5, 0, .25, .5, 0, .25, 3.5, 0, 0, 3.5, 0, 0, .5, 2.5, .25, .5, 2.5, .25, 3.5, 2.5, 0, 3.5, 2.5];
@@ -68,7 +68,7 @@ export const cubeAuthoring = `await model.previewAssets({families:[{id:'evidence
   size:{width:.5,depth:.5,height:.5},placement:{kind:'single-room'}}],removeInstanceIds:[]});`;
 export const cubeMeasurement = { subject: { kind: 'box', candidateId: 'requested-cube', bounds: { min: [.75, 1.75, 0], max: [1.25, 2.25, .5] },
   localToProject: [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]] },
-  against: { kind: 'query', query: { role: 'physical', region: { min: [.25, 1.25, -.5], max: [1.75, 2.75, 1] } } },
+  against: { kind: 'query', query: { role: 'physical', region: { min: [-.1, 1, -1], max: [2.1, 3, 1.5] } } },
   operation: 'clearance', clearanceMetres: .5 };
 export const geometryProposalScript = `${cubeAuthoring}
 const result = await geometry.measure(${JSON.stringify(cubeMeasurement)});

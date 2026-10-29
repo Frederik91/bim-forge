@@ -1,32 +1,20 @@
 import { isDeepStrictEqual } from 'node:util';
-import { Type } from 'typebox';
-import type { Static } from 'typebox';
-import { Check } from 'typebox/value';
-import { GeometryReceiptSchema, GeometryMeasureRequestSchema, GeometryMeasureResultSchema,
-  geometryPlainData, parseGeometryMeasureRequest, parseGeometryReceipts } from './geometry-contract.ts';
-import type { GeometryMeasureRequest, GeometryMeasureResult, GeometryRef } from './geometry-contract.ts';
+import { parseGeometryMeasureRequest } from './geometry-contract.ts';
+import type { GeometryMeasureRequest, GeometryMeasureResult, GeometryRef, GeometryReceipt } from './geometry-contract.ts';
 import { geometryDigest } from './geometry-query.ts';
 import { createGeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
 import type { GeometrySession, GeometrySessionInput, GeometryCorrespondence } from './geometry-session.ts';
 import type { ModelSnapshot } from './room-model.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
+import { parseGeometryEvidence as parseEvidenceContract, readGeometryEvidence as readEvidenceContract } from './geometry-evidence-contract.ts';
+import type { GeometryEvidence } from './geometry-evidence-contract.ts';
+export { GeometryEvidenceSchema, MAX_GEOMETRY_EVIDENCE_BYTES } from './geometry-evidence-contract.ts';
+export type { GeometryEvidence } from './geometry-evidence-contract.ts';
 
 export function geometryNativeInput(input: GeometrySessionInput['native'] & { scope?: FrozenModelScope }): GeometrySessionInput['native'] {
   const { scope, ...native } = input;
-  return { ...native, ...(scope ? { readableIds: [...new Set([...scope.targetIds, ...scope.contextIds, ...scope.dependentIds])] } : {}) };
+  return { ...native, ...(scope ? { readableIds: [...new Set([...scope.targetIds, ...scope.contextIds, ...scope.dependentIds, ...scope.writableIds])] } : {}) };
 }
-
-const identity = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' });
-const hash = Type.String({ pattern: '^[a-f0-9]{64}$' });
-export const GeometryEvidenceSchema = Type.Object({
-  version: Type.Literal(1), projectId: identity, requestId: identity, baseRevisionId: hash,
-  proposalSnapshotSha256: hash,
-  receipts: Type.Array(GeometryReceiptSchema, { maxItems: 128 }),
-  measurements: Type.Array(Type.Object({ request: GeometryMeasureRequestSchema, result: GeometryMeasureResultSchema },
-    { additionalProperties: false }), { maxItems: 64 }),
-}, { additionalProperties: false });
-export type GeometryEvidence = Static<typeof GeometryEvidenceSchema>;
-export const MAX_GEOMETRY_EVIDENCE_BYTES = 64 * 1024;
 
 export function geometrySnapshotHash(snapshot: ModelSnapshot): string {
   return geometryDigest(snapshot);
@@ -35,25 +23,20 @@ export function geometrySnapshotHash(snapshot: ModelSnapshot): string {
 /** Receipt arrays have their own bounds; opaque JSON preserves the existing native model array limits. */
 export function encodeGeometryEvidence(evidence: GeometryEvidence): string { return JSON.stringify(parseGeometryEvidence(evidence)); }
 export function readGeometryEvidence(value: unknown): GeometryEvidence {
-  if (typeof value !== 'string' || Buffer.byteLength(value) > MAX_GEOMETRY_EVIDENCE_BYTES) throw new Error('Invalid stored geometry evidence.');
-  return parseGeometryEvidence(JSON.parse(value));
+  return parseGeometryEvidence(readEvidenceContract(value));
 }
 
 /** Parses retained host receipts, never authority supplied by a guest decision. */
 export function parseGeometryEvidence(input: unknown): GeometryEvidence {
-  const value = geometryPlainData(input);
-  if (!Check(GeometryEvidenceSchema, value)
-      || new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_GEOMETRY_EVIDENCE_BYTES) {
-    throw new Error('Invalid bounded geometry evidence.');
-  }
-  parseGeometryReceipts(value.receipts);
-  for (const receipt of value.receipts) if (receipt.projectId !== value.projectId) throw new Error('Geometry evidence crosses projects.');
+  const value = parseEvidenceContract(input);
   for (const measurement of value.measurements) {
     parseGeometryMeasureRequest(measurement.request);
     if (measurement.result.receipt.operationDigest !== geometryDigest({ method: 'measure', input: measurement.request })
         || !value.receipts.some(receipt => isDeepStrictEqual(receipt, measurement.result.receipt))) {
       throw new Error('Geometry measurement is not bound to its host observation.');
     }
+    const { receipt, ...outcome } = measurement.result;
+    if (geometryDigest(outcome) !== receipt.resultDigest) throw new Error('Geometry measurement result digest changed.');
   }
   return value;
 }
@@ -66,7 +49,8 @@ export type GeometryPublication<T> = { kind: 'committed'; value: T } | { kind: '
 
 /** The linked store owns authorization, immutable snapshots and its cross-process guard. */
 export interface GeometryEvidenceSource {
-  snapshot(input: { projectId: string; native: GeometrySessionInput['native']; signal: AbortSignal }): Promise<GeometryReadSnapshot>;
+  snapshot(input: { projectId: string; native: GeometrySessionInput['native']; signal: AbortSignal;
+    historicalRefs?: readonly Extract<GeometryRef, { kind: 'ifc' }>[] }): Promise<GeometryReadSnapshot>;
   withCatalogGuard<T>(projectId: string, catalogToken: string, commit: () => T): GeometryPublication<T>;
 }
 
@@ -77,9 +61,24 @@ export class GeometryEvidenceConflict extends Error {
 }
 
 export async function readGeometrySnapshot(source: GeometryEvidenceSource, projectId: string,
-  native: GeometrySessionInput['native'], signal: AbortSignal): Promise<GeometryReadSnapshot> {
+  native: GeometrySessionInput['native'], signal: AbortSignal, receipts?: readonly GeometryReceipt[]): Promise<GeometryReadSnapshot> {
   signal.throwIfAborted();
-  const value = await source.snapshot({ projectId, native: structuredClone(native), signal });
+  const historical = new Map<string, Extract<GeometryRef, { kind: 'ifc' }>>();
+  const add = (ref: GeometryRef): void => {
+    if (ref.kind !== 'ifc') return;
+    if (ref.projectId !== projectId) throw new GeometryEvidenceConflict('Historical geometry reference crosses projects.');
+    historical.set(geometryDigest(ref), structuredClone(ref));
+    if (historical.size > 4096) throw new GeometryEvidenceConflict('Historical geometry reference budget exceeded.');
+  };
+  for (const receipt of receipts ?? []) for (const read of receipt.reads) {
+    if (read.kind === 'object') add(read.ref);
+    else if (read.kind === 'query') {
+      read.members.forEach(add); read.query.exclude?.forEach(add);
+      if (read.query.level) add(read.query.level);
+    } else if (read.subject.kind === 'object') add(read.subject.ref);
+  }
+  const value = await source.snapshot({ projectId, native: structuredClone(native), signal,
+    ...(receipts ? { historicalRefs: [...historical.values()] } : {}) });
   signal.throwIfAborted();
   if (!value.catalogToken || value.catalogToken.length > 256 || value.input.projectId !== projectId
       || !isDeepStrictEqual(value.input.native, native)) throw new GeometryEvidenceConflict('Geometry context differs from the authorized native read binding.');
@@ -124,9 +123,16 @@ async function validateFinalMeasurements(evidence: GeometryEvidence, input: Geom
   if (!evidence.measurements.length) return [];
   const final = await createGeometrySession(input, { signal, lifetimeMs: 120000 });
   try {
+    const lastBox = new Map<string, string>();
+    for (const measurement of evidence.measurements) if (measurement.request.subject.kind === 'box') {
+      lastBox.set(measurement.request.subject.candidateId, geometryDigest(measurement.request.subject));
+    }
     const latest = new Map<string, GeometryEvidence['measurements'][number]>();
     for (const measurement of evidence.measurements) {
       const subject = measurement.request.subject;
+      // Distance/intersection probes describe a trial pose. Explicit clearance constraints survive pose changes.
+      if (subject.kind === 'box' && measurement.request.operation !== 'clearance'
+          && lastBox.get(subject.candidateId) !== geometryDigest(subject)) continue;
       const candidate = subject.kind === 'box' ? subject.candidateId : subject.ref;
       latest.set(geometryDigest({ candidate, against: measurement.request.against, operation: measurement.request.operation,
         clearanceMetres: measurement.request.clearanceMetres ?? null }), measurement);
@@ -146,6 +152,7 @@ async function validateFinalMeasurements(evidence: GeometryEvidence, input: Geom
       }
       const request: GeometryMeasureRequest = { ...currentMeasurement(measurement.request, input, correspondences), subject: { kind: 'object', ref } };
       requireMeasurement(await final.measure(request), measurement.result);
+      if (subject.kind !== 'box') continue;
       // A finite against-ID never certifies absence of other obstructions.
       const surroundings = await final.measure({ subject: { kind: 'object', ref }, against: { kind: 'query', query: { role: 'physical' } },
         operation: 'intersection' });
@@ -163,7 +170,7 @@ export async function validateGeometryEvidence(input: {
   candidate: ModelSnapshot; signal: AbortSignal;
 }): Promise<GeometryReadSnapshot & { verifiedCandidateSha256: string; finalReceipts: ReturnType<GeometrySession['receipts']> }> {
   const evidence = parseGeometryEvidence(input.evidence);
-  const snapshot = await readGeometrySnapshot(input.source, evidence.projectId, input.native, input.signal);
+  const snapshot = await readGeometrySnapshot(input.source, evidence.projectId, input.native, input.signal, evidence.receipts);
   const candidate = { ...snapshot.input, native: { ...snapshot.input.native, snapshot: input.candidate } };
   const status = await validateGeometryReceiptsInWorker({ receipts: evidence.receipts, current: snapshot.input,
     candidate, ...(snapshot.correspondences ? { correspondences: snapshot.correspondences } : {}) }, { signal: input.signal });
@@ -214,7 +221,7 @@ export class GeometryEvidenceSession {
     if (!receipts.length) return;
     const native = await this.#current();
     this.#assertAlive();
-    const current = await readGeometrySnapshot(this.#input.source, this.#input.projectId, native, this.#input.signal);
+    const current = await readGeometrySnapshot(this.#input.source, this.#input.projectId, native, this.#input.signal, receipts);
     const result = await validateGeometryReceiptsInWorker({ receipts, current: current.input,
       candidate: { ...current.input, native: { ...current.input.native, snapshot: candidate ?? native.snapshot } },
       ...(current.correspondences ? { correspondences: current.correspondences } : {}) }, { signal: this.#input.signal });

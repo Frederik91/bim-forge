@@ -30,7 +30,7 @@ import { MAX_EVIDENCE_PINS, parseEvidenceEntry, parseEvidencePin, parseEvidenceR
 import type { EvidencePin, EvidenceReadSet } from '../src/model-evidence.ts';
 import { GeometryEvidenceConflict, geometryNativeInput, readGeometryEvidence, validateGeometryEvidence,
   publishWithGeometryGuard } from '../src/geometry-evidence.ts';
-import type { GeometryEvidenceSource, GeometryReadSnapshot } from '../src/geometry-evidence.ts';
+import type { GeometryEvidenceSource } from '../src/geometry-evidence.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
@@ -689,6 +689,10 @@ export class ChangeRequests {
   }
   #proposalReadiness(ticket: Ticket, current: RoomRepository, proposed: RoomRepository): ProposalReadiness {
     const review = proposed.review(ticket.request.proposalName);
+    const head = current.freezeDesignTarget(ticket.request.target?.target ?? { kind: 'main' }).revisionId;
+    if (ticket.request.selectedObjectIds.length && !current.view(head).snapshot.entities.some(entity => ticket.request.selectedObjectIds.includes(entity.id))) {
+      return { state: 'needs-input', error: 'Every originally selected native object disappeared. Start a fresh chat or select a new explicit context before revising.' };
+    }
     const row = this.#db.prepare('SELECT body FROM request_geometry_evidence WHERE request_id=? AND ticket_id=? AND attempt=?')
       .get(ticket.request.requestId, ticket.id, ticket.attempts);
     if (review.geometryEvidence !== undefined || row) {
@@ -871,6 +875,10 @@ export class ChangeRequests {
         || repository.freezeDesignTarget(destination).revisionId !== head || request.baseRevisionId !== head) {
       throw new BacklogConflict('A revision must use the current accepted revision of this design.');
     }
+    if (ticket.request.selectedObjectIds.length && !request.selectedObjectIds.length
+        && !current.view(head).snapshot.entities.some(entity => ticket.request.selectedObjectIds.includes(entity.id))) {
+      throw new BacklogConflict('Every originally selected native object disappeared. An empty rebase cannot silently replace those anchors; start a fresh chat.');
+    }
     if (this.#all(ticket.projectId).some((other) => other.id !== ticket.id && other.request.proposalName === request.proposalName)) throw new BacklogConflict('Another ticket uses that proposal name.');
     const evidence = this.#freezeEvidence(current, request);
     this.#seedConversation(ticket);
@@ -1046,7 +1054,13 @@ export class ChangeRequests {
       } });
       if (evidenceError) throw evidenceError;
       if (!this.#isWorking(ticket)) return;
-      this.#transaction(() => {
+      let boundDocumentId: string | undefined;
+      const saveResult = (): void => this.#transaction(() => {
+      signal.throwIfAborted();
+      if (!this.#isWorking(ticket)) throw new GeometryEvidenceConflict('This request attempt was superseded before binding.');
+      if (boundDocumentId !== undefined && this.#requiredCurrent(ticket.projectId).documentId !== boundDocumentId) {
+        throw new BacklogConflict('The accepted native model changed while binding geometry evidence. Revalidate the request.');
+      }
       if (result.status === 'ready' && result.review.geometryEvidence !== undefined) {
         this.#db.prepare('INSERT INTO request_geometry_evidence(request_id,ticket_id,attempt,body) VALUES(?,?,?,?)')
           .run(ticket.request.requestId, ticket.id, ticket.attempts, result.review.geometryEvidence);
@@ -1057,6 +1071,19 @@ export class ChangeRequests {
         { stage: result.status === 'ready' ? 'ready' : 'needs-input', message: result.status === 'ready' ? 'Validated proposal is ready for your review. Nothing is accepted automatically.' : 'The agent needs clarification. Open the request to review its explanation.' }));
       this.#assistantMessage(this.#get(ticket.id), result.status === 'declined' ? result.clarification : undefined);
       });
+      if (result.status === 'ready' && result.review.geometryEvidence !== undefined) {
+        const source = this.#geometry;
+        if (!source) throw new GeometryEvidenceConflict('Geometry verification is unavailable.');
+        await publishWithGeometryGuard({ source, projectId: ticket.projectId, signal, commit: saveResult,
+          validate: async () => {
+            signal.throwIfAborted();
+            const reference = this.#requiredCurrent(ticket.projectId);
+            const current = await RoomRepository.restore(this.#projects.read(reference));
+            const snapshot = await this.#validateGeometry(ticket, current, result.repository, signal);
+            if (!snapshot) throw new GeometryEvidenceConflict('Required geometry receipts disappeared before proposal binding.');
+            boundDocumentId = reference.documentId; return snapshot;
+          } });
+      } else saveResult();
       if (result.status === 'ready') await this.refreshProposal(ticket.id);
     } catch (error) {
       this.#attempts.get(ticket.id)?.controller.abort();
@@ -1116,7 +1143,9 @@ export class ChangeRequests {
     for (const other of this.#all(ticket.projectId)) {
       if (other.id === ticket.id || (other.state !== 'ready' && other.state !== 'needs-input') || other.result?.status !== 'ready') continue;
       const otherProposal = await RoomRepository.restore(this.#projects.read(other.result.project));
-      assessments.push({ before: other, after: assessedTicket(other, this.#proposalReadiness(other, accepted, otherProposal)) });
+      const controller = new AbortController(); this.#geometryDecisions.add(controller);
+      try { assessments.push({ before: other, after: assessedTicket(other, await this.#geometryReadiness(other, accepted, otherProposal, controller.signal)) }); }
+      finally { this.#geometryDecisions.delete(controller); }
     }
     this.#assertOpen();
     let geometryProof: Awaited<ReturnType<typeof validateGeometryEvidence>> | undefined;
