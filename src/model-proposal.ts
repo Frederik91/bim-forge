@@ -23,6 +23,9 @@ import type { FrozenDesignTarget } from './design-targets.ts';
 import { MAX_EVIDENCE_PINS, MAX_EVIDENCE_CONTEXT_ENTRIES, MAX_EVIDENCE_CONTEXT_BYTES,
   parseEvidencePin, parseEvidenceReadSet, parseEvidenceEntry, evidenceCanonical } from './model-evidence.ts';
 import type { EvidenceEntry, EvidencePin, EvidenceReadSet, EvidenceSubject, EvidenceUse } from './model-evidence.ts';
+import { GeometryEvidenceSession, geometryNativeInput, encodeGeometryEvidence } from './geometry-evidence.ts';
+import type { GeometryEvidenceSource } from './geometry-evidence.ts';
+import type { GeometrySessionInput } from './geometry-session.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
@@ -85,6 +88,7 @@ export interface ProposalEvidenceContext {
     | { kind: 'unknown-required'; message: string; entryId: string })[];
 }
 export interface ModelProposalOptions {
+  geometry?: { source: GeometryEvidenceSource; current?: () => Promise<GeometrySessionInput['native']> };
   evidenceContext?: ProposalEvidenceContext;
   conversation?: RequestConversation;
   initialDraft?: ModelSnapshot;
@@ -264,6 +268,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   if (options.signal?.aborted) forwardAbort();
   options.signal?.addEventListener('abort', forwardAbort, { once: true });
   const signal = controller.signal;
+  let geometry: GeometryEvidenceSession | undefined;
   const scripts = options.scripts ?? new ModelScripts();
   const terminal: { value: Extract<ModelScriptResult, { kind: 'proposal' | 'declined' }> | null } = { value: null };
   const toolCalls: ToolCallEvidence[] = [];
@@ -294,16 +299,21 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     if (executions.length >= MAX_SCRIPT_EXECUTIONS || hostCalls >= MAX_SCRIPT_HOST_CALLS) { fatal = true; options.onPreview?.(null); fail('The model worker exceeded the aggregate script budget.'); }
     running = true;
     try {
+      await geometry?.assertFresh();
+      signal.throwIfAborted();
       fields(argumentsValue, ['language', 'source']);
       if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
       if (typeof argumentsValue.source !== 'string' || !argumentsValue.source.trim()) fail('A script source body is required.');
       const result = await scripts.run({ base: bound.base.snapshot, ...(options.initialDraft ? { initialDraft: options.initialDraft } : {}), binding: bound, language: argumentsValue.language, source: argumentsValue.source,
+        ...(geometry ? { geometry } : {}),
         remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity, onPreview: snapshot => {
           if (snapshot === null || (!signal.aborted && !finished && !fatal)) options.onPreview?.(snapshot);
         } });
       options.onExecution?.(result.evidence);
       parseScriptExecutions([...executions, result.evidence]);
       executions.push(result.evidence); hostCalls += result.evidence.calls.length;
+      signal.throwIfAborted();
+      await geometry?.assertFresh(result.kind === 'proposal' ? result.snapshot : undefined);
       signal.throwIfAborted();
       if (result.kind === 'failed') {
         fatal ||= ['cancelled', 'timed-out', 'resource-limit'].includes(result.evidence.status)
@@ -337,6 +347,13 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     return pending;
   };
   try {
+    if (options.geometry) {
+      geometry = await GeometryEvidenceSession.open({ source: options.geometry.source, projectId: repository.projectId,
+        requestId: bound.requestId, native: geometryNativeInput({ snapshot: bound.base.snapshot, revisionId: bound.base.id,
+          target: bound.target?.target ?? { kind: 'main' }, ...(bound.scope ? { scope: bound.scope } : {}) }), signal,
+        ...(options.geometry.current ? { current: options.geometry.current } : {}) });
+      await geometry.assertFresh();
+    }
     const declarations = await scripts.declarations();
     signal.throwIfAborted();
     await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
@@ -363,6 +380,8 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       ...(result.intent ? { intent: result.intent } : {}),
     } };
     if (bound.scope) assertModelScopeWrites({ before: bound.base.snapshot, after: result.snapshot, binding: bound.scope });
+    const geometryEvidence = geometry ? await geometry.seal(result.snapshot) : undefined;
+    signal.throwIfAborted();
     const next = await repository.proposeReviewedModel({ name: bound.proposalName, from: bound.base.id, snapshot: result.snapshot,
       ...(bound.target ? { target: bound.target } : {}),
       review: { requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
@@ -370,15 +389,19 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
           usage: providerEvents.reduce((sum, event) => ({ inputTokens: sum.inputTokens + event.inputTokens, outputTokens: sum.outputTokens + event.outputTokens,
             totalTokens: sum.totalTokens + event.totalTokens }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 }) },
         toolCalls, scriptExecutions: executions, ...(bound.sources ? { sources: bound.sources } : {}),
+        ...(geometryEvidence ? { geometryEvidence: encodeGeometryEvidence(geometryEvidence) } : {}),
         ...(evidenceContext ? { evidence: evidenceContext.readSet } : {}),
         ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}), ...(bound.scope ? { scope: bound.scope } : {}), validator: 'room-graph-v1' },
     });
+    signal.throwIfAborted();
+    await geometry?.assertFresh(result.snapshot);
     signal.throwIfAborted();
     return { status: 'ready', repository: next, review: { ...next.review(bound.proposalName), changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } };
   } catch (error) { throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error }); }
   finally {
     finished = true; controller.abort(); options.onPreview?.(null);
     await Promise.allSettled([...activeTools]);
+    await geometry?.close();
     options.signal?.removeEventListener('abort', forwardAbort);
     if (!options.scripts) await scripts.dispose();
   }
