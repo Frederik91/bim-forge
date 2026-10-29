@@ -70,6 +70,12 @@ function one(items: GeometryDescription[], name: string): GeometryDescription {
 test('real converted rotated metre/mm geometry matches independent prism distances and zero-clearance controls', async () => {
   const input = await inputs();
   const retained: { source: string; unit: string; probe: string; occurrence: string; expectedDistanceMetres: number; result: GeometryMeasureResult }[] = [];
+  const boundaryAbstentions: { unit: string; occurrence: string; operation: 'distance' | 'clearance-zero'; probe: string }[] = [];
+  const retainAbstentions = async () => fs.writeFile(path.join(input.output, 'unsupported-boundary-abstentions.json'), JSON.stringify({
+    source: input.source, count: boundaryAbstentions.length, cases: boundaryAbstentions,
+    qualification: 'Unsupported representation uncertainty; these are not certified contact/clearance results. IEEE vertex-level cause is unverified.',
+  }, null, 2) + '\n');
+  await retainAbstentions();
   // Write each result before its assertion, so a red run preserves the offending witness/receipt.
   for (const unit of ['m', 'mm']) for (const probe of input.probes) {
     const linked = sourceBy(input.prepared, `${unit}-v1`, `occurrence-${probe.occurrence}`);
@@ -82,7 +88,17 @@ test('real converted rotated metre/mm geometry matches independent prism distanc
     retained.push({ source: input.source, unit, probe: probe.id, occurrence: probe.occurrence,
       expectedDistanceMetres: probe.expectedDistanceMetres, result });
     await fs.writeFile(path.join(input.output, 'private-runtime-measurements.json'), JSON.stringify(retained, null, 2) + '\n');
-    if (result.kind !== 'complete') throw new Error(JSON.stringify(result));
+    if (result.kind === 'unavailable') throw new Error(JSON.stringify(result));
+    if (result.kind === 'partial') {
+      assert.ok(probe.nonPenetrating && !probe.strictlySeparated, 'Only the independently boundary-only control may abstain.');
+      assert.equal(result.reason, 'unsupported');
+      assert.equal(result.value.relation, 'contact-or-overlap');
+      assert.equal(result.value.distanceMetres, 0);
+      assert.equal(result.value.clearance, 'not-requested');
+      assert.equal(result.receipt.status, 'partial');
+      boundaryAbstentions.push({ unit, occurrence: probe.occurrence, operation: 'distance', probe: probe.id });
+      await retainAbstentions();
+    }
     assert.notEqual(result.value.distanceMetres, null);
     assert.ok(Math.abs((result.value.distanceMetres ?? Infinity) - probe.expectedDistanceMetres) <= 1e-6, JSON.stringify({ probe, result }));
     assert.equal(result.value.exactness, 'prepared-representation');
@@ -96,8 +112,17 @@ test('real converted rotated metre/mm geometry matches independent prism distanc
     retained.push({ source: input.source, unit, probe: `${probe.id}:clearance-zero`, occurrence: probe.occurrence,
       expectedDistanceMetres: probe.expectedDistanceMetres, result: zero });
     await fs.writeFile(path.join(input.output, 'private-runtime-measurements.json'), JSON.stringify(retained, null, 2) + '\n');
-    if (zero.kind !== 'complete') throw new Error(JSON.stringify(zero));
-    if (!probe.nonPenetrating) {
+    if (zero.kind === 'unavailable') throw new Error(JSON.stringify(zero));
+    if (zero.kind === 'partial') {
+      assert.ok(probe.nonPenetrating && !probe.strictlySeparated, 'Separated/contained/penetrating controls must remain complete.');
+      assert.equal(zero.reason, 'unsupported');
+      assert.equal(zero.value.relation, 'contact-or-overlap');
+      assert.equal(zero.value.distanceMetres, 0);
+      assert.equal(zero.value.clearance, 'unknown', 'An ambiguous boundary cannot certify even zero clearance.');
+      assert.equal(zero.receipt.status, 'partial');
+      boundaryAbstentions.push({ unit, occurrence: probe.occurrence, operation: 'clearance-zero', probe: probe.id });
+      await retainAbstentions();
+    } else if (!probe.nonPenetrating) {
       assert.notEqual(zero.value.clearance, 'satisfied-mesh', JSON.stringify({ probe: probe.id, zero }));
     } else if (!probe.strictlySeparated) {
       // The private prism control establishes a boundary-only touching case.
@@ -143,8 +168,26 @@ test('unavailable active source and missing physical shape prevent absence and c
   assert.notEqual(clearance.kind, 'complete');
   if (clearance.kind !== 'unavailable') assert.equal(clearance.value.clearance, 'unknown');
   const partial = createGeometryContext({ projectId: input.projectId, native: input.native, linked: [sourceBy(input.prepared, 'm-partial')] });
-  const missingShape = partial.query({ query: { role: 'physical' } });
-  assert.notEqual(missingShape.kind, 'complete');
+  // Unbounded identity inventory may be complete without certifying any geometry.
+  const inventory = partial.query({ query: { role: 'physical' }, limit: 32 });
+  if (inventory.kind !== 'complete') throw new Error(JSON.stringify(inventory));
+  const missing = one(inventory.items, 'Invented no-representation');
+  assert.equal(missing.class, 'IfcBuildingElementProxy');
+  assert.equal(missing.role, 'physical');
+  assert.equal(missing.capability.kind, 'unavailable');
+  if (missing.capability.kind !== 'unavailable') throw new Error('Expected a declared physical object without geometry.');
+  assert.equal(missing.capability.reason, 'missing-geometry');
+  const spatial = partial.query({ query: { role: 'physical', region }, limit: 32 });
+  if (spatial.kind !== 'partial') throw new Error(JSON.stringify(spatial));
+  assert.ok(spatial.uncertainMembers > 0);
+  assert.ok(spatial.items.some(item => JSON.stringify(item.ref) === JSON.stringify(missing.ref)), 'An unlocated physical candidate cannot disappear from spatial membership.');
+  const measured = partial.measure({ subject, against: { kind: 'query', query: { role: 'physical', region } }, operation: 'clearance', clearanceMetres: .5 });
+  if (measured.kind !== 'partial') throw new Error(JSON.stringify(measured));
+  assert.equal(measured.value.clearance, 'unknown');
+  const direct = partial.measure({ subject: { kind: 'object', ref: missing.ref },
+    against: { kind: 'query', query: { role: 'physical', region } }, operation: 'clearance', clearanceMetres: .5 });
+  if (direct.kind !== 'unavailable') throw new Error(JSON.stringify(direct));
+  assert.equal(direct.reason, 'missing-geometry');
 });
 
 test('receiving native project is ordinary valid context, matching floor elevation without any proposed asset', async () => {
