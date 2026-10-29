@@ -128,7 +128,7 @@ are authored in the queue suite. These consumer assertions remain unrun; the par
 
 ## Authored evidence and qualification ledger
 
-All assertions below are **unrun**.
+The assertions were initially authored without a runtime run. Parent component results and remaining unrun cases are recorded below.
 
 | Requirement | Test source |
 | --- | --- |
@@ -161,6 +161,19 @@ ScriptBox issue 24 support. Component 4 at `aee595c` passed root validation, pol
 the blocked ScriptBox bootstrap. No independent #233 run occurred. The ignored `artifacts/private/issue233-contract-audit.ts` diagnostic
 is prepared for parent execution, never evaluated locally; the parent retains all run logs and the ten-attempt budget.
 Static verification performed: source/diff inspection and `git -c core.whitespace=cr-at-eol diff --check`.
+
+Parent combined component attempt 5 at `6763d6b`, using the qualified ScriptBox 0.2.0 packed artifact, passed root validation on 315 sources,
+explicit policy, browser build, geometry 35/35 (including describe geometry projections), linked 12/12 and 28/31 evidence tests.
+The retained red log is `artifacts/private/component-05-6763d6b/geometry-evidence.log` in the parent integration worktree.
+Three fixture failures were isolated: direct construction of baseline/alternative metadata bypassed the queue's explicit target publication CAS;
+endpoint proposal names embedded decimal coordinates despite the existing lowercase-word-only contract; and an independent-acceptance assertion
+expected the earlier review to remain target-current after the later acceptance. The original door-width and cube-presence checks had passed.
+The fixtures now use `importProject` plus authoritative `designCommand` baseline/alternative creation, valid descriptive scenario names,
+and exact nonempty deltas (door 900 to 1200 mm, then cube family/instance additions), unchanged other entities/relationships, accepted ancestry,
+retained original review/evidence/decision identities, completed queue states and both accepted-history entries.
+The earlier review's `superseded` status follows the existing target-local `RoomRepository.#advance` contract; the later review is `accepted`.
+No production implementation, validator or CAS rule changed. These fixture corrections and all eight previously blocked endpoint cases remain
+**unrun** until the parent assigns the next bounded server attempt. Attempt 5 and its failed output remain part of the cumulative budget.
 The app worktree creation failed during Git configuration discovery; direct isolated Git worktree creation succeeded.
 The shell profile initially reset relative paths to MacType; explicit non-login shell and absolute owned paths resolved it.
 No source was edited in saved Main, parent integration or another worker checkout.

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { ChangeRequests } from './change-requests.ts';
-import { RoomRepository, rectangleLayout, previewFurnishings, previewAssets } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewFurnishings, previewAssets, diffSnapshots } from '../src/room-model.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 import { readGeometryEvidence, parseGeometryEvidence, geometrySnapshotHash } from '../src/geometry-evidence.ts';
 import { FixtureGeometrySource, evidenceWall, evidenceFloor, geometryProposalScript, geometryReview, cubeAuthoring, cubeMeasurement } from '../src/geometry-evidence.fixture.ts';
@@ -43,9 +43,15 @@ test('property-only revision adoption accepts an alternative while retaining Mai
   const source = new FixtureGeometrySource(); let queue = await ChangeRequests.open(file, () => agent(), { geometry: source });
   t.after(async () => { await queue.close(); await fs.rm(directory, { recursive: true, force: true }); });
   let repository = await RoomRepository.create('Historical geometry evidence'); const main = repository.head('main');
-  repository = repository.captureBaseline({ id: 'as-is', name: 'As-is', from: repository.freezeDesignTarget({ kind: 'main' }) })
-    .forkAlternative({ id: 'test-alternative', name: 'Test alternative', baselineId: 'as-is' });
-  const target = repository.freezeDesignTarget({ kind: 'alternative', id: 'test-alternative' });
+  await queue.importProject(repository.serialize());
+  const baseline = await queue.designCommand(repository.projectId, 'baseline', { commandId: 'capture-as-is', name: 'As-is',
+    from: repository.freezeDesignTarget({ kind: 'main' }) });
+  assert.ok(baseline.created.kind === 'baseline');
+  const alternative = await queue.designCommand(repository.projectId, 'alternative', { commandId: 'fork-test-alternative',
+    name: 'Test alternative', baselineId: baseline.created.id });
+  assert.ok(alternative.created.kind === 'alternative');
+  repository = await RoomRepository.restore(alternative.project);
+  const target = repository.freezeDesignTarget(alternative.created);
   const ticket = await queue.submit(repository.serialize(), { ...request(repository, 'alternative-cube'), selectedObjectIds: [], target });
   await ready(queue, ticket.id);
   const reviewProject = queue.get(ticket.id).result?.project; assert.ok(reviewProject);
@@ -55,8 +61,9 @@ test('property-only revision adoption accepts an alternative while retaining Mai
   await queue.close(); queue = await ChangeRequests.open(file, () => null, { geometry: source });
   source.replace([evidenceWall({ version: 'v2', name: 'Changed metadata only' })]);
   const accepted = await accept(queue, ticket.id); const saved = await RoomRepository.restore(accepted.project);
-  assert.equal(saved.head('main'), main); assert.equal(saved.designView({ kind: 'baseline', id: 'as-is' }).revisionId, main);
-  assert.notEqual(saved.designView({ kind: 'alternative', id: 'test-alternative' }).revisionId, target.revisionId);
+  assert.equal(saved.head('main'), main); assert.equal(saved.designView(baseline.created).revisionId, main);
+  assert.deepEqual(saved.designView(baseline.created).snapshot, repository.designView(baseline.created).snapshot);
+  assert.notEqual(saved.designView(alternative.created).revisionId, target.revisionId);
   assert.equal(saved.review('alternative-cube').geometryEvidence, historical);
   const db = new DatabaseSync(file, { readOnly: true });
   try {
@@ -64,7 +71,7 @@ test('property-only revision adoption accepts an alternative while retaining Mai
     assert.equal(typeof row?.body, 'string'); if (typeof row?.body !== 'string') assert.fail('Missing final acceptance evidence');
     const proof: unknown = JSON.parse(row.body);
     assert.ok(proof && typeof proof === 'object' && 'verifiedCandidateSha256' in proof);
-    assert.equal(proof.verifiedCandidateSha256, geometrySnapshotHash(saved.designView({ kind: 'alternative', id: 'test-alternative' }).snapshot));
+    assert.equal(proof.verifiedCandidateSha256, geometrySnapshotHash(saved.designView(alternative.created).snapshot));
     assert.ok('finalMeasurements' in proof && Array.isArray(proof.finalMeasurements) && proof.finalMeasurements.length > 0);
   } finally { db.close(); }
 });
@@ -101,7 +108,7 @@ test('final native endpoint replay is symmetric for object order and query membe
       const source = new FixtureGeometrySource(); source.replace([evidenceWall({ x: 2 })]);
       const file = path.join(directory, `${endpoint}-${operation}-${x}.sqlite`);
       const queue = await ChangeRequests.open(file, () => agent(script), { geometry: source }); queues.push(queue);
-      const ticket = await queue.submit(repository.serialize(), { ...request(repository, `${endpoint}-${x}`), selectedObjectIds: [instance.id] });
+      const ticket = await queue.submit(repository.serialize(), { ...request(repository, `${endpoint}-${operation}-${x === 3.5 ? 'safe' : 'overlap'}`), selectedObjectIds: [instance.id] });
       if (x === 3.5) {
         await ready(queue, ticket.id);
         const result = await accept(queue, ticket.id); const saved = await RoomRepository.restore(result.project);
@@ -228,14 +235,41 @@ test('unrelated native acceptance is retained when a geometry proposal reconcile
   const source = new FixtureGeometrySource(); let currentWorker = agent();
   const queue = await ChangeRequests.open(':memory:', () => currentWorker, { geometry: source }); t.after(() => queue.close());
   const repository = await RoomRepository.create();
+  const base = repository.view(repository.head('main')).snapshot;
+  assert.equal(rectangleLayout(base).door.widthMm, 900);
   const cube = await queue.submit(repository.serialize(), request(repository, 'independent-cube')); await ready(queue, cube.id);
+  const cubeProject = await RoomRepository.restore(queue.get(cube.id).result?.project);
+  const originalCube = cubeProject.review('independent-cube');
   currentWorker = agent(doorScript);
   const door = await queue.submit(repository.serialize(), { ...request(repository, 'independent-door'), selectedObjectIds: ['door-entry'] });
-  await ready(queue, door.id); await accept(queue, door.id, 'accept-door');
+  await ready(queue, door.id);
+  const doorResult = await accept(queue, door.id, 'accept-door'); const acceptedDoor = await RoomRepository.restore(doorResult.project);
+  const originalDoor = acceptedDoor.review('independent-door');
+  assert.equal(originalDoor.decision.status, 'accepted'); assert.equal(originalDoor.decision.decisionId, 'accept-door');
+  const nativeDelta = diffSnapshots(base, acceptedDoor.view(acceptedDoor.head('main')).snapshot);
+  assert.deepEqual(nativeDelta.entities.modified.map(item => item.id), ['door-entry']);
+  assert.deepEqual(nativeDelta.entities.added, []); assert.deepEqual(nativeDelta.entities.removed, []);
+  assert.deepEqual(nativeDelta.relationships, { added: [], modified: [], removed: [] });
+  assert.equal(rectangleLayout(acceptedDoor.view(acceptedDoor.head('main')).snapshot).door.widthMm, 1200);
+  assert.equal(queue.get(cube.id).state, 'ready');
   const result = await accept(queue, cube.id, 'accept-cube'); const saved = await RoomRepository.restore(result.project);
   assert.equal(rectangleLayout(saved.view(saved.head('main')).snapshot).door.widthMm, 1200);
   assert.ok(saved.view(saved.head('main')).snapshot.entities.some(item => item.id === 'requested-cube'));
-  assert.equal(saved.review('independent-door').decision.status, 'accepted');
+  const geometryDelta = diffSnapshots(acceptedDoor.view(acceptedDoor.head('main')).snapshot, saved.view(saved.head('main')).snapshot);
+  assert.deepEqual(geometryDelta.entities.added.map(item => item.id).sort(), ['evidence-cube', 'requested-cube']);
+  assert.deepEqual(geometryDelta.entities.modified, []); assert.deepEqual(geometryDelta.entities.removed, []);
+  assert.deepEqual(geometryDelta.relationships, { added: [], modified: [], removed: [] });
+  assert.equal(saved.view(saved.head('main')).parentId, acceptedDoor.head('main'));
+  const retainedDoor = saved.review('independent-door'); const appliedCube = saved.review('independent-cube');
+  assert.equal(retainedDoor.decision.status, 'superseded');
+  assert.deepEqual({ ...retainedDoor, decision: null }, { ...originalDoor, decision: null });
+  assert.deepEqual({ ...retainedDoor.decision, status: null }, { ...originalDoor.decision, status: null });
+  assert.equal(appliedCube.decision.status, 'accepted'); assert.equal(appliedCube.decision.decisionId, 'accept-cube');
+  assert.deepEqual({ ...appliedCube, decision: null }, { ...originalCube, decision: null });
+  assert.equal(queue.get(door.id).state, 'completed'); assert.equal(queue.get(door.id).decisionId, 'accept-door');
+  assert.equal(queue.get(cube.id).state, 'completed'); assert.equal(queue.get(cube.id).attempts, 1);
+  const history = queue.history({ projectId: repository.projectId, before: null, limit: 3 });
+  assert.deepEqual(history.entries.slice(0, 2).map(item => item.requestId), ['independent-cube', 'independent-door']);
 });
 
 test('finite against-object measurements are not a loophole for an uninspected new obstruction', async t => {
