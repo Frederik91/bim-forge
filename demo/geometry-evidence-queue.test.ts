@@ -8,7 +8,8 @@ import { ChangeRequests } from './change-requests.ts';
 import { RoomRepository, rectangleLayout, previewFurnishings } from '../src/room-model.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
 import { readGeometryEvidence, geometrySnapshotHash } from '../src/geometry-evidence.ts';
-import { FixtureGeometrySource, evidenceWall, geometryProposalScript, geometryReview, cubeAuthoring, cubeMeasurement } from '../src/geometry-evidence.fixture.ts';
+import { FixtureGeometrySource, evidenceWall, evidenceFloor, geometryProposalScript, geometryReview, cubeAuthoring, cubeMeasurement } from '../src/geometry-evidence.fixture.ts';
+import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
 
 const doorScript = `const view = await model.inspect(); if(!view.placement.layout) throw new Error('Fixture layout');
   await model.previewRectangle({...view.placement.layout,door:{...view.placement.layout.door,widthMm:1200}});
@@ -186,4 +187,48 @@ test('a syntactically valid portable receipt cannot replace the host-authenticat
   try { db.prepare('DELETE FROM request_geometry_evidence WHERE request_id=?').run('receipt-authority'); } finally { db.close(); }
   await assert.rejects(accept(queue, ticket.id), /Trusted geometry read evidence/);
   assert.equal(queue.project(repository.projectId), before);
+});
+
+test('final native floor support accepts only certified contact; positive gap, sub-tolerance penetration and open surface remain blocked', async t => {
+  for (const condition of ['native-contact', 'positive-required-gap', 'sub-tolerance-penetration', 'open-floor']) {
+    const source = new FixtureGeometrySource();
+    source.replace(condition === 'sub-tolerance-penetration' ? [evidenceFloor({ top: 1e-10 })]
+      : condition === 'open-floor' ? [evidenceFloor({ open: true })] : []);
+    const repository = await RoomRepository.createProject({ projectId: globalThis.crypto.randomUUID(), name: condition, snapshot: multiStoreySnapshot() });
+    const measurement = { ...cubeMeasurement,
+      subject: { ...cubeMeasurement.subject, bounds: { min: [5.75, 4.55, 0], max: [6.25, 5.05, .5] } },
+      against: { kind: 'object', ref: { kind: 'native', projectId: repository.projectId, target: { kind: 'main' },
+        revisionId: repository.head('main'), entityId: 'level-ground-slab' } },
+      clearanceMetres: condition === 'positive-required-gap' ? .5 : 0 };
+    const authoring = cubeAuthoring.replace('position:[1,2]', 'position:[6,4.8]')
+      .replace("placement:{kind:'single-room'}", "placement:{kind:'room',roomId:'level-ground-east'}");
+    const script = `${authoring}
+      const result = await geometry.measure(${JSON.stringify(measurement)});
+      if(result.kind !== 'complete' || result.value.clearance !== 'satisfied-mesh') throw new Error('Requested support clearance is not verified');
+      return {kind:'propose',review:${JSON.stringify({ ...geometryReview, summary: 'Place the cube on the ground slab.',
+        rationale: 'Certified supporting-plane contact must not waive penetration or positive clearance.' })}};`;
+    const worker: ModelWorker = { identity: { provider: 'test', model: 'certified-floor-support' }, async run(session) {
+      const output = await session.executeTool('run_model_script', { language: 'typescript', source: script });
+      assert.equal(output.ok, condition !== 'positive-required-gap', JSON.stringify(output));
+    } };
+    const queue = await ChangeRequests.open(':memory:', () => worker, { geometry: source }); t.after(() => queue.close());
+    const ticket = await queue.submit(repository.serialize(), { ...request(repository, 'floor-support'), selectedObjectIds: [],
+      instruction: 'Place a cube on the ground slab with no penetration.' });
+    if (condition === 'native-contact') {
+      await ready(queue, ticket.id);
+      const accepted = await accept(queue, ticket.id); assert.equal(accepted.ticket.state, 'completed');
+      const saved = await RoomRepository.restore(accepted.project);
+      const evidence = readGeometryEvidence(saved.review('floor-support').geometryEvidence);
+      const measured = evidence.measurements[0]?.result;
+      assert.ok(measured?.kind === 'complete'); assert.equal(measured.value.relation, 'contact');
+      assert.equal(measured.value.clearance, 'satisfied-mesh');
+    } else {
+      const deadline = Date.now() + 30000;
+      while (queue.get(ticket.id).state === 'queued' || queue.get(ticket.id).state === 'working') {
+        assert.ok(Date.now() < deadline, `Floor case ${condition} did not finish`); await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(queue.get(ticket.id).state, 'failed', condition);
+      assert.equal(queue.get(ticket.id).result, null); assert.equal(queue.project(repository.projectId), repository.serialize());
+    }
+  }
 });

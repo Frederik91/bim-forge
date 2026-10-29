@@ -148,17 +148,18 @@ async function validateFinalMeasurements(evidence: GeometryEvidence, input: Geom
       const ref = { kind: 'native', projectId: input.projectId, revisionId: input.native.revisionId,
         target: input.native.target, entityId } satisfies Extract<GeometryMeasureRequest['subject'], { kind: 'object' }>['ref'];
       const description = await final.describe(ref);
-      if (description.kind !== 'complete' || description.value.role !== 'physical') {
+      if (description.kind !== 'complete' || description.value.role !== 'physical' || description.value.bounds === null) {
         throw new GeometryEvidenceConflict('A measured candidate does not identify a supported final native object.');
       }
       const request: GeometryMeasureRequest = { ...currentMeasurement(measurement.request, input, correspondences), subject: { kind: 'object', ref } };
       requireMeasurement(await final.measure(request), measurement.result);
       if (subject.kind !== 'box') continue;
       // A finite against-ID never certifies absence of other obstructions.
-      const surroundings = await final.measure({ subject: { kind: 'object', ref }, against: { kind: 'query', query: { role: 'physical' } },
+      const surroundings = await final.measure({ subject: { kind: 'object', ref },
+        against: { kind: 'query', query: { role: 'physical', region: description.value.bounds } },
         operation: 'intersection' });
       requireMeasurement(surroundings);
-      if (surroundings.kind === 'complete' && !['separated', 'empty-set'].includes(surroundings.value.relation)) {
+      if (surroundings.kind === 'complete' && !['separated', 'empty-set', 'contact'].includes(surroundings.value.relation)) {
         throw new GeometryEvidenceConflict('The final candidate intersects or is contained by another physical object.');
       }
     }

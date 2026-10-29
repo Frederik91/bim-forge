@@ -92,7 +92,9 @@ Relevant geometry/transform/removal/query-membership changes fail; unrelated rev
 
 Measurements retain their full typed predicates, including clearance distance and absence candidate sets. A guest box's `candidateId`
 must identify a real final native object. The host independently measures that final authored shape against the original constraint,
-then checks its complete surrounding physical domain. Reconciliation runs the same checks against the actual merged native candidate.
+then checks every physical object overlapping its host-evaluated candidate enclosure through exact kernel measurement.
+The complete predicate includes newly added/moved-in objects; unlocated shapes and unavailable sources still prevent a certificate.
+Distant open display surfaces outside that predicate cannot affect candidate intersection. Reconciliation runs the same checks against the actual merged native candidate.
 A finite wall reference cannot hide a newly intersecting object elsewhere in the candidate's final surroundings.
 
 Exploratory measurements remain in history. For each candidate and constraint the final replay checks the most recent trial;
@@ -101,10 +103,12 @@ Changing the predicate or requested clearance does not erase the earlier constra
 Distance/intersection probes at an earlier box pose remain observations, rather than becoming conflicting final design constraints.
 Explicit clearance predicates remain enforceable across pose changes; final-pose probes are replayed against the authored object.
 
-Known kernel limitation: some coincident/coplanar contact is reported as `contact-or-overlap`.
-This component does not certify that as free space. Its full-surroundings check therefore conservatively rejects ambiguous slab/support
-contact as well as penetration. No building-floor support acceptance claim is made. The geometry owner has been asked to provide
-a supported contact/penetration distinction and positive/negative floor-support fixtures; the parent must resolve and qualify this case.
+The geometry owner's exact head `a7a8f3c76ee622141bdfda50c7e140c99fa91837` introduces certified `contact` using an exact supporting-plane
+nonpenetration proof on closed prepared meshes. The surroundings check accepts only `separated`, `empty-set` and this certified `contact`.
+Some coincident/coplanar cases still report `contact-or-overlap`; those and incomplete/open surfaces remain blocked.
+No epsilon can waive penetration, and a positive requested clearance remains enforceable even when zero-gap support contact is certified.
+Actual native slab support, distant open furniture, positive-gap rejection, `1e-10` linked slab penetration and coplanar open floor controls
+are authored in the queue suite. These consumer assertions remain unrun; the parent owns runtime qualification.
 
 ## Authored evidence and qualification ledger
 
