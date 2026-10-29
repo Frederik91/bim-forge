@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { ModelScripts } from './model-script.ts';
 import { prepareModelProposal } from './model-proposal.ts';
 import type { ModelWorker } from './model-proposal.ts';
@@ -20,6 +21,54 @@ function worker(run: ModelWorker['run']): ModelWorker {
   return { identity: { provider: 'test', model: 'geometry-preseal-scriptbox' }, run };
 }
 const unsafeScript = geometryProposalScript.replace('position:[1,2]', 'position:[.75,2]');
+
+for (const condition of ['fatal preseal failure', 'complete correctable preseal failure']) {
+  test(`throwing activity sink during ${condition} stays fatal and redacts persistence details`, async t => {
+    const repository = await RoomRepository.create(); const accepted = repository.serialize();
+    const scripts = new ModelScripts(); t.after(() => scripts.dispose());
+    const database = new DatabaseSync(':memory:'); t.after(() => database.close());
+    database.exec(`CREATE TABLE activity(stage TEXT NOT NULL, body TEXT NOT NULL);
+      CREATE TRIGGER reject_failure_activity BEFORE INSERT ON activity WHEN NEW.stage = 'validation-failed'
+      BEGIN SELECT RAISE(ABORT, 'PRIVATE_ACTIVITY_SINK_DETAIL'); END;`);
+    const insertActivity = database.prepare('INSERT INTO activity(stage, body) VALUES(?, ?)');
+    const executions: ScriptExecutionEvidence[] = []; const activities: ActivityUpdate[] = [];
+    const previews: (ModelSnapshot | null)[] = []; const outputs: unknown[] = [];
+    let sinkFailures = 0;
+    const activity = (event: ActivityUpdate): void => {
+      try { insertActivity.run(event.stage, JSON.stringify(event)); }
+      catch (error) {
+        sinkFailures += 1;
+        database.exec('DROP TRIGGER reject_failure_activity');
+        throw error;
+      }
+      activities.push(event);
+    };
+    if (condition === 'fatal preseal failure') t.mock.method(GeometryEvidenceSession.prototype, 'seal', async () => {
+      throw new GeometrySessionError('deadline', 'Geometry operation exceeded its hard worker deadline.');
+    });
+    await assert.rejects(prepareModelProposal(repository, request(repository), worker(async session => {
+      const output = await session.executeTool('run_model_script', { language: 'typescript', source: unsafeScript });
+      outputs.push(output);
+      assert.equal(output.ok, false, JSON.stringify(output));
+      const failed = executions[0]; assert.ok(failed);
+      assert.equal(failed.status, 'completed'); assert.equal(failed.disposition, 'discarded'); assert.equal(failed.validation, 'failed');
+      assert.equal(failed.diagnostic?.code, 'host-failure');
+      assert.equal(failed.diagnostic?.message, 'Host proposal validation failed. Staged changes discarded.');
+      assert.deepEqual(output.execution, failed);
+      assert.equal(previews.at(-1), null); assert.equal(repository.serialize(), accepted);
+      assert.ok(!JSON.stringify({ output, activities, executions }).includes('PRIVATE_ACTIVITY_SINK_DETAIL'));
+      const replay = await session.executeTool('run_model_script', { language: 'typescript', source: geometryProposalScript });
+      outputs.push(replay); assert.equal(replay.ok, false, JSON.stringify(replay));
+    }), activity, { geometry: { source: new FixtureGeometrySource() }, scripts,
+      onExecution: evidence => executions.push(evidence), onPreview: snapshot => previews.push(snapshot) }), /authority|ended/);
+    assert.equal(sinkFailures, 1, 'The actual SQLite write fails once; later writes recover.');
+    assert.equal(executions.length, 1, 'A failed activity write must revoke subsequent scripts.');
+    assert.ok(previews.some(snapshot => snapshot !== null)); assert.equal(previews.at(-1), null);
+    assert.equal(repository.serialize(), accepted); assert.equal(repository.head('main'), request(repository).baseRevisionId);
+    const persistedActivities = database.prepare('SELECT body FROM activity').all();
+    assert.ok(!JSON.stringify({ outputs, activities, persistedActivities, executions }).includes('PRIVATE_ACTIVITY_SINK_DETAIL'));
+  });
+}
 
 test('the worker receives final geometry failure before success and corrects its complete script without losing history', async t => {
   const repository = await RoomRepository.create(); const accepted = repository.serialize();
