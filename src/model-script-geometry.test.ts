@@ -22,6 +22,47 @@ function worker(run: ModelWorker['run']): ModelWorker {
 }
 const unsafeScript = geometryProposalScript.replace('position:[1,2]', 'position:[.75,2]');
 
+for (const condition of ['persistent', 'outer-event']) {
+  test(`${condition} throwing activity sink never exposes persistence details through the request tool boundary`, async t => {
+    const repository = await RoomRepository.create(); const accepted = repository.serialize(); const mainHead = repository.head('main');
+    const scripts = new ModelScripts(); t.after(() => scripts.dispose());
+    const database = new DatabaseSync(':memory:'); t.after(() => database.close());
+    const predicate = condition === 'persistent' ? "NEW.stage = 'validation-failed'"
+      : "NEW.message = 'Script did not produce a valid proposal. Staged changes were discarded.'";
+    database.exec(`CREATE TABLE activity(stage TEXT NOT NULL, message TEXT NOT NULL);
+      CREATE TRIGGER reject_request_activity BEFORE INSERT ON activity WHEN ${predicate}
+      BEGIN SELECT RAISE(ABORT, 'PRIVATE_REQUEST_ACTIVITY_DETAIL'); END;`);
+    const insertActivity = database.prepare('INSERT INTO activity(stage, message) VALUES(?, ?)');
+    const executions: ScriptExecutionEvidence[] = []; const activities: ActivityUpdate[] = [];
+    const previews: (ModelSnapshot | null)[] = []; const outputs: Record<string, unknown>[] = [];
+    let sinkFailures = 0;
+    const activity = (event: ActivityUpdate): void => {
+      try { insertActivity.run(event.stage, event.message); }
+      catch (error) { sinkFailures += 1; throw error; }
+      activities.push(event);
+    };
+    await assert.rejects(prepareModelProposal(repository, request(repository), worker(async session => {
+      const output = await session.executeTool('run_model_script', { language: 'typescript', source: unsafeScript });
+      outputs.push(output); assert.equal(output.ok, false);
+      assert.equal(output.error, 'Request activity could not be saved. Staged changes discarded.');
+      assert.ok(!JSON.stringify({ output, activities, executions }).includes('PRIVATE_REQUEST_ACTIVITY_DETAIL'));
+      assert.equal(previews.at(-1), null); assert.equal(repository.serialize(), accepted);
+      const replay = await session.executeTool('run_model_script', { language: 'typescript', source: geometryProposalScript });
+      outputs.push(replay); assert.equal(replay.ok, false);
+    }), activity, { geometry: { source: new FixtureGeometrySource() }, scripts,
+      onExecution: evidence => executions.push(evidence), onPreview: snapshot => previews.push(snapshot) }), /authority|ended/);
+    assert.equal(sinkFailures, condition === 'persistent' ? 2 : 1);
+    assert.equal(outputs.length, 2); assert.equal(executions.length, 1);
+    assert.equal(executions[0]?.status, 'completed'); assert.equal(executions[0]?.disposition, 'discarded');
+    assert.equal(executions[0]?.validation, 'failed');
+    assert.equal(executions[0]?.diagnostic?.code, condition === 'persistent' ? 'host-failure' : 'invalid-proposal');
+    assert.equal(previews.at(-1), null); assert.equal(repository.serialize(), accepted); assert.equal(repository.head('main'), mainHead);
+    const persistedActivities = database.prepare('SELECT stage, message FROM activity').all();
+    assert.ok(!JSON.stringify({ outputs, activities, persistedActivities, executions }).includes('PRIVATE_REQUEST_ACTIVITY_DETAIL'));
+    assert.equal(activities.some(event => ['submitting', 'ready', 'completed'].includes(event.stage)), false);
+  });
+}
+
 for (const condition of ['fatal preseal failure', 'complete correctable preseal failure']) {
   test(`throwing activity sink during ${condition} stays fatal and redacts persistence details`, async t => {
     const repository = await RoomRepository.create(); const accepted = repository.serialize(); const mainHead = repository.head('main');
