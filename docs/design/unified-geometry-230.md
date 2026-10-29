@@ -249,3 +249,122 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
 - Latest bounded SSH probe still timed out. No server container started, no new preview was
   published, and no GitHub PR was merged. #232 versioned storage and #233 trusted proposal
   evidence/final publication wiring remain in their dedicated sessions.
+
+### Browser registration and connected-trial preflight
+
+- Parent integrated #234 follow-up `423bfc37c0de68c9e4bee805eded8a5418e7f2ec` and registered
+  `npm run test:geometry-workflow`. It requires the isolated server-container environment,
+  generated fixture files, a reserved converter spool, and a built demo. It is not a local
+  smoke test and does not silently replace the connected-provider or acceptance gates.
+- The source checks cover native-to-linked selection actions and exact unsent source pins,
+  including two sources reusing a GlobalId. Preserving the native picker is not proof of the
+  submitted request's intended native selection; actual payload context remains a live-UI gate.
+- The generated IFC is translated and elevated by its building/storey placements, whereas the
+  default native room is near the origin at zero elevation. Native assets require a bound room
+  and have no world-placement/elevation override. QA must generate an ordinary broad receiving
+  room at the proper level, validate it on server, and import through the normal project UI.
+  Do not reposition or axis-align the IFC for an answer-specific trial, or expose oracle facts.
+- Reviewed #231's staged asynchronous session source without treating it as a committed handback.
+  Construction/operation hard termination exists in the draft, but its default 60-second lifetime
+  is shorter than the existing 120-second provider turn. Owners must align the request lifecycle
+  and cleanup without disabling per-operation deadlines. No runtime timing claim is qualified.
+
+### Source integration after command approvals cleared
+
+- Owner cleared the expected command approvals. #233 confirmed that its geometry-evidence source
+  write had been waiting for approval and has now returned. Component sessions are progressing;
+  none was restarted. Server SSH still timed out on the fresh connectivity check.
+- Parent composed #231 `3cb9db6f15fa51b14b2f2123a6ff76c9e04d2b63`: asynchronous geometry session,
+  private worker message protocol, worker-based receipt replay and adversarial query tests.
+  Registered `npm run test:geometry` and included it in the standard `npm test` chain so these
+  checks cannot be omitted from the combined default suite. No dependency or lockfile change.
+- That committed core explicitly refuses zero-clearance satisfaction for volume overlap and
+  containment. Its tests and worker boundary remain unrun. Native readable-domain, semantic
+  discovery and extended-lifetime corrections are still in #231's next source handback; do not
+  infer that those fixes are present merely because the worker files have been integrated.
+
+### Combined source checkpoints (still unqualified)
+
+| Component | Exact locally composed source | Implementation present; runtime evidence still missing |
+| --- | --- | --- |
+| Geometry #231 | `c150e715ccb9a60f5c85f31ba4f07587c95b9da3` | Readable native domain, filtered relations, discovery/measurement receipts, canonical public-result verification, worker lifecycle/concurrency and focused tests |
+| IFC updates #232 | `8556f7d53eca98d799a7fb883b35bf90c4747d90` | Immutable unique versions, retained legacy pins, staged review/adopt/history/placement UI, catalog guard and retry/resolution fixes |
+| Independent QA #234 | `52c5da0ff493880c45c0524b6fd17a0c5c6bd7c3` | Receiving-native generator, real-IFC versus withheld prism runtime probes, prerequisite-bound server runner and UI import source |
+
+`npm run test:linked-revisions` is registered in the default `npm test` chain alongside geometry.
+These are local Git composition checkpoints, not GitHub merges or passing qualification results.
+Two bounded read-only reviews examine the geometry boundary and IFC publication/history guard
+while parent completes proposal/server wiring. Reviewers may not run local tests or edit owned
+component files. All acceptance-evidence matrix entries above remain pending.
+
+The bounded static reviews found five additional issues, with no runtime reproduction claimed:
+
+- IFC current resolution could select an earlier preparation of identical source bytes, and the
+  adoption retry shortcut could acknowledge a stale request after an intervening placement.
+  #232 source `50f862e` fixes both and adds controls; those controls remain unrun.
+- Geometry query exclusions could discard stale pins by reducing them to identity; discovery
+  receipts consumed unreturned geometry; worker replies did not verify their public payload
+  against the receipt result digest. #231 source `c150e71` adds explicit-pin checks, separate
+  discovery/measurement observations and verified public result digests, with unrun controls.
+- Source-version identity must use the immutable version/job ID, with `originalSha256` reserved
+  for integrity and content deduplication. Reusing the content hash as the revision token makes
+  exact historical preparation identity ambiguous after repeated unchanged exports. #232 is
+  source `8556f7d` updates the unpublished producer/private-worker contract and tests together. Exact-base
+  inspection corrected an earlier parent assumption: pre-feature jobs used the content hash
+  as revision. Preserve those retained records/pins; the worker validates one general bounded
+  revision token, which naturally accepts existing hashes and new IDs. No live data conversion
+  or hash-specific compatibility layer is required.
+- The proposal data provider must receive only the consumed historical IFC references when
+  computing verified correspondences. Eagerly enumerating every object in every retained
+  version would violate bounded resource goals and the worker message/pair limits. Parent/#233
+  are adding that host-only input before server wiring, preserving full current-catalog coverage.
+
+No repository server runner is registered in the GitHub runner query; the existing validation
+workflow uses a hosted runner. It cannot substitute for the owner's required server-container
+qualification. No runner, workflow, network route or VPN settings were changed.
+
+The unsent linked-context attachment now includes a full `GeometryRef`, including project,
+source version, occurrence and placement digest. Browser WebCrypto hashes the canonical matrix
+array, avoiding a Node-only dependency in the browser and allowing the agent to call the same
+`describe` API directly from the pin. Reference preparation rechecks chat/design/project and
+current source identity after hashing; Send stays gated until preparation/upload completes.
+This changes no accepted model or approval authority. Independent browser assertions are being
+extended; the new UI behavior has not yet been built or exercised on the server.
+
+Primary IFC selection now clears the native 3D highlight and omits the preceding implicit native
+object from a new request. Explicit native visual attachments and room/level navigation context
+are retained. The matching #233 input contract must allow deliberate project-context requests
+with no selected native objects; a formerly nonempty selection lost during rebase must not
+silently broaden into project context. That parser/rebase change and actual sent-payload UI
+evidence are still pending, so the source combination is not ready for deployment.
+
+### Restored server and first combined qualification
+
+Owner cleared the expected command approvals. SSH recovered on 29 October; the preview remains
+at its prior executable. The server has approximately 4.6 GiB available memory and almost no
+free swap, so parent reserves one serial 2 CPU / 3 GiB / no-swap qualification slot. Source,
+dependencies and containers remain read-only/network-off with writable evidence/temp on SSD.
+
+Root attempt 1 at `88daaa82e38f3491d62b0866ba458bbf0bbada2c` passed strict lint (306 source
+files), then failed TypeScript at `src/geometry-query.ts:219`: narrowing of an optional level
+reference did not survive a callback. No tests ran. Logs and stopped container are retained in
+`/ssd1/bim-forge-qualification/issue230/run-88daaa82e38f3491d62b0866ba458bbf0bbada2c-component-01`.
+Source correction `e7b24a5` captures the validated identity before the callback; it changes no
+validator or semantics and awaits rerun.
+
+Parent has composed #233 through `bfb9db5`, including explicit empty native-selection semantics,
+browser-safe evidence restoration, trusted request-attempt receipts, final-candidate measurement
+replay, and source-guarded acceptance. `test:geometry-evidence` registers its two test files plus
+the parent provider tests in default `npm test`. The server injects `demo/geometry-source.ts`;
+the production image allowlist and COPY include that module. Native-only requests keep the same
+interface. Authorization precedes source reads. Only consumed historical references are resolved,
+with one preparation cached per version/placement during each snapshot; all unavailable active
+links remain explicit. #232 `2b783b1` supplies the exact retained-pin lookup without requiring a
+caller-supplied matrix or loading every historical mesh.
+
+Independent static follow-ups confirm the prior three geometry and two IFC findings are
+addressed in source. A separate provider review found no concrete defect given the source owner's
+exact-pin contract. These are source reviews, not runtime receipts. Ordinary floor contact remains
+a known qualification blocker: #231 is adding a geometric nonpenetration certificate and controls;
+#233 must accept only certified contact while retaining ambiguous-contact/penetration rejection.
+All live-provider, converter/oracle, actual-image, browser, preservation and deployment gates remain pending.

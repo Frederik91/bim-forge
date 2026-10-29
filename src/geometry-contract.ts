@@ -66,11 +66,18 @@ export const GeometryCapabilitySchema = Type.Union([
   Type.Object({ kind: Type.Literal('unavailable'), reason, detail: Type.String({ maxLength: 1024 }) }, exact),
 ]);
 export type GeometryCapability = Static<typeof GeometryCapabilitySchema>;
+export const GeometrySemanticsSchema = Type.Union([
+  Type.Object({ kind: Type.Literal('none') }, exact),
+  Type.Object({ kind: Type.Literal('level'), elevationMetres: Type.Union([coordinate, Type.Null()]) }, exact),
+  Type.Object({ kind: Type.Literal('space'), footprintProjectMetres: Type.Union([
+    Type.Tuple([GeometryPointSchema, GeometryPointSchema, GeometryPointSchema, GeometryPointSchema]), Type.Null()]) }, exact),
+]);
 export const GeometryDescriptionSchema = Type.Object({ ref: GeometryRefSchema, name: Type.String({ maxLength: 256 }),
   class: token, category: GeometryCategorySchema, role: Type.Union([Type.Literal('physical'), Type.Literal('context')]),
   frame: Type.Literal('project-engineering-metres'), sourceUnitsToMetres: Type.Number({ exclusiveMinimum: 0, maximum: 1e6 }),
   writeAuthority: Type.Union([Type.Literal('native-review'), Type.Literal('read-only')]),
   bounds: Type.Union([GeometryBoundsSchema, Type.Null()]), capability: GeometryCapabilitySchema,
+  semantics: GeometrySemanticsSchema,
   surfaceSamples: Type.Array(Type.Object({ point: GeometryPointSchema, normal: GeometryPointSchema,
     triangleAreaMetres2: Type.Number({ minimum: 0, maximum: 4e12 }), orientation: Type.Literal('mesh-winding') }, exact), { maxItems: 12 }),
   surfaceSamplesTruncated: Type.Boolean(),
@@ -85,11 +92,15 @@ export const GeometryProjectionSchema = Type.Union([Type.Literal('description'),
 export type GeometryProjection = Static<typeof GeometryProjectionSchema>;
 const objectRead = Type.Object({ kind: Type.Literal('object'), ref: GeometryRefSchema, projection: GeometryProjectionSchema, digest: hash }, exact);
 const queryRead = Type.Object({ kind: Type.Literal('query'), query: GeometryQuerySchema, digest: hash,
+  purpose: Type.Union([Type.Literal('discovery'), Type.Literal('measurement')]), candidateExclusion: Type.Optional(GeometryRefSchema),
   members: Type.Array(GeometryRefSchema, { maxItems: 4096 }), unavailableSources: Type.Array(token, { maxItems: 64 }), complete: Type.Boolean() }, exact);
 const candidateRead = Type.Object({ kind: Type.Literal('candidate'), subject: GeometrySubjectSchema, digest: hash }, exact);
 export const GeometryReadSchema = Type.Union([objectRead, queryRead, candidateRead]);
 export type GeometryRead = Static<typeof GeometryReadSchema>;
+export const GeometryDomainSchema = Type.Object({ kind: Type.Union([Type.Literal('project'), Type.Literal('authorized-native-scope')]), digest: hash }, exact);
+export type GeometryDomain = Static<typeof GeometryDomainSchema>;
 export const GeometryReceiptSchema = Type.Object({ version: Type.Literal(1), projectId: token,
+  domain: GeometryDomainSchema,
   reads: Type.Array(GeometryReadSchema, { maxItems: 128 }),
   operationDigest: hash, resultDigest: hash,
   status: Type.Union([Type.Literal('complete'), Type.Literal('partial'), Type.Literal('unavailable')]),
@@ -107,6 +118,7 @@ export const GeometryMeasurementSchema = Type.Object({
   numericToleranceMetres: Type.Number({ minimum: 0, maximum: 1 }),
   sourceErrorMetres: Type.Union([Type.Number({ minimum: 0, maximum: 2 }), Type.Null()]),
   exactness: Type.Literal('prepared-representation'), testedObjects: Type.Integer({ minimum: 0, maximum: 4096 }),
+  domain: GeometryDomainSchema,
 }, exact);
 export type GeometryMeasurement = Static<typeof GeometryMeasurementSchema>;
 
@@ -117,6 +129,7 @@ export const GeometryDescriptionResultSchema = Type.Union([
   Type.Object({ kind: Type.Literal('unavailable'), receipt: GeometryReceiptSchema, ...failure }, exact),
 ]);
 const queryPage = { items: Type.Array(GeometryDescriptionSchema, { maxItems: 32 }),
+    domain: GeometryDomainSchema,
     nextCursor: Type.Union([Type.String({ maxLength: 256 }), Type.Null()]), total: Type.Integer({ minimum: 0, maximum: 4096 }),
     uncertainMembers: Type.Integer({ minimum: 0, maximum: 4096 }), receipt: GeometryReceiptSchema };
 export const GeometryQueryResultSchema = Type.Union([
@@ -137,6 +150,7 @@ export type GeometryDescriptionResult = Static<typeof GeometryDescriptionResultS
 export type GeometryQueryResult = Static<typeof GeometryQueryResultSchema>;
 export type GeometryRelationsResult = Static<typeof GeometryRelationsResultSchema>;
 export type GeometryMeasureResult = Static<typeof GeometryMeasureResultSchema>;
+export type GeometryResult = GeometryDescriptionResult | GeometryQueryResult | GeometryRelationsResult | GeometryMeasureResult;
 
 export function parseGeometryRef(input: unknown): GeometryRef {
   const value = geometryPlainData(input);

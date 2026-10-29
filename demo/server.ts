@@ -12,6 +12,7 @@ import { ScopeStoreConflict } from './model-scope-store.ts';
 import { parseWritableDesignTarget } from '../src/design-targets.ts';
 import { LinkedModelStore } from './linked-model-store.ts';
 import { handleLinkedModelRoute } from './linked-model-routes.ts';
+import { createGeometryEvidenceSource } from './geometry-source.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Map<string, readonly [string, string]>([
@@ -160,7 +161,9 @@ export async function createDemoServer({
   const expectedHost = publicOrigin ? new URL(validatedPublicOrigin(publicOrigin)).host : null;
   const links = await openLinkedModels(backlogFile, linkedModelSpool, linkedModelRoot);
   let backlog: ChangeRequests;
-  try { backlog = await ChangeRequests.open(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null)); }
+  try { backlog = await ChangeRequests.open(backlogFile, () => modelWorker ?? (codex?.publicSession().connected ? codex.modelWorker() : null), {
+    geometry: createGeometryEvidenceSource({ links, hasProject: id => backlog.hasProject(id) }),
+  }); }
   catch (error) { links?.close(); throw error; }
   let sourceUploads = 0;
   const server = http.createServer(async (request, response) => {

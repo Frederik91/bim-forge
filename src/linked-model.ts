@@ -10,6 +10,8 @@ const hash = Type.String({ pattern: '^[a-f0-9]{64}$' });
 const number = Type.Number({ minimum: -1e6, maximum: 1e6 });
 const matrix = Type.Array(Type.Array(number, { minItems: 4, maxItems: 4 }), { minItems: 4, maxItems: 4 });
 const source = Type.Object({ namespace: token, revision: token, originalSha256: hash }, { additionalProperties: false });
+export const LinkedSourceSchema = source;
+export const LinkedTransformSchema = matrix;
 const ref = Type.Object({ namespace: token, revision: token, originalSha256: hash, globalId: guid }, { additionalProperties: false });
 const artifact = Type.Object({ sha256: hash, bytes: Type.Integer({ minimum: 1, maximum: MAX_LINK_OUTPUT_BYTES }) }, { additionalProperties: false });
 const ManifestSchema = Type.Object({
@@ -46,7 +48,9 @@ export const IDENTITY_LINK_TRANSFORM = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]
 export function linkPoint(matrix: number[][], point: readonly number[]): number[] {
   return matrix.slice(0, 3).map(row => row.slice(0, 3).reduce((sum, value, axis) => sum + value * (point[axis] ?? 0), row[3] ?? 0));
 }
-function rigid(matrix: number[][]): void {
+export function assertRigidLinkTransform(matrix: number[][]): void {
+  if (!Check(Type.Array(Type.Array(number, { minItems: 4, maxItems: 4 }), { minItems: 4, maxItems: 4 }), matrix)) throw new Error('Invalid bounded IFC transform.');
+  if (matrix.flat().some(value => !Number.isFinite(value))) throw new Error('Invalid finite IFC transform.');
   if (JSON.stringify(matrix[3]) !== '[0,0,0,1]') throw new Error('Invalid IFC transform.');
   const rows = matrix.slice(0, 3);
   for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
@@ -66,7 +70,7 @@ export function parseLinkedPrepared(value: unknown): LinkedPrepared {
   const binding = JSON.stringify(manifest.source);
   const sameSource = (input: Static<typeof source>) => input.namespace === manifest.source.namespace && input.revision === manifest.source.revision && input.originalSha256 === manifest.source.originalSha256;
   if (!binding || !sameSource(index.source) || !sameSource(geometry.source)) throw new Error('IFC source binding differs.');
-  rigid(manifest.occurrence.sourceToProjectMetres);
+  assertRigidLinkTransform(manifest.occurrence.sourceToProjectMetres);
   const ids = new Set(index.objects.map(item => item.ref.globalId));
   if (ids.size !== index.objects.length || index.objects.some(item => !sameSource(item.ref)) || index.spatial.some(edge => !ids.has(edge.parent) || !ids.has(edge.child))) throw new Error('Invalid IFC object identity.');
   let vertices = 0; let triangles = 0;
@@ -74,7 +78,7 @@ export function parseLinkedPrepared(value: unknown): LinkedPrepared {
   for (const mesh of geometry.meshes) {
     if (!sameSource(mesh.ref) || !ids.has(mesh.ref.globalId) || meshes.has(mesh.ref.globalId) || mesh.verticesMetres.length % 3 || mesh.triangles.length % 3
         || mesh.triangles.some(i => i >= mesh.verticesMetres.length / 3)) throw new Error('Invalid IFC mesh identity or topology.');
-    meshes.add(mesh.ref.globalId); rigid(mesh.productToSourceMetres);
+    meshes.add(mesh.ref.globalId); assertRigidLinkTransform(mesh.productToSourceMetres);
     vertices += mesh.verticesMetres.length / 3; triangles += mesh.triangles.length / 3;
     for (let i = 0; i < mesh.verticesMetres.length; i += 3) {
       const sourcePoint = linkPoint(mesh.productToSourceMetres, mesh.verticesMetres.slice(i, i + 3));
@@ -106,4 +110,58 @@ export function linkedReferenceText(selection: LinkedSelection): string {
 export function linkedSelectionKey(selection: LinkedSelection): string {
   const { source, occurrence } = selection;
   return JSON.stringify([source.namespace, source.revision, source.originalSha256, source.globalId, occurrence.id, occurrence.sourceToProjectMetres]);
+}
+
+export const MAX_LINK_REVISIONS = 8;
+export const LinkedStateSchema = Type.Object({
+  id: token, projectId: token, namespace: token, occurrence: token,
+  generation: Type.Integer({ minimum: 0 }), currentVersionId: Type.Union([token, Type.Null()]),
+  sourceToProjectMetres: matrix,
+}, { additionalProperties: false });
+export type LinkedState = Static<typeof LinkedStateSchema>;
+export function parseLinkedState(value: unknown): LinkedState {
+  if (!Check(LinkedStateSchema, value)) throw new Error('Invalid IFC link state.');
+  assertRigidLinkTransform(value.sourceToProjectMetres); return value;
+}
+const deltaIds = Type.Array(guid, { maxItems: 2000 });
+const LinkedDeltaSchema = Type.Object({ added: deltaIds, removed: deltaIds, moved: deltaIds, geometry: deltaIds, properties: deltaIds,
+  ambiguous: deltaIds, unchanged: deltaIds, transformChanged: Type.Boolean(), correspondence: Type.Union([Type.Literal('same-source'), Type.Literal('global-id-only')]) });
+export type LinkedDelta = Static<typeof LinkedDeltaSchema>;
+const LinkedCatalogSchema = Type.Array(Type.Object({ state: LinkedStateSchema,
+  versions: Type.Array(Type.Object({ job: LinkedJobSchema, expectedGeneration: Type.Integer({ minimum: 0 }), current: Type.Boolean(), adopted: Type.Boolean() }), { maxItems: MAX_LINK_REVISIONS }),
+  revisionLimit: Type.Literal(MAX_LINK_REVISIONS) }), { maxItems: 8 });
+export type LinkedCatalogItem = Static<typeof LinkedCatalogSchema>[number];
+export function parseLinkedCatalog(value: unknown): LinkedCatalogItem[] {
+  if (!Check(LinkedCatalogSchema, value)) throw new Error('Invalid IFC version catalog.');
+  for (const item of value) parseLinkedState(item.state); return value;
+}
+const LinkedReviewSchema = Type.Object({ linkId: token, candidateId: token, generation: Type.Integer({ minimum: 0 }), expectedGeneration: Type.Integer({ minimum: 0 }),
+  delta: LinkedDeltaSchema, diagnostics: Type.Array(Type.Unknown(), { maxItems: 4000 }), losses: Type.Array(Type.String(), { maxItems: 32 }) });
+export type LinkedReview = Static<typeof LinkedReviewSchema>;
+export function parseLinkedReview(value: unknown): LinkedReview {
+  if (!Check(LinkedReviewSchema, value)) throw new Error('Invalid IFC candidate review.'); return value;
+}
+
+/** Cross-revision identity is deliberately conservative: an exporter may reuse any GlobalId. */
+export function linkedDelta(before: LinkedPrepared | null, after: LinkedPrepared): LinkedDelta {
+  if (before && (before.manifest.source.namespace !== after.manifest.source.namespace || before.manifest.occurrence.id !== after.manifest.occurrence.id)) throw new Error('IFC correspondence requires the same namespace and occurrence.');
+  const delta: LinkedDelta = { added: [], removed: [], moved: [], geometry: [], properties: [], ambiguous: [], unchanged: [],
+    transformChanged: before !== null && JSON.stringify(before.manifest.occurrence) !== JSON.stringify(after.manifest.occurrence),
+    correspondence: before?.manifest.source.originalSha256 === after.manifest.source.originalSha256 ? 'same-source' : 'global-id-only' };
+  const previous = new Map(before?.index.objects.map(object => [object.ref.globalId, object]) ?? []);
+  const current = new Map(after.index.objects.map(object => [object.ref.globalId, object]));
+  const oldMeshes = new Map(before?.geometry.meshes.map(mesh => [mesh.ref.globalId, mesh]) ?? []);
+  const newMeshes = new Map(after.geometry.meshes.map(mesh => [mesh.ref.globalId, mesh]));
+  for (const id of previous.keys()) if (!current.has(id)) delta.removed.push(id);
+  for (const [id, object] of current) {
+    const old = previous.get(id); if (!old) { delta.added.push(id); continue; }
+    const oldMesh = oldMeshes.get(id); const newMesh = newMeshes.get(id);
+    const properties = JSON.stringify([old.ifcClass, old.name, old.properties]) !== JSON.stringify([object.ifcClass, object.name, object.properties]);
+    const moved = JSON.stringify(oldMesh?.productToSourceMetres) !== JSON.stringify(newMesh?.productToSourceMetres);
+    const shape = JSON.stringify([oldMesh?.verticesMetres, oldMesh?.triangles]) !== JSON.stringify([newMesh?.verticesMetres, newMesh?.triangles]);
+    if (properties) delta.properties.push(id); if (moved) delta.moved.push(id); if (shape) delta.geometry.push(id);
+    if (delta.correspondence === 'global-id-only' && (old.ifcClass !== object.ifcClass || shape || moved || properties)) delta.ambiguous.push(id);
+    if (!properties && !moved && !shape) delta.unchanged.push(id);
+  }
+  return delta;
 }

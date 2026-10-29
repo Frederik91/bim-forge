@@ -14,6 +14,7 @@ import time
 
 UUID = re.compile(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\Z")
 HASH = re.compile(r"[a-f0-9]{64}\Z")
+REVISION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 
 
 def atomic(filename, value):
@@ -28,7 +29,10 @@ def bounded(filename, limit):
         info = os.fstat(stream.fileno())
         if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
             raise ValueError('Worker input exceeds budget')
-        return stream.read(limit + 1)
+        content = stream.read(limit + 1)
+        if len(content) > limit:
+            raise ValueError('Worker input exceeds budget')
+        return content
 
 
 def limits():
@@ -80,6 +84,8 @@ def supervise(directory, command, seconds=35):
             if process.returncode != 0:
                 try:
                     receipt = json.loads(bounded(directory / 'output' / 'failure.json', 4096))
+                    if not isinstance(receipt, dict):
+                        raise ValueError('Invalid converter failure receipt')
                     return {'kind': 'failed', 'error': str(receipt.get('code', 'IMPORT_FAILED'))[:128] + ': ' + str(receipt.get('detail', 'Conversion failed'))[:800]}
                 except (ValueError, OSError):
                     return {'kind': 'failed', 'error': 'Converter process failed.'}
@@ -88,23 +94,34 @@ def supervise(directory, command, seconds=35):
             terminate(process)
 
 
+def read_request(directory):
+    request = json.loads(bounded(directory / 'request.json', 4096))
+    if not isinstance(request, dict) or set(request) != {'id', 'source', 'occurrence'}:
+        raise ValueError('Invalid private worker request')
+    source = request['source']
+    if (not isinstance(source, dict) or set(source) != {'namespace', 'revision', 'originalSha256'}
+            or not all(isinstance(source[key], str) for key in source)
+            or not isinstance(request['occurrence'], str)
+            or request['id'] != directory.name or not UUID.fullmatch(request['occurrence'])
+            or not UUID.fullmatch(source['namespace']) or not REVISION.fullmatch(source['revision'])
+            or not HASH.fullmatch(source['originalSha256'])):
+        raise ValueError('Invalid private worker request')
+    return request
+
+
 def convert(directory):
     if not UUID.fullmatch(directory.name) or directory.is_symlink():
         return
-    request = json.loads(bounded(directory / 'request.json', 4096))
-    source = request.get('source', {})
-    if (request.get('id') != directory.name or request.get('occurrence') != directory.name
-            or source.get('namespace') != directory.name or not HASH.fullmatch(source.get('revision', ''))
-            or source.get('revision') != source.get('originalSha256')):
-        raise ValueError('Invalid private worker request')
+    request = read_request(directory)
+    source = request['source']
     content = bounded(directory / 'input.ifc', 2 * 1024**2)
     if hashlib.sha256(content).hexdigest() != source['originalSha256']:
         raise ValueError('Source integrity check failed')
     atomic(directory / 'running.json', {'started': time.time()})
     result = supervise(directory, [sys.executable, str(Path(__file__).with_name('link.py')),
                        str(directory / 'input.ifc'), str(directory / 'output'),
-                       '--namespace', directory.name, '--revision', source['revision'],
-                       '--occurrence', directory.name, '--cancel-file', str(directory / 'cancel.json')])
+                       '--namespace', source['namespace'], '--revision', source['revision'],
+                       '--occurrence', request['occurrence'], '--cancel-file', str(directory / 'cancel.json')])
     atomic(directory / 'terminal.json', result)
 
 

@@ -29,6 +29,8 @@ import type { WallShiftImpact } from './wall-dependencies.ts';
 import { previewRoomDimensionChange } from './room-dimension-preview.ts';
 import { parseEvidenceUses } from './model-evidence.ts';
 import type { EvidenceUse } from './model-evidence.ts';
+import { GEOMETRY_SCRIPT_METHODS, GEOMETRY_SCRIPT_CAPABILITIES, GEOMETRY_SCRIPT_GUIDANCE } from './geometry-evidence-api.ts';
+import type { GeometryEvidenceSession } from './geometry-evidence.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -163,6 +165,7 @@ export type ModelScriptResult =
   | { kind: 'failed'; diagnostic: ScriptDiagnostic; evidence: ScriptExecutionEvidence };
 
 interface Draft {
+  geometry?: GeometryEvidenceSession;
   readonly base: ModelSnapshot;
   snapshot: ModelSnapshot;
   binding: ModelScriptBinding;
@@ -171,6 +174,7 @@ interface Draft {
   onPreview?: (snapshot: ModelSnapshot | null) => void;
 }
 interface RunInput {
+  geometry?: GeometryEvidenceSession;
   base: ModelSnapshot;
   initialDraft?: ModelSnapshot;
   binding: ModelScriptBinding;
@@ -310,6 +314,24 @@ function selectedLevel(current: ModelGraph, binding: ModelScriptBinding) {
 }
 
 const api = createApiKit<Draft>();
+async function geometryRead<T>(draft: Draft, revoked: () => void, read: (session: GeometryEvidenceSession) => Promise<T>): Promise<T> {
+  revoked(); draft.signal.throwIfAborted();
+  if (!draft.geometry) throw new Error('No authorized geometry context is bound to this request.');
+  draft.onActivity({ stage: 'inspecting', message: 'Reading source-bound geometry through the unified geometry tools.' });
+  const value = await read(draft.geometry);
+  revoked(); draft.signal.throwIfAborted();
+  return value;
+}
+const geometry = api.namespace({ name: 'geometry', description: GEOMETRY_SCRIPT_GUIDANCE, methods: {
+  describe: api.method({ ...GEOMETRY_SCRIPT_METHODS.describe, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.describe(input)) }),
+  query: api.method({ ...GEOMETRY_SCRIPT_METHODS.query, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.query(input)) }),
+  relations: api.method({ ...GEOMETRY_SCRIPT_METHODS.relations, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.relations(input)) }),
+  measure: api.method({ ...GEOMETRY_SCRIPT_METHODS.measure, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.measure(input)) }),
+} });
 const model = api.namespace({ name: 'model', description: 'Read a bound model and stage validated changes in this script only. Nothing here accepts or saves a project.', methods: {
   scope: api.method({ summary: 'Read the frozen request scope and live working graph. Context is read-only; this graph is not a complete project.',
     effect: 'read', result: Type.Object({ scope: Type.Union([scopeRead, Type.Null()]), graph: snapshot }),
@@ -424,7 +446,7 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
       () => previewRoomFurnishings(call.context.snapshot, input), () => call.throwIfRevoked()) }),
 } });
 
-export { model as modelScriptApi };
+export { model as modelScriptApi, geometry as geometryScriptApi };
 
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
   'A propose decision returns review:{summary,rationale,constraints,uncertainty,intent,evidenceUses?}. Optional evidenceUses is an array of {pin,subject,rationale} choosing exact pinned known sourceEvidence facts as proposal-local assumptions for human review. Copy the complete frozen subject including anchor.target; preserve competing claims and explain the choice without promoting global truth. The host validates choices against the bound read set and context; self-rated certainty grants no authority. ' +
@@ -495,7 +517,9 @@ export class ModelScripts {
   constructor(limits: Partial<Pick<ExecutionLimits, 'timeoutMs' | 'hostCalls' | 'sourceBytes' | 'resultBytes'>> = {}) { this.#limits = limits; }
   #get(): Promise<ScriptBoxRuntime<Draft>> {
     if (this.#disposed) throw new Error('The model script runtime is disposed.');
-    this.#runtime ??= createRuntime<Draft>({ apis: [model], docs: [guide], contractVersion: 'bim-model-scripts-v2', policyVersion: 'proposal-intent-v1',
+    this.#runtime ??= createRuntime<Draft>({ apis: [model, geometry], docs: [guide,
+      new DocsTree().addFile('/guides/geometry.md', 'Unified source-bound geometry reads, limits and proposal evidence.', GEOMETRY_SCRIPT_GUIDANCE)],
+      contractVersion: 'bim-model-scripts-v3', policyVersion: 'proposal-intent-v1',
       sealResults: true, compilerWorkers: 1,
       limits: { memoryBytes: 64 * 1024 * 1024, compilerHeapMb: 256, sourceBytes: 32 * 1024, resultBytes: 64 * 1024,
         hostCalls: MAX_SCRIPT_HOST_CALLS, evidenceRecords: MAX_SCRIPT_HOST_CALLS, ...this.#limits },
@@ -519,9 +543,11 @@ export class ModelScripts {
       }
       const runtime = await this.#get();
       const draft: Draft = { base: input.base, snapshot: input.initialDraft ?? input.base, binding, signal: input.signal,
+        ...(input.geometry ? { geometry: input.geometry } : {}),
         onActivity: input.onActivity, ...(input.onPreview ? { onPreview: input.onPreview } : {}) };
       const session = runtime.createSession({ context: draft,
         capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewWallShift', 'model.previewRoomDimensionChange', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+          ...(input.geometry ? GEOMETRY_SCRIPT_CAPABILITIES : []),
           ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
           ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
         limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },
