@@ -112,9 +112,17 @@ export async function qualifyLinkedVersions(input: {
   try {
     const other = await otherContext.newPage();
     await other.goto(base);
-    await other.locator('#saved-projects').selectOption(input.projectId);
-    await other.locator('#open-saved-project').click();
-    await other.locator('#linked-model-references > summary').click();
+    const projectPicker = other.locator('#start-dialog');
+    if (!await projectPicker.isVisible()) {
+      await other.locator('.workspace-file-menu > summary').click();
+      await other.getByRole('button', { name: 'Projects', exact: true }).click();
+    }
+    await projectPicker.waitFor({ state: 'visible' });
+    await projectPicker.locator('#saved-projects').selectOption(input.projectId);
+    await projectPicker.getByRole('button', { name: 'Open latest accepted model', exact: true }).click();
+    await projectPicker.waitFor({ state: 'hidden' });
+    if (await other.locator('#workspace-navigation').isHidden()) await other.locator('#workspace-navigation-toggle').click();
+    if (await other.locator('#linked-model-references').getAttribute('open') === null) await other.locator('#linked-model-references > summary').click();
     const otherSection = other.locator(`#linked-model-mount a[href="${input.originalHref}"]`).locator('..');
     const placementSummary = otherSection.locator('summary').filter({ hasText: /^Occurrence placement in project$/ });
     await placementSummary.click();
