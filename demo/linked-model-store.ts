@@ -229,9 +229,9 @@ export class LinkedModelStore {
   adopt(input: { projectId: string; linkId: string; candidateId: string; expectedGeneration: number }): LinkedState {
     return this.transaction(() => {
       const state = this.state(input.projectId, input.linkId);
-      if (state.currentVersionId === input.candidateId && state.generation === input.expectedGeneration + 1) return state;
-      this.expect(state, input.expectedGeneration);
       const candidate = this.versionJobs(state).find(version => version.job.id === input.candidateId);
+      if (candidate?.expectedGeneration === input.expectedGeneration && state.currentVersionId === input.candidateId && state.generation === input.expectedGeneration + 1) return state;
+      this.expect(state, input.expectedGeneration);
       if (!candidate || candidate.expectedGeneration !== state.generation) throw new Error('Candidate was prepared against a different current version. Prepare a fresh candidate.');
       this.placed(this.preparedVersion(input.projectId, candidate.job.id), state.sourceToProjectMetres);
       const adopted = { ...state, currentVersionId: candidate.job.id, generation: state.generation + 1 };
@@ -285,8 +285,9 @@ export class LinkedModelStore {
     const versions = this.versionJobs(state).filter(version => version.job.kind === 'ready' && version.job.source.revision === selection.source.revision
       && version.job.source.originalSha256 === selection.source.originalSha256);
     const rows = this.database.prepare('SELECT version,transform FROM link_history WHERE link=? AND project=?').all(state.id, projectId);
-    const retained = versions.find(version => rows.some(row => row.version === version.job.id && row.transform === JSON.stringify(selection.occurrence.sourceToProjectMetres)));
-    if (!retained) return { kind: 'unavailable', reason: 'missing' };
+    const matches = versions.filter(version => rows.some(row => row.version === version.job.id && row.transform === JSON.stringify(selection.occurrence.sourceToProjectMetres)));
+    if (matches.length > 1) return { kind: 'unavailable', reason: 'ambiguous' };
+    const retained = matches[0]; if (!retained) return { kind: 'unavailable', reason: 'missing' };
     try {
       const prepared = this.placed(this.preparedVersion(projectId, retained.job.id), selection.occurrence.sourceToProjectMetres);
       if (!prepared.index.objects.some(object => object.ref.globalId === selection.source.globalId)) return { kind: 'unavailable', reason: 'missing' };
@@ -294,11 +295,17 @@ export class LinkedModelStore {
     } catch { return { kind: 'unavailable', reason: 'missing' }; }
   }
   resolve(projectId: string, selection: LinkedSelection, mode: 'current' | 'historical'): LinkedVersionResolution {
-    const historical = this.readVersion(projectId, selection); if (historical.kind !== 'ok' || mode === 'historical') return historical;
+    if (mode === 'historical') return this.readVersion(projectId, selection);
     const state = this.states(projectId).find(item => item.namespace === selection.source.namespace && item.occurrence === selection.occurrence.id);
+    if (!state) return { kind: 'unavailable', reason: 'missing' };
     const current = this.all().find(job => job.projectId === projectId && job.id === state?.currentVersionId);
-    if (!state || !current || current.source.originalSha256 !== selection.source.originalSha256 || current.source.revision !== selection.source.revision || JSON.stringify(state.sourceToProjectMetres) !== JSON.stringify(selection.occurrence.sourceToProjectMetres)) return { kind: 'unavailable', reason: 'stale' };
-    return historical;
+    if (!current || current.kind !== 'ready') return { kind: 'unavailable', reason: 'missing' };
+    if (current.source.originalSha256 !== selection.source.originalSha256 || current.source.revision !== selection.source.revision || JSON.stringify(state.sourceToProjectMetres) !== JSON.stringify(selection.occurrence.sourceToProjectMetres)) return { kind: 'unavailable', reason: 'stale' };
+    try {
+      const prepared = this.placed(this.preparedVersion(projectId, current.id), state.sourceToProjectMetres);
+      if (!prepared.index.objects.some(object => object.ref.globalId === selection.source.globalId)) return { kind: 'unavailable', reason: 'missing' };
+      return { kind: 'ok', versionId: current.id, prepared };
+    } catch { return { kind: 'unavailable', reason: 'missing' }; }
   }
   /** Lock order: linked catalog first, then the caller's native transaction. Never await or reenter. */
   withCatalogGuard<T>(projectId: string, expectedCatalogToken: string, synchronousCommit: () => T): LinkedGuardResult<T> {
