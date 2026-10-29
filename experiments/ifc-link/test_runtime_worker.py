@@ -8,7 +8,49 @@ import subprocess
 import os
 import signal
 
-from runtime_worker import supervise
+from runtime_worker import convert, read_request, supervise
+from unittest.mock import patch
+import hashlib
+
+
+class RevisionRequests(unittest.TestCase):
+    def test_job_identity_is_independent_of_retained_namespace_and_occurrence(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
+            directory.mkdir()
+            content = b'new synthetic IFC revision'
+            digest = hashlib.sha256(content).hexdigest()
+            request = {'id': directory.name, 'source': {'namespace': 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',
+                       'revision': digest, 'originalSha256': digest}, 'occurrence': 'cccccccc-cccc-4ccc-cccc-cccccccccccc'}
+            (directory / 'request.json').write_text(json.dumps(request))
+            (directory / 'input.ifc').write_bytes(content)
+            with patch('runtime_worker.supervise', return_value={'kind': 'complete'}) as run:
+                convert(directory)
+            command = run.call_args.args[1]
+            self.assertEqual(command[command.index('--namespace') + 1], request['source']['namespace'])
+            self.assertEqual(command[command.index('--occurrence') + 1], request['occurrence'])
+            self.assertEqual(command[command.index('--revision') + 1], digest)
+            self.assertEqual(json.loads((directory / 'terminal.json').read_text()), {'kind': 'complete'})
+
+    def test_malformed_requests_fail_as_bounded_input_errors_without_crashing_worker(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
+            directory.mkdir()
+            valid = {'id': directory.name, 'source': {'namespace': directory.name, 'revision': 'a' * 64,
+                     'originalSha256': 'a' * 64}, 'occurrence': directory.name}
+            cases = [None, [], 'source text', {}, {**valid, 'occurrence': 17}, {**valid, 'source': []},
+                     {**valid, 'source': {**valid['source'], 'namespace': 12}},
+                     {**valid, 'source': {**valid['source'], 'revision': None}},
+                     {**valid, 'source': {**valid['source'], 'originalSha256': 'b' * 64}},
+                     {**valid, 'id': 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'}, {**valid, 'fetch': 'https://example.invalid'}]
+            for value in cases:
+                with self.subTest(value=value):
+                    (directory / 'request.json').write_text(json.dumps(value))
+                    with self.assertRaises(ValueError):
+                        read_request(directory)
+            (directory / 'request.json').write_bytes(b' ' * 4097)
+            with self.assertRaisesRegex(ValueError, 'budget'):
+                read_request(directory)
 
 
 class Supervision(unittest.TestCase):

@@ -40,10 +40,14 @@ function inputEnvelope(value: unknown): void {
   visit(value, 0);
   if (bytes > 16 * 1024 * 1024) throw new Error('Geometry worker input exceeds the byte envelope.');
 }
+let activeWorkers = 0;
 function worker(data: unknown): Worker {
+  if (activeWorkers >= 4) throw new GeometrySessionError('worker-failed', 'Geometry worker concurrency limit reached.');
   inputEnvelope(data);
-  return new Worker(new URL('./geometry-worker.ts', import.meta.url), { workerData: data,
+  const instance = new Worker(new URL('./geometry-worker.ts', import.meta.url), { workerData: data,
     resourceLimits: { maxOldGenerationSizeMb: 192, maxYoungGenerationSizeMb: 32, stackSizeMb: 4 } });
+  activeWorkers++; instance.once('exit', () => { activeWorkers--; });
+  return instance;
 }
 
 /** Product host boundary: one immutable context stays in a private, resource-bounded worker for one request. */
@@ -64,7 +68,7 @@ export class GeometrySession {
   constructor(input: GeometrySessionInput, options: GeometrySessionOptions = {}) {
     const construction = boundedTime(options.constructionTimeoutMs, 3000, 5000);
     this.#operationTimeout = boundedTime(options.operationTimeoutMs, 1500, 5000);
-    const lifetime = boundedTime(options.lifetimeMs, 60000, 120000);
+    const lifetime = boundedTime(options.lifetimeMs, 180000, 900000);
     this.#projectId = input.projectId; this.#signal = options.signal;
     this.#worker = worker({ kind: 'session', input });
     this.#abort = () => this.#fail(new GeometrySessionError('aborted', 'Geometry request was aborted.'));

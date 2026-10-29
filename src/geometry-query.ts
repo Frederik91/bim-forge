@@ -4,8 +4,8 @@ import { Type } from 'typebox';
 import { parseLinkedPrepared } from './linked-model.ts';
 import type { LinkedPrepared } from './linked-model.ts';
 import { validateSnapshot } from './room-model.ts';
-import { GeometryPageRequestSchema, geometryPlainData, parseGeometryMeasureRequest, parseGeometryQuery, parseGeometryReceipts, parseGeometryRef } from './geometry-contract.ts';
-import type { GeometryDescription, GeometryDescriptionResult, GeometryFailure, GeometryMeasureRequest, GeometryMeasureResult, GeometryMeasurement,
+import { GeometryMatrixSchema, GeometryPageRequestSchema, geometryPlainData, parseGeometryMeasureRequest, parseGeometryQuery, parseGeometryReceipts, parseGeometryRef } from './geometry-contract.ts';
+import type { GeometryDescription, GeometryDescriptionResult, GeometryDomain, GeometryFailure, GeometryMeasureRequest, GeometryMeasureResult, GeometryMeasurement,
   GeometryPageRequest, GeometryProjection, GeometryQuery, GeometryQueryResult, GeometryRead, GeometryReceipt, GeometryRef, GeometryRelation, GeometryRelationsResult } from './geometry-contract.ts';
 import { GeometryLimitError, NUMERIC_TOLERANCE_METRES, add, assertRigidTransform, boundsOverlap, boxMesh, createMesh, cross, dot,
   geometryWork, measureShapes, scale, shapeOf, sub, transformPoint } from './geometry-math.ts';
@@ -55,6 +55,16 @@ function linkedRecords(projectId: string, input: LinkedPrepared, work: GeometryW
   const products = new Set(prepared.index.placements.flatMap(value => Check(placementIdentitySchema, value) ? [value.globalId] : []));
   const completeProductInventory = products.size === prepared.manifest.counts.products && products.size === prepared.index.placements.length
     && [...products].every(id => prepared.index.objects.some(object => object.ref.globalId === id));
+  const placedSchema = Type.Object({ globalId: Type.String(), productToSourceMetres: GeometryMatrixSchema });
+  const levelElevations = new Map<string, number>();
+  for (const placement of prepared.index.placements) if (Check(placedSchema, placement)) {
+    try {
+      assertRigidTransform(placement.productToSourceMetres);
+      const origin = transformPoint(occurrence.sourceToProjectMetres, transformPoint(placement.productToSourceMetres, [0, 0, 0]));
+      const up = sub(transformPoint(occurrence.sourceToProjectMetres, transformPoint(placement.productToSourceMetres, [0, 0, 1])), origin);
+      if (Math.hypot(up[0], up[1], up[2] - 1) < 1e-8) levelElevations.set(placement.globalId, origin[2]);
+    } catch { /* Unusable semantic placement has no inferred project elevation. Physical meshes validate separately. */ }
+  }
   return prepared.index.objects.map(object => {
     work.tick(); const raw = meshes.get(object.ref.globalId);
     let shape: GeometryShape | null = null;
@@ -98,8 +108,10 @@ function linkedRecords(projectId: string, input: LinkedPrepared, work: GeometryW
       writeAuthority: 'read-only', bounds: shape?.bounds ?? null, capability: shape ? { kind: 'mesh', closed: shape.meshes.every(mesh => mesh.closed),
         representation: 'ifcopenshell-prepared-triangles', numericToleranceMetres: NUMERIC_TOLERANCE_METRES, sourceErrorMetres: null,
         limitation: 'Original-solid tessellation error is unqualified. Measurements are relative to prepared triangles; closed topology alone does not certify a self-intersection-free engineering solid. Map conversion is unapplied.' }
-        : { kind: 'unavailable', reason: raw ? 'unsupported' : 'missing-geometry', detail }, surfaceSamples: [], surfaceSamplesTruncated: false },
-      shape, relations, dependencies: shape ? null : { placement: occurrence.sourceToProjectMetres } };
+        : { kind: 'unavailable', reason: raw ? 'unsupported' : 'missing-geometry', detail },
+      semantics: category === 'level' ? { kind: 'level', elevationMetres: levelElevations.get(object.ref.globalId) ?? null }
+        : category === 'space' ? { kind: 'space', footprintProjectMetres: null } : { kind: 'none' }, surfaceSamples: [], surfaceSamplesTruncated: false },
+      shape, relations, dependencies: shape ? null : { placement: structuredClone(occurrence.sourceToProjectMetres) } };
   });
 }
 
@@ -120,11 +132,13 @@ type Selection = { records: GeometryRecord[]; uncertain: number; complete: boole
 /** A request-local derived read model. No DB, authoring, external fetch, or acceptance authority. */
 export class GeometryContext {
   readonly projectId: string;
+  readonly domain: Readonly<GeometryDomain>;
   readonly #records: Map<string, GeometryRecord>;
   readonly #limits: GeometryLimits;
   readonly #now: () => number;
   readonly #unavailable: readonly { id: string; reason: string }[];
   readonly #log: GeometryReceipt[] = [];
+  #logBytes = 0;
   #exhausted = false;
   constructor(input: GeometryContextInput) {
     this.projectId = input.projectId;
@@ -141,7 +155,13 @@ export class GeometryContext {
     const native = { ...input.native, snapshot: validateSnapshot(input.native.snapshot) };
     // Parsing a reference validates native target/revision metadata independently of source bodies.
     parseGeometryRef({ kind: 'native', projectId: input.projectId, target: native.target, revisionId: native.revisionId, entityId: 'context' });
-    const records = nativeGeometryRecords(input.projectId, native, work);
+    const readableIds = native.readableIds === undefined ? null : new Set(native.readableIds);
+    if (native.readableIds && (native.readableIds.length > 100 || readableIds?.size !== native.readableIds.length
+      || native.readableIds.some(id => !native.snapshot.entities.some(entity => entity.id === id)))) throw new Error('Native readable identities must be a bounded unique authorized subset of the full evaluation graph.');
+    this.domain = Object.freeze({ kind: readableIds ? 'authorized-native-scope' : 'project', digest: geometryDigest({ projectId: input.projectId, target: native.target,
+      nativeDomain: readableIds ? [...readableIds].sort() : 'project' }) });
+    const records = nativeGeometryRecords(input.projectId, native, work).filter(record => !readableIds || readableIds.has(record.description.ref.kind === 'native' ? record.description.ref.entityId : ''));
+    for (const record of records) record.relations = record.relations.filter(relation => relation.target.kind !== 'native' || !readableIds || readableIds.has(relation.target.entityId));
     const occurrences = new Set<string>();
     for (const linked of input.linked) {
       const occurrenceKey = canonical([linked.manifest.source.namespace, linked.manifest.occurrence.id]);
@@ -184,7 +204,7 @@ export class GeometryContext {
         else if (!levels.some(relation => geometryIdentityKey(relation.target) === geometryIdentityKey(query.level))) continue;
       }
       if (query.region && d.bounds && !boundsOverlap(query.region, d.bounds)) continue;
-      records.push(record); if (!record.shape || unknownLevel) uncertain++;
+      records.push(record); if (query.region && !record.shape || unknownLevel) uncertain++;
     }
     records.sort((a, b) => geometryIdentityKey(a.description.ref).localeCompare(geometryIdentityKey(b.description.ref)));
     const complete = uncertain === 0 && this.#unavailable.length === 0;
@@ -200,15 +220,16 @@ export class GeometryContext {
       const value = geometryPlainData(input); operationDigest = geometryDigest({ method, input: value });
       const work = this.#work(); outcome = calculate(value, reads, work); work.tick();
       if (reads.length > 128) throw new GeometryLimitError('budget');
-      if (Buffer.byteLength(canonical({ outcome, reads })) > this.#limits.maxResponseBytes) throw new GeometryUnavailableError('response-limit', 'Geometry reply exceeds the response byte limit.');
+      const replyBytes = Buffer.byteLength(canonical({ outcome, reads }));
+      if (replyBytes > this.#limits.maxResponseBytes || this.#logBytes + replyBytes > 1024 * 1024) throw new GeometryUnavailableError('response-limit', 'Geometry reply or accumulated evidence exceeds the byte limit.');
     } catch (error) {
       reads = [];
       outcome = { kind: 'unavailable', reason: error instanceof GeometryLimitError || error instanceof GeometryUnavailableError ? error.reason : 'invalid-input',
         detail: error instanceof Error ? error.message.slice(0, 1024) : 'Invalid geometry operation.' };
     }
-    const receipt: GeometryReceipt = { version: 1, projectId: this.projectId, reads: structuredClone(reads), operationDigest,
+    const receipt: GeometryReceipt = { version: 1, projectId: this.projectId, domain: structuredClone(this.domain), reads: structuredClone(reads), operationDigest,
       resultDigest: geometryDigest(outcome), status: outcome.kind };
-    if (this.#log.length < this.#limits.maxReceipts) this.#log.push(receipt);
+    if (this.#log.length < this.#limits.maxReceipts) { this.#log.push(receipt); this.#logBytes += Buffer.byteLength(canonical(receipt)); }
     return { outcome: structuredClone(outcome), receipt: structuredClone(receipt) };
   }
   describe(input: unknown): GeometryDescriptionResult {
@@ -220,7 +241,7 @@ export class GeometryContext {
     return { ...outcome, receipt };
   }
   query(input: unknown): GeometryQueryResult {
-    const { outcome, receipt } = this.#run<{ items: GeometryDescription[]; total: number; uncertainMembers: number; nextCursor: string | null }>('query', input, (value, reads, work) => {
+    const { outcome, receipt } = this.#run<{ items: GeometryDescription[]; domain: GeometryDomain; total: number; uncertainMembers: number; nextCursor: string | null }>('query', input, (value, reads, work) => {
       if (!Check(GeometryPageRequestSchema, value)) throw new Error('Invalid bounded geometry page request.');
       const query = parseGeometryQuery(value.query); const selection = this.#select(query, work); reads.push(selection.read);
       const contextDigest = geometryDigest([...this.#records.values()].map(record => record.description.ref));
@@ -229,7 +250,7 @@ export class GeometryContext {
       if (!Number.isSafeInteger(offset) || offset < 0 || offset > selection.records.length) throw new GeometryUnavailableError('stale-reference', 'Cursor does not belong to this exact frozen context and predicate.');
       const limit = value.limit ?? 20; const page = selection.records.slice(offset, offset + limit);
       for (const record of page) this.#objectRead(record, 'description', reads);
-      const result = { items: page.map(record => record.description), total: selection.records.length, uncertainMembers: selection.uncertain + this.#unavailable.length,
+      const result = { items: page.map(record => record.description), domain: this.domain, total: selection.records.length, uncertainMembers: selection.uncertain + this.#unavailable.length,
         nextCursor: offset + limit < selection.records.length ? `${prefix}${offset + limit}` : null };
       return selection.complete ? { kind: 'complete', value: result } : { kind: 'partial', value: result, reason: 'missing-geometry', detail: 'One or more potentially relevant objects or active sources lack geometry.' };
     });
@@ -246,6 +267,7 @@ export class GeometryContext {
   measure(input: unknown): GeometryMeasureResult {
     const { outcome, receipt } = this.#run<GeometryMeasurement>('measure', input, (value, reads, work) => {
       const request = parseGeometryMeasureRequest(value);
+      if (request.operation === 'containment' && request.against.kind !== 'object') throw new GeometryUnavailableError('unsupported', 'Containment requires one explicit container object, not a union of query candidates.');
       const subjectRecord = request.subject.kind === 'object' ? this.#resolve(request.subject.ref) : null;
       const subject = request.subject.kind === 'box' ? shapeOf([boxMesh(request.subject.bounds, request.subject.localToProject, work)]) : subjectRecord?.shape;
       if (!subject) throw new GeometryUnavailableError('missing-geometry', 'Measurement subject has no supported shape.');
@@ -272,7 +294,8 @@ export class GeometryContext {
         if (!hit.closed || hit.relation === 'unknown') complete = false;
         const capability = record.description.capability;
         if (capability.kind === 'mesh') errorBound = errorBound === null || capability.sourceErrorMetres === null ? null : errorBound + capability.sourceErrorMetres;
-        if (!best || hit.distance < best.distance || (hit.distance === best.distance && hit.relation === 'volume-overlap')) { best = hit; nearest = record; }
+        const penetrates = (relation: string): boolean => ['volume-overlap', 'subject-inside', 'obstacle-inside'].includes(relation);
+        if (!best || hit.distance < best.distance || (hit.distance === best.distance && penetrates(hit.relation) && !penetrates(best.relation))) { best = hit; nearest = record; }
       }
       const clearance = request.operation !== 'clearance' ? 'not-requested' : !complete ? 'unknown'
         : !best ? 'satisfied-mesh' : best.relation === 'contact-or-overlap' && (request.clearanceMetres ?? 0) === 0 ? 'unknown'
@@ -281,7 +304,7 @@ export class GeometryContext {
       const measurement: GeometryMeasurement = { nearest: nearest?.description.ref ?? null, distanceMetres: best?.distance ?? null,
         witness: best ? { subject: best.subject, obstacle: best.obstacle } : null, relation: best?.relation ?? (complete ? 'empty-set' : 'unknown'),
         clearance, numericToleranceMetres: NUMERIC_TOLERANCE_METRES, sourceErrorMetres: errorBound,
-        exactness: 'prepared-representation', testedObjects: tested };
+        exactness: 'prepared-representation', testedObjects: tested, domain: this.domain };
       return complete ? { kind: 'complete', value: measurement } : { kind: 'partial', value: measurement, reason: 'unsupported',
         detail: 'Potentially relevant geometry is missing or has open/unsupported solid topology. Surface distance is not a solid-clearance certificate.' };
     });
@@ -322,6 +345,7 @@ export function validateGeometryReceipts(input: { receipts: unknown; current: Ge
     };
     for (const receipt of receipts) {
       if (receipt.projectId !== input.current.projectId || receipt.status !== 'complete') return { kind: 'unavailable', reason: 'An observation is incomplete or belongs to another project.' };
+      if (canonical(receipt.domain) !== canonical(input.current.domain)) return { kind: 'stale', reason: 'The authorized geometry read domain changed.' };
       for (const read of receipt.reads) {
         if (read.kind === 'object') {
           const current = input.current.currentProjection(read.ref, read.projection);

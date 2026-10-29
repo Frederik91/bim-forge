@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Run on frederik@192.168.1.17 only after parent authorizes a qualification reservation.+# No SSH retries, pulls, dependency installation, preview changes, or worker218 replays.
+# Run on frederik@192.168.1.17 only after parent authorizes a qualification reservation.
+# No SSH retries, pulls, dependency installation, preview changes, or worker218 replays.
 set -euo pipefail
 umask 077
-mode=${1:?Usage: run-server.sh converter|validate|browser SOURCE_CHECKOUT EVIDENCE_ROOT}
+mode=${1:?Usage: run-server.sh converter|validate|native|runtime|browser SOURCE_CHECKOUT EVIDENCE_ROOT}
 source_checkout=$(realpath "${2:?source checkout}")
 evidence_root=$(realpath -m "${3:?new /ssd1 evidence root}")
 case "$source_checkout" in /ssd1/*) ;; *) echo 'Source bundle must be under /ssd1' >&2; exit 2;; esac
 case "$evidence_root" in /ssd1/*/issue234|/ssd1/*/issue234/*) ;; *) echo 'Use a dedicated /ssd1/.../issue234 evidence root' >&2; exit 2;; esac
-case "$mode" in converter|validate|browser) ;; *) exit 2;; esac
+case "$mode" in converter|validate|native|runtime|browser) ;; *) exit 2;; esac
 test -f /.dockerenv && { echo 'Invoke the supervisor on the qualification server host' >&2; exit 2; }
 test "${QUAL_SERVER_RESERVATION:-}" = issue234 || { echo 'Parent must reserve this source/run before execution' >&2; exit 2; }
 sha=$(git -C "$source_checkout" rev-parse HEAD)
@@ -16,11 +17,18 @@ deps=${QUAL_NODE_DEPS:?Set the cached direct node_modules directory under /ssd1,
 node_image=${QUAL_NODE_IMAGE:-bim-qvm-tools:20261025}
 python_prefix=${QUAL_PYTHON_PREFIX:-/ssd1/bim-forge-qualification/qvm-20261025/python}
 python_deps=${QUAL_PYTHON_DEPS:-/ssd1/bim-forge-qualification/qvm-20261025/w2-runs/w2-source-unit-c30979d-20261025-01/python-deps}
-python_image=${QUAL_PYTHON_IMAGE:?Set the already cached IfcOpenShell-compatible Python image, no image pulls}
-python_bin=${QUAL_PYTHON_BIN:?Set the executable within the cached read-only Python prefix}
-test -d "$deps" && test -d "$python_prefix" && test -d "$python_deps"
+python_image=${QUAL_PYTHON_IMAGE:-}
+python_bin=${QUAL_PYTHON_BIN:-}
+if test "$mode" = converter; then
+  test -n "$python_image" && test -n "$python_bin" || { echo 'Set cached QUAL_PYTHON_IMAGE and QUAL_PYTHON_BIN, no pulls' >&2; exit 2; }
+  test -d "$python_prefix" && test -d "$python_deps"
+  for python_mount in "$python_prefix" "$python_deps"; do
+    case "$(realpath "$python_mount")" in /ssd1/*) ;; *) exit 2;; esac
+  done
+fi
+test -d "$deps"
 test -f "$deps/typescript/package.json" && test -f "$deps/playwright/package.json"
-for mount_source in "$deps" "$python_prefix" "$python_deps"; do
+for mount_source in "$deps"; do
   case "$(realpath "$mount_source")" in /ssd1/*) ;; *) echo 'Dependencies must stay on /ssd1' >&2; exit 2;; esac
 done
 mkdir -p "$evidence_root"
@@ -83,25 +91,53 @@ case "$mode" in
       --mount "type=bind,src=$run/changed-paths.txt,dst=/ssd1/run/changed-paths.txt,readonly" \
       "$node_image" sh -eu -c 'npm run validate; node scripts/validate-policy.ts --changed-files $(cat /ssd1/run/changed-paths.txt)' > "$run/raw.log" 2>&1 || exit_code=$?
     ;;
+  native)
+    docker image inspect "$node_image" > "$run/image.json" 2>> "$run/raw.log"
+    timeout --signal=TERM --kill-after=10s 90s docker run --name "$container_name" "${common[@]}" \
+      --env "QUAL_PROJECT_ID=${QUAL_PROJECT_ID:-00000234-0000-4000-8000-000000000234}" \
+      "$node_image" node experiments/geometry-qualification-230/receiving-native.ts > "$run/raw.log" 2>&1 || exit_code=$?
+    ;;
+  runtime)
+    converted=$(realpath "${QUAL_CONVERTER_ARTIFACTS:?successful converter attempt artifacts containing private probes}")
+    case "$converted" in /ssd1/*) ;; *) exit 2;; esac
+    test -f "$converted/private-product-probes.json"
+    test "$(cat "$(dirname "$converted")/exit-code.txt")" = 0 || { echo 'Converter attempt did not pass' >&2; exit 2; }
+    test "$(cat "$(dirname "$converted")/source-sha.txt")" = "$sha" || { echo 'Converter and runtime source commits differ' >&2; exit 2; }
+    docker image inspect "$node_image" > "$run/image.json" 2>> "$run/raw.log"
+    timeout --signal=TERM --kill-after=10s 180s docker run --name "$container_name" "${common[@]}" \
+      --mount "type=bind,src=$converted,dst=/ssd1/run/converter,readonly" \
+      --env QUAL_CONVERTER_ARTIFACTS=/ssd1/run/converter \
+      "$node_image" node --test --test-concurrency=1 experiments/geometry-qualification-230/geometry-runtime.test.ts > "$run/raw.log" 2>&1 || exit_code=$?
+    ;;
   browser)
     # Parent must run converter sidecar on this dedicated spool, in its OWN bounded container.
     # No provider connection or production preview is available to this process.
     fixtures=$(realpath "${QUAL_FIXTURES:?retained successful converter attempt fixtures directory}")
     spool=$(realpath "${QUAL_IFC_SPOOL:?parent-reserved dedicated issue234 sidecar spool}")
+    native_file=$(realpath "${QUAL_RECEIVING_PROJECT:?native-mode generated receiving-project.json, no candidate answers}")
+    native_directory=$(dirname "$native_file")
+    test "$(basename "$native_file")" = receiving-project.json
+    converter_attempt=$(dirname "$(dirname "$fixtures")")
+    native_attempt=$(dirname "$native_directory")
+    test "$(cat "$converter_attempt/exit-code.txt")" = 0
+    test "$(cat "$native_attempt/exit-code.txt")" = 0
+    test "$(cat "$converter_attempt/source-sha.txt")" = "$sha"
+    test "$(cat "$native_attempt/source-sha.txt")" = "$sha"
     browsers=${QUAL_BROWSERS:-/ssd1/bim-forge-qualification/compact213/browsers}
     browser_libraries=${QUAL_BROWSER_LIBS:-/ssd1/bim-forge-qualification/issue218/browser-deps/extracted}
-    for location in "$fixtures" "$spool" "$browsers" "$browser_libraries"; do
+    for location in "$fixtures" "$spool" "$native_file" "$browsers" "$browser_libraries"; do
       case "$location" in /ssd1/*) ;; *) exit 2;; esac
     done
     docker image inspect "$node_image" > "$run/image.json" 2>> "$run/raw.log"
     timeout --signal=TERM --kill-after=10s 300s docker run --name "$container_name" "${common[@]}" \
       --mount "type=bind,src=$run/bundle,dst=/src/dist" \
       --mount "type=bind,src=$fixtures,dst=/ssd1/run/fixtures,readonly" \
+      --mount "type=bind,src=$native_directory,dst=/ssd1/run/native,readonly" \
       --mount "type=bind,src=$spool,dst=/ssd1/run/spool" \
       --mount "type=bind,src=$browsers,dst=$browsers,readonly" \
       --mount "type=bind,src=$browser_libraries,dst=$browser_libraries,readonly" \
       --env "PLAYWRIGHT_BROWSERS_PATH=$browsers" --env "LD_LIBRARY_PATH=$browser_libraries/usr/lib/x86_64-linux-gnu" \
-      --env IFC_EXTERNAL_SPOOL=/ssd1/run/spool --env QUAL_FIXTURES=/ssd1/run/fixtures \
+      --env IFC_EXTERNAL_SPOOL=/ssd1/run/spool --env QUAL_FIXTURES=/ssd1/run/fixtures --env QUAL_RECEIVING_PROJECT=/ssd1/run/native/receiving-project.json \
       "$node_image" sh -eu -c 'npm run build:demo; node --test --test-concurrency=1 demo/geometry-workflow-browser.test.ts' > "$run/raw.log" 2>&1 || exit_code=$?
     ;;
 esac

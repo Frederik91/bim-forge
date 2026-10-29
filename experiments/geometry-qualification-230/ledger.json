@@ -7,9 +7,13 @@
   "attemptAllowance": 10,
   "runtimeAttemptsStarted": 0,
   "initialUnqualifiedCommit": "faa6a80274adce99aaf8758d786e52d082e17391",
+  "selectionUnqualifiedCommit": "423bfc37c0de68c9e4bee805eded8a5418e7f2ec",
+  "runtimeDependencyParent": "f5c3210f166ccfa4041aa6acc42dd41d6d833224",
   "qualification": {
     "fixtureGeneration": "not-run",
     "independentOracle": "not-run",
+    "receivingNativeGeneration": "not-run",
+    "geometryContextRuntime": "not-run",
     "converter": "not-run",
     "rootValidate": "not-run",
     "explicitChangedPaths": "not-run",
@@ -31,5 +35,6 @@
     "Use existing server's HTTP 200 project import response, confirmed by source read; no invented 201 assertion.",
     "Retain trace before browser closes; retained failure evidence must survive teardown."
   ],
+  "permissionUpdate": "2026-10-29 owner enabled direct access to the assigned checkout; no approval remains pending. No server/test restriction changed.",
   "delivery": "No PR until server root validation and all-changed-path policy pass. No merge/deploy authorized for this child."
 }

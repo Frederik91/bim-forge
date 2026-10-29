@@ -268,3 +268,31 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
   Construction/operation hard termination exists in the draft, but its default 60-second lifetime
   is shorter than the existing 120-second provider turn. Owners must align the request lifecycle
   and cleanup without disabling per-operation deadlines. No runtime timing claim is qualified.
+
+### Source integration after command approvals cleared
+
+- Owner cleared the expected command approvals. #233 confirmed that its geometry-evidence source
+  write had been waiting for approval and has now returned. Component sessions are progressing;
+  none was restarted. Server SSH still timed out on the fresh connectivity check.
+- Parent composed #231 `3cb9db6f15fa51b14b2f2123a6ff76c9e04d2b63`: asynchronous geometry session,
+  private worker message protocol, worker-based receipt replay and adversarial query tests.
+  Registered `npm run test:geometry` and included it in the standard `npm test` chain so these
+  checks cannot be omitted from the combined default suite. No dependency or lockfile change.
+- That committed core explicitly refuses zero-clearance satisfaction for volume overlap and
+  containment. Its tests and worker boundary remain unrun. Native readable-domain, semantic
+  discovery and extended-lifetime corrections are still in #231's next source handback; do not
+  infer that those fixes are present merely because the worker files have been integrated.
+
+### Combined source checkpoints (still unqualified)
+
+| Component | Exact locally composed source | Implementation present; runtime evidence still missing |
+| --- | --- | --- |
+| Geometry #231 | `3f459f5aa03c7cdc39f557730cdb37e501484c13` | Readable native domain, filtered relations, semantic discovery, domain receipts, worker lifecycle/concurrency and focused tests |
+| IFC updates #232 | `a7d9d1f081250d93d661cd7f9043632aad1b8a27` | Immutable versions, staged review/adopt/history/placement UI, availability-sensitive catalog token and synchronous publication guard |
+| Independent QA #234 | `52c5da0ff493880c45c0524b6fd17a0c5c6bd7c3` | Receiving-native generator, real-IFC versus withheld prism runtime probes, prerequisite-bound server runner and UI import source |
+
+`npm run test:linked-revisions` is registered in the default `npm test` chain alongside geometry.
+These are local Git composition checkpoints, not GitHub merges or passing qualification results.
+Two bounded read-only reviews examine the geometry boundary and IFC publication/history guard
+while parent completes proposal/server wiring. Reviewers may not run local tests or edit owned
+component files. All acceptance-evidence matrix entries above remain pending.

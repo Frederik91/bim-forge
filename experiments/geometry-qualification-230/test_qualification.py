@@ -15,7 +15,7 @@ import unittest
 
 import numpy as np
 from generate import generate, identifier, require_container
-from oracle import Prism, box, distance, doorway_wall, facts, frame, inside, l_solid, project, union_distance
+from oracle import Prism, box, distance, doorway_wall, facts, frame, l_solid, product_probes, project, union_distance
 
 # Conversion is the system under test, never the oracle.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ifc-link"))
@@ -48,7 +48,7 @@ class OracleControls(unittest.TestCase):
 
     def test_hand_computable_adversarial_controls(self):
         measured = facts()
-        expected = {"free-side-500mm": .5, "doorway-passage": .2, "touching": 0., "contained": 0., "above-lintel": .5, "l-recess": .5}
+        expected = {"free-side-500mm": .5, "doorway-passage": .2, "touching": 0., "contained": 0., "penetrating": 0., "above-lintel": .5, "l-recess": .5}
         self.assertEqual(set(measured), set(expected))
         for name, value in expected.items():
             with self.subTest(name=name):
@@ -78,6 +78,7 @@ class RealIFC(unittest.TestCase):
         cls.root = Path(os.environ["QUAL_ARTIFACTS"])
         cls.manifest = generate(cls.root / "fixtures")
         cls.repeated = generate(cls.root / "fixtures-repeat")
+        (cls.root / "private-product-probes.json").write_text(json.dumps(product_probes(), indent=2) + "\n")
         cls.counter = 0
 
     def convert(self, name, namespace="discipline-a", occurrence="occurrence-a", transform=None):
@@ -88,6 +89,8 @@ class RealIFC(unittest.TestCase):
             arguments["transform"] = transform
         manifest = build_link(self.root / "fixtures" / (name + ".ifc"), output, **arguments)
         self.assertEqual(verify_link(output), manifest)
+        with (self.root / "converted-catalog.jsonl").open("a") as stream:
+            stream.write(json.dumps({"directory": output.name, "source": manifest["source"], "occurrence": manifest["occurrence"]}) + "\n")
         return output, manifest, json.loads((output / "geometry.json").read_text())
 
     def test_deterministic_immutable_pack(self):
