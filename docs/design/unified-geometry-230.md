@@ -368,3 +368,32 @@ exact-pin contract. These are source reviews, not runtime receipts. Ordinary flo
 a known qualification blocker: #231 is adding a geometric nonpenetration certificate and controls;
 #233 must accept only certified contact while retaining ambiguous-contact/penetration rejection.
 All live-provider, converter/oracle, actual-image, browser, preservation and deployment gates remain pending.
+
+Root attempt 2 at `256071ce2ec5581e468d69d21e03e459d4e755bf` again passed strict lint,
+then exposed schema-metadata access, branded fixture IDs, an asynchronous restore check placed
+inside a synchronous parser, and incorrect parent fixture construction. #233 `beebdee` and parent
+`4f69430`/`1f31a63` correct those exact failures. No Node tests ran in attempt 2.
+
+Root attempt 3 at `f6ef6f9edc4080c66d40c7502a7c1bbfc11fbdd6` passed `npm run validate`
+(314 source files), explicit policy for all 96 changed paths, and `build:demo`. Geometry tests
+passed 28/28; IFC revision lifecycle/history/HTTP/cross-process tests passed 12/12. The actual
+ScriptBox evidence suites failed at registration because the package's closed schema subset
+does not support the canonical geometry tuple encoding (`additionalItems`/tuple `items`).
+The parent source fixtures also exposed an incorrect branch-name-as-revision lookup, now fixed.
+These results do not qualify proposal execution or acceptance. Every attempt and log is retained
+under the source-bound `run-…-component-03/artifacts` directory on SSD.
+
+The new Python revision-request tests separately passed 3/3 on their first attempt at `256071c`,
+using the same cached immutable tools image and the verified Python 3.11 venv entrypoint, read-only
+mounts, no network, 1 CPU / 1 GiB / no swap and SSD temp. Evidence is retained at
+`/ssd1/bim-forge-qualification/issue230/python-revision-request-01-256071ce2ec5581e468d69d21e03e459d4e755bf`.
+This is only the new `RevisionRequests` class, not a rerun of the exhausted worker218 suite.
+
+Further bounded static reviews found three acceptance gaps and two clearance-aggregation gaps:
+continuation drafts could lose inherited source evidence; measurements with a native endpoint
+on the `against` side could escape final-candidate replay; distant bounded open geometry could
+unnecessarily fail an unrestricted surroundings check; positive sub-tolerance clearance could
+promote ambiguous overlap; nearest certified contact could hide a second unresolved overlap.
+Owners #233/#231 are fixing these with targeted controls. No validator relaxation, evidence
+stripping, ambiguous-contact acceptance or ScriptBox runtime patch is an acceptable correction.
+Root attempts consumed: 3 of the owner's 10; no unchanged retry has run.
