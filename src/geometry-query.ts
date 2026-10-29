@@ -304,27 +304,35 @@ export class GeometryContext {
         }
       } else { const record = this.#resolve(request.against.ref); this.#objectRead(record, 'geometry', reads); candidates = [record]; }
       let nearest: GeometryRecord | null = null; let best: ReturnType<typeof measureShapes> | null = null; let tested = 0;
+      let aggregateRelation: ReturnType<typeof measureShapes>['relation'] | null = null;
+      const penetrates = (relation: string): boolean => ['volume-overlap', 'subject-inside', 'obstacle-inside'].includes(relation);
+      const severity = (relation: string): number => penetrates(relation) ? 3
+        : relation === 'contact-or-overlap' || relation === 'unknown' ? 2 : relation === 'contact' ? 1 : 0;
+      const combineRelation = (current: ReturnType<typeof measureShapes>['relation'] | null, next: ReturnType<typeof measureShapes>['relation']): ReturnType<typeof measureShapes>['relation'] =>
+        current === null || severity(next) > severity(current) ? next : current;
       let errorBound: number | null = subjectRecord?.description.capability.kind === 'mesh' ? subjectRecord.description.capability.sourceErrorMetres : 0;
       for (const record of candidates) {
-        work.tick(); if (!record.shape) { complete = false; continue; }
+        work.tick(); if (!record.shape) { complete = false; aggregateRelation = combineRelation(aggregateRelation, 'unknown'); continue; }
         const hit = measureShapes(subject, record.shape, work, this.#limits.maxPairs); tested++;
-        if (!hit.closed || hit.relation === 'unknown') complete = false;
+        aggregateRelation = combineRelation(aggregateRelation, hit.relation);
+        if (!hit.closed || hit.relation === 'unknown' || hit.relation === 'contact-or-overlap') complete = false;
         const capability = record.description.capability;
         if (capability.kind === 'mesh') errorBound = errorBound === null || capability.sourceErrorMetres === null ? null : errorBound + capability.sourceErrorMetres;
-        const severity = (relation: string): number => ['volume-overlap', 'subject-inside', 'obstacle-inside'].includes(relation) ? 3
-          : relation === 'contact-or-overlap' || relation === 'unknown' ? 2 : relation === 'contact' ? 1 : 0;
         if (!best || hit.distance < best.distance || (hit.distance === best.distance && severity(hit.relation) > severity(best.relation))) { best = hit; nearest = record; }
       }
-      const clearance = request.operation !== 'clearance' ? 'not-requested' : !complete ? 'unknown'
-        : !best ? 'satisfied-mesh' : best.relation === 'contact-or-overlap' && (request.clearanceMetres ?? 0) === 0 ? 'unknown'
-          : best.relation === 'volume-overlap' || best.relation === 'subject-inside' || best.relation === 'obstacle-inside' ? 'violated-mesh'
+      // Relation summarizes every tested obstacle. Nearest/witness remain the closest individual pair.
+      // A closer supporting surface never erases a different penetration or unresolved containment.
+      const relation = aggregateRelation ?? (complete ? 'empty-set' : 'unknown');
+      const clearance = request.operation !== 'clearance' ? 'not-requested' : penetrates(relation) ? 'violated-mesh'
+        : !complete || relation === 'contact-or-overlap' || relation === 'unknown' ? 'unknown'
+          : !best ? 'satisfied-mesh'
           : best.distance + NUMERIC_TOLERANCE_METRES >= (request.clearanceMetres ?? 0) ? 'satisfied-mesh' : 'violated-mesh';
       const measurement: GeometryMeasurement = { nearest: nearest?.description.ref ?? null, distanceMetres: best?.distance ?? null,
-        witness: best ? { subject: best.subject, obstacle: best.obstacle } : null, relation: best?.relation ?? (complete ? 'empty-set' : 'unknown'),
+        witness: best ? { subject: best.subject, obstacle: best.obstacle } : null, relation,
         clearance, numericToleranceMetres: NUMERIC_TOLERANCE_METRES, sourceErrorMetres: errorBound,
         exactness: 'prepared-representation', testedObjects: tested, domain: this.domain };
       return complete ? { kind: 'complete', value: measurement } : { kind: 'partial', value: measurement, reason: 'unsupported',
-        detail: 'Potentially relevant geometry is missing or has open/unsupported solid topology. Surface distance is not a solid-clearance certificate.' };
+        detail: 'Potentially relevant geometry is missing, has unsupported topology, or has unresolved contact/penetration. Surface distance is not a solid-clearance certificate.' };
     });
     return { ...outcome, receipt };
   }

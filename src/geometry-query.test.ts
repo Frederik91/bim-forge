@@ -176,6 +176,34 @@ test('sub-tolerance penetration, coincident solids and coplanar surface ambiguit
   assert.notEqual(value.relation, 'contact'); assert.equal(value.clearance, 'unknown');
 });
 
+test('ambiguous coincident solids never satisfy any positive gap, including one below numeric tolerance', () => {
+  const context = createGeometryContext(input()); const ref = discovered(context);
+  for (const clearanceMetres of [0, 1e-8, 1e-7, .5]) {
+    const result = context.measure({ subject: box({ min: [0, 0, 0], max: [1, 1, 1] }),
+      against: { kind: 'object', ref }, operation: 'clearance', clearanceMetres });
+    assert.equal(result.kind, 'partial');
+    const value = measurement(result);
+    assert.equal(value.relation, 'contact-or-overlap'); assert.equal(value.clearance, 'unknown');
+  }
+});
+
+test('a closest exterior contact never hides unresolved inset containment, in either evaluation order', () => {
+  const inset = cubeVertices.map(n => 1e-8 + n * (1 - 2e-8));
+  const exterior: GeometryMatrix = [[1, 0, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+  for (const [insideId, contactId] of [['a-inside', 'z-contact'], ['z-inside', 'a-contact']]) {
+    const context = createGeometryContext(input([prepared({ occurrence: insideId, vertices: inset }), prepared({ occurrence: contactId, matrix: exterior })]));
+    for (const operation of ['clearance', 'intersection']) {
+      const result = context.measure({ subject: box({ min: [0, 0, 0], max: [1, 1, 1] }),
+        against: { kind: 'query', query: {} }, operation, ...(operation === 'clearance' ? { clearanceMetres: 0 } : {}) });
+      assert.equal(result.kind, 'partial');
+      const value = measurement(result);
+      assert.equal(value.relation, 'contact-or-overlap'); assert.equal(value.distanceMetres, 0);
+      assert.equal(value.nearest?.kind === 'ifc' ? value.nearest.occurrenceId : null, contactId);
+      assert.equal(value.clearance, operation === 'clearance' ? 'unknown' : 'not-requested');
+    }
+  }
+});
+
 test('namespace and occurrence identity isolate duplicate GlobalIds and reject stale/cross-project handles', () => {
   const context = createGeometryContext(input([prepared(), prepared({ namespace: 'source-b' }), prepared({ occurrence: 'occ-b' })]));
   const page = context.query({ query: {} }); assert.ok(Check(GeometryQueryResultSchema, page)); assert.notEqual(page.kind, 'unavailable');

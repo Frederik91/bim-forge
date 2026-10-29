@@ -68,6 +68,9 @@ The plane check uses exact integer signs of the supplied binary floating-point c
 It requires vertices on the plane and strictly opposite nonzero sides for the two shapes.
 Surface contact can remain `contact-or-overlap` where solid penetration cannot be distinguished reliably.
 That state never certifies zero-gap nonpenetration. Explicit overlap and containment violate zero clearance too.
+An ambiguous relation blocks clearance for every requested gap, including positive gaps smaller than the numeric tolerance.
+For a query measurement, `relation` summarizes all candidate obstructions by severity. `nearest`, distance, and witnesses still describe the closest tested pair.
+An exterior support contact cannot hide another unresolved or penetrating candidate. Ambiguity makes the result partial even when the nearest pair is certified contact.
 Certified `contact` satisfies a requested minimum gap of zero. It does not satisfy a positive requested gap larger than the reported tolerance.
 The final-proposal surroundings policy can admit `contact` while continuing to reject `contact-or-overlap`, containment, and penetration.
 
@@ -200,6 +203,8 @@ Source inspection found the following defects before any test run:
 | A schema-valid changed reply could retain its prior receipt hash | Hash the canonical public payload and check it before collecting receipts | Four-method digest controls and private-worker transport mutation test authored; unrun |
 | TypeScript loses optional `query.level` narrowing inside a callback | Capture the validated level identity key before the callback | Parent attempt 1 failed TS2345; fix awaits parent rerun |
 | Floor-standing geometry could only return unresolved boundary contact | Certify nonpenetration through exact common supporting-plane signs on closed meshes; retain ambiguous fallback | Native slab and native/IFC wall controls authored; unrun |
+| Sub-tolerance positive gaps could promote ambiguous coincident geometry | Ambiguity blocks all clearance values and produces a partial result | Coincident gap matrix authored; unrun |
+| A closer contact could hide a different near-contained obstruction | Aggregate every obstruction independently of the closest pair | Both obstacle orders and clearance/intersection controls authored; unrun |
 
 ## Qualification record
 
