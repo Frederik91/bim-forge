@@ -17,8 +17,8 @@ deps=${QUAL_NODE_DEPS:?Set the cached direct node_modules directory under /ssd1,
 node_image=${QUAL_NODE_IMAGE:-bim-qvm-tools:20261025}
 python_prefix=${QUAL_PYTHON_PREFIX:-/ssd1/bim-forge-qualification/qvm-20261025/python}
 python_deps=${QUAL_PYTHON_DEPS:-/ssd1/bim-forge-qualification/qvm-20261025/w2-runs/w2-source-unit-c30979d-20261025-01/python-deps}
-python_image=${QUAL_PYTHON_IMAGE:-}
-python_bin=${QUAL_PYTHON_BIN:-}
+python_image=${QUAL_PYTHON_IMAGE:-sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff}
+python_bin=${QUAL_PYTHON_BIN:-/qualification/python/bin/python}
 if test "$mode" = converter; then
   test -n "$python_image" && test -n "$python_bin" || { echo 'Set cached QUAL_PYTHON_IMAGE and QUAL_PYTHON_BIN, no pulls' >&2; exit 2; }
   test -d "$python_prefix" && test -d "$python_deps"
@@ -64,7 +64,14 @@ mkdir -p "$run/source/node_modules" "$run/source/dist"
 git -C "$source_checkout" diff --name-only e43dd859a631ff8676d080011607447806beeb34 "$sha" > "$run/changed-paths.txt"
 tar -C "$run/source" --exclude=node_modules --exclude=dist -cf "$run/source.tar" .
 sha256sum "$run/source.tar" > "$run/source.tar.sha256"
-common=(--pull=never --rm --log-driver none --network none --read-only --cpus 2 --memory 3g --memory-swap 3g --pids-limit 256
+container_cpus=2
+container_memory=3g
+if test "$mode" = browser; then
+  # Parent separately reserves at most .5 CPU/1 GiB for the spool-only sidecar.
+  container_cpus=1.5
+  container_memory=2g
+fi
+common=(--pull=never --rm --log-driver none --network none --read-only --cpus "$container_cpus" --memory "$container_memory" --memory-swap "$container_memory" --pids-limit 256
   --cap-drop ALL --security-opt no-new-privileges --user "$(id -u):$(id -g)"
   --mount "type=bind,src=$run/source,dst=/src,readonly"
   --mount "type=bind,src=$deps,dst=/src/node_modules,readonly"
@@ -80,10 +87,11 @@ case "$mode" in
   converter)
     docker image inspect "$python_image" > "$run/image.json" 2>> "$run/raw.log"
     timeout --signal=TERM --kill-after=10s 240s docker run --name "$container_name" "${common[@]}" \
-      --mount "type=bind,src=$python_prefix,dst=$python_prefix,readonly" \
-      --mount "type=bind,src=$python_deps,dst=$python_deps,readonly" \
-      --env "PYTHONPATH=$python_deps" --env PYTHONDONTWRITEBYTECODE=1 \
-      "$python_image" "$python_bin" experiments/geometry-qualification-230/test_qualification.py > "$run/raw.log" 2>&1 || exit_code=$?
+      --mount "type=bind,src=$python_prefix,dst=/qualification/python,readonly" \
+      --mount "type=bind,src=$python_deps,dst=/python-deps,readonly" \
+      --env PYTHONPATH=/python-deps --env PYTHONDONTWRITEBYTECODE=1 \
+      --env OPENBLAS_NUM_THREADS=1 --env OMP_NUM_THREADS=1 --env MKL_NUM_THREADS=1 \
+      --entrypoint "$python_bin" "$python_image" experiments/geometry-qualification-230/test_qualification.py > "$run/raw.log" 2>&1 || exit_code=$?
     ;;
   validate)
     docker image inspect "$node_image" > "$run/image.json" 2>> "$run/raw.log"
