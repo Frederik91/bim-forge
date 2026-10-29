@@ -160,7 +160,7 @@ export class LinkedModelStore {
     const original = path.join(this.root, 'sources', originalSha256 + '.ifc');
     if (!fs.existsSync(original)) fs.writeFileSync(original, input.bytes, { flag: 'wx', mode: 0o400 });
     if (sha(readBounded(original, MAX_LINK_SOURCE_BYTES)) !== originalSha256) throw new Error('Retained IFC source is corrupt.');
-    const job: LinkedJob = { id, projectId: input.projectId, name: input.name, source: { namespace: state.namespace, revision: originalSha256, originalSha256 }, occurrence: state.occurrence, createdAt: Date.now(), kind: 'queued' };
+    const job: LinkedJob = { id, projectId: input.projectId, name: input.name, source: { namespace: state.namespace, revision: id, originalSha256 }, occurrence: state.occurrence, createdAt: Date.now(), kind: 'queued' };
     const directory = path.join(this.spool, id); fs.mkdirSync(directory, { mode: 0o700 });
     fs.writeFileSync(path.join(directory, 'input.ifc'), input.bytes, { flag: 'wx', mode: 0o400 });
     this.save(job);

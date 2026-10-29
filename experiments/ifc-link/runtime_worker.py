@@ -14,6 +14,7 @@ import time
 
 UUID = re.compile(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\Z")
 HASH = re.compile(r"[a-f0-9]{64}\Z")
+REVISION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 
 
 def atomic(filename, value):
@@ -102,8 +103,8 @@ def read_request(directory):
             or not all(isinstance(source[key], str) for key in source)
             or not isinstance(request['occurrence'], str)
             or request['id'] != directory.name or not UUID.fullmatch(request['occurrence'])
-            or not UUID.fullmatch(source['namespace']) or not HASH.fullmatch(source['revision'])
-            or source['revision'] != source['originalSha256']):
+            or not UUID.fullmatch(source['namespace']) or not REVISION.fullmatch(source['revision'])
+            or not HASH.fullmatch(source['originalSha256'])):
         raise ValueError('Invalid private worker request')
     return request
 
