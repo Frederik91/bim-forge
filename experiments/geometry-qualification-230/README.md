@@ -19,6 +19,15 @@ red/green receipt; inspect failures before retrying. It does not reopen worker21
 - `test_qualification.py`: real production converter as system under test; independent
   signed mesh volume, project-coordinate vertices and oblique ray parity inspect
   emitted triangles. Tests source hashes, immutable outputs and failed publication.
+- `geometry-runtime.test.ts`: consumes verified artifacts from a passing converter
+  attempt at the same commit and withheld analytical probes. Compares the actual
+  `GeometryContext` to the independent metre/mm/occurrence/distance controls. Retains
+  every result before asserting, including zero-clearance containment/penetration and
+  contact cases. Tests missing sources and meshless Level/Space semantic discovery.
+- `receiving-native.ts`: writes an ordinary broad named receiving hall/service room
+  at elevation 3.5 m, with shell, slab and doors. Existing validators and portable
+  roundtrip check the generated context. No assets, candidate locations, normals,
+  measurements, proposals, alternatives or oracle facts are generated into it.
 - `demo/geometry-workflow-browser.test.ts`: actual public UI/server/sidecar attach,
   read-only properties, hostile property as source text, unsent reference pin,
   original bytes, Main preservation, cross-project source refusal and phone layout.
@@ -27,6 +36,8 @@ red/green receipt; inspect failures before retrying. It does not reopen worker21
   Native reselection clears linked selection. A second property-version source with
   the same GlobalId keeps the first pin immutable and cannot mix old source binding
   with new properties. These assertions require the parent's linked-selection fix.
+  The receiving project enters through the existing `#import-file` UI. It uses a
+  fresh disposable UUID for live runs; the generator records the actual ID and hash.
   There is no fake provider or test-only product bypass. It does not qualify touch.
 - `requirements.tsv`: full matrix with narrow written checks and every pending row.
 - `run-server.sh`: bounded network-off/read-only server container supervisor; exact
@@ -46,6 +57,8 @@ Each unit (`m`, `mm`) has `v1`, `property`, `unrelated`, `wall-motion`,
 `unsupported`, `duplicate`, `huge` and `budget`. Two extra originals are malformed
 and over the source-byte limit. Total: 30 generated originals, no checked-in IFC
 output or claim that generation has run. A repeat generation must match hashes.
+Every source also contains a declared IFC space without a physical representation,
+so semantic discovery can be tested without inventing a solid for its context.
 
 Wall local dimensions are 6 x .3 x 3 m; a 1 x .3 x 2.2 m through-thickness void
 is actually removed, retaining a lintel. Wall volume is 4.74 m3, versus a filled
@@ -85,11 +98,22 @@ export QUAL_PYTHON_IMAGE='<already-cached-compatible-image>'
 export QUAL_PYTHON_BIN='/ssd1/bim-forge-qualification/qvm-20261025/python/bin/python'
 bash experiments/geometry-qualification-230/run-server.sh converter /ssd1/.../source /ssd1/.../issue234
 bash experiments/geometry-qualification-230/run-server.sh validate /ssd1/.../source /ssd1/.../issue234
+export QUAL_CONVERTER_ARTIFACTS='/ssd1/.../issue234/attempt-1-converter-<sha>/artifacts'
+bash experiments/geometry-qualification-230/run-server.sh runtime /ssd1/.../source /ssd1/.../issue234
+# Parent supplies and retains a new disposable project UUID for every live trial.
+export QUAL_PROJECT_ID='<fresh disposable UUID>'
+bash experiments/geometry-qualification-230/run-server.sh native /ssd1/.../source /ssd1/.../issue234
 # After successful conversion and parent-reserved isolated converter sidecar:
 export QUAL_FIXTURES='/ssd1/.../issue234/attempt-1-converter-<sha>/artifacts/fixtures'
+export QUAL_RECEIVING_PROJECT='/ssd1/.../issue234/attempt-4-native-<sha>/artifacts/receiving-project.json'
 export QUAL_IFC_SPOOL='/ssd1/.../issue234/browser-spool'
 bash experiments/geometry-qualification-230/run-server.sh browser /ssd1/.../source /ssd1/.../issue234
 ```
+
+The converter must pass before runtime consumption. Converter and native prerequisite
+receipts must both pass at the browser run's exact source commit. The native generator
+must pass separately before any real connected-provider trial; source planning alone
+does not establish that the receiving project is valid or importable.
 
 The browser container has no provider or external network. A separate parent-owned
 bounded converter container serves only that disposable spool. This runner never
@@ -106,15 +130,20 @@ after server validation; no draft PR has been opened from this unqualified state
 
 ## Pending interface work and limits
 
-#231's actual `src/geometry-contract.ts` at d48623b defines qualified refs, source
-capabilities, project points, queries, measurements/witnesses and trusted receipts.
-The runtime factory was not yet available when this fixture slice was written.
-Bind production results to independently exported candidate geometry and source hashes
-once it exists; importing its math into the oracle would invalidate independence.
+#231's actual `src/geometry-contract.ts` defines qualified refs, source capabilities,
+project points, queries, measurements/witnesses and trusted receipts. The unqualified
+`createGeometryContext` runtime was integrated from the parent at f5c3210. Host runtime
+tests consume its public interface as the system under test. Its geometry math is
+never imported by the oracle. Scoped `readableIds` exposure and receipt-domain binding
+remain pending a concrete implementation contract; the full private graph must still
+evaluate hosts/families while hidden IDs and relation targets remain unreadable.
 
 #232 proposed `snapshotCurrent`, `readVersion`, `withCatalogGuard`, including missing
-active sources, a short SQLite publication fence and thenable refusal. Browser
-candidate/adopt/history accessible names and route payloads are still pending.
+active sources, a short SQLite publication fence and thenable refusal. The announced
+route family adds `/catalog`, `/:linkId/candidate` with `X-Expected-Generation`,
+`/:linkId/versions/:jobId/review|original|adopt`, and `/:linkId/placement` under the
+existing project-authorized prefix. Source handback and accessible UI names remain
+pending; do not manufacture an adoption flow or treat an API-only replay as UI proof.
 Stale selection after adoption of a changed source/version/occurrence transform is
 also pending those real public UI operations. Independent attachments are separate
 sources, not a substitute for repeated replacement of one stable project link.
@@ -136,3 +165,10 @@ provider, proposal, race, restart, accepted alternative or As-is preservation ru
 been performed while the server is unreachable. Main-only attachment preservation is
 the narrow browser assertion. Review `requirements.tsv` before interpreting any green
 test as broader qualification.
+
+Preserving the previous native picker value under linked selection is a background
+navigation check. It does **not** prove correct submitted `selectedObjectIds` or
+proposal anchor semantics. The real connected-provider trial must inspect that payload
+and the host's geometry/evidence refs, with intentional native context retained and
+no implicit targeting of the previously selected Door. No fake worker is added here
+to hide the parent's outstanding anchor contract.

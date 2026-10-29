@@ -37,6 +37,21 @@ async function createProject(page: Page, base: string, name: string) {
   return { repository: await RoomRepository.restore(serialized), serialized };
 }
 
+async function importReceivingProject(page: Page, base: string, filename: string) {
+  const bytes = await fs.readFile(filename);
+  const expected = await RoomRepository.restore(bytes.toString('utf8'));
+  await page.goto(base);
+  const response = page.waitForResponse(item => item.url() === `${base}/api/projects` && item.request().method() === 'POST');
+  await page.locator('#import-file').setInputFiles({ name: 'Invented receiving context.json', mimeType: 'application/json', buffer: bytes });
+  const imported = await response;
+  assert.equal(imported.status(), 200);
+  const value: unknown = await imported.json();
+  const repository = await RoomRepository.restore(serializedProject(value));
+  assert.equal(repository.projectId, expected.projectId);
+  assert.equal(repository.serialize(), expected.serialize());
+  return { repository };
+}
+
 test('real IFC properties and historical context preserve Main and refuse cross-project reads', { timeout: 180_000 }, async t => {
   assert.equal(process.env.QUAL_SERVER_CONTAINER, 'issue234', 'Only run in the reserved network-off server container.');
   assert.ok(await fs.stat('/.dockerenv'));
@@ -44,6 +59,7 @@ test('real IFC properties and historical context preserve Main and refuse cross-
   const fixtures = required('QUAL_FIXTURES');
   const artifacts = required('QUAL_ARTIFACTS');
   const source = required('QUAL_SOURCE_SHA');
+  const nativeFile = required('QUAL_RECEIVING_PROJECT');
   assert.match(source, /^[a-f0-9]{40}$/);
   const fixture = await fs.readFile(path.join(fixtures, 'mm-v1.ifc'));
   const originalHash = createHash('sha256').update(fixture).digest('hex');
@@ -76,10 +92,10 @@ test('real IFC properties and historical context preserve Main and refuse cross-
       await context.tracing.stop({ path: path.join(artifacts, 'issue234-trace.zip') });
     } finally { await browser.close(); }
   });
-  const first = await createProject(page, base, 'Disposable issue234 real IFC');
+  const first = await importReceivingProject(page, base, nativeFile);
   const projectId = first.repository.projectId;
   const nativeDoor = first.repository.view(first.repository.head('main')).snapshot.entities.find(item => item.type === 'Door');
-  assert.ok(nativeDoor, 'The room fixture must provide a native door for the previous-selection trap.');
+  assert.ok(nativeDoor, 'The receiving fixture must provide a native door for the previous-selection trap.');
   await page.locator('.model-object-picker').selectOption(nativeDoor.id);
   assert.ok((await page.locator('#selection-context-label').innerText()).includes(nativeDoor.name));
   assert.equal(await page.locator('#selection-move').isHidden(), false);
@@ -187,7 +203,7 @@ test('real IFC properties and historical context preserve Main and refuse cross-
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(artifacts, 'issue234-browser-receipt.json'), JSON.stringify({ source, originalHash,
     projectId, secondProjectId: second.repository.projectId, mainUnchanged: true,
-    propertyHash, selectionContext: 'IFC Ask pins exact selected source/version/occurrence/transform; native reselect clears linked selection; independent source preserves prior pin',
+    propertyHash, receivingContextImportedVia: '#import-file', selectionContext: 'IFC Ask pins exact selected source/version/occurrence/transform; native reselect clears linked selection; independent source preserves prior pin',
     qualification: 'attach/read-only-properties/selection-action-strip/unsent-context/cross-project-original-and-prepared/layout only',
-    pending: ['same-link source/version/transform stale selection after adoption', 'candidate/adopt/history', 'restart/cancel/concurrent adoption', 'trusted freshness/acceptance races', 'connected-provider 500mm proposal', 'As-is and alternative acceptance'] }, null, 2) + '\n');
+    pending: ['actual submitted selectedObjectIds/anchor semantics with linked selection', 'same-link source/version/transform stale selection after adoption', 'candidate/adopt/history', 'restart/cancel/concurrent adoption', 'trusted freshness/acceptance races', 'connected-provider 500mm proposal', 'As-is and alternative acceptance'] }, null, 2) + '\n');
 });

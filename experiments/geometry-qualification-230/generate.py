@@ -58,6 +58,9 @@ class Writer:
                                ObjectPlacement=self.placement(building.ObjectPlacement, (2, -1, .5), -15))
         for key, parent, child in (("site", project, site), ("building", site, building), ("floor", building, self.storey)):
             self.root("IfcRelAggregates", "aggregate-" + key, RelatingObject=parent, RelatedObjects=[child])
+        space = self.root("IfcSpace", "context-space", Name="Invented context space", CompositionType="ELEMENT",
+                          ObjectPlacement=self.placement(self.storey.ObjectPlacement))
+        self.root("IfcRelAggregates", "floor-context-space", RelatingObject=self.storey, RelatedObjects=[space])
         self.products = []
 
     def entity(self, kind, **attributes):
