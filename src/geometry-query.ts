@@ -214,9 +214,10 @@ export class GeometryContext {
         || (query.classes && !query.classes.includes(d.class)) || (query.categories && !query.categories.includes(d.category))) continue;
       let unknownLevel = false;
       if (query.level) {
+        const levelKey = geometryIdentityKey(query.level);
         const levels = record.relations.filter(relation => relation.kind === 'level');
         if (!levels.length) unknownLevel = true;
-        else if (!levels.some(relation => geometryIdentityKey(relation.target) === geometryIdentityKey(query.level))) continue;
+        else if (!levels.some(relation => geometryIdentityKey(relation.target) === levelKey)) continue;
       }
       if (query.region && d.bounds && !boundsOverlap(query.region, d.bounds)) continue;
       records.push(record); if (((query.region !== undefined || purpose === 'measurement') && !record.shape) || unknownLevel) uncertain++;
