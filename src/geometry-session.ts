@@ -3,7 +3,7 @@ import { Check } from 'typebox/value';
 import { GeometryDescriptionResultSchema, GeometryMeasureResultSchema, GeometryQueryResultSchema, GeometryRelationsResultSchema,
   geometryPlainData } from './geometry-contract.ts';
 import type { GeometryDescriptionResult, GeometryMeasureResult, GeometryQueryResult, GeometryReceipt, GeometryRef, GeometryRelationsResult } from './geometry-contract.ts';
-import { geometryDigest } from './geometry-query.ts';
+import { geometryDigest, geometryPublicResultDigest } from './geometry-query.ts';
 import type { GeometryContextInput, GeometryFreshness } from './geometry-query.ts';
 
 export type GeometrySessionInput = Omit<GeometryContextInput, 'now'>;
@@ -13,6 +13,13 @@ export class GeometrySessionError extends Error {
   constructor(reason: GeometrySessionError['reason'], message: string) { super(message); this.reason = reason; }
 }
 type Reply = GeometryDescriptionResult | GeometryQueryResult | GeometryRelationsResult | GeometryMeasureResult;
+/** Applied only after method-specific schema validation. A mismatched payload cannot publish its receipt. */
+export function geometryReplyMatchesReceipt(reply: Reply, expected: { projectId: string; operationDigest: string }): boolean {
+  try {
+    return reply.receipt.projectId === expected.projectId && reply.receipt.operationDigest === expected.operationDigest
+      && reply.receipt.status === reply.kind && reply.receipt.resultDigest === geometryPublicResultDigest(reply);
+  } catch { return false; }
+}
 type Pending = { id: number; method: string; digest: string; resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
 const boundedTime = (value: number | undefined, fallback: number, maximum: number): number => {
   const time = value ?? fallback;
@@ -114,7 +121,7 @@ export class GeometrySession {
         this.#pending = { id, method, digest, resolve, reject, timer };
         this.#worker.postMessage({ id, method, input: value });
       });
-      if (!isResult(reply) || reply.receipt.projectId !== this.#projectId || reply.receipt.operationDigest !== digest || reply.receipt.status !== reply.kind) {
+      if (!isResult(reply) || !geometryReplyMatchesReceipt(reply, { projectId: this.#projectId, operationDigest: digest })) {
         this.#fail(new GeometrySessionError('invalid-reply', 'Geometry result/receipt does not match the dispatched operation.')); throw this.#failure;
       }
       this.#receipts.push(structuredClone(reply.receipt)); return reply;
