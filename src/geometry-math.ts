@@ -174,7 +174,59 @@ export function pointInside(point: Vec3, shape: GeometryShape, work: GeometryWor
     return Math.abs(angle) > 2 * Math.PI;
   });
 }
-export type ShapeMeasurement = Witness & { relation: 'separated' | 'subject-inside' | 'obstacle-inside' | 'volume-overlap' | 'contact-or-overlap' | 'unknown'; closed: boolean };
+type Dyadic = { integer: bigint; exponent: number };
+type ExactPoint = readonly [Dyadic, Dyadic, Dyadic];
+const floatBits = new DataView(new ArrayBuffer(8));
+function dyadic(value: number): Dyadic {
+  floatBits.setFloat64(0, value);
+  const bits = floatBits.getBigUint64(0);
+  const exponent = Number((bits >> 52n) & 2047n);
+  const fraction = bits & ((1n << 52n) - 1n);
+  const integer = exponent === 0 ? fraction : (1n << 52n) | fraction;
+  if (integer === 0n) return { integer: 0n, exponent: 0 };
+  return { integer: bits >> 63n ? -integer : integer, exponent: exponent === 0 ? -1074 : exponent - 1075 };
+}
+/** A common supporting plane proves disjoint interiors even for non-convex, disconnected closed meshes.
+ * Signs use exact integer arithmetic on the supplied IEEE coordinates. No epsilon can turn penetration into contact.
+ * Failure to find a plane is inconclusive, not proof of penetration. */
+function supportingContactPlane(subject: GeometryShape, obstacle: GeometryShape, work: GeometryWork): boolean {
+  const exactPoints = new Map<Vec3, ExactPoint>();
+  const exact = (point: Vec3): ExactPoint => {
+    const cached = exactPoints.get(point); if (cached) return cached;
+    const result: ExactPoint = [dyadic(point[0]), dyadic(point[1]), dyadic(point[2])]; exactPoints.set(point, result); return result;
+  };
+  const pointsA = [...new Set(subject.meshes.flatMap(mesh => mesh.triangles.flatMap(triangle => [...triangle])))];
+  const pointsB = [...new Set(obstacle.meshes.flatMap(mesh => mesh.triangles.flatMap(triangle => [...triangle])))];
+  let planes = 0;
+  for (const shape of [subject, obstacle]) for (const mesh of shape.meshes) for (const triangle of mesh.triangles) {
+    work.tick(); if (++planes > 64) return false;
+    const vertices = triangle.map(exact);
+    const exponent = Math.min(...vertices.flatMap(point => point.map(value => value.exponent)));
+    const integers = vertices.map(point => point.map(value => value.integer << BigInt(value.exponent - exponent)));
+    const origin = integers[0];
+    const u = integers[1].map((value, i) => value - origin[i]); const v = integers[2].map((value, i) => value - origin[i]);
+    const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    if (normal.every(value => value === 0n)) continue;
+    const sides = (points: Vec3[]): { positive: boolean; negative: boolean; boundary: boolean } => {
+      let positive = false; let negative = false; let boundary = false;
+      for (const point of points) {
+        work.tick(16);
+        const values = exact(point); const common = Math.min(exponent, ...values.map(value => value.exponent));
+        const offset = BigInt(exponent - common);
+        const delta = values.map((value, i) => (value.integer << BigInt(value.exponent - common)) - (origin[i] << offset));
+        const sign = normal[0] * delta[0] + normal[1] * delta[1] + normal[2] * delta[2];
+        positive ||= sign > 0n; negative ||= sign < 0n; boundary ||= sign === 0n;
+        if (positive && negative) break;
+      }
+      return { positive, negative, boundary };
+    };
+    const a = sides(pointsA); if ((a.positive && a.negative) || !a.boundary) continue;
+    const b = sides(pointsB); if (!b.boundary) continue;
+    if ((a.positive && !a.negative && b.negative && !b.positive) || (a.negative && !a.positive && b.positive && !b.negative)) return true;
+  }
+  return false;
+}
+export type ShapeMeasurement = Witness & { relation: 'separated' | 'contact' | 'subject-inside' | 'obstacle-inside' | 'volume-overlap' | 'contact-or-overlap' | 'unknown'; closed: boolean };
 export function measureShapes(subject: GeometryShape, obstacle: GeometryShape, work: GeometryWork, maxPairs: number): ShapeMeasurement {
   const a = tree(subject.meshes.flatMap(mesh => mesh.triangles), work); const b = tree(obstacle.meshes.flatMap(mesh => mesh.triangles), work);
   let best: Witness = { distance: Infinity, subject: subject.bounds.min, obstacle: obstacle.bounds.min, crossing: false };
@@ -197,8 +249,10 @@ export function measureShapes(subject: GeometryShape, obstacle: GeometryShape, w
   }
   const closed = subject.meshes.every(mesh => mesh.closed) && obstacle.meshes.every(mesh => mesh.closed);
   if (!closed) return { ...best, relation: best.distance <= NUMERIC_TOLERANCE_METRES ? 'contact-or-overlap' : 'unknown', closed };
-  if (best.distance <= NUMERIC_TOLERANCE_METRES) return { ...best, distance: 0,
-    relation: best.crossing ? 'volume-overlap' : 'contact-or-overlap', closed };
+  if (best.distance <= NUMERIC_TOLERANCE_METRES) {
+    if (supportingContactPlane(subject, obstacle, work)) return { ...best, relation: 'contact', closed };
+    return { ...best, relation: best.crossing ? 'volume-overlap' : 'contact-or-overlap', closed };
+  }
   // With disjoint boundaries, each connected component has constant containment. Check every mesh component vertex.
   // Checking every triangle vertex also handles disconnected shells in a single converted mesh.
   let anySubject = false; let allSubject = true; let anyObstacle = false; let allObstacle = true;

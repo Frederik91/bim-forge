@@ -287,7 +287,7 @@ export class ModelViewer {
     }
     this.selection.value = next.selectedId;
     if (this.root.parentElement !== host) host.replaceChildren(this.root);
-    this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison); this.model.select(next.selectedId);
+    this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison); this.model.select(this.linkedSelection ? '' : next.selectedId);
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
     if (focusChanged || levelChanged) this.model.frame(state.focusId);
     this.model.setCutaway(state.cutaway);
@@ -302,7 +302,8 @@ export class ModelViewer {
     this.root.dataset.linkedModels = String(links.filter(link => link.visible).length);
   }
   selectLinkedReference(selection: LinkedSelection | null): void {
-    this.linkedSelection = selection; this.linked.select(selection); this.updateCaption(); this.frames = 3;
+    this.linkedSelection = selection; this.linked.select(selection);
+    this.model.select(selection ? '' : this.state?.selectedId ?? ''); this.updateCaption(); this.frames = 3;
   }
   frameLinkedModels(selection: LinkedSelection | null = null): void {
     const meshes = this.model.scene.meshes.filter(mesh => mesh.isEnabled() && mesh.name.startsWith('ifc:')

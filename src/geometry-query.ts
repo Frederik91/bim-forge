@@ -214,9 +214,10 @@ export class GeometryContext {
         || (query.classes && !query.classes.includes(d.class)) || (query.categories && !query.categories.includes(d.category))) continue;
       let unknownLevel = false;
       if (query.level) {
+        const levelKey = geometryIdentityKey(query.level);
         const levels = record.relations.filter(relation => relation.kind === 'level');
         if (!levels.length) unknownLevel = true;
-        else if (!levels.some(relation => geometryIdentityKey(relation.target) === geometryIdentityKey(query.level))) continue;
+        else if (!levels.some(relation => geometryIdentityKey(relation.target) === levelKey)) continue;
       }
       if (query.region && d.bounds && !boundsOverlap(query.region, d.bounds)) continue;
       records.push(record); if (((query.region !== undefined || purpose === 'measurement') && !record.shape) || unknownLevel) uncertain++;
@@ -310,8 +311,9 @@ export class GeometryContext {
         if (!hit.closed || hit.relation === 'unknown') complete = false;
         const capability = record.description.capability;
         if (capability.kind === 'mesh') errorBound = errorBound === null || capability.sourceErrorMetres === null ? null : errorBound + capability.sourceErrorMetres;
-        const penetrates = (relation: string): boolean => ['volume-overlap', 'subject-inside', 'obstacle-inside'].includes(relation);
-        if (!best || hit.distance < best.distance || (hit.distance === best.distance && penetrates(hit.relation) && !penetrates(best.relation))) { best = hit; nearest = record; }
+        const severity = (relation: string): number => ['volume-overlap', 'subject-inside', 'obstacle-inside'].includes(relation) ? 3
+          : relation === 'contact-or-overlap' || relation === 'unknown' ? 2 : relation === 'contact' ? 1 : 0;
+        if (!best || hit.distance < best.distance || (hit.distance === best.distance && severity(hit.relation) > severity(best.relation))) { best = hit; nearest = record; }
       }
       const clearance = request.operation !== 'clearance' ? 'not-requested' : !complete ? 'unknown'
         : !best ? 'satisfied-mesh' : best.relation === 'contact-or-overlap' && (request.clearanceMetres ?? 0) === 0 ? 'unknown'

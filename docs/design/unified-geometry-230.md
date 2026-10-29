@@ -287,8 +287,8 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
 
 | Component | Exact locally composed source | Implementation present; runtime evidence still missing |
 | --- | --- | --- |
-| Geometry #231 | `c4b4ba0e0589393b863961560134b857f2285d7e` | Readable native domain, filtered relations, semantic discovery, domain receipts, worker lifecycle/concurrency and focused tests |
-| IFC updates #232 | `50f862e5a50fafc26e6fc54a8ad80a4523b8250d` | Immutable versions, staged review/adopt/history/placement UI, availability-sensitive catalog token, publication guard and reviewed retry/resolution fixes |
+| Geometry #231 | `c150e715ccb9a60f5c85f31ba4f07587c95b9da3` | Readable native domain, filtered relations, discovery/measurement receipts, canonical public-result verification, worker lifecycle/concurrency and focused tests |
+| IFC updates #232 | `8556f7d53eca98d799a7fb883b35bf90c4747d90` | Immutable unique versions, retained legacy pins, staged review/adopt/history/placement UI, catalog guard and retry/resolution fixes |
 | Independent QA #234 | `52c5da0ff493880c45c0524b6fd17a0c5c6bd7c3` | Receiving-native generator, real-IFC versus withheld prism runtime probes, prerequisite-bound server runner and UI import source |
 
 `npm run test:linked-revisions` is registered in the default `npm test` chain alongside geometry.
@@ -304,11 +304,12 @@ The bounded static reviews found five additional issues, with no runtime reprodu
   #232 source `50f862e` fixes both and adds controls; those controls remain unrun.
 - Geometry query exclusions could discard stale pins by reducing them to identity; discovery
   receipts consumed unreturned geometry; worker replies did not verify their public payload
-  against the receipt result digest. #231 owns these corrections and their focused controls.
+  against the receipt result digest. #231 source `c150e71` adds explicit-pin checks, separate
+  discovery/measurement observations and verified public result digests, with unrun controls.
 - Source-version identity must use the immutable version/job ID, with `originalSha256` reserved
   for integrity and content deduplication. Reusing the content hash as the revision token makes
   exact historical preparation identity ambiguous after repeated unchanged exports. #232 is
-  updating the unpublished producer/private-worker contract and tests together. Exact-base
+  source `8556f7d` updates the unpublished producer/private-worker contract and tests together. Exact-base
   inspection corrected an earlier parent assumption: pre-feature jobs used the content hash
   as revision. Preserve those retained records/pins; the worker validates one general bounded
   revision token, which naturally accepts existing hashes and new IDs. No live data conversion
@@ -329,3 +330,41 @@ array, avoiding a Node-only dependency in the browser and allowing the agent to 
 current source identity after hashing; Send stays gated until preparation/upload completes.
 This changes no accepted model or approval authority. Independent browser assertions are being
 extended; the new UI behavior has not yet been built or exercised on the server.
+
+Primary IFC selection now clears the native 3D highlight and omits the preceding implicit native
+object from a new request. Explicit native visual attachments and room/level navigation context
+are retained. The matching #233 input contract must allow deliberate project-context requests
+with no selected native objects; a formerly nonempty selection lost during rebase must not
+silently broaden into project context. That parser/rebase change and actual sent-payload UI
+evidence are still pending, so the source combination is not ready for deployment.
+
+### Restored server and first combined qualification
+
+Owner cleared the expected command approvals. SSH recovered on 29 October; the preview remains
+at its prior executable. The server has approximately 4.6 GiB available memory and almost no
+free swap, so parent reserves one serial 2 CPU / 3 GiB / no-swap qualification slot. Source,
+dependencies and containers remain read-only/network-off with writable evidence/temp on SSD.
+
+Root attempt 1 at `88daaa82e38f3491d62b0866ba458bbf0bbada2c` passed strict lint (306 source
+files), then failed TypeScript at `src/geometry-query.ts:219`: narrowing of an optional level
+reference did not survive a callback. No tests ran. Logs and stopped container are retained in
+`/ssd1/bim-forge-qualification/issue230/run-88daaa82e38f3491d62b0866ba458bbf0bbada2c-component-01`.
+Source correction `e7b24a5` captures the validated identity before the callback; it changes no
+validator or semantics and awaits rerun.
+
+Parent has composed #233 through `bfb9db5`, including explicit empty native-selection semantics,
+browser-safe evidence restoration, trusted request-attempt receipts, final-candidate measurement
+replay, and source-guarded acceptance. `test:geometry-evidence` registers its two test files plus
+the parent provider tests in default `npm test`. The server injects `demo/geometry-source.ts`;
+the production image allowlist and COPY include that module. Native-only requests keep the same
+interface. Authorization precedes source reads. Only consumed historical references are resolved,
+with one preparation cached per version/placement during each snapshot; all unavailable active
+links remain explicit. #232 `2b783b1` supplies the exact retained-pin lookup without requiring a
+caller-supplied matrix or loading every historical mesh.
+
+Independent static follow-ups confirm the prior three geometry and two IFC findings are
+addressed in source. A separate provider review found no concrete defect given the source owner's
+exact-pin contract. These are source reviews, not runtime receipts. Ordinary floor contact remains
+a known qualification blocker: #231 is adding a geometric nonpenetration certificate and controls;
+#233 must accept only certified contact while retaining ambiguous-contact/penetration rejection.
+All live-provider, converter/oracle, actual-image, browser, preservation and deployment gates remain pending.

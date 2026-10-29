@@ -3,6 +3,7 @@
 !package-lock.json
 !demo/
 !demo/server.ts
+!demo/geometry-source.ts
 !demo/change-requests.ts
 !demo/request-source-store.ts
 !demo/project-evidence-store.ts

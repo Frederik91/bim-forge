@@ -13,6 +13,7 @@ import type { LinkedPrepared } from './linked-model.ts';
 import { validateSnapshot } from './room-model.ts';
 import { createGeometrySession, geometryReplyMatchesReceipt, GeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
 import { residentialFloor } from './residential-floor.ts';
+import { multiStoreySnapshot } from './multi-storey-house.ts';
 
 const projectId = '00000000-0000-4000-8000-000000000231';
 const identity: GeometryMatrix = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
@@ -113,17 +114,66 @@ test('independent triangulated opening boundary preserves passage and lintel dis
   assert.equal(result.relation, 'separated'); assert.ok(Math.abs((result.distanceMetres ?? 0) - .5) < 1e-8); assert.equal(result.clearance, 'satisfied-mesh');
 });
 
-test('zero-clearance never blesses overlap/containment; touching is distinct and conservatively unresolved', () => {
+test('zero-clearance rejects overlap/containment and permits only proven boundary contact', () => {
   const context = createGeometryContext(input()); const ref = discovered(context);
   for (const [bounds, expected] of [
     [{ min: [.2, .2, .2], max: [.8, .8, .8] }, 'violated-mesh'],
     [{ min: [.5, .2, .2], max: [1.5, .8, .8] }, 'violated-mesh'],
-    [{ min: [1, 0, 0], max: [2, 1, 1] }, 'unknown'],
+    [{ min: [1, 0, 0], max: [2, 1, 1] }, 'satisfied-mesh'],
     [{ min: [1.1, 0, 0], max: [2, 1, 1] }, 'satisfied-mesh'],
   ] satisfies [GeometryBounds, string][]) {
     const result = measurement(context.measure({ subject: box(bounds), against: { kind: 'object', ref }, operation: 'clearance', clearanceMetres: 0 }));
     assert.equal(result.clearance, expected);
   }
+});
+
+test('an evaluated native asset can stand on a native slab without a penetration or clearance waiver', () => {
+  const base = multiStoreySnapshot();
+  const snapshot = validateSnapshot({ ...base, entities: [...base.entities,
+    { id: 'contact-family', type: 'AssetFamily', name: 'Closed box', description: 'Synthetic contact fixture',
+      parts: [{ id: 'body', kind: 'box', min: [0, 0, 0], size: [1, 1, 1], color: '#336699' }] },
+    { id: 'standing-box', type: 'AssetInstance', name: 'Standing box', familyId: 'contact-family', position: [6, 4.8],
+      rotationDeg: 0, size: { width: .5, depth: .5, height: .5 }, placement: { kind: 'room', roomId: 'level-ground-east' } },
+  ] });
+  const context = createGeometryContext({ ...input([]), native: { snapshot, revisionId, target: { kind: 'main' } } });
+  const ref = (entityId: string): GeometryRef => ({ kind: 'native', projectId, revisionId, target: { kind: 'main' }, entityId });
+  const request = { subject: { kind: 'object', ref: ref('standing-box') }, against: { kind: 'object', ref: ref('level-ground-slab') }, operation: 'clearance', clearanceMetres: 0 };
+  const result = context.measure(request); assert.equal(result.kind, 'complete');
+  const value = measurement(result); assert.equal(value.relation, 'contact'); assert.equal(value.clearance, 'satisfied-mesh');
+  const witness = value.witness;
+  assert.ok((value.distanceMetres ?? 1) < 1e-10); assert.ok(witness);
+  assert.ok(Math.abs(Math.hypot(...witness.subject.map((n, i) => n - witness.obstacle[i])) - (value.distanceMetres ?? -1)) < 1e-10);
+  const requiredGap = measurement(context.measure({ ...request, clearanceMetres: .5 }));
+  assert.equal(requiredGap.clearance, 'violated-mesh');
+  const penetration = measurement(context.measure({ subject: box({ min: [5.75, 4.55, -.01], max: [6.25, 5.05, .49] }),
+    against: request.against, operation: 'clearance', clearanceMetres: 0 }));
+  assert.notEqual(penetration.relation, 'contact'); assert.notEqual(penetration.clearance, 'satisfied-mesh');
+});
+
+test('native and rotated IFC wall boundary contact uses actual mesh supporting planes', () => {
+  const native = validateSnapshot({ units: 'm', entities: [{ id: 'wall', type: 'Wall', name: 'Native', start: [0, .5], end: [1, .5], thickness: 1, height: 1 }], relationships: [] });
+  const context = createGeometryContext({ ...input([]), native: { snapshot: native, revisionId, target: { kind: 'main' } } });
+  const subject = box({ min: [1, 0, 0], max: [2, 1, 1] });
+  const value = measurement(context.measure({ subject, against: { kind: 'object', ref: discovered(context) }, operation: 'clearance', clearanceMetres: 0 }));
+  assert.equal(value.relation, 'contact'); assert.equal(value.clearance, 'satisfied-mesh');
+  const angle = 37 * Math.PI / 180; const c = Math.cos(angle); const s = Math.sin(angle);
+  const matrix: GeometryMatrix = [[c, -s, 0, 5], [s, c, 0, -3], [0, 0, 1, 1], [0, 0, 0, 1]];
+  const rotated = createGeometryContext(input([prepared({ productMatrix: matrix })]));
+  const rotatedValue = measurement(rotated.measure({ subject: { ...subject, localToProject: matrix },
+    against: { kind: 'object', ref: discovered(rotated) }, operation: 'clearance', clearanceMetres: 0 }));
+  assert.equal(rotatedValue.relation, 'contact'); assert.equal(rotatedValue.clearance, 'satisfied-mesh');
+});
+
+test('sub-tolerance penetration, coincident solids and coplanar surface ambiguity never become certified contact', () => {
+  const context = createGeometryContext(input()); const ref = discovered(context);
+  for (const bounds of [{ min: [1 - 1e-10, 0, 0], max: [2, 1, 1] }, { min: [0, 0, 0], max: [1, 1, 1] }] satisfies GeometryBounds[]) {
+    const value = measurement(context.measure({ subject: box(bounds), against: { kind: 'object', ref }, operation: 'clearance', clearanceMetres: 0 }));
+    assert.notEqual(value.relation, 'contact'); assert.notEqual(value.clearance, 'satisfied-mesh');
+  }
+  const coplanar = createGeometryContext(input([prepared({ triangles: [0, 2, 1, 0, 1, 2] })]));
+  const value = measurement(coplanar.measure({ subject: box({ min: [0, 0, 0], max: [1, 1, 1] }),
+    against: { kind: 'object', ref: discovered(coplanar) }, operation: 'clearance', clearanceMetres: 0 }));
+  assert.notEqual(value.relation, 'contact'); assert.equal(value.clearance, 'unknown');
 });
 
 test('namespace and occurrence identity isolate duplicate GlobalIds and reject stale/cross-project handles', () => {

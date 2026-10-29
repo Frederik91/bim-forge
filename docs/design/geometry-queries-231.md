@@ -5,8 +5,9 @@ Component [#231](https://github.com/Frederik91/bim-forge/issues/231) of
 Implementation base: `f4285c644e52b5bdba8e4f6afeb6e099bc02b891`.
 This component changes derived read records and calculations. Native model delta is empty.
 
-Qualification status on 2026-10-29: **unqualified**. The server was unreachable at integration kickoff.
-No local build or test substitutes were run. No issue231 test container has run.
+Qualification status on 2026-10-29: **unqualified**. The server was unreachable at integration kickoff and connectivity later returned.
+The parent reserves the sole serial qualification slot. No local build or test substitutes were run.
+Parent integration attempt 1 passed strict lint on 306 sources, then failed TypeScript checking before component tests ran.
 The source and test assertions below describe implementation intent until server evidence confirms them.
 
 ## Host construction and authority
@@ -62,8 +63,13 @@ Operations are `distance`, `clearance`, `intersection`, and `containment`.
 Containment requires one explicit container object. Union containment across a query is unsupported.
 A clearance query region must enclose the candidate expanded by the requested gap and numeric tolerance.
 Results identify witnesses, distance, relation, numeric tolerance, representation accuracy, and the tested domain.
+`contact` means closed-mesh boundaries are within the reported distance tolerance and a common supporting face plane proves disjoint interiors.
+The plane check uses exact integer signs of the supplied binary floating-point coordinates, not AABB overlap or an epsilon penetration allowance.
+It requires vertices on the plane and strictly opposite nonzero sides for the two shapes.
 Surface contact can remain `contact-or-overlap` where solid penetration cannot be distinguished reliably.
 That state never certifies zero-gap nonpenetration. Explicit overlap and containment violate zero clearance too.
+Certified `contact` satisfies a requested minimum gap of zero. It does not satisfy a positive requested gap larger than the reported tolerance.
+The final-proposal surroundings policy can admit `contact` while continuing to reject `contact-or-overlap`, containment, and penetration.
 
 ## Generic placement sequence
 
@@ -153,6 +159,9 @@ It is not an exact original-solid or regulatory certificate.
 Closed topology uses exact-coordinate welding and paired oriented edges.
 It does not prove that the mesh is free of self intersections.
 Open or unsupported topology produces partial solid measurements rather than inferred containment.
+The contact certificate checks at most 64 actual triangle face planes and charges exact coordinate work to the existing budget.
+Failure to find a plane remains ambiguous. In particular, edge contacts without a common supporting face plane and some non-convex contacts are not certified.
+Exact signs do not qualify original source tessellation, load capacity, contact area, or physical support stability.
 Native furniture reuses display surfaces, which can be intentionally open. Its solid clearance remains unsupported.
 Native wall openings, roof clipping, slab stair voids, and native family evaluation use existing evaluators.
 Internal faces of multiple native components can underestimate separation. Curved native family tessellation has unknown source error.
@@ -166,6 +175,7 @@ High-complexity containment can exhaust the bounded work budget. No hospital-sca
 | Units and transforms | Independent composed rotation, translation, 200 km offset, and mm-metadata fixture | Unrun |
 | Irregular shapes and openings | Independently authored L-prism and U-profile triangle fixtures | Unrun |
 | Solid distance and witnesses | Analytic cube gap and containment invariants | Unrun |
+| Supported boundary contact | Evaluated native asset on a native slab, native wall, rotated IFC wall, positive-gap rejection, sub-tolerance penetration and coincident/coplanar ambiguity controls | Unrun |
 | Contact and penetration | Zero-gap and positive-gap overlap, containment, and contact controls | Unrun |
 | Identity and scope | Namespace, occurrence, stale reference, private host, filtered relations, and scope-domain tests | Unrun |
 | Complete candidate membership | Absence, new obstruction, off-page membership changes, discovery-only height change, measurement geometry change, missing mesh, and unavailable source tests | Unrun |
@@ -188,12 +198,19 @@ Source inspection found the following defects before any test run:
 | A stale exclusion could hide a current obstruction | Resolve explicit pins before selection and rebind only during verified replay | Assertions authored; unrun |
 | Discovery inherited unconsumed off-page geometry dependencies | Separate discovery membership from measurement geometry observations | Positive and negative freshness controls authored; unrun |
 | A schema-valid changed reply could retain its prior receipt hash | Hash the canonical public payload and check it before collecting receipts | Four-method digest controls and private-worker transport mutation test authored; unrun |
+| TypeScript loses optional `query.level` narrowing inside a callback | Capture the validated level identity key before the callback | Parent attempt 1 failed TS2345; fix awaits parent rerun |
+| Floor-standing geometry could only return unresolved boundary contact | Certify nonpenetration through exact common supporting-plane signs on closed meshes; retain ambiguous fallback | Native slab and native/IFC wall controls authored; unrun |
 
 ## Qualification record
 
 The owner allows ten total attempts for this new interactive item, as recorded in
 `docs/design/synthetic-residential-197.md`. Issue218 remains exhausted and is not rerun.
 Issue231 attempts consumed: **0**. Parent SSH and HTTPS kickoff failures were infrastructure probes, not executed test failures.
+The parent subsequently ran combined component attempt 1 at `88daaa82e38f3491d62b0866ba458bbf0bbada2c`.
+Its strict lint passed on 306 sources. TypeScript reported TS2345 at `geometry-query.ts:219` because callback access widened `query.level` to include `undefined`.
+The correction captures the already validated identity key outside that callback, without casts or non-null assertions.
+The retained parent log is `/ssd1/bim-forge-qualification/issue230/run-88daaa82e38f3491d62b0866ba458bbf0bbada2c-component-01/artifacts/validate.log`.
+This is parent-reported execution evidence. No independent child container or server probe ran, and the correction remains unqualified pending the parent's next run.
 The early Windows shell profile changed the working directory and hid the Git worktree.
 Explicit PowerShell path, `login:false`, and the exact work directory corrected command routing.
 Initial file-copy approvals completed. The owner later supplied direct worktree write access.
