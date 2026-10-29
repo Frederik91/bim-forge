@@ -20,7 +20,7 @@ Current source-bound results and release blockers are in
 [the qualification handoff](../../experiments/geometry-qualification-230/qualified-status.md).
 The original pending tables below describe the starting gates, not current runtime results.
 
-Final feedback source65f8ceb passed943 server checks (941 passes, two optional
+Final feedback sourcece21445 passed950 server checks (948 passes, two optional
 skips). Host geometry validation now precedes successful script evidence and the
 provider's ready response, allowing designated complete candidate failures to be
 corrected within the same bounded request. Every original observation remains;
@@ -28,6 +28,14 @@ authority, incomplete-geometry, session, integrity and evidence-budget failures
 remain fatal. Later sealing/publication/acceptance still revalidate independently.
 The preview currently runs8843208; final-image and connected-provider repair/
 acceptance evidence remain separate gates. See the current handoff above.
+
+Follow-up SQLite regression fixtures demonstrate that one-off and persistent
+activity-write failures remain fatal and cannot forward raw persistence details
+to the agent. Real abort barriers and a three-execution correction sequence
+preserve revocation, measurement history and the original Main snapshot. The
+deployment plan also requires durable ingress restart fencing and an authoritative
+post-stop CURRENT audit, including committed WAL data; those private helpers and
+their runtime proof remain pending qualification, not completed release evidence.
 
 ## Problem and authority
 
