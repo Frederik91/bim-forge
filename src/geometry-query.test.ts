@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
 import { Check } from 'typebox/value';
-import { GeometryDescriptionResultSchema, GeometryMeasureResultSchema, GeometryQueryResultSchema, GeometryRelationsResultSchema, parseGeometryReceipts } from './geometry-contract.ts';
-import type { GeometryBounds, GeometryMatrix, GeometryMeasureResult, GeometryPoint, GeometryRef } from './geometry-contract.ts';
+import { GeometryDescriptionResultSchema, GeometryMatrixSchema, GeometryMeasureRequestSchema, GeometryMeasureResultSchema, GeometryPointSchema,
+  GeometryQueryResultSchema, GeometryRelationsResultSchema, GeometrySemanticsSchema, parseGeometryReceipts } from './geometry-contract.ts';
+import type { GeometryBounds, GeometryMatrix, GeometryMeasureResult, GeometryRef } from './geometry-contract.ts';
 import { createGeometryContext, geometryDigest, geometryPublicResultDigest, validateGeometryReceipts } from './geometry-query.ts';
 import type { GeometryContextInput } from './geometry-query.ts';
-import { createMesh, geometryWork, measureShapes, shapeOf } from './geometry-math.ts';
-import type { Triangle } from './geometry-math.ts';
+import { createMesh, geometryWork, measureShapes, shapeOf, vector3 } from './geometry-math.ts';
+import type { Triangle, Vec3 } from './geometry-math.ts';
 import { parseLinkedPrepared } from './linked-model.ts';
 import type { LinkedPrepared } from './linked-model.ts';
 import { validateSnapshot } from './room-model.ts';
@@ -52,7 +53,7 @@ function measurement(result: GeometryMeasureResult) {
 }
 function work() { return geometryWork({ maxWork: 2000000, maxMilliseconds: 1000 }); }
 function triangles(vertices: number[], faces: number[]): Triangle[] {
-  const point = (i: number): GeometryPoint => [vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]];
+  const point = (i: number): Vec3 => [vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]];
   const result: Triangle[] = []; for (let i = 0; i < faces.length; i += 3) result.push([point(faces[i]), point(faces[i + 1]), point(faces[i + 2])]); return result;
 }
 function prism(polygon: [number, number][], caps: number[][], height: number): { vertices: number[]; faces: number[] } {
@@ -461,4 +462,30 @@ test('the actual worker session rejects a schema-valid changed measurement and f
       against: { kind: 'object', ref: page.items[0].ref }, operation: 'distance' }), /does not match/);
     assert.throws(() => session.receipts(), /does not match/);
   } finally { await session.close(); }
+});
+
+test('canonical fixed-array schemas preserve vector, matrix and footprint bounds without tuple-only JSON keywords', () => {
+  assert.equal(Check(GeometryPointSchema, [1, -2, 3]), true);
+  for (const value of [[], [1, 2], [1, 2, 3, 4], ['1', 2, 3], [null, 2, 3], [Infinity, 2, 3], [NaN, 2, 3], [1e6 + 1, 2, 3]]) {
+    assert.equal(Check(GeometryPointSchema, value), false);
+  }
+  assert.deepEqual(vector3([1, -2, 3]), [1, -2, 3]);
+  for (const value of [[], [1, 2], [1, 2, 3, 4], [Infinity, 2, 3], [1e6 + 1, 2, 3], new Array<number>(3)]) assert.throws(() => vector3(value));
+  assert.equal(Check(GeometryMatrixSchema, identity), true);
+  for (const value of [identity.slice(0, 3), [...identity, identity[0]], identity.map(row => row.slice(0, 3)), identity.map(row => [...row, 0]),
+    [['1', 0, 0, 0], ...identity.slice(1)], [[1e6 + 1, 0, 0, 0], ...identity.slice(1)], [[NaN, 0, 0, 0], ...identity.slice(1)]]) {
+    assert.equal(Check(GeometryMatrixSchema, value), false);
+  }
+  const footprint = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]];
+  assert.equal(Check(GeometrySemanticsSchema, { kind: 'space', footprintProjectMetres: footprint }), true);
+  assert.equal(Check(GeometrySemanticsSchema, { kind: 'space', footprintProjectMetres: footprint.slice(0, 3) }), false);
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) { for (const child of value) visit(child); return; }
+    if (typeof value !== 'object' || value === null) return;
+    for (const [key, child] of Object.entries(value)) {
+      assert.notEqual(key, 'additionalItems'); if (key === 'items') assert.equal(Array.isArray(child), false);
+      visit(child);
+    }
+  };
+  for (const schema of [GeometryMeasureRequestSchema, GeometryDescriptionResultSchema, GeometryQueryResultSchema, GeometryRelationsResultSchema, GeometryMeasureResultSchema]) visit(schema);
 });

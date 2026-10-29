@@ -8,6 +8,8 @@ This component changes derived read records and calculations. Native model delta
 Qualification status on 2026-10-29: **unqualified**. The server was unreachable at integration kickoff and connectivity later returned.
 The parent reserves the sole serial qualification slot. No local build or test substitutes were run.
 Parent integration attempt 1 passed strict lint on 306 sources, then failed TypeScript checking before component tests ran.
+A later parent run passed the earlier geometry source 28/28 and then exposed a ScriptBox schema bootstrap failure.
+Subsequent clearance and schema corrections remain unqualified pending another parent run.
 The source and test assertions below describe implementation intent until server evidence confirms them.
 
 ## Host construction and authority
@@ -33,6 +35,13 @@ An acceptance policy that needs project-wide collision checks needs a project-au
 ## Four caller operations
 
 `src/geometry-contract.ts` owns TypeBox schemas and schema-derived wire types.
+Fixed coordinate and matrix arrays use homogeneous `Type.Array` schemas with equal minimum and maximum lengths.
+They accept the same JSON as the former homogeneous tuples while avoiding tuple-only keywords outside ScriptBox's closed schema subset.
+All public wire types remain derived through `Static`. The math kernel retains fixed `Vec3` tuples and `MathBounds`.
+`vector3` validates and constructs a triple where wire box bounds enter the kernel. No casts, unsafe schemas, schema stripping, or second wire family are used.
+The canonical `uniqueItems:true` constraints on query classes and categories remain intact.
+The parent and ScriptBox owner are auditing all nested schema keywords before another guest bootstrap attempt.
+The array representation correction alone does not claim full compatibility with ScriptBox 0.1.1.
 Both source kinds use `describe`, `query`, `relations`, and `measure`.
 Qualified references preserve project, native target or source namespace, revision, source hash, occurrence, and placement identity.
 An IFC reference has read-only authority. A native reference retains human review authority.
@@ -172,6 +181,8 @@ High-complexity containment can exhaust the bounded work budget. No hospital-sca
 
 ## Evidence matrix and defect record
 
+Execution status in this matrix concerns the current source. Earlier source passes are recorded separately below.
+
 | Requirement | Authored evidence | Execution status |
 | --- | --- | --- |
 | Shared native and IFC semantics | Equivalent native and IFC wall measurement test | Unrun |
@@ -185,6 +196,7 @@ High-complexity containment can exhaust the bounded work budget. No hospital-sca
 | Relevant updates | Verified correspondence, property-only change, and moved source controls | Unrun |
 | Final candidate binding | Object candidate versus changed reconciled geometry test | Unrun |
 | Budgets and termination | Work and pair limits, deterministic deadline, abort, and late-reply controls | Unrun |
+| ScriptBox schema representation | Fixed-array length/type/range controls, internal vector construction, and absence of tuple-only keywords | Unrun; parent owns actual guest bootstrap |
 | Real converter and connected UI | Parent and independent #234 qualification | Pending |
 | Root validation and changed-path policy | Server-only qualification script | Unrun |
 
@@ -205,6 +217,7 @@ Source inspection found the following defects before any test run:
 | Floor-standing geometry could only return unresolved boundary contact | Certify nonpenetration through exact common supporting-plane signs on closed meshes; retain ambiguous fallback | Native slab and native/IFC wall controls authored; unrun |
 | Sub-tolerance positive gaps could promote ambiguous coincident geometry | Ambiguity blocks all clearance values and produces a partial result | Coincident gap matrix authored; unrun |
 | A closer contact could hide a different near-contained obstruction | Aggregate every obstruction independently of the closest pair | Both obstacle orders and clearance/intersection controls authored; unrun |
+| ScriptBox 0.1.1 rejects tuple-only schema keywords during bootstrap | Equivalent canonical bounded arrays with validated fixed-vector math boundary | Schema equivalence controls authored; actual guest rerun pending |
 
 ## Qualification record
 
@@ -216,6 +229,10 @@ Its strict lint passed on 306 sources. TypeScript reported TS2345 at `geometry-q
 The correction captures the already validated identity key outside that callback, without casts or non-null assertions.
 The retained parent log is `/ssd1/bim-forge-qualification/issue230/run-88daaa82e38f3491d62b0866ba458bbf0bbada2c-component-01/artifacts/validate.log`.
 This is parent-reported execution evidence. No independent child container or server probe ran, and the correction remains unqualified pending the parent's next run.
+The parent later reported combined component attempt 3 at source `f6ef6f9`: root validation on 314 sources, explicit changed-path policy, and browser build passed.
+The geometry suite passed 28/28 including the then-current contact controls, and linked revision tests passed 12/12.
+Actual ScriptBox bootstrap then rejected tuple-only JSON schema keywords in `@frederik91/scriptbox` 0.1.1.
+These passes predate the subsequent clearance-aggregation and canonical-array corrections and do not qualify those later edits.
 The early Windows shell profile changed the working directory and hid the Git worktree.
 Explicit PowerShell path, `login:false`, and the exact work directory corrected command routing.
 Initial file-copy approvals completed. The owner later supplied direct worktree write access.
