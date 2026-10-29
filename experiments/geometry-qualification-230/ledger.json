@@ -5,7 +5,19 @@
   "implementationBase": "f4285c644e52b5bdba8e4f6afeb6e099bc02b891",
   "docsBase": "e43dd859a631ff8676d080011607447806beeb34",
   "attemptAllowance": 10,
-  "runtimeAttemptsStarted": 0,
+  "runtimeAttemptsStarted": 1,
+  "runtimeAttemptsExecutedByThisChat": 0,
+  "parentReportedConverterAttempts": [
+    {
+      "attempt": 1,
+      "sourcePrefix": "a4269f99e57f",
+      "rawEvidence": "/ssd1/bim-forge-qualification/issue230/issue234/attempt-1-converter-a4269f99e57f/raw.log",
+      "result": "Failed only m-huge exact-code expectation; parent reports the other eight test methods/subcases passed.",
+      "rootCause": "Fixture changes IfcLocalPlacement.RelativePlacement.Location to 2e6 m. axis_matrix catches LinkError as ValueError from rigid() and exposes UNSAFE_PLACEMENT; UNSAFE_TRANSFORM is the direct occurrence-transform boundary code.",
+      "ownedCorrection": "Expect exactly UNSAFE_PLACEMENT. Keep rejection, unpublished failure, absent manifest, exact retained original and unchanged current-artifact assertions.",
+      "verification": "Parent-reported runtime receipt plus local source inspection. No server/log probe or test by this chat; corrected-source rerun remains pending."
+    }
+  ],
   "initialUnqualifiedCommit": "faa6a80274adce99aaf8758d786e52d082e17391",
   "selectionUnqualifiedCommit": "423bfc37c0de68c9e4bee805eded8a5418e7f2ec",
   "runtimeDependencyParent": "f5c3210f166ccfa4041aa6acc42dd41d6d833224",
