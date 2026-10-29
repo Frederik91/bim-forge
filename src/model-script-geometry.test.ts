@@ -6,7 +6,7 @@ import { prepareModelProposal } from './model-proposal.ts';
 import type { ModelWorker } from './model-proposal.ts';
 import { RoomRepository } from './room-model.ts';
 import type { ModelSnapshot } from './room-model.ts';
-import { GeometryEvidenceConflict, GeometryEvidenceSession, readGeometryEvidence } from './geometry-evidence.ts';
+import { GeometryEvidenceConflict, GeometryEvidenceSession, GeometryProposalValidationError, readGeometryEvidence } from './geometry-evidence.ts';
 import { GeometrySessionError } from './geometry-session.ts';
 import { GeometryEvidenceLimitError } from './geometry-evidence-contract.ts';
 import { FixtureGeometrySource, evidenceWall, geometryProposalScript } from './geometry-evidence.fixture.ts';
@@ -24,7 +24,7 @@ const unsafeScript = geometryProposalScript.replace('position:[1,2]', 'position:
 
 for (const condition of ['fatal preseal failure', 'complete correctable preseal failure']) {
   test(`throwing activity sink during ${condition} stays fatal and redacts persistence details`, async t => {
-    const repository = await RoomRepository.create(); const accepted = repository.serialize();
+    const repository = await RoomRepository.create(); const accepted = repository.serialize(); const mainHead = repository.head('main');
     const scripts = new ModelScripts(); t.after(() => scripts.dispose());
     const database = new DatabaseSync(':memory:'); t.after(() => database.close());
     database.exec(`CREATE TABLE activity(stage TEXT NOT NULL, body TEXT NOT NULL);
@@ -64,9 +64,78 @@ for (const condition of ['fatal preseal failure', 'complete correctable preseal 
     assert.equal(sinkFailures, 1, 'The actual SQLite write fails once; later writes recover.');
     assert.equal(executions.length, 1, 'A failed activity write must revoke subsequent scripts.');
     assert.ok(previews.some(snapshot => snapshot !== null)); assert.equal(previews.at(-1), null);
-    assert.equal(repository.serialize(), accepted); assert.equal(repository.head('main'), request(repository).baseRevisionId);
+    assert.equal(repository.serialize(), accepted); assert.equal(repository.head('main'), mainHead);
     const persistedActivities = database.prepare('SELECT body FROM activity').all();
     assert.ok(!JSON.stringify({ outputs, activities, persistedActivities, executions }).includes('PRIVATE_ACTIVITY_SINK_DETAIL'));
+  });
+}
+
+test('two complete correctable failures can be followed by a proposal without erasing any observations', async t => {
+  const repository = await RoomRepository.create(); const accepted = repository.serialize(); const mainHead = repository.head('main');
+  const scripts = new ModelScripts(); t.after(() => scripts.dispose());
+  const executions: ScriptExecutionEvidence[] = [];
+  const result = await prepareModelProposal(repository, request(repository), worker(async session => {
+    const sources = [unsafeScript, geometryProposalScript.replace('position:[1,2]', 'position:[.8,2]'), geometryProposalScript];
+    for (const [index, source] of sources.entries()) {
+      const output = await session.executeTool('run_model_script', { language: 'typescript', source });
+      assert.equal(output.ok, index === 2, JSON.stringify(output));
+      const execution = executions[index]; assert.ok(execution);
+      assert.equal(execution.status, 'completed');
+      assert.equal(execution.disposition, index === 2 ? 'proposal' : 'discarded');
+      assert.equal(execution.validation, index === 2 ? 'passed' : 'failed');
+      if (index !== 2) assert.equal(execution.diagnostic?.code, 'invalid-proposal');
+      assert.equal(repository.serialize(), accepted);
+    }
+  }), () => {}, { geometry: { source: new FixtureGeometrySource() }, scripts, onExecution: evidence => executions.push(evidence) });
+  assert.equal(result.status, 'ready'); assert.equal(executions.length, 3);
+  assert.equal(repository.serialize(), accepted); assert.equal(result.repository.head('main'), mainHead);
+  const review = result.repository.review('geometry-preseal'); assert.deepEqual(review.scriptExecutions, executions);
+  const evidence = readGeometryEvidence(review.geometryEvidence);
+  assert.equal(evidence.measurements.length, 3);
+  assert.ok(evidence.measurements.every(measurement => measurement.result.kind === 'complete'));
+});
+
+for (const settlement of ['resolve', 'reject']) {
+  test(`revocation while preseal awaits a late ${settlement} never restores tool authority`, async t => {
+    const repository = await RoomRepository.create(); const accepted = repository.serialize(); const mainHead = repository.head('main');
+    const scripts = new ModelScripts(); const controller = new AbortController();
+    const entered = Promise.withResolvers<void>(); const release = Promise.withResolvers<void>();
+    const workerFinished = Promise.withResolvers<void>();
+    const authority = Promise.withResolvers<Parameters<ModelWorker['run']>[0]>();
+    const executions: ScriptExecutionEvidence[] = []; const previews: (ModelSnapshot | null)[] = [];
+    const outputs: Record<string, unknown>[] = [];
+    const original = GeometryEvidenceSession.prototype.seal;
+    t.mock.method(GeometryEvidenceSession.prototype, 'seal', async function (this: GeometryEvidenceSession, candidate: ModelSnapshot) {
+      const evidence = await original.call(this, candidate);
+      entered.resolve();
+      await release.promise;
+      if (settlement === 'reject') throw new GeometryProposalValidationError({ code: 'clearance-violated',
+        replayLeg: 'primary', operation: 'clearance', resultKind: 'complete', relation: 'separated', clearance: 'violated-mesh' });
+      return evidence;
+    });
+    const attempt = prepareModelProposal(repository, request(repository), worker(async session => {
+      authority.resolve(session);
+      try { outputs.push(await session.executeTool('run_model_script', { language: 'typescript', source: geometryProposalScript })); }
+      finally { workerFinished.resolve(); }
+    }), () => {}, { signal: controller.signal, geometry: { source: new FixtureGeometrySource() }, scripts,
+      onExecution: evidence => executions.push(evidence), onPreview: snapshot => previews.push(snapshot) });
+    const settled = attempt.then(() => ({ kind: 'resolved' } satisfies { kind: 'resolved' }),
+      (error: unknown) => ({ kind: 'rejected', error } satisfies { kind: 'rejected'; error: unknown }));
+    t.after(async () => { controller.abort(); release.resolve(); await settled; await scripts.dispose(); });
+    assert.equal(await Promise.race([entered.promise.then(() => true), settled.then(() => false)]), true,
+      'The actual successful host proof must pause before script success.');
+    controller.abort(); release.resolve();
+    const outcome = await settled; assert.ok(outcome.kind === 'rejected');
+    assert.ok(outcome.error instanceof Error); assert.match(outcome.error.message, /abort|cancel/i);
+    await workerFinished.promise;
+    assert.equal(outputs.length, 1); assert.equal(outputs[0]?.ok, false);
+    assert.equal(executions.length, 1);
+    assert.equal(executions[0]?.disposition, 'discarded'); assert.equal(executions[0]?.validation, 'failed');
+    assert.equal(executions[0]?.diagnostic?.code, 'host-failure');
+    assert.equal(previews.at(-1), null); assert.equal(repository.serialize(), accepted); assert.equal(repository.head('main'), mainHead);
+    const session = await authority.promise;
+    await assert.rejects(session.executeTool('run_model_script', { language: 'typescript', source: geometryProposalScript }), /abort|cancel/i);
+    assert.equal(executions.length, 1);
   });
 }
 
