@@ -75,6 +75,7 @@ export async function readGeometrySnapshot(source: GeometryEvidenceSource, proje
     else if (read.kind === 'query') {
       read.members.forEach(add); read.query.exclude?.forEach(add);
       if (read.query.level) add(read.query.level);
+      if (read.candidateExclusion) add(read.candidateExclusion);
     } else if (read.subject.kind === 'object') add(read.subject.ref);
   }
   const value = await source.snapshot({ projectId, native: structuredClone(native), signal,

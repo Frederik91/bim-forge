@@ -46,7 +46,7 @@ The parent supplies `ChangeRequests.open(file, worker, {geometry: source})`.
 Standalone proposal preparation accepts `geometry: {source, current?}` where `current` reads the current native target input.
 The provider returns data and verified correspondence pairs. It does not create workers.
 Revalidation extracts a bounded, deduplicated set of historical IFC references from trusted receipt object reads,
-full query members, level/exclusion predicates and measured object subjects. The provider resolves only those retained versions,
+full query members, level/exclusion predicates, the host's implicit candidate exclusion and measured object subjects. The provider resolves only those retained versions,
 rather than scanning every object in every version. Initial construction omits historical references; this resolver data never reaches the guest.
 `GeometryEvidenceSession` owns the request worker; revalidation uses `validateGeometryReceiptsInWorker`.
 The request worker lifetime is 180 seconds, with the geometry owner's separate startup/operation hard deadlines.
