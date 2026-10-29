@@ -1,15 +1,113 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { RoomRepository, previewRectangle, rectangleLayout } from './room-model.ts';
+import { RoomRepository, previewAssets, previewRectangle, rectangleLayout } from './room-model.ts';
 import { prepareModelProposal, validateModelProposalRequest } from './model-proposal.ts';
 import type { ModelWorker, ModelWorkerSession } from './model-proposal.ts';
 import { ModelScripts } from './model-script.ts';
 import { GeometryEvidenceSession, geometryNativeInput, readGeometryEvidence, encodeGeometryEvidence,
-  parseGeometryEvidence, geometrySnapshotHash, publishWithGeometryGuard } from './geometry-evidence.ts';
+  parseGeometryEvidence, geometrySnapshotHash, publishWithGeometryGuard, GeometryEvidenceConflict,
+  GeometryProposalValidationError, GeometryEvidenceLimitError } from './geometry-evidence.ts';
 import type { GeometryEvidenceSource } from './geometry-evidence.ts';
 import type { GeometryRef } from './geometry-contract.ts';
 import { assertGeometryEvidenceBound, readGeometryEvidence as readWireGeometryEvidence } from './geometry-evidence-contract.ts';
 import { FixtureGeometrySource, evidenceWall, geometryProposalScript, cubeMeasurement, geometryReview } from './geometry-evidence.fixture.ts';
+
+async function proofFixture(source = new FixtureGeometrySource()) {
+  const repository = await RoomRepository.create();
+  const native = { snapshot: repository.view(repository.head('main')).snapshot, revisionId: repository.head('main'),
+    target: { kind: 'main' } } satisfies Parameters<typeof GeometryEvidenceSession.open>[0]['native'];
+  const session = await GeometryEvidenceSession.open({ source, projectId: repository.projectId, requestId: 'proof-diagnostic', native,
+    signal: new AbortController().signal });
+  const candidate = (x: number) => previewAssets(native.snapshot, {
+    families: [{ id: 'evidence-cube', type: 'AssetFamily', name: 'Cube', description: 'Synthetic cube',
+      parts: [{ id: 'body', kind: 'box', min: [0, 0, 0], size: [1, 1, 1], color: '#546778' }] }],
+    instances: [{ id: 'requested-cube', type: 'AssetInstance', name: 'Requested cube', familyId: 'evidence-cube', position: [x, 2], rotationDeg: 0,
+      size: { width: .5, depth: .5, height: .5 }, placement: { kind: 'single-room' } }], removeInstanceIds: [],
+  });
+  return { session, candidate };
+}
+
+test('final violated clearance reports only safe primary proof fields and permits a corrected candidate', async t => {
+  const { session, candidate } = await proofFixture(); t.after(() => session.close());
+  assert.equal((await session.measure(cubeMeasurement)).kind, 'complete');
+  await assert.rejects(session.seal(candidate(.75)), error => {
+    assert.ok(error instanceof GeometryProposalValidationError);
+    assert.deepEqual(error.diagnostic, { code: 'clearance-violated', replayLeg: 'primary', operation: 'clearance',
+      resultKind: 'complete', relation: 'separated', clearance: 'violated-mesh' });
+    assert.ok(Object.isFrozen(error.diagnostic));
+    assert.doesNotMatch(error.message, /requested-cube|evidence-wall|evidence-occurrence|vertices|witness/);
+    return true;
+  });
+  assert.ok(await session.seal(candidate(1)));
+});
+
+test('final distance mismatch is a designated candidate failure without exposing either witness', async t => {
+  const { session, candidate } = await proofFixture(); t.after(() => session.close());
+  const measured = await session.measure({ ...cubeMeasurement, operation: 'distance' });
+  assert.equal(measured.kind, 'complete');
+  await assert.rejects(session.seal(candidate(.75)), error => {
+    assert.ok(error instanceof GeometryProposalValidationError);
+    assert.deepEqual(error.diagnostic, { code: 'final-shape-mismatch', replayLeg: 'primary', operation: 'distance',
+      resultKind: 'complete', relation: 'separated', clearance: 'not-requested' });
+    return true;
+  });
+});
+
+test('full surroundings overlap remains rejected with a designated safe intersection diagnostic', async t => {
+  const source = new FixtureGeometrySource(); source.replace([evidenceWall({ x: .9 })]);
+  const { session, candidate } = await proofFixture(source); t.after(() => session.close());
+  await session.measure({ ...cubeMeasurement, operation: 'distance', against: { kind: 'query',
+    query: { role: 'physical', region: { min: [20, 20, 0], max: [21, 21, 1] } } } });
+  await assert.rejects(session.seal(candidate(1)), error => {
+    assert.ok(error instanceof GeometryProposalValidationError);
+    assert.equal(error.diagnostic.code, 'final-intersection');
+    assert.equal(error.diagnostic.replayLeg, 'surroundings');
+    assert.equal(error.diagnostic.operation, 'intersection');
+    assert.equal(error.diagnostic.resultKind, 'complete');
+    assert.ok(['volume-overlap', 'subject-inside', 'obstacle-inside', 'contact-or-overlap'].includes(error.diagnostic.relation));
+    assert.deepEqual(Object.keys(error.diagnostic).sort(), ['clearance', 'code', 'operation', 'relation', 'replayLeg', 'resultKind']);
+    return true;
+  });
+});
+
+test('unsupported final measurement retains fatal authority classification and a safe typed reason', async t => {
+  const source = new FixtureGeometrySource(); source.replace([evidenceWall({ open: true })]);
+  const { session, candidate } = await proofFixture(source); t.after(() => session.close());
+  await session.measure(cubeMeasurement);
+  await assert.rejects(session.seal(candidate(1)), error => {
+    assert.ok(error instanceof GeometryEvidenceConflict);
+    assert.equal(error instanceof GeometryProposalValidationError, false);
+    assert.ok(error.diagnostic);
+    assert.equal(error.diagnostic.replayLeg, 'primary');
+    assert.equal(error.diagnostic.operation, 'clearance');
+    assert.equal(error.diagnostic.resultKind, 'partial');
+    assert.equal(error.diagnostic.reason, 'unsupported');
+    assert.doesNotMatch(error.message, /evidence-wall|evidence-occurrence|requested-cube|witness|nearest/);
+    return true;
+  });
+});
+
+test('schema-valid evidence byte overflow has safe exact counts while malformed evidence stays distinct', async t => {
+  const { session, candidate } = await proofFixture(); t.after(() => session.close());
+  await session.measure(cubeMeasurement);
+  const evidence = await session.seal(candidate(1)); assert.ok(evidence);
+  const receipt = evidence.receipts[0]; assert.ok(receipt);
+  const large = { ...evidence, receipts: Array.from({ length: 128 }, () => receipt) };
+  const bytes = Buffer.byteLength(JSON.stringify(large)); assert.ok(bytes > 65536);
+  assert.throws(() => parseGeometryEvidence(large), error => {
+    assert.ok(error instanceof GeometryEvidenceLimitError);
+    assert.deepEqual(error.diagnostic, { code: 'geometry-evidence-byte-limit', bytes, limitBytes: 65536,
+      receiptCount: 128, measurementCount: 1 });
+    assert.ok(Object.isFrozen(error.diagnostic));
+    assert.match(error.message, /geometry-evidence-byte-limit/);
+    assert.doesNotMatch(error.message, /evidence-wall|evidence-occurrence|requested-cube/);
+    return true;
+  });
+  assert.throws(() => parseGeometryEvidence({ ...large, requestId: 'invalid request identity' }), error => {
+    assert.ok(error instanceof Error); assert.equal(error instanceof GeometryEvidenceLimitError, false);
+    assert.equal(error.message, 'Invalid bounded geometry evidence.'); return true;
+  });
+});
 
 function request(repository: RoomRepository, id = 'geometry-evidence') {
   return { requestId: id, proposalName: id, baseRevisionId: repository.head('main'), selectedObjectIds: ['wall-west'],
