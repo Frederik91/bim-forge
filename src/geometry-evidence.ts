@@ -8,7 +8,7 @@ import type { ModelSnapshot } from './room-model.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
 import { parseGeometryEvidence as parseEvidenceContract, readGeometryEvidence as readEvidenceContract } from './geometry-evidence-contract.ts';
 import type { GeometryEvidence } from './geometry-evidence-contract.ts';
-export { GeometryEvidenceSchema, MAX_GEOMETRY_EVIDENCE_BYTES } from './geometry-evidence-contract.ts';
+export { GeometryEvidenceSchema, MAX_GEOMETRY_EVIDENCE_BYTES, GeometryEvidenceLimitError } from './geometry-evidence-contract.ts';
 export type { GeometryEvidence } from './geometry-evidence-contract.ts';
 
 export function geometryNativeInput(input: GeometrySessionInput['native'] & { scope?: FrozenModelScope }): GeometrySessionInput['native'] {
@@ -54,9 +54,43 @@ export interface GeometryEvidenceSource {
   withCatalogGuard<T>(projectId: string, catalogToken: string, commit: () => T): GeometryPublication<T>;
 }
 
+type MeasurementContext = { replayLeg: 'primary' | 'original-member' | 'surroundings'; operation: GeometryMeasureRequest['operation'] };
+type CompleteMeasurementStatus = { resultKind: 'complete' } & Pick<Extract<GeometryMeasureResult, { kind: 'complete' }>['value'], 'relation' | 'clearance'>;
+type MeasurementStatus = CompleteMeasurementStatus
+  | ({ resultKind: 'partial'; reason: Extract<GeometryMeasureResult, { kind: 'partial' }>['reason'] }
+    & Pick<Extract<GeometryMeasureResult, { kind: 'partial' }>['value'], 'relation' | 'clearance'>)
+  | { resultKind: 'unavailable'; reason: Extract<GeometryMeasureResult, { kind: 'unavailable' }>['reason'] };
+export type GeometryMeasurementDiagnostic = MeasurementContext & MeasurementStatus & { code: 'measurement-unverified' };
+export type GeometryProposalValidationDiagnostic = MeasurementContext & CompleteMeasurementStatus
+  & { code: 'clearance-violated' | 'final-shape-mismatch' | 'final-intersection' };
+
+function measurementStatus(result: GeometryMeasureResult): MeasurementStatus {
+  if (result.kind === 'unavailable') return { resultKind: result.kind, reason: result.reason };
+  const status = { relation: result.value.relation, clearance: result.value.clearance };
+  return result.kind === 'partial' ? { resultKind: result.kind, reason: result.reason, ...status } : { resultKind: result.kind, ...status };
+}
+function measurementSummary(diagnostic: MeasurementContext & MeasurementStatus): string {
+  return `[phase=${diagnostic.replayLeg} operation=${diagnostic.operation} result=${diagnostic.resultKind}`
+    + ('reason' in diagnostic ? ` reason=${diagnostic.reason}` : '')
+    + ('relation' in diagnostic ? ` relation=${diagnostic.relation} clearance=${diagnostic.clearance}` : '') + ']';
+}
+export class GeometryProposalValidationError extends Error {
+  readonly diagnostic: Readonly<GeometryProposalValidationDiagnostic>;
+  constructor(diagnostic: GeometryProposalValidationDiagnostic) {
+    const messages = {
+      'clearance-violated': 'The final authored shape violates the requested clearance constraint.',
+      'final-shape-mismatch': 'The final authored shape does not satisfy the inspected geometry measurement.',
+      'final-intersection': 'The final candidate intersects or is contained by another physical object.',
+    };
+    super(`${messages[diagnostic.code]} ${measurementSummary(diagnostic)}`);
+    this.name = 'GeometryProposalValidationError'; this.diagnostic = Object.freeze({ ...diagnostic });
+  }
+}
 export class GeometryEvidenceConflict extends Error {
-  constructor(message = 'Inspected geometry changed or could not be verified. Revalidate the proposal before accepting.') {
-    super(message); this.name = 'GeometryEvidenceConflict';
+  readonly diagnostic: Readonly<GeometryMeasurementDiagnostic> | null;
+  constructor(message = 'Inspected geometry changed or could not be verified. Revalidate the proposal before accepting.',
+    diagnostic: GeometryMeasurementDiagnostic | null = null) {
+    super(message); this.name = 'GeometryEvidenceConflict'; this.diagnostic = diagnostic ? Object.freeze({ ...diagnostic }) : null;
   }
 }
 
@@ -86,10 +120,15 @@ export async function readGeometrySnapshot(source: GeometryEvidenceSource, proje
   return value;
 }
 
-function requireMeasurement(result: GeometryMeasureResult, expected?: GeometryMeasureResult): void {
+function requireMeasurement(result: GeometryMeasureResult, context: MeasurementContext, expected?: GeometryMeasureResult): void {
+  const diagnostic: GeometryMeasurementDiagnostic = { code: 'measurement-unverified', ...context, ...measurementStatus(result) };
   if (result.kind !== 'complete' || result.value.relation === 'unknown'
       || result.value.clearance === 'unknown' || result.value.clearance === 'violated-mesh') {
-    throw new GeometryEvidenceConflict('A geometry measurement is incomplete, unsupported or violates the requested constraint.');
+    if (result.kind === 'complete' && result.value.relation !== 'unknown' && result.value.clearance === 'violated-mesh') {
+      throw new GeometryProposalValidationError({ code: 'clearance-violated', ...context, resultKind: 'complete',
+        relation: result.value.relation, clearance: result.value.clearance });
+    }
+    throw new GeometryEvidenceConflict(`A geometry measurement is incomplete, unsupported or violates the requested constraint. ${measurementSummary(diagnostic)}`, diagnostic);
   }
   if (expected?.kind === 'complete') {
     const a = result.value; const b = expected.value;
@@ -97,7 +136,12 @@ function requireMeasurement(result: GeometryMeasureResult, expected?: GeometryMe
         || (a.distanceMetres === null) !== (b.distanceMetres === null)
         || (a.distanceMetres !== null && b.distanceMetres !== null
           && Math.abs(a.distanceMetres - b.distanceMetres) > a.numericToleranceMetres + b.numericToleranceMetres)) {
-      throw new GeometryEvidenceConflict('The final authored shape does not satisfy the inspected geometry measurement.');
+      if (!['unknown', 'contact-or-overlap'].includes(b.relation) && !['unknown', 'violated-mesh'].includes(b.clearance)
+          && a.relation !== 'contact-or-overlap') {
+        throw new GeometryProposalValidationError({ code: 'final-shape-mismatch', ...context, resultKind: 'complete',
+          relation: a.relation, clearance: a.clearance });
+      }
+      throw new GeometryEvidenceConflict(`The final authored shape does not satisfy the inspected geometry measurement. ${measurementSummary(diagnostic)}`, diagnostic);
     }
   }
 }
@@ -192,14 +236,16 @@ async function validateFinalMeasurements(evidence: GeometryEvidence, current: Ge
       const request: GeometryMeasureRequest = subject.kind === 'box'
         ? { ...rebound, subject: { kind: 'object', ref: nativeRef(subject.candidateId, input) } } : rebound;
       const result = await final.measure(request);
-      requireMeasurement(result, subject.kind === 'box' && request.operation !== 'clearance' ? measurement.result : undefined);
+      requireMeasurement(result, { replayLeg: 'primary', operation: request.operation },
+        subject.kind === 'box' && request.operation !== 'clearance' ? measurement.result : undefined);
       measurements.push({ request, result });
       // Original query membership cannot hide a native endpoint merely by moving it outside the predicate.
       if (request.operation === 'clearance' && measurement.request.against.kind === 'query') {
         for (const member of queryMembers(measurement)) {
           const pair = currentMeasurement({ ...measurement.request, against: { kind: 'object', ref: member } }, input, correspondences);
           const pairRequest: GeometryMeasureRequest = { ...pair, subject: request.subject };
-          const pairResult = await final.measure(pairRequest); requireMeasurement(pairResult);
+          const pairResult = await final.measure(pairRequest);
+          requireMeasurement(pairResult, { replayLeg: 'original-member', operation: pairRequest.operation });
           measurements.push({ request: pairRequest, result: pairResult });
         }
       }
@@ -219,9 +265,15 @@ async function validateFinalMeasurements(evidence: GeometryEvidence, current: Ge
           against: { kind: 'query', query: { role: 'physical', region } },
           operation: 'intersection' };
         const surroundings = await complete.measure(request);
-        requireMeasurement(surroundings);
+        const context = { replayLeg: 'surroundings', operation: request.operation } satisfies MeasurementContext;
+        requireMeasurement(surroundings, context);
         if (surroundings.kind === 'complete' && !['separated', 'empty-set', 'contact'].includes(surroundings.value.relation)) {
-          throw new GeometryEvidenceConflict('The final candidate intersects or is contained by another physical object.');
+          if (['volume-overlap', 'subject-inside', 'obstacle-inside'].includes(surroundings.value.relation)) {
+            throw new GeometryProposalValidationError({ code: 'final-intersection', ...context, resultKind: 'complete',
+              relation: surroundings.value.relation, clearance: surroundings.value.clearance });
+          }
+          const diagnostic: GeometryMeasurementDiagnostic = { code: 'measurement-unverified', ...context, ...measurementStatus(surroundings) };
+          throw new GeometryEvidenceConflict(`The final candidate intersects or is contained by another physical object. ${measurementSummary(diagnostic)}`, diagnostic);
         }
         measurements.push({ request, result: surroundings });
       }

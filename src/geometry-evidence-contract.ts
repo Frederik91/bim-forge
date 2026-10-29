@@ -18,6 +18,18 @@ export const GeometryEvidenceSchema = Type.Object({
 export type GeometryEvidence = Static<typeof GeometryEvidenceSchema>;
 export const MAX_GEOMETRY_EVIDENCE_BYTES = 64 * 1024;
 
+export type GeometryEvidenceLimitDiagnostic = { code: 'geometry-evidence-byte-limit'; bytes: number; limitBytes: number;
+  receiptCount: number; measurementCount: number };
+export class GeometryEvidenceLimitError extends Error {
+  readonly diagnostic: Readonly<GeometryEvidenceLimitDiagnostic>;
+  constructor(bytes: number, receiptCount: number, measurementCount: number) {
+    super(`[geometry-evidence-byte-limit] Geometry evidence uses ${bytes} bytes; the limit is ${MAX_GEOMETRY_EVIDENCE_BYTES} bytes.`);
+    this.name = 'GeometryEvidenceLimitError';
+    this.diagnostic = Object.freeze({ code: 'geometry-evidence-byte-limit', bytes,
+      limitBytes: MAX_GEOMETRY_EVIDENCE_BYTES, receiptCount, measurementCount });
+  }
+}
+
 /** Geometry wire digests sort JSON keys lexically; no platform locale or Node-only hashing is involved. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -29,8 +41,9 @@ function canonical(value: unknown): string {
 
 export function parseGeometryEvidence(input: unknown): GeometryEvidence {
   const value = geometryPlainData(input);
-  if (!Check(GeometryEvidenceSchema, value)
-      || new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_GEOMETRY_EVIDENCE_BYTES) throw new Error('Invalid bounded geometry evidence.');
+  if (!Check(GeometryEvidenceSchema, value)) throw new Error('Invalid bounded geometry evidence.');
+  const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  if (bytes > MAX_GEOMETRY_EVIDENCE_BYTES) throw new GeometryEvidenceLimitError(bytes, value.receipts.length, value.measurements.length);
   parseGeometryReceipts(value.receipts);
   if (value.inheritedFrom && (new Set(value.inheritedFrom.map(parent => parent.requestId)).size !== value.inheritedFrom.length
       || value.inheritedFrom.some(parent => parent.requestId === value.requestId))) throw new Error('Geometry evidence lineage must be acyclic and unique.');

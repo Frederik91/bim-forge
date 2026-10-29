@@ -80,7 +80,7 @@ test('unsupported final measurement retains fatal authority classification and a
     assert.ok(error.diagnostic);
     assert.equal(error.diagnostic.replayLeg, 'primary');
     assert.equal(error.diagnostic.operation, 'clearance');
-    assert.equal(error.diagnostic.resultKind, 'partial');
+    assert.ok(error.diagnostic.resultKind === 'partial');
     assert.equal(error.diagnostic.reason, 'unsupported');
     assert.doesNotMatch(error.message, /evidence-wall|evidence-occurrence|requested-cube|witness|nearest/);
     return true;
