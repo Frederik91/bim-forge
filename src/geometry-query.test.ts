@@ -303,7 +303,7 @@ test('pagination receipts detect changes on an unread page and bounded replies n
 });
 
 test('touching at one obstacle cannot hide penetration at a different obstacle', () => {
-  const contained: GeometryMatrix = [[1, 0, 0, 1.2], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+  const contained: GeometryMatrix = [[1, 0, 0, 1.2], [0, 1, 0, .2], [0, 0, 1, .2], [0, 0, 0, 1]];
   const context = createGeometryContext(input([prepared(), prepared({ occurrence: 'inside', matrix: contained })]));
   const result = measurement(context.measure({ subject: box({ min: [1, 0, 0], max: [3, 2, 2] }),
     against: { kind: 'query', query: {} }, operation: 'clearance', clearanceMetres: 0 }));
