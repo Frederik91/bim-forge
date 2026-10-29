@@ -232,7 +232,11 @@ async function runWorker(worker: ModelWorker, session: ModelWorkerSession): Prom
 }
 
 export async function prepareModelProposal(repository: RoomRepository, input: unknown, worker: unknown,
-  onActivity: (event: ActivityUpdate) => void = () => {}, options: ModelProposalOptions = {}): Promise<ModelProposalResult> {
+  activity: (event: ActivityUpdate) => void = () => {}, options: ModelProposalOptions = {}): Promise<ModelProposalResult> {
+  const onActivity = (event: ActivityUpdate): void => {
+    try { activity(event); }
+    catch { throw new ModelWorkerError('Request activity could not be saved. Staged changes discarded.'); }
+  };
   if (!isModelWorker(worker)) fail('A model worker with an auditable identity is required.');
   fields(worker.identity, ['provider', 'model']);
   const identity = { provider: text(worker.identity.provider, 'Worker provider', 80), model: text(worker.identity.model, 'Worker model', 100) };
