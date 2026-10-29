@@ -147,7 +147,7 @@ test('explicit project retention extends expiry and read/prepare eligibility wit
   await prepared.dispose();
   assert.equal(db.prepare('SELECT manifest FROM request_source_identities WHERE id=?').get(source.id)?.manifest, manifest);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_source_bindings').get()?.n, 0);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_source_blobs').get()?.n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_source_blobs').get()?.n, 2);
 });
 
 test('project source pages expose bounded ordered retained metadata only, isolate projects and reject invalid cursors', async (t) => {
@@ -215,6 +215,54 @@ test('source bytes and request memberships survive SQLite close and reopen', asy
   const prepared = await store.prepare(project, [source], signal());
   assert.deepEqual(prepared.documents, [{ sourceId: source.id, text: bytes.toString('utf8') }]);
   await prepared.dispose();
+});
+
+test('restart preserves expired upload rows without restoring access; the next upload reclaims only expired unbound sources', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_800_000_000_000 });
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'bim-source-restart-test-'));
+  const filename = path.join(directory, 'sources.sqlite');
+  let db = new DatabaseSync(filename);
+  t.after(async () => { db.close(); await fs.rm(directory, { recursive: true, force: true }); });
+  db.exec('PRAGMA foreign_keys=ON');
+  let store = new RequestSourceStore(db);
+  const expired = await upload(store, Buffer.from('Expired unbound upload.'));
+  const bound = await upload(store, Buffer.from('Bound request original.'));
+  const retained = await upload(store, Buffer.from('Retained project original.'));
+  const fresh = await upload(store, Buffer.from('Fresh unbound upload.'));
+  store.bind(project, [bound], 'restart-bound-request');
+  store.retainProject(project, retained);
+  db.prepare('UPDATE request_source_blobs SET created_at=? WHERE id IN (?,?,?)')
+    .run(Date.now() - 25 * 60 * 60 * 1000, expired.id, bound.id, retained.id);
+  const snapshot = () => Object.fromEntries([
+    'request_source_blobs', 'request_source_identities', 'request_source_bindings',
+    'request_source_memberships', 'request_source_project_retention',
+  ].map(table => [table, db.prepare(`SELECT * FROM ${table} ORDER BY 1, 2`).all()]));
+  const beforeRestart = snapshot();
+  const survivingRows = db.prepare('SELECT * FROM request_source_blobs WHERE id<>? ORDER BY id').all(expired.id);
+  const expiredIdentity = db.prepare('SELECT * FROM request_source_identities WHERE id=?').get(expired.id);
+  db.close();
+  db = new DatabaseSync(filename);
+  db.exec('PRAGMA foreign_keys=ON');
+  store = new RequestSourceStore(db);
+
+  assert.deepEqual(snapshot(), beforeRestart);
+  assert.throws(() => store.get(project, expired.id), /expired/);
+  assert.throws(() => store.bind(project, [expired], 'expired-restart-request'), /expired/);
+  assert.throws(() => store.retainProject(project, expired), /expired/);
+  assert.deepEqual(snapshot(), beforeRestart);
+  for (const source of [bound, retained, fresh]) assert.deepEqual(store.get(project, source.id).source, source);
+  assert.deepEqual(store.retained(project, retained.id), retained);
+  assert.throws(() => store.get(otherProject, retained.id), /Unknown/);
+
+  const next = await upload(store, Buffer.from('New upload triggers collection.'));
+  assert.equal(db.prepare('SELECT id FROM request_source_blobs WHERE id=?').get(expired.id), undefined);
+  assert.deepEqual(db.prepare('SELECT * FROM request_source_blobs WHERE id<>? ORDER BY id').all(next.id), survivingRows);
+  assert.deepEqual(db.prepare('SELECT * FROM request_source_identities WHERE id=?').get(expired.id), expiredIdentity);
+  for (const source of [bound, retained, fresh, next]) assert.deepEqual(store.get(project, source.id).source, source);
+  assert.deepEqual(store.retained(project, retained.id), retained);
+  store.bind(project, [bound], 'restart-bound-request');
+  assert.throws(() => store.get(project, expired.id), /expired/);
+  assert.throws(() => store.bind(project, [expired], 'expired-restart-request'), /expired/);
 });
 
 test('real PNG/PDF/text inputs normalize privately and retain source/page mappings and extracted text', async (t) => {
