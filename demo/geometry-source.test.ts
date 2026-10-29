@@ -3,13 +3,13 @@ import test from 'node:test';
 import { createGeometryEvidenceSource } from './geometry-source.ts';
 import { evidenceWall } from '../src/geometry-evidence.fixture.ts';
 import { geometryDigest } from '../src/geometry-query.ts';
-import { RoomRepository, previewRectangle, rectangleLayout } from '../src/room-model.ts';
+import { RoomRepository } from '../src/room-model.ts';
 import type { GeometryRef } from '../src/geometry-contract.ts';
 import type { GeometrySessionInput } from '../src/geometry-session.ts';
 import type { LinkedModelStore } from './linked-model-store.ts';
 
 async function setup() {
-  const repository = await RoomRepository.create(previewRectangle(rectangleLayout(6, 4, 2.7, .2, 1)));
+  const repository = await RoomRepository.create('Geometry source boundary');
   const native: GeometrySessionInput['native'] = { snapshot: repository.view('main').snapshot,
     revisionId: repository.head('main'), target: { kind: 'main' }, readableIds: [] };
   return { native, projectId: repository.projectId, signal: new AbortController().signal };
