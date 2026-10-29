@@ -287,8 +287,8 @@ do not substitute local tests or repeatedly consume attempts on an unreachable h
 
 | Component | Exact locally composed source | Implementation present; runtime evidence still missing |
 | --- | --- | --- |
-| Geometry #231 | `3f459f5aa03c7cdc39f557730cdb37e501484c13` | Readable native domain, filtered relations, semantic discovery, domain receipts, worker lifecycle/concurrency and focused tests |
-| IFC updates #232 | `a7d9d1f081250d93d661cd7f9043632aad1b8a27` | Immutable versions, staged review/adopt/history/placement UI, availability-sensitive catalog token and synchronous publication guard |
+| Geometry #231 | `c4b4ba0e0589393b863961560134b857f2285d7e` | Readable native domain, filtered relations, semantic discovery, domain receipts, worker lifecycle/concurrency and focused tests |
+| IFC updates #232 | `50f862e5a50fafc26e6fc54a8ad80a4523b8250d` | Immutable versions, staged review/adopt/history/placement UI, availability-sensitive catalog token, publication guard and reviewed retry/resolution fixes |
 | Independent QA #234 | `52c5da0ff493880c45c0524b6fd17a0c5c6bd7c3` | Receiving-native generator, real-IFC versus withheld prism runtime probes, prerequisite-bound server runner and UI import source |
 
 `npm run test:linked-revisions` is registered in the default `npm test` chain alongside geometry.
@@ -296,3 +296,36 @@ These are local Git composition checkpoints, not GitHub merges or passing qualif
 Two bounded read-only reviews examine the geometry boundary and IFC publication/history guard
 while parent completes proposal/server wiring. Reviewers may not run local tests or edit owned
 component files. All acceptance-evidence matrix entries above remain pending.
+
+The bounded static reviews found five additional issues, with no runtime reproduction claimed:
+
+- IFC current resolution could select an earlier preparation of identical source bytes, and the
+  adoption retry shortcut could acknowledge a stale request after an intervening placement.
+  #232 source `50f862e` fixes both and adds controls; those controls remain unrun.
+- Geometry query exclusions could discard stale pins by reducing them to identity; discovery
+  receipts consumed unreturned geometry; worker replies did not verify their public payload
+  against the receipt result digest. #231 owns these corrections and their focused controls.
+- Source-version identity must use the immutable version/job ID, with `originalSha256` reserved
+  for integrity and content deduplication. Reusing the content hash as the revision token makes
+  exact historical preparation identity ambiguous after repeated unchanged exports. #232 is
+  updating the unpublished producer/private-worker contract and tests together. Exact-base
+  inspection corrected an earlier parent assumption: pre-feature jobs used the content hash
+  as revision. Preserve those retained records/pins; the worker validates one general bounded
+  revision token, which naturally accepts existing hashes and new IDs. No live data conversion
+  or hash-specific compatibility layer is required.
+- The proposal data provider must receive only the consumed historical IFC references when
+  computing verified correspondences. Eagerly enumerating every object in every retained
+  version would violate bounded resource goals and the worker message/pair limits. Parent/#233
+  are adding that host-only input before server wiring, preserving full current-catalog coverage.
+
+No repository server runner is registered in the GitHub runner query; the existing validation
+workflow uses a hosted runner. It cannot substitute for the owner's required server-container
+qualification. No runner, workflow, network route or VPN settings were changed.
+
+The unsent linked-context attachment now includes a full `GeometryRef`, including project,
+source version, occurrence and placement digest. Browser WebCrypto hashes the canonical matrix
+array, avoiding a Node-only dependency in the browser and allowing the agent to call the same
+`describe` API directly from the pin. Reference preparation rechecks chat/design/project and
+current source identity after hashing; Send stays gated until preparation/upload completes.
+This changes no accepted model or approval authority. Independent browser assertions are being
+extended; the new UI behavior has not yet been built or exercised on the server.
