@@ -67,6 +67,30 @@ historical preparation when retained version metadata is ambiguous.
 Exact original downloads remain available because the original source bytes remain authoritative.
 Current resolution loads `currentVersionId` directly and never falls back to an older preparation.
 
+`resolveRetained(projectId, pin: LinkedRetainedPin): LinkedVersionResolution` is the host-only lookup
+for geometry references that carry a placement digest without the raw matrix. `LinkedRetainedPin` is
+exported from `demo/linked-model-store.ts`:
+
+```typescript
+{
+	namespace: string;
+	revision: string;
+	originalSha256: string;
+	occurrenceId: string;
+	globalId: string;
+	placementDigest: string;
+}
+```
+
+The digest is SHA-256 of `JSON.stringify(sourceToProjectMetres)`. The shared internal retained resolver
+checks authorized version metadata and at most 72 history rows before loading one uniquely matched
+preparation. It validates the stored rigid matrix, matches the digest, and checks the object identity.
+It never accepts a matrix from this caller or loads every historical preparation. Repeated history
+entries for the same version and exact matrix identify one preparation. Different preparations claiming
+one version pin remain ambiguous. `readVersion` computes the selection's placement digest and uses
+this same resolver. Historical placements remain available after later placement or source changes;
+an unretained revision or transform returns `missing`. No new HTTP or guest API is added.
+
 `prepareReplacement({projectId,linkId,expectedGeneration,name,bytes})` retains a separate candidate.
 Repeating the same bytes and expected generation returns an existing live or ready candidate.
 `reviewCandidate(projectId,linkId,candidateId)` returns its delta and conversion diagnostics.
@@ -178,3 +202,9 @@ the identity cause of repeated identical exports. Focused regression sources cov
 current resolution over identical original bytes, genuine retained ambiguity, actual pre-feature hash
 pins, corrupt current artifacts, and adoption followed by placement. These regressions remain unrun
 while the server is unavailable.
+
+Digest-only historical resolution was added for parent provider wiring. New unrun tests cover old
+rotation and translation after adoption, repeated placement history, wrong and cross-project pins,
+unadopted candidates, legacy source tokens, genuine ambiguity, and corrupt artifacts. Corrupting an
+unrelated current preparation does not affect a unique historical read. Parent retains the exclusive
+server qualification slot; this follow-up has no runtime qualification result.

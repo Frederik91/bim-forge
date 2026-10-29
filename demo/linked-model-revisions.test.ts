@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
 import { LinkedModelStore } from './linked-model-store.ts';
+import type { LinkedRetainedPin } from './linked-model-store.ts';
 import { handleLinkedModelRoute } from './linked-model-routes.ts';
 import { IDENTITY_LINK_TRANSFORM, MAX_LINK_REVISIONS, linkedDelta, parseLinkedJob, parseLinkedPrepared, parseLinkedReview } from '../src/linked-model.ts';
 import type { LinkedJob, LinkedSelection } from '../src/linked-model.ts';
@@ -49,6 +50,10 @@ function attachReady(input: ReturnType<typeof setup>, text = 'v1') {
 function selection(prepared: ReturnType<LinkedModelStore['prepared']>): LinkedSelection {
   const object = prepared.index.objects[0]; assert.ok(object);
   return { kind: 'ifc-reference', source: object.ref, occurrence: prepared.manifest.occurrence };
+}
+function retainedPin(prepared: ReturnType<LinkedModelStore['prepared']>): LinkedRetainedPin {
+  const pin = selection(prepared);
+  return { ...pin.source, occurrenceId: pin.occurrence.id, placementDigest: sha(Buffer.from(JSON.stringify(pin.occurrence.sourceToProjectMetres))) };
 }
 
 test('replacement stages separately, adopts atomically, retains original pins and never remaps removed/reused IDs', t => {
@@ -148,8 +153,43 @@ test('genuinely ambiguous retained version pins fail closed without guessing a h
   complete({ spool, job: ambiguousJob, bytes: first.bytes, offset: 2 }); store.refresh();
   store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
   assert.deepEqual(store.readVersion(projectId, selection(first.prepared)), { kind: 'unavailable', reason: 'ambiguous' });
+  assert.deepEqual(store.resolveRetained(projectId, retainedPin(first.prepared)), { kind: 'unavailable', reason: 'ambiguous' });
   const current = store.resolve(projectId, selection(first.prepared), 'current'); assert.equal(current.kind, 'ok');
   if (current.kind === 'ok') { assert.equal(current.versionId, candidate.id); assert.equal(current.prepared.geometry.meshes[0]?.productToSourceMetres[0]?.[3], 2); }
+});
+
+test('digest-only retained lookup owns historical placement and rejects wrong, cross-project, unadopted and corrupt pins', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool, data } = input;
+  const originalPin = retainedPin(first.prepared);
+  const transform = [[0, -1, 0, 11], [1, 0, 0, -4], [0, 0, 1, 2], [0, 0, 0, 1]];
+  store.place({ projectId, linkId: first.job.id, expectedGeneration: 1, sourceToProjectMetres: transform });
+  const placed = store.prepared(projectId, first.job.id); const placedPin = retainedPin(placed);
+  store.place({ projectId, linkId: first.job.id, expectedGeneration: 2, sourceToProjectMetres: structuredClone(IDENTITY_LINK_TRANSFORM) });
+  store.place({ projectId, linkId: first.job.id, expectedGeneration: 3, sourceToProjectMetres: transform });
+  const bytes = source('digest candidate');
+  const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 4, name: 'digest-v2.ifc', bytes });
+  const candidatePrepared = complete({ spool, job: candidate, bytes, offset: 2 }); store.refresh();
+  assert.deepEqual(store.resolveRetained(projectId, retainedPin(candidatePrepared)), { kind: 'unavailable', reason: 'missing' });
+  store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 4 });
+  for (const [pin, expected] of [[originalPin, first.prepared], [placedPin, placed]] satisfies [LinkedRetainedPin, typeof placed][]) {
+    const result = store.resolveRetained(projectId, pin); assert.equal(result.kind, 'ok');
+    if (result.kind === 'ok') { assert.equal(result.versionId, first.job.id); assert.deepEqual(result.prepared, expected); }
+    assert.deepEqual(result, store.readVersion(projectId, selection(expected)), 'both entry points use the same retained resolution');
+  }
+  assert.deepEqual(store.resolveRetained(randomUUID(), placedPin), { kind: 'unavailable', reason: 'missing' });
+  for (const wrong of [
+    { ...placedPin, namespace: randomUUID() }, { ...placedPin, occurrenceId: randomUUID() },
+    { ...placedPin, revision: randomUUID() }, { ...placedPin, originalSha256: 'b'.repeat(64) },
+    { ...placedPin, globalId: '0000000000000000000009' }, { ...placedPin, placementDigest: 'invalid' },
+    { ...placedPin, placementDigest: sha(Buffer.from(JSON.stringify([[1, 0, 0, 999], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]))) },
+  ]) assert.deepEqual(store.resolveRetained(projectId, wrong), { kind: 'unavailable', reason: 'missing' });
+  assert.deepEqual(store.resolve(projectId, selection(placed), 'current'), { kind: 'unavailable', reason: 'stale' });
+  // Another preparation's corruption must not make an exact retained lookup read all versions.
+  const currentFile = path.join(data, 'prepared', candidate.id, 'geometry.json'); fs.chmodSync(currentFile, 0o600); fs.appendFileSync(currentFile, ' ');
+  assert.equal(store.resolveRetained(projectId, placedPin).kind, 'ok');
+  const historicalFile = path.join(data, 'prepared', first.job.id, 'geometry.json'); fs.chmodSync(historicalFile, 0o600); fs.appendFileSync(historicalFile, ' ');
+  assert.deepEqual(store.resolveRetained(projectId, placedPin), { kind: 'unavailable', reason: 'missing' });
+  assert.deepEqual(store.originalVersion(projectId, first.job.id), first.bytes);
 });
 
 test('adoption retry must match the recorded candidate transition rather than a later placement generation', t => {
@@ -217,6 +257,8 @@ test('legacy ready rows upgrade deterministically and retained revision budgets 
   const upgraded = LinkedModelStore.open({ root: data, spool }); t.after(() => upgraded.close());
   assert.deepEqual(upgraded.prepared(projectId, first.job.id), first.prepared); assert.deepEqual(upgraded.original(projectId, first.job.id), first.bytes);
   assert.equal(upgraded.prepared(projectId, first.job.id).manifest.source.revision, sha(bytes), 'retain actual pre-feature hash revision pins unchanged');
+  const retained = upgraded.resolveRetained(projectId, retainedPin(first.prepared)); assert.equal(retained.kind, 'ok');
+  if (retained.kind === 'ok') assert.deepEqual(retained.prepared, first.prepared);
   for (let i = 1; i < MAX_LINK_REVISIONS; i++) {
     const job = upgraded.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: `${i}.ifc`, bytes: source(String(i)) }); upgraded.cancel(projectId, job.id);
   }
