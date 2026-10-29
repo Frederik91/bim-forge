@@ -47,11 +47,16 @@ availability metadata. It excludes staged candidate progress and failures. Missi
 artifacts appear in `unavailable`; consumers must preserve that incomplete coverage. A changed token
 requires outside-lock revalidation. The token does not decide semantic staleness.
 
-`readVersion(projectId, selection: LinkedSelection): LinkedVersionResolution` resolves an exact
-adopted source and occurrence-transform pin. The result is `{kind:'ok',versionId,prepared}` or
+`readVersion(projectId, selection: LinkedSelection): LinkedVersionResolution` resolves an adopted
+source and occurrence-transform pin only when it identifies one retained preparation. The result is `{kind:'ok',versionId,prepared}` or
 `{kind:'unavailable',reason}`. Cross-project pins, fabricated occurrence bindings, unadopted candidates,
 missing objects, and unavailable artifacts fail closed. Historic original hashes and transforms stay
 unchanged. `resolve(projectId, selection, 'current' | 'historical')` adds an exact-current check.
+If the same source bytes and transform match multiple adopted preparation jobs, historical resolution
+returns `ambiguous`, even when their derived artifacts happen to match. The selection does not contain
+a preparation-job pin, so the store cannot claim which historical preparation the caller inspected.
+Exact original downloads remain available because the original source bytes remain authoritative.
+Current resolution loads `currentVersionId` directly and never falls back to an older preparation.
 
 `prepareReplacement({projectId,linkId,expectedGeneration,name,bytes})` retains a separate candidate.
 Repeating the same bytes and expected generation returns an existing live or ready candidate.
@@ -59,6 +64,8 @@ Repeating the same bytes and expected generation returns an existing live or rea
 `adopt({projectId,linkId,candidateId,expectedGeneration})` checks both the caller's generation and
 the generation against which the candidate was prepared. Repeating a successful adoption request
 returns the same current state. A placement change also makes a previously prepared candidate stale.
+An adoption retry must also match the candidate's recorded preparation generation. A subsequent
+placement cannot make a stale adoption request succeed merely because its candidate remains current.
 
 `place({projectId,linkId,expectedGeneration,sourceToProjectMetres})` accepts only a finite, bounded,
 right-handed rigid transform. The placed geometry must remain within the existing coordinate envelope.
@@ -153,3 +160,10 @@ job, namespace, and occurrence IDs. It also checks malformed, extra-field, and o
 The server command from `experiments/ifc-link` is
 `python -m unittest test_runtime_worker.RevisionRequests`. Its subprocess launch is intercepted to inspect
 the exact command. Actual converter execution remains a separate qualification requirement.
+
+Parent static review identified two source defects after the initial handback: same-source generations
+could resolve an older preparation as current, and an adoption retry could mistake a later placement
+for its own transition. The store now selects actual current preparation, rejects ambiguous historical
+preparations, and checks the recorded candidate generation on retries. Focused regression sources cover
+identical and differing derived preparations over identical original bytes, corrupt current artifacts,
+and adoption followed by placement. These regressions remain unrun while the server is unavailable.

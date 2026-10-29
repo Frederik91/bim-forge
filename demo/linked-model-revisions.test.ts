@@ -96,6 +96,48 @@ test('corrupt, cancelled, oversize and interrupted candidates preserve usable cu
   assert.deepEqual(second.prepared(projectId, first.job.id), first.prepared);
 });
 
+test('same-source generations resolve the actual current preparation and fail closed on ambiguous historical preparation', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool, data } = input;
+  const pin = selection(first.prepared);
+  const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'same-source.ifc', bytes: first.bytes });
+  complete({ spool, job: candidate, bytes: first.bytes, offset: 3 }); store.refresh();
+  // Unadopted preparations cannot make an adopted historical pin ambiguous.
+  assert.equal(store.readVersion(projectId, pin).kind, 'ok');
+  store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
+  const current = store.resolve(projectId, pin, 'current'); assert.equal(current.kind, 'ok');
+  if (current.kind !== 'ok') assert.fail('Current source must resolve its actual adopted preparation.');
+  assert.equal(current.versionId, candidate.id); assert.deepEqual(current.prepared, store.prepared(projectId, first.job.id));
+  assert.equal(current.prepared.geometry.meshes[0]?.productToSourceMetres[0]?.[3], 3);
+  assert.deepEqual(store.readVersion(projectId, pin), { kind: 'unavailable', reason: 'ambiguous' });
+  assert.deepEqual(store.resolve(projectId, pin, 'historical'), { kind: 'unavailable', reason: 'ambiguous' });
+  assert.deepEqual(store.originalVersion(projectId, first.job.id), first.bytes); assert.deepEqual(store.originalVersion(projectId, candidate.id), first.bytes);
+  const filename = path.join(data, 'prepared', candidate.id, 'geometry.json'); fs.chmodSync(filename, 0o600); fs.appendFileSync(filename, ' ');
+  assert.deepEqual(store.resolve(projectId, pin, 'current'), { kind: 'unavailable', reason: 'missing' }, 'current corruption must never fall back to an older preparation');
+});
+
+test('identical preparations do not disambiguate source-only historical pins across adopted generations', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool } = input;
+  const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'identical.ifc', bytes: first.bytes });
+  complete({ spool, job: candidate, bytes: first.bytes }); store.refresh();
+  store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
+  assert.deepEqual(store.readVersion(projectId, selection(first.prepared)), { kind: 'unavailable', reason: 'ambiguous' });
+  const current = store.resolve(projectId, selection(first.prepared), 'current'); assert.equal(current.kind, 'ok');
+  if (current.kind === 'ok') assert.equal(current.versionId, candidate.id);
+});
+
+test('adoption retry must match the recorded candidate transition rather than a later placement generation', t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool } = input;
+  const bytes = source('adopt B'); const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'B.ifc', bytes });
+  complete({ spool, job: candidate, bytes }); store.refresh();
+  const adopted = store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 });
+  assert.deepEqual(store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 }), adopted);
+  const placed = store.place({ projectId, linkId: first.job.id, expectedGeneration: 2, sourceToProjectMetres: [[1, 0, 0, 4], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]] });
+  const token = store.snapshotCurrent(projectId).catalogToken;
+  assert.throws(() => store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 2 }), /changed/);
+  assert.throws(() => store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 1 }), /changed/);
+  assert.equal(store.snapshotCurrent(projectId).catalogToken, token); assert.deepEqual(store.catalog(projectId)[0]?.state, placed);
+});
+
 test('placement is independent, rigid, bounded, CAS protected and retains historical occurrence transform', t => {
   const input = setup(t); const first = attachReady(input); const { store, projectId, spool } = input;
   const candidateBytes = source('next'); const candidate = store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'next.ifc', bytes: candidateBytes });
