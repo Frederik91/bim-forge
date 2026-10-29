@@ -7,6 +7,7 @@ import { RoomRepository } from './room-model.ts';
 import type { ModelSnapshot } from './room-model.ts';
 import { GeometryEvidenceConflict, GeometryEvidenceSession, readGeometryEvidence } from './geometry-evidence.ts';
 import { GeometrySessionError } from './geometry-session.ts';
+import { GeometryEvidenceLimitError } from './geometry-evidence-contract.ts';
 import { FixtureGeometrySource, evidenceWall, geometryProposalScript } from './geometry-evidence.fixture.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
 
@@ -77,6 +78,7 @@ test('fatal host geometry failures retain discarded execution evidence and canno
   const scripts = new ModelScripts(); t.after(() => scripts.dispose());
   const failures = [
     new GeometryEvidenceConflict('Inspected geometry changed.'),
+    new GeometryEvidenceLimitError(65537, 1, 1),
     new GeometrySessionError('deadline', 'Geometry operation exceeded its hard worker deadline.'),
     new GeometrySessionError('worker-failed', 'Geometry worker rejected its input or operation.'),
     new GeometrySessionError('invalid-reply', 'Geometry result/receipt does not match the dispatched operation.'),
