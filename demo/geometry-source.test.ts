@@ -10,7 +10,7 @@ import type { LinkedModelStore } from './linked-model-store.ts';
 
 async function setup() {
   const repository = await RoomRepository.create('Geometry source boundary');
-  const native: GeometrySessionInput['native'] = { snapshot: repository.view('main').snapshot,
+  const native: GeometrySessionInput['native'] = { snapshot: repository.view(repository.head('main')).snapshot,
     revisionId: repository.head('main'), target: { kind: 'main' }, readableIds: [] };
   return { native, projectId: repository.projectId, signal: new AbortController().signal };
 }
