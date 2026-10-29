@@ -70,19 +70,28 @@ test('full surroundings overlap remains rejected with a designated safe intersec
   });
 });
 
-test('unsupported final measurement retains fatal authority classification and a safe typed reason', async t => {
-  const source = new FixtureGeometrySource(); source.replace([evidenceWall({ open: true })]);
+test('unread open surroundings retain fatal authority classification after a complete initial wall measurement', async t => {
+  const source = new FixtureGeometrySource();
+  source.replace([evidenceWall(), evidenceWall({ namespace: 'open-panel', x: 1.25 + 5e-8, open: true })]);
   const { session, candidate } = await proofFixture(source); t.after(() => session.close());
-  await session.measure(cubeMeasurement);
+  const page = await session.query({ query: { categories: ['wall'], region: { min: [0, 1, 0], max: [.25, 3, 2] } } });
+  assert.ok(page.kind === 'complete');
+  const wall = page.items.find(item => item.ref.kind === 'ifc' && item.ref.namespace === 'evidence-wall');
+  assert.ok(wall);
+  const initial = await session.measure({ ...cubeMeasurement, against: { kind: 'object', ref: wall.ref } });
+  assert.ok(initial.kind === 'complete');
+  assert.equal(initial.value.clearance, 'satisfied-mesh');
+  assert.equal(initial.receipt.reads.some(read => read.kind === 'object' && read.ref.kind === 'ifc' && read.ref.namespace === 'open-panel'), false);
+  await session.assertFresh();
   await assert.rejects(session.seal(candidate(1)), error => {
     assert.ok(error instanceof GeometryEvidenceConflict);
     assert.equal(error instanceof GeometryProposalValidationError, false);
     assert.ok(error.diagnostic);
-    assert.equal(error.diagnostic.replayLeg, 'primary');
-    assert.equal(error.diagnostic.operation, 'clearance');
+    assert.equal(error.diagnostic.replayLeg, 'surroundings');
+    assert.equal(error.diagnostic.operation, 'intersection');
     assert.ok(error.diagnostic.resultKind === 'partial');
     assert.equal(error.diagnostic.reason, 'unsupported');
-    assert.doesNotMatch(error.message, /evidence-wall|evidence-occurrence|requested-cube|witness|nearest/);
+    assert.doesNotMatch(error.message, /open-panel|evidence-wall|evidence-occurrence|requested-cube|witness|nearest/);
     return true;
   });
 });
