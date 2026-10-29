@@ -13,10 +13,18 @@ candidate associations, and adopted source and occurrence-placement history. Ope
 upgrades legacy jobs in one transaction. Existing ready links retain their IDs and source pins.
 The upgrade does not touch native model storage or rewrite source bytes.
 
+New jobs set `source.revision` to their unique job/version UUID. `originalSha256` remains the content
+integrity and deduplication hash. Repeated exports of identical bytes therefore retain separate,
+unambiguous immutable version pins. Exact base `f4285c6` used the original hash as the revision for
+pre-feature jobs. The additive upgrade preserves those stored source pins unchanged.
+
 Every link has one occurrence. Separate attachments have separate namespaces and occurrences,
 even when their original bytes and GlobalIds match. Occurrence placement changes independently
 of source preparation. The private worker request now separates the job UUID from the stable
 namespace and occurrence UUIDs. Result validation checks all three bindings.
+Private worker revisions use the same bounded source-token grammar as stored source metadata.
+New requests carry the version UUID; retained pre-feature hash tokens remain valid source tokens.
+The worker checks `originalSha256` against the actual bytes independently of the revision token.
 
 The first successfully prepared version becomes current, preserving the existing attach workflow.
 Replacement candidates leave current unchanged until explicit adoption. Preparation failure,
@@ -52,9 +60,10 @@ source and occurrence-transform pin only when it identifies one retained prepara
 `{kind:'unavailable',reason}`. Cross-project pins, fabricated occurrence bindings, unadopted candidates,
 missing objects, and unavailable artifacts fail closed. Historic original hashes and transforms stay
 unchanged. `resolve(projectId, selection, 'current' | 'historical')` adds an exact-current check.
-If the same source bytes and transform match multiple adopted preparation jobs, historical resolution
-returns `ambiguous`, even when their derived artifacts happen to match. The selection does not contain
-a preparation-job pin, so the store cannot claim which historical preparation the caller inspected.
+If genuinely ambiguous retained data contains multiple adopted preparation jobs claiming one identical
+source-version and transform pin, historical resolution returns `ambiguous`. New version UUIDs prevent
+that state when the same original file is prepared across generations. The store does not guess a
+historical preparation when retained version metadata is ambiguous.
 Exact original downloads remain available because the original source bytes remain authoritative.
 Current resolution loads `currentVersionId` directly and never falls back to an older preparation.
 
@@ -164,6 +173,8 @@ the exact command. Actual converter execution remains a separate qualification r
 Parent static review identified two source defects after the initial handback: same-source generations
 could resolve an older preparation as current, and an adoption retry could mistake a later placement
 for its own transition. The store now selects actual current preparation, rejects ambiguous historical
-preparations, and checks the recorded candidate generation on retries. Focused regression sources cover
-identical and differing derived preparations over identical original bytes, corrupt current artifacts,
-and adoption followed by placement. These regressions remain unrun while the server is unavailable.
+preparations, and checks the recorded candidate generation on retries. Unique source revision UUIDs fix
+the identity cause of repeated identical exports. Focused regression sources cover exact history and
+current resolution over identical original bytes, genuine retained ambiguity, actual pre-feature hash
+pins, corrupt current artifacts, and adoption followed by placement. These regressions remain unrun
+while the server is unavailable.
