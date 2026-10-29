@@ -132,7 +132,7 @@ test('an evaluated native asset can stand on a native slab without a penetration
   const snapshot = validateSnapshot({ ...base, entities: [...base.entities,
     { id: 'contact-family', type: 'AssetFamily', name: 'Closed box', description: 'Synthetic contact fixture',
       parts: [{ id: 'body', kind: 'box', min: [0, 0, 0], size: [1, 1, 1], color: '#336699' }] },
-    { id: 'standing-box', type: 'AssetInstance', name: 'Standing box', familyId: 'contact-family', position: [5, 4],
+    { id: 'standing-box', type: 'AssetInstance', name: 'Standing box', familyId: 'contact-family', position: [6, 4.8],
       rotationDeg: 0, size: { width: .5, depth: .5, height: .5 }, placement: { kind: 'room', roomId: 'level-ground-east' } },
   ] });
   const context = createGeometryContext({ ...input([]), native: { snapshot, revisionId, target: { kind: 'main' } } });
@@ -145,7 +145,7 @@ test('an evaluated native asset can stand on a native slab without a penetration
   assert.ok(Math.abs(Math.hypot(...witness.subject.map((n, i) => n - witness.obstacle[i])) - (value.distanceMetres ?? -1)) < 1e-10);
   const requiredGap = measurement(context.measure({ ...request, clearanceMetres: .5 }));
   assert.equal(requiredGap.clearance, 'violated-mesh');
-  const penetration = measurement(context.measure({ subject: box({ min: [4.75, 3.75, -.01], max: [5.25, 4.25, .49] }),
+  const penetration = measurement(context.measure({ subject: box({ min: [5.75, 4.55, -.01], max: [6.25, 5.05, .49] }),
     against: request.against, operation: 'clearance', clearanceMetres: 0 }));
   assert.notEqual(penetration.relation, 'contact'); assert.notEqual(penetration.clearance, 'satisfied-mesh');
 });
