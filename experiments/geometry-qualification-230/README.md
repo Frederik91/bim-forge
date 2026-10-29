@@ -102,17 +102,31 @@ does not grant access to the private oracle or native acceptance authority.
 The owner/parent must reserve the server and combined source first. All storage is
 under `/ssd1`; supply a clean committed server checkout, cached dependencies/image,
 and compatible cached Python executable. No installs or image pulls are performed.
-Each container is limited to two CPUs and 3 GiB RAM with total memory+swap also
-3 GiB, so it cannot consume swap. The parent permits one serial qualification slot;
-do not start a container, build, test or server probe before explicit slot handoff.
-Inspect the image/Python paths before the first attempt; they are configuration,
-not evidence that the cached venv works in an arbitrary base image.
+Serial converter/validate/native/runtime containers are limited to two CPUs and
+3 GiB RAM with total memory+swap also 3 GiB. The browser app is limited to 1.5 CPUs
+and 2 GiB, reserving at most 0.5 CPU/1 GiB for the separate parent-owned sidecar.
+Both must disable swap; combined limits must stay at two CPUs/3 GiB. The parent
+permits one serial qualification slot; do not start a container, build, test or
+server probe before explicit slot handoff. This source handback grants no rights
+to run. Parent currently retains the slot.
+
+The known Python invocation comes from the retained #223 packaging source:
+`deploy/preview/compose.yaml` and `docs/design/linked-model-packaging-223.md` in
+`issue-223-server-packaging/bim-forge`. They pin tools image
+`sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff`,
+mount the retained venv at `/qualification/python` and pinned packages at
+`/python-deps`, and override entrypoint to `/qualification/python/bin/python`.
+The historical receipt identifies Python 3.11.2 resolving to `/usr/bin/python3.11`
+inside that exact image, without host interpreter/shared-library mounts. The runner
+now uses those aliases, explicit entrypoint and one-thread BLAS settings. This is
+read-only retained evidence, not a current server-cache verification or a claim
+that the venv works in an arbitrary image. Parent verifies cached bytes before use.
 
 ```sh
 export QUAL_SERVER_RESERVATION=issue234
 export QUAL_NODE_DEPS='<cached direct node_modules directory under /ssd1>'
-export QUAL_PYTHON_IMAGE='<already-cached-compatible-image>'
-export QUAL_PYTHON_BIN='/ssd1/bim-forge-qualification/qvm-20261025/python/bin/python'
+export QUAL_PYTHON_IMAGE='sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff'
+export QUAL_PYTHON_BIN='/qualification/python/bin/python'
 bash experiments/geometry-qualification-230/run-server.sh converter /ssd1/.../source /ssd1/.../issue234
 bash experiments/geometry-qualification-230/run-server.sh validate /ssd1/.../source /ssd1/.../issue234
 export QUAL_CONVERTER_ARTIFACTS='/ssd1/.../issue234/attempt-1-converter-<sha>/artifacts'

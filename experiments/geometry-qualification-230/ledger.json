@@ -9,6 +9,14 @@
   "initialUnqualifiedCommit": "faa6a80274adce99aaf8758d786e52d082e17391",
   "selectionUnqualifiedCommit": "423bfc37c0de68c9e4bee805eded8a5418e7f2ec",
   "runtimeDependencyParent": "f5c3210f166ccfa4041aa6acc42dd41d6d833224",
+  "retainedPythonInvocation": {
+    "source": "Local issue-223-server-packaging deploy/preview/compose.yaml and docs/design/linked-model-packaging-223.md, inspected read-only 2026-10-29",
+    "image": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+    "entrypoint": "/qualification/python/bin/python",
+    "mounts": "retained venv -> /qualification/python:ro; pinned packages -> /python-deps:ro",
+    "status": "Historical compatible invocation found; no current server probe or execution"
+  },
+  "combinedBrowserBudget": "App 1.5 CPU/2 GiB plus separately parent-owned sidecar at most 0.5 CPU/1 GiB; no swap; no handoff to child yet",
   "qualification": {
     "fixtureGeneration": "not-run",
     "independentOracle": "not-run",
