@@ -147,3 +147,9 @@ Before a draft PR, required server commands include `npm run validate`, the expl
 policy check, and `node --test demo/linked-model-revisions.test.ts`. Parent-owned package registration,
 actual-image converter checks, real IFC fixtures, application/server regressions, and desktop/phone
 replacement and adoption checks remain required. No validator or policy was weakened.
+
+The new Python `test_runtime_worker.RevisionRequests` class checks actual command bindings for distinct
+job, namespace, and occurrence IDs. It also checks malformed, extra-field, and oversized requests.
+The server command from `experiments/ifc-link` is
+`python -m unittest test_runtime_worker.RevisionRequests`. Its subprocess launch is intercepted to inspect
+the exact command. Actual converter execution remains a separate qualification requirement.
