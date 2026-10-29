@@ -22,6 +22,16 @@ export function evidenceWall(options: { version?: string; x?: number; namespace?
     geometry: { source, frame: 'source-engineering-metres', meshes: options.missing ? [] : [{ ref, verticesMetres: vertices, triangles,
       productToSourceMetres: [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]] }] } });
 }
+export function evidenceFloor(options: { top?: number; open?: boolean } = {}): LinkedPrepared {
+  const floor = evidenceWall({ namespace: 'evidence-floor' }); const mesh = floor.geometry.meshes[0];
+  if (!mesh) throw new Error('The floor fixture requires a mesh.');
+  const top = options.top ?? 0;
+  const verticesMetres = [5, 4, -.2, 7, 4, -.2, 7, 5.5, -.2, 5, 5.5, -.2, 5, 4, top, 7, 4, top, 7, 5.5, top, 5, 5.5, top];
+  const triangles = options.open ? [4, 6, 5, 4, 5, 6] : mesh.triangles;
+  return parseLinkedPrepared({ ...floor, manifest: { ...floor.manifest, counts: { ...floor.manifest.counts, triangles: triangles.length / 3 } },
+    index: { ...floor.index, objects: floor.index.objects.map(object => ({ ...object, ifcClass: 'IfcSlab', name: 'Synthetic floor support' })) },
+    geometry: { ...floor.geometry, meshes: [{ ...mesh, verticesMetres, triangles }] } });
+}
 function wallRef(projectId: string, prepared: LinkedPrepared): Extract<GeometryRef, { kind: 'ifc' }> {
   const object = prepared.index.objects[0];
   if (!object) throw new Error('Fixture requires an object.');
