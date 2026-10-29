@@ -337,3 +337,34 @@ are retained. The matching #233 input contract must allow deliberate project-con
 with no selected native objects; a formerly nonempty selection lost during rebase must not
 silently broaden into project context. That parser/rebase change and actual sent-payload UI
 evidence are still pending, so the source combination is not ready for deployment.
+
+### Restored server and first combined qualification
+
+Owner cleared the expected command approvals. SSH recovered on 29 October; the preview remains
+at its prior executable. The server has approximately 4.6 GiB available memory and almost no
+free swap, so parent reserves one serial 2 CPU / 3 GiB / no-swap qualification slot. Source,
+dependencies and containers remain read-only/network-off with writable evidence/temp on SSD.
+
+Root attempt 1 at `88daaa82e38f3491d62b0866ba458bbf0bbada2c` passed strict lint (306 source
+files), then failed TypeScript at `src/geometry-query.ts:219`: narrowing of an optional level
+reference did not survive a callback. No tests ran. Logs and stopped container are retained in
+`/ssd1/bim-forge-qualification/issue230/run-88daaa82e38f3491d62b0866ba458bbf0bbada2c-component-01`.
+Source correction `e7b24a5` captures the validated identity before the callback; it changes no
+validator or semantics and awaits rerun.
+
+Parent has composed #233 through `bfb9db5`, including explicit empty native-selection semantics,
+browser-safe evidence restoration, trusted request-attempt receipts, final-candidate measurement
+replay, and source-guarded acceptance. `test:geometry-evidence` registers its two test files plus
+the parent provider tests in default `npm test`. The server injects `demo/geometry-source.ts`;
+the production image allowlist and COPY include that module. Native-only requests keep the same
+interface. Authorization precedes source reads. Only consumed historical references are resolved,
+with one preparation cached per version/placement during each snapshot; all unavailable active
+links remain explicit. #232 `2b783b1` supplies the exact retained-pin lookup without requiring a
+caller-supplied matrix or loading every historical mesh.
+
+Independent static follow-ups confirm the prior three geometry and two IFC findings are
+addressed in source. A separate provider review found no concrete defect given the source owner's
+exact-pin contract. These are source reviews, not runtime receipts. Ordinary floor contact remains
+a known qualification blocker: #231 is adding a geometric nonpenetration certificate and controls;
+#233 must accept only certified contact while retaining ambiguous-contact/penetration rejection.
+All live-provider, converter/oracle, actual-image, browser, preservation and deployment gates remain pending.
