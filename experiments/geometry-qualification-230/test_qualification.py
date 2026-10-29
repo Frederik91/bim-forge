@@ -166,7 +166,10 @@ class RealIFC(unittest.TestCase):
     def test_failed_candidates_retain_original_and_never_publish_manifest(self):
         current_output, _, _ = self.convert("m-v1")
         current_bytes = {p.name: p.read_bytes() for p in current_output.iterdir()}
-        for name, expected in (("m-duplicate", "DUPLICATE_GLOBAL_ID"), ("m-huge", "UNSAFE_TRANSFORM"),
+        # The huge fixture corrupts an IFC local placement, not the caller's
+        # occurrence transform. axis_matrix wraps rigid()'s ValueError subclass
+        # as UNSAFE_PLACEMENT at that source-placement validation boundary.
+        for name, expected in (("m-duplicate", "DUPLICATE_GLOBAL_ID"), ("m-huge", "UNSAFE_PLACEMENT"),
                                ("m-budget", "PRODUCT_BUDGET"), ("oversize", "SOURCE_BUDGET"), ("malformed", None)):
             with self.subTest(name=name):
                 type(self).counter += 1
