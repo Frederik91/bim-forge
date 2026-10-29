@@ -24,8 +24,8 @@ function prepared(options: { namespace?: string; occurrence?: string; revision?:
   vertices?: number[]; triangles?: number[]; missing?: boolean; name?: string; units?: 1 | .001; globalId?: string; ifcClass?: string } = {}): LinkedPrepared {
   const source = { namespace: options.namespace ?? 'source-a', revision: options.revision ?? 'v1', originalSha256: options.originalSha256 ?? 'b'.repeat(64) };
   const ref = { ...source, globalId: options.globalId ?? gid };
-  const verticesMetres = options.vertices ?? cubeVertices;
-  const triangles = options.triangles ?? cubeFaces;
+  const verticesMetres = [...(options.vertices ?? cubeVertices)];
+  const triangles = [...(options.triangles ?? cubeFaces)];
   const artifact = { sha256: 'c'.repeat(64), bytes: 100 };
   return parseLinkedPrepared({ manifest: { format: 'bim-forge-ifc-link', version: 1, state: 'complete', readOnly: true,
     source, schema: 'IFC4', tool: { ifcopenshell: '0.9.0.post1' }, occurrence: { id: options.occurrence ?? 'occ-a', sourceToProjectMetres: options.matrix ?? identity },
@@ -203,7 +203,7 @@ test('worker keeps the public four-method contract, trusted receipts and bounded
   } finally { await session.close(); }
 });
 
-test('worker abortion and hard startup deadline prevent publication of successful partial history', async () => {
+test('worker abortion prevents publication of successful partial history', async () => {
   const aborted = new AbortController(); aborted.abort();
   await assert.rejects(createGeometrySession(input(), { signal: aborted.signal }), /aborted/);
   const controller = new AbortController(); const session = await createGeometrySession(input(), { signal: controller.signal });
@@ -288,4 +288,24 @@ test('idle lifetime covers thinking separately from hard operation deadlines and
     t.mock.timers.tick(10); await rejected;
     assert.throws(() => session.receipts(), /hard worker deadline/);
   } finally { await session.close(); }
+});
+
+test('pagination receipts detect changes on an unread page and bounded replies never silently truncate membership', () => {
+  const before = createGeometryContext(input([prepared(), prepared({ occurrence: 'second' })]));
+  const page = before.query({ query: {}, limit: 1 }); assert.equal(page.kind, 'complete');
+  const moved: GeometryMatrix = [[1, 0, 0, 2], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+  const current = createGeometryContext(input([prepared(), prepared({ occurrence: 'second', matrix: moved })]));
+  assert.equal(validateGeometryReceipts({ receipts: before.receipts(), current }).kind, 'stale');
+  const bounded = createGeometryContext({ ...input(), limits: { maxResponseBytes: 1 } });
+  const rejected = bounded.query({ query: {} }); assert.equal(rejected.kind, 'unavailable');
+  if (rejected.kind === 'unavailable') assert.equal(rejected.reason, 'response-limit');
+  assert.equal(validateGeometryReceipts({ receipts: bounded.receipts(), current: bounded }).kind, 'unavailable');
+});
+
+test('touching at one obstacle cannot hide penetration at a different obstacle', () => {
+  const contained: GeometryMatrix = [[1, 0, 0, 1.2], [0, 1, 0, .2], [0, 0, 1, .2], [0, 0, 0, 1]];
+  const context = createGeometryContext(input([prepared(), prepared({ occurrence: 'inside', matrix: contained })]));
+  const result = measurement(context.measure({ subject: box({ min: [1, 0, 0], max: [3, 2, 2] }),
+    against: { kind: 'query', query: {} }, operation: 'clearance', clearanceMetres: 0 }));
+  assert.equal(result.clearance, 'violated-mesh');
 });
