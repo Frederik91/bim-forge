@@ -202,7 +202,7 @@ test('real IFC properties, version UI and historical context preserve Main and r
   });
   const first = await importReceivingProject(page, base, nativeFile);
   const projectId = first.repository.projectId;
-  const nativeDoor = first.repository.view(first.repository.head('main')).snapshot.entities.find(item => item.type === 'Door');
+  const nativeDoor = first.repository.view(first.repository.head('main')).snapshot.entities.find(item => item.type === 'Door' && item.id === 'receiving-entry');
   assert.ok(nativeDoor, 'The receiving fixture must provide a native door for the previous-selection trap.');
   await page.locator('#model-explorer [data-node-id="receiving-level"] > .model-tree-row .model-tree-name').click();
   await page.locator('.model-object-picker').selectOption('receiving-hall');
