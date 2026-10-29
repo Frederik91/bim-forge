@@ -455,3 +455,20 @@ source, while the new evidence fixtures were corrected. Validation/policy/build 
 tests passed 819 with two optional skips, and all 21 asset tests passed. This was explicitly not
 a claim that the full default chain passed: it did not rerun or hide the known failing evidence
 segment. The next gate is the complete default `npm test` at the corrected combined head.
+
+Root attempt 7 at `04d71ca` passed the contracts/geometry/IFC prefix and 30/31 evidence checks;
+the remaining endpoint fixture generated an impossible TypeScript literal comparison before any
+host call. Exact correction `06db363` selects the expression in the host fixture and requires
+successful actual guest execution for every endpoint branch. At combined `a4269f99`, root
+attempt 8 passed the complete default chain: **925 total, 923 pass, zero fail, two optional skips**.
+Strict lint covers 315 sources; TypeScript, explicit policy for all 98 changed paths, and the
+browser build pass. Raw evidence is retained under
+`/ssd1/bim-forge-qualification/issue230/run-a4269f99e57f7d1c83b5eb0e3abe32c5695eead1-full-08`.
+
+Independent real-converter/oracle attempt 1 at that same source correctly rejected the huge
+placement fixture as `UNSAFE_PLACEMENT`, but its expected code was `UNSAFE_TRANSFORM`.
+Qualification-only correction `d119330` matches the actual placement boundary. Rejection, no
+manifest publication, exact original retention and unchanged-current checks remain unchanged.
+The failed run remains retained; the corrected converter/oracle run is pending. This does not
+constitute browser, actual-image, connected-provider or preview qualification. No deployment,
+upstream public release, GitHub merge, live data/auth modification or validator weakening occurred.
