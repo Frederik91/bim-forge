@@ -83,7 +83,7 @@ The reviewed portable body alone grants no freshness or execution authority. A m
 Historical reviews without geometry evidence retain their native behavior. A portable pending geometry review without its host attempt record
 requires fresh hosted inspection. Already accepted imported native history remains native history.
 
-`request_geometry_acceptances` records the catalogue token, reconciled candidate digest and independent final measurement receipts
+`request_geometry_acceptances` records the catalogue token, reconciled candidate digest, independent final measurement receipts and typed final request/results
 inside the same native transaction as the explicit decision. Original request source pins and review evidence remain unchanged.
 
 ## Freshness and final candidate
@@ -98,10 +98,20 @@ Relevant geometry/transform/removal/query-membership changes fail; unrelated rev
 
 Measurements retain their full typed predicates, including clearance distance and absence candidate sets. A guest box's `candidateId`
 must identify a real final native object. The host independently measures that final authored shape against the original constraint,
-then checks every physical object overlapping its host-evaluated candidate enclosure through exact kernel measurement.
+then checks every physical object overlapping its host-evaluated candidate enclosure expanded by the kernel's declared numeric tolerance through exact kernel measurement.
 The complete predicate includes newly added/moved-in objects; unlocated shapes and unavailable sources still prevent a certificate.
 Distant open display surfaces outside that predicate cannot affect candidate intersection. Reconciliation runs the same checks against the actual merged native candidate.
 A finite wall reference cannot hide a newly intersecting object elsewhere in the candidate's final surroundings.
+
+Original observations are revalidated against the accepted current native context, separately from final-candidate constraints.
+Final replay rebinds both endpoints and includes native members retained in a measurement query's full host receipt.
+Explicit clearances apply to actual final shapes in either endpoint order, including original query members that leave the predicate.
+Ordinary object distance/intersection probes retain their historical facts without requiring the authored object to stay at that pose.
+Worker-produced full evaluated geometry digests identify changed native endpoints, including host/family/level effects; bounds and sampled faces cannot prove shape equality.
+Only proposed boxes and changed physical native endpoints receive the additional surroundings check, so unchanged native wall joins do not become new constraints.
+The describe receipt geometry projection is produced by #231 for every record with an evaluated shape, including opening voids.
+Unknown source representation error is retained as unknown; numeric expansion does not claim source-error certainty.
+Sequential comparison/replay/surroundings workers stay within the existing session cap.
 
 Exploratory measurements remain in history. For each candidate and constraint the final replay checks the most recent trial;
 a later corrected placement can supersede an earlier violated trial without deleting the failure.
@@ -132,6 +142,7 @@ All assertions below are **unrun**.
 | Native reconciliation and independent unrelated native acceptance | `demo/geometry-evidence-queue.test.ts` |
 | Authenticated private-draft continuation, review-only follow-up, relevant/unrelated source changes and preserved lineage | `demo/geometry-evidence-queue.test.ts` |
 | Finite against-object loophole and missing host-authenticated evidence | `demo/geometry-evidence-queue.test.ts` |
+| Both native endpoint orders, native query members, observational moves, actual final persisted distances and tolerance-expanded surroundings | `demo/geometry-evidence-queue.test.ts` |
 | Real linked cross-process reservation, converter, app UI, connected agent and independent oracle | #232 / #234 / parent #230 |
 
 No independent #233 qualification run has been started. The parent owns the serial server slot and combined attempt ledger.

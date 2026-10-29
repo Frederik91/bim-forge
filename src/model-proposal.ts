@@ -300,7 +300,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     if (executions.length >= MAX_SCRIPT_EXECUTIONS || hostCalls >= MAX_SCRIPT_HOST_CALLS) { fatal = true; options.onPreview?.(null); fail('The model worker exceeded the aggregate script budget.'); }
     running = true;
     try {
-      await geometry?.assertFresh(options.initialDraft);
+      await geometry?.assertFresh();
       signal.throwIfAborted();
       fields(argumentsValue, ['language', 'source']);
       if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
@@ -314,7 +314,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       parseScriptExecutions([...executions, result.evidence]);
       executions.push(result.evidence); hostCalls += result.evidence.calls.length;
       signal.throwIfAborted();
-      await geometry?.assertFresh(result.kind === 'proposal' ? result.snapshot : options.initialDraft);
+      await geometry?.assertFresh();
       signal.throwIfAborted();
       if (result.kind === 'failed') {
         fatal ||= ['cancelled', 'timed-out', 'resource-limit'].includes(result.evidence.status)
@@ -354,7 +354,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
           target: bound.target?.target ?? { kind: 'main' }, ...(bound.scope ? { scope: bound.scope } : {}) }), signal,
         ...(options.geometry.inherited ? { inherited: options.geometry.inherited } : {}),
         ...(options.geometry.current ? { current: options.geometry.current } : {}) });
-      await geometry.assertFresh(options.initialDraft);
+      await geometry.assertFresh();
     }
     const declarations = await scripts.declarations();
     signal.throwIfAborted();
@@ -396,7 +396,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}), ...(bound.scope ? { scope: bound.scope } : {}), validator: 'room-graph-v1' },
     });
     signal.throwIfAborted();
-    await geometry?.assertFresh(result.snapshot);
+    await geometry?.assertFresh();
     signal.throwIfAborted();
     return { status: 'ready', repository: next, review: { ...next.review(bound.proposalName), changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } };
   } catch (error) { throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error }); }

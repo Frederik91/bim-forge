@@ -1171,7 +1171,8 @@ export class ChangeRequests {
           expectedTargetRevisionId: current.freezeDesignTarget(ticket.request.target.target).revisionId } : {}) });
       if (geometryProof) this.#db.prepare('INSERT INTO request_geometry_acceptances(decision_id,request_id,ticket_id,body) VALUES(?,?,?,?)')
         .run(decisionId, ticket.request.requestId, ticket.id, JSON.stringify({ version: 1, catalogToken: geometryProof.catalogToken,
-          verifiedCandidateSha256: geometryProof.verifiedCandidateSha256, finalReceipts: geometryProof.finalReceipts }));
+          verifiedCandidateSha256: geometryProof.verifiedCandidateSha256, finalReceipts: geometryProof.finalReceipts,
+          finalMeasurements: geometryProof.finalMeasurements }));
       this.#put(next);
       this.#decisionMessage(next);
       for (const assessment of assessments) {

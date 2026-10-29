@@ -5,9 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { ChangeRequests } from './change-requests.ts';
-import { RoomRepository, rectangleLayout, previewFurnishings } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewFurnishings, previewAssets } from '../src/room-model.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
-import { readGeometryEvidence, geometrySnapshotHash } from '../src/geometry-evidence.ts';
+import { readGeometryEvidence, parseGeometryEvidence, geometrySnapshotHash } from '../src/geometry-evidence.ts';
 import { FixtureGeometrySource, evidenceWall, evidenceFloor, geometryProposalScript, geometryReview, cubeAuthoring, cubeMeasurement } from '../src/geometry-evidence.fixture.ts';
 import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
 
@@ -65,7 +65,96 @@ test('property-only revision adoption accepts an alternative while retaining Mai
     const proof: unknown = JSON.parse(row.body);
     assert.ok(proof && typeof proof === 'object' && 'verifiedCandidateSha256' in proof);
     assert.equal(proof.verifiedCandidateSha256, geometrySnapshotHash(saved.designView({ kind: 'alternative', id: 'test-alternative' }).snapshot));
+    assert.ok('finalMeasurements' in proof && Array.isArray(proof.finalMeasurements) && proof.finalMeasurements.length > 0);
   } finally { db.close(); }
+});
+
+test('final native endpoint replay is symmetric for object order and query members, and preserves actual final measurements', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'geometry-final-endpoints-'));
+  const queues: ChangeRequests[] = [];
+  t.after(async () => { for (const queue of queues) await queue.close(); await fs.rm(directory, { recursive: true, force: true }); });
+  for (const endpoint of ['native-subject', 'native-against', 'native-query-member']) {
+    for (const scenario of [{ x: 2.3, operation: 'clearance' }, { x: 3.5, operation: 'clearance' },
+      ...(endpoint === 'native-against' ? [{ x: 2.3, operation: 'distance' }, { x: 3.5, operation: 'distance' }] : [])]) {
+      const { x, operation } = scenario;
+      const initial = await RoomRepository.create();
+      const instance = { id: 'requested-cube', type: 'AssetInstance', name: 'Requested cube', familyId: 'evidence-cube', position: [3, 2],
+        rotationDeg: 0, size: { width: .5, depth: .5, height: .5 }, placement: { kind: 'single-room' } };
+      const snapshot = previewAssets(initial.view(initial.head('main')).snapshot, {
+        families: [{ id: 'evidence-cube', type: 'AssetFamily', name: 'Cube', description: 'Synthetic cube',
+          parts: [{ id: 'body', kind: 'box', min: [0, 0, 0], size: [1, 1, 1], color: '#546778' }] }],
+        instances: [instance], removeInstanceIds: [],
+      });
+      const repository = await RoomRepository.createProject({ projectId: initial.projectId, name: endpoint, snapshot });
+      const native = { kind: 'object', ref: { kind: 'native', projectId: repository.projectId, revisionId: repository.head('main'),
+        target: { kind: 'main' }, entityId: instance.id } };
+      const subject = endpoint === 'native-subject' ? JSON.stringify(native) : "{kind:'object',ref:wall.ref}";
+      const against = endpoint === 'native-subject' ? "{kind:'object',ref:wall.ref}" : endpoint === 'native-against'
+        ? JSON.stringify(native) : "{kind:'query',query:{role:'physical',categories:['asset']}}";
+      const script = `const page = await geometry.query({query:{categories:['wall'],region:{min:[2,.5,0],max:[2.25,3.5,2.5]}}});
+        if(page.kind === 'unavailable') throw new Error('Missing source wall');
+        const wall = page.items.find(item => item.ref.kind === 'ifc'); if(!wall) throw new Error('Missing source wall');
+        const measured = await geometry.measure({subject:${subject},against:${against},operation:${JSON.stringify(operation)},clearanceMetres:.5});
+        if(measured.kind !== 'complete' || (${JSON.stringify(operation)} === 'clearance' && measured.value.clearance !== 'satisfied-mesh')) throw new Error('Initial measurement not proven');
+        await model.previewAssets(${JSON.stringify({ families: [], instances: [{ ...instance, position: [x, 2] }], removeInstanceIds: [] })});
+        return {kind:'propose',review:${JSON.stringify(geometryReview)}};`;
+      const source = new FixtureGeometrySource(); source.replace([evidenceWall({ x: 2 })]);
+      const file = path.join(directory, `${endpoint}-${operation}-${x}.sqlite`);
+      const queue = await ChangeRequests.open(file, () => agent(script), { geometry: source }); queues.push(queue);
+      const ticket = await queue.submit(repository.serialize(), { ...request(repository, `${endpoint}-${x}`), selectedObjectIds: [instance.id] });
+      if (x === 3.5) {
+        await ready(queue, ticket.id);
+        const result = await accept(queue, ticket.id); const saved = await RoomRepository.restore(result.project);
+        const evidence = readGeometryEvidence(saved.review(ticket.request.proposalName).geometryEvidence);
+        assert.equal(evidence.measurements[0]?.result.kind, 'complete');
+        const original = evidence.measurements[0]?.result;
+        assert.ok(original?.kind === 'complete'); assert.equal(original.value.distanceMetres, .5);
+        const db = new DatabaseSync(file, { readOnly: true });
+        try {
+          const row = db.prepare('SELECT body FROM request_geometry_acceptances WHERE decision_id=?').get('accept-geometry');
+          assert.equal(typeof row?.body, 'string'); if (typeof row?.body !== 'string') assert.fail('Missing final acceptance proof');
+          const proof: unknown = JSON.parse(row.body);
+          assert.ok(proof && typeof proof === 'object' && 'finalReceipts' in proof && 'finalMeasurements' in proof);
+          const final = parseGeometryEvidence({ ...evidence, receipts: proof.finalReceipts, measurements: proof.finalMeasurements,
+            proposalSnapshotSha256: geometrySnapshotHash(saved.view(saved.head('main')).snapshot) });
+          const replay = final.measurements.find(item => item.request.operation === operation)?.result;
+          assert.ok(replay?.kind === 'complete'); assert.equal(replay.value.distanceMetres, 1);
+        } finally { db.close(); }
+        const moved = saved.view(saved.head('main')).snapshot.entities.find(item => item.id === instance.id);
+        assert.ok(moved?.type === 'AssetInstance'); assert.deepEqual(moved.position, [3.5, 2]);
+      } else {
+        const deadline = Date.now() + 30000;
+        while (queue.get(ticket.id).state === 'queued' || queue.get(ticket.id).state === 'working') {
+          assert.ok(Date.now() < deadline, `Endpoint case ${endpoint} did not finish`); await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.equal(queue.get(ticket.id).state, 'failed', endpoint);
+        assert.equal(queue.get(ticket.id).result, null); assert.equal(queue.project(repository.projectId), repository.serialize());
+      }
+    }
+  }
+});
+
+test('tolerance-expanded final surroundings include nearby open surfaces while ignoring distant open surfaces', async t => {
+  for (const x of [1.25 + 5e-8, 1.25 + 1.5e-7, 20]) {
+    const source = new FixtureGeometrySource(); source.replace([evidenceWall(), evidenceWall({ namespace: 'open-panel', x, open: true })]);
+    const script = `const page = await geometry.query({query:{categories:['wall'],region:{min:[0,1,0],max:[.25,3,2]}}});
+      if(page.kind === 'unavailable') throw new Error('Missing wall');
+      const wall = page.items.find(item => item.ref.kind === 'ifc'); if(!wall) throw new Error('Missing wall');
+      ${cubeAuthoring}
+      const result = await geometry.measure({...${JSON.stringify(cubeMeasurement)},against:{kind:'object',ref:wall.ref}});
+      if(result.kind !== 'complete' || result.value.clearance !== 'satisfied-mesh') throw new Error('Initial wall gap unavailable');
+      return {kind:'propose',review:${JSON.stringify(geometryReview)}};`;
+    const repository = await RoomRepository.create(); const queue = await ChangeRequests.open(':memory:', () => agent(script), { geometry: source });
+    t.after(() => queue.close()); const ticket = await queue.submit(repository.serialize(), request(repository, 'bounded-surroundings'));
+    if (x === 20) { await ready(queue, ticket.id); assert.equal((await accept(queue, ticket.id)).ticket.state, 'completed'); }
+    else {
+      const deadline = Date.now() + 30000;
+      while (queue.get(ticket.id).state === 'queued' || queue.get(ticket.id).state === 'working') {
+        assert.ok(Date.now() < deadline, 'Tolerance enclosure case did not finish'); await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(queue.get(ticket.id).state, 'failed'); assert.equal(queue.project(repository.projectId), repository.serialize());
+    }
+  }
 });
 
 test('a previously nonempty selection cannot become implicit project context after all anchors are removed', async t => {

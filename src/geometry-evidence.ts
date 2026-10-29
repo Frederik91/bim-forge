@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { parseGeometryMeasureRequest } from './geometry-contract.ts';
 import type { GeometryMeasureRequest, GeometryMeasureResult, GeometryRef, GeometryReceipt } from './geometry-contract.ts';
-import { geometryDigest } from './geometry-query.ts';
+import { geometryDigest, geometryIdentityKey } from './geometry-query.ts';
 import { createGeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
 import type { GeometrySession, GeometrySessionInput, GeometryCorrespondence } from './geometry-session.ts';
 import type { ModelSnapshot } from './room-model.ts';
@@ -112,76 +112,141 @@ function currentMeasurement(request: GeometryMeasureRequest, input: GeometrySess
     return correspondences.find(pair => isDeepStrictEqual(pair.historical, old))?.current ?? old;
   };
   const against = request.against;
-  return { ...request, against: against.kind === 'object' ? { kind: 'object', ref: ref(against.ref) }
+  const subject: GeometryMeasureRequest['subject'] = request.subject.kind === 'object' ? { kind: 'object', ref: ref(request.subject.ref) } : request.subject;
+  return { ...request, subject,
+    against: against.kind === 'object' ? { kind: 'object', ref: ref(against.ref) }
     : { kind: 'query', query: { ...against.query,
       ...(against.query.exclude ? { exclude: against.query.exclude.map(ref) } : {}),
       ...(against.query.level ? { level: ref(against.query.level) } : {}) } } };
 }
 
+function nativeRef(entityId: string, input: GeometrySessionInput): Extract<GeometryRef, { kind: 'native' }> {
+  return { kind: 'native', projectId: input.projectId, revisionId: input.native.revisionId, target: input.native.target, entityId };
+}
+function queryMembers(measurement: GeometryEvidence['measurements'][number]): GeometryRef[] {
+  return measurement.result.receipt.reads.flatMap(read => read.kind === 'query' && read.purpose === 'measurement' ? read.members : []);
+}
+async function nativeDescription(session: GeometrySession, ref: Extract<GeometryRef, { kind: 'native' }>) {
+  const result = await session.describe(ref);
+  if (result.kind !== 'complete' || result.value.bounds === null || result.value.capability.kind !== 'mesh') {
+    throw new GeometryEvidenceConflict('A measured native endpoint has no complete final geometry.');
+  }
+  const projection = result.receipt.reads.find(read => read.kind === 'object' && read.projection === 'geometry'
+    && geometryIdentityKey(read.ref) === geometryIdentityKey(ref));
+  if (!projection || projection.kind !== 'object') throw new GeometryEvidenceConflict('Trusted evaluated geometry projection is unavailable.');
+  return { description: result.value, digest: projection.digest };
+}
+
 /** Resolve actual final native shapes; guest boxes are never proof of authored geometry. */
-async function validateFinalMeasurements(evidence: GeometryEvidence, input: GeometrySessionInput, signal: AbortSignal,
-  correspondences: readonly GeometryCorrespondence[]): Promise<ReturnType<GeometrySession['receipts']>> {
-  if (!evidence.measurements.length) return [];
+async function validateFinalMeasurements(evidence: GeometryEvidence, current: GeometrySessionInput, input: GeometrySessionInput, signal: AbortSignal,
+  correspondences: readonly GeometryCorrespondence[]): Promise<{ receipts: GeometryReceipt[]; measurements: GeometryEvidence['measurements'] }> {
+  if (!evidence.measurements.length) return { receipts: [], measurements: [] };
+  const receipts: GeometryReceipt[] = []; const measurements: GeometryEvidence['measurements'] = [];
+  const lastBox = new Map<string, string>();
+  for (const measurement of evidence.measurements) if (measurement.request.subject.kind === 'box') {
+    lastBox.set(measurement.request.subject.candidateId, geometryDigest(measurement.request.subject));
+  }
+  const latest = new Map<string, GeometryEvidence['measurements'][number]>();
+  for (const measurement of evidence.measurements) {
+    const subject = measurement.request.subject;
+    // Distance/intersection probes describe a trial pose. Explicit clearance constraints survive pose changes.
+    if (subject.kind === 'box' && measurement.request.operation !== 'clearance'
+        && lastBox.get(subject.candidateId) !== geometryDigest(subject)) continue;
+    const candidate = subject.kind === 'box' ? subject.candidateId : subject.ref;
+    latest.set(geometryDigest({ candidate, against: measurement.request.against, operation: measurement.request.operation,
+      clearanceMetres: measurement.request.clearanceMetres ?? null }), measurement);
+  }
+  const endpoints = new Map<string, Extract<GeometryRef, { kind: 'native' }>>();
+  const boxes = new Set<string>();
+  for (const measurement of latest.values()) {
+    const subject = measurement.request.subject;
+    if (subject.kind === 'box') boxes.add(subject.candidateId);
+    const refs = [...(subject.kind === 'object' ? [subject.ref] : []),
+      ...(measurement.request.against.kind === 'object' ? [measurement.request.against.ref] : queryMembers(measurement))];
+    for (const ref of refs) if (ref.kind === 'native') endpoints.set(ref.entityId, nativeRef(ref.entityId, input));
+  }
+  const baseline = new Map<string, string>();
+  if (endpoints.size) {
+    const before = await createGeometrySession(current, { signal, lifetimeMs: 120000 });
+    try {
+      for (const entityId of endpoints.keys()) baseline.set(entityId, (await nativeDescription(before, nativeRef(entityId, current))).digest);
+      receipts.push(...before.receipts());
+    } finally { await before.close(); }
+  }
+  const safety = new Map<string, Extract<GeometryRef, { kind: 'native' }>>();
   const final = await createGeometrySession(input, { signal, lifetimeMs: 120000 });
   try {
-    const lastBox = new Map<string, string>();
-    for (const measurement of evidence.measurements) if (measurement.request.subject.kind === 'box') {
-      lastBox.set(measurement.request.subject.candidateId, geometryDigest(measurement.request.subject));
+    for (const [entityId, ref] of endpoints) {
+      const evaluated = await nativeDescription(final, ref);
+      if (baseline.get(entityId) !== evaluated.digest && evaluated.description.role === 'physical') safety.set(entityId, ref);
     }
-    const latest = new Map<string, GeometryEvidence['measurements'][number]>();
-    for (const measurement of evidence.measurements) {
-      const subject = measurement.request.subject;
-      // Distance/intersection probes describe a trial pose. Explicit clearance constraints survive pose changes.
-      if (subject.kind === 'box' && measurement.request.operation !== 'clearance'
-          && lastBox.get(subject.candidateId) !== geometryDigest(subject)) continue;
-      const candidate = subject.kind === 'box' ? subject.candidateId : subject.ref;
-      latest.set(geometryDigest({ candidate, against: measurement.request.against, operation: measurement.request.operation,
-        clearanceMetres: measurement.request.clearanceMetres ?? null }), measurement);
+    for (const entityId of boxes) {
+      const ref = nativeRef(entityId, input); const evaluated = await nativeDescription(final, ref);
+      if (evaluated.description.role !== 'physical') throw new GeometryEvidenceConflict('A proposed box does not identify a final physical native object.');
+      safety.set(entityId, ref);
     }
     for (const measurement of latest.values()) {
       signal.throwIfAborted();
-      requireMeasurement(measurement.result);
       const subject = measurement.request.subject;
-      const entityId = subject.kind === 'box' ? subject.candidateId
-        : subject.ref.kind === 'native' ? subject.ref.entityId : null;
-      if (entityId === null) continue;
-      const ref = { kind: 'native', projectId: input.projectId, revisionId: input.native.revisionId,
-        target: input.native.target, entityId } satisfies Extract<GeometryMeasureRequest['subject'], { kind: 'object' }>['ref'];
-      const description = await final.describe(ref);
-      if (description.kind !== 'complete' || description.value.role !== 'physical' || description.value.bounds === null) {
-        throw new GeometryEvidenceConflict('A measured candidate does not identify a supported final native object.');
-      }
-      const request: GeometryMeasureRequest = { ...currentMeasurement(measurement.request, input, correspondences), subject: { kind: 'object', ref } };
-      requireMeasurement(await final.measure(request), measurement.result);
-      if (subject.kind !== 'box') continue;
-      // A finite against-ID never certifies absence of other obstructions.
-      const surroundings = await final.measure({ subject: { kind: 'object', ref },
-        against: { kind: 'query', query: { role: 'physical', region: description.value.bounds } },
-        operation: 'intersection' });
-      requireMeasurement(surroundings);
-      if (surroundings.kind === 'complete' && !['separated', 'empty-set', 'contact'].includes(surroundings.value.relation)) {
-        throw new GeometryEvidenceConflict('The final candidate intersects or is contained by another physical object.');
+      const rebound = currentMeasurement(measurement.request, input, correspondences);
+      const request: GeometryMeasureRequest = subject.kind === 'box'
+        ? { ...rebound, subject: { kind: 'object', ref: nativeRef(subject.candidateId, input) } } : rebound;
+      const result = await final.measure(request);
+      requireMeasurement(result, subject.kind === 'box' && request.operation !== 'clearance' ? measurement.result : undefined);
+      measurements.push({ request, result });
+      // Original query membership cannot hide a native endpoint merely by moving it outside the predicate.
+      if (request.operation === 'clearance' && measurement.request.against.kind === 'query') {
+        for (const member of queryMembers(measurement)) {
+          const pair = currentMeasurement({ ...measurement.request, against: { kind: 'object', ref: member } }, input, correspondences);
+          const pairRequest: GeometryMeasureRequest = { ...pair, subject: request.subject };
+          const pairResult = await final.measure(pairRequest); requireMeasurement(pairResult);
+          measurements.push({ request: pairRequest, result: pairResult });
+        }
       }
     }
-    return final.receipts();
+    receipts.push(...final.receipts());
   } finally { await final.close(); }
+  if (safety.size) {
+    const fullInput = { ...input, native: { snapshot: input.native.snapshot, revisionId: input.native.revisionId, target: input.native.target } };
+    const complete = await createGeometrySession(fullInput, { signal, lifetimeMs: 120000 });
+    try {
+      for (const ref of safety.values()) {
+        const evaluated = await nativeDescription(complete, ref); const bounds = evaluated.description.bounds;
+        const capability = evaluated.description.capability;
+        if (!bounds || capability.kind !== 'mesh') throw new GeometryEvidenceConflict('Final native geometry bounds or tolerance are unavailable.');
+        const region = { min: bounds.min.map(n => n - capability.numericToleranceMetres), max: bounds.max.map(n => n + capability.numericToleranceMetres) };
+        const request: GeometryMeasureRequest = { subject: { kind: 'object', ref },
+          against: { kind: 'query', query: { role: 'physical', region } },
+          operation: 'intersection' };
+        const surroundings = await complete.measure(request);
+        requireMeasurement(surroundings);
+        if (surroundings.kind === 'complete' && !['separated', 'empty-set', 'contact'].includes(surroundings.value.relation)) {
+          throw new GeometryEvidenceConflict('The final candidate intersects or is contained by another physical object.');
+        }
+        measurements.push({ request, result: surroundings });
+      }
+      receipts.push(...complete.receipts());
+    } finally { await complete.close(); }
+  }
+  parseGeometryEvidence({ version: 1, projectId: evidence.projectId, requestId: evidence.requestId, baseRevisionId: evidence.baseRevisionId,
+    proposalSnapshotSha256: geometrySnapshotHash(input.native.snapshot), receipts, measurements });
+  return { receipts, measurements };
 }
 
 export async function validateGeometryEvidence(input: {
   evidence: GeometryEvidence; source: GeometryEvidenceSource; native: GeometrySessionInput['native'];
   candidate: ModelSnapshot; signal: AbortSignal;
-}): Promise<GeometryReadSnapshot & { verifiedCandidateSha256: string; finalReceipts: ReturnType<GeometrySession['receipts']> }> {
+}): Promise<GeometryReadSnapshot & { verifiedCandidateSha256: string; finalReceipts: GeometryReceipt[]; finalMeasurements: GeometryEvidence['measurements'] }> {
   const evidence = parseGeometryEvidence(input.evidence);
   const snapshot = await readGeometrySnapshot(input.source, evidence.projectId, input.native, input.signal, evidence.receipts);
   const candidate = { ...snapshot.input, native: { ...snapshot.input.native, snapshot: input.candidate } };
   const status = await validateGeometryReceiptsInWorker({ receipts: evidence.receipts, current: snapshot.input,
-    candidate, ...(snapshot.correspondences ? { correspondences: snapshot.correspondences } : {}) }, { signal: input.signal });
+    candidate: snapshot.input, ...(snapshot.correspondences ? { correspondences: snapshot.correspondences } : {}) }, { signal: input.signal });
   input.signal.throwIfAborted();
   if (status.kind !== 'fresh') throw new GeometryEvidenceConflict(status.reason);
   // Independent host verification sees the complete authorized project; no full-graph facts cross the guest boundary.
-  const fullNative = { snapshot: input.candidate, revisionId: input.native.revisionId, target: input.native.target };
-  const finalReceipts = await validateFinalMeasurements(evidence, { ...candidate, native: fullNative }, input.signal, snapshot.correspondences ?? []);
-  return { ...snapshot, verifiedCandidateSha256: geometrySnapshotHash(input.candidate), finalReceipts };
+  const final = await validateFinalMeasurements(evidence, snapshot.input, candidate, input.signal, snapshot.correspondences ?? []);
+  return { ...snapshot, verifiedCandidateSha256: geometrySnapshotHash(input.candidate), finalReceipts: final.receipts, finalMeasurements: final.measurements };
 }
 
 type OpenGeometryEvidence = { source: GeometryEvidenceSource; projectId: string; requestId: string;
@@ -230,7 +295,7 @@ export class GeometryEvidenceSession {
     const receipts = [...(this.#inherited?.receipts ?? []), ...this.#session.receipts()];
     return [...new Map(receipts.map(receipt => [geometryDigest(receipt), receipt])).values()];
   }
-  async assertFresh(candidate?: ModelSnapshot): Promise<void> {
+  async assertFresh(): Promise<void> {
     this.#assertAlive();
     const receipts = this.#receipts();
     if (!receipts.length) return;
@@ -238,7 +303,7 @@ export class GeometryEvidenceSession {
     this.#assertAlive();
     const current = await readGeometrySnapshot(this.#input.source, this.#input.projectId, native, this.#input.signal, receipts);
     const result = await validateGeometryReceiptsInWorker({ receipts, current: current.input,
-      candidate: { ...current.input, native: { ...current.input.native, snapshot: candidate ?? native.snapshot } },
+      candidate: current.input,
       ...(current.correspondences ? { correspondences: current.correspondences } : {}) }, { signal: this.#input.signal });
     this.#assertAlive();
     if (result.kind !== 'fresh') throw new GeometryEvidenceConflict(result.reason);
@@ -246,7 +311,7 @@ export class GeometryEvidenceSession {
   async seal(candidate: ModelSnapshot): Promise<GeometryEvidence | undefined> {
     this.#assertAlive();
     if (!this.#receipts().length && !this.#inherited) return;
-    await this.assertFresh(candidate);
+    await this.assertFresh();
     this.#assertAlive();
     const evidence = parseGeometryEvidence({ version: 1, projectId: this.#input.projectId, requestId: this.#input.requestId,
       baseRevisionId: this.#input.native.revisionId, proposalSnapshotSha256: geometrySnapshotHash(candidate),

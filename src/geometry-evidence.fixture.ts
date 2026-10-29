@@ -5,17 +5,18 @@ import type { GeometryRef } from './geometry-contract.ts';
 import type { GeometryEvidenceSource, GeometryPublication, GeometryReadSnapshot } from './geometry-evidence.ts';
 import type { GeometrySessionInput } from './geometry-session.ts';
 
-export function evidenceWall(options: { version?: string; x?: number; namespace?: string; name?: string; missing?: boolean; originalSha256?: string } = {}): LinkedPrepared {
+export function evidenceWall(options: { version?: string; x?: number; namespace?: string; name?: string; missing?: boolean; open?: boolean; originalSha256?: string } = {}): LinkedPrepared {
   const source = { namespace: options.namespace ?? 'evidence-wall', revision: options.version ?? 'v1', originalSha256: options.originalSha256 ?? geometryDigest(options.version ?? 'v1') };
   const ref = { ...source, globalId: '0123456789012345678901' };
   const transform = [[1, 0, 0, options.x ?? 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
   const vertices = [0, .5, 0, .25, .5, 0, .25, 3.5, 0, 0, 3.5, 0, 0, .5, 2.5, .25, .5, 2.5, .25, 3.5, 2.5, 0, 3.5, 2.5];
-  const triangles = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+  const triangles = options.open ? [3, 0, 4, 3, 4, 7]
+    : [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
   const artifact = { sha256: 'c'.repeat(64), bytes: 100 };
   return parseLinkedPrepared({ manifest: { format: 'bim-forge-ifc-link', version: 1, state: 'complete', readOnly: true,
     source, schema: 'IFC4', tool: { ifcopenshell: '0.9.0.post1' }, occurrence: { id: 'evidence-occurrence', sourceToProjectMetres: transform },
     artifacts: { 'original.ifc': { ...artifact, sha256: source.originalSha256 }, 'index.json': artifact, 'geometry.json': artifact },
-    counts: { entities: 20, objects: 1, products: 1, meshes: options.missing ? 0 : 1, vertices: options.missing ? 0 : 8, triangles: options.missing ? 0 : 12 }, diagnostics: [], losses: [] },
+    counts: { entities: 20, objects: 1, products: 1, meshes: options.missing ? 0 : 1, vertices: options.missing ? 0 : 8, triangles: options.missing ? 0 : triangles.length / 3 }, diagnostics: [], losses: [] },
     index: { source, schema: 'IFC4', unitScaleToMetres: 1, units: [], georeferencing: { applied: false, inventory: [] },
       objects: [{ ref, ifcClass: 'IfcWall', name: options.name ?? 'Evidence wall', properties: [] }],
       spatial: [], relationships: [], placements: [{ globalId: ref.globalId }] },

@@ -160,11 +160,11 @@ test('dispatch refuses further guest work after its frozen geometry observations
   assert.equal(attempted, true);
 });
 
-test('final authored shape is independently remeasured; a correct guest box cannot certify a different cube', async () => {
+test('final authored shape is independently remeasured; a correct guest box cannot certify an unsafe native cube', async () => {
   const repository = await RoomRepository.create(); const source = new FixtureGeometrySource();
   await assert.rejects(prepareModelProposal(repository, request(repository), worker(async session => {
-    await propose(session, geometryProposalScript.replace('position:[1,2]', 'position:[1.25,2]'));
-  }), () => {}, { geometry: { source } }), /final authored shape|measurement/);
+    await propose(session, geometryProposalScript.replace('position:[1,2]', 'position:[.75,2]'));
+  }), () => {}, { geometry: { source } }), /final authored shape|measurement|constraint/);
 });
 
 test('corrected trial measurements retain history while the final candidate satisfies the same constraint', async () => {
