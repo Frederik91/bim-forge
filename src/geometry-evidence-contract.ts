@@ -12,6 +12,8 @@ export const GeometryEvidenceSchema = Type.Object({
   receipts: Type.Array(GeometryReceiptSchema, { maxItems: 128 }),
   measurements: Type.Array(Type.Object({ request: GeometryMeasureRequestSchema, result: GeometryMeasureResultSchema },
     { additionalProperties: false }), { maxItems: 64 }),
+  inheritedFrom: Type.Optional(Type.Array(Type.Object({ requestId: identity, baseRevisionId: hash,
+    proposalSnapshotSha256: hash, evidenceSha256: hash }, { additionalProperties: false }), { maxItems: 20 })),
 }, { additionalProperties: false });
 export type GeometryEvidence = Static<typeof GeometryEvidenceSchema>;
 export const MAX_GEOMETRY_EVIDENCE_BYTES = 64 * 1024;
@@ -30,6 +32,8 @@ export function parseGeometryEvidence(input: unknown): GeometryEvidence {
   if (!Check(GeometryEvidenceSchema, value)
       || new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_GEOMETRY_EVIDENCE_BYTES) throw new Error('Invalid bounded geometry evidence.');
   parseGeometryReceipts(value.receipts);
+  if (value.inheritedFrom && (new Set(value.inheritedFrom.map(parent => parent.requestId)).size !== value.inheritedFrom.length
+      || value.inheritedFrom.some(parent => parent.requestId === value.requestId))) throw new Error('Geometry evidence lineage must be acyclic and unique.');
   for (const receipt of value.receipts) if (receipt.projectId !== value.projectId) throw new Error('Geometry evidence crosses projects.');
   for (const measurement of value.measurements) {
     parseGeometryMeasureRequest(measurement.request);

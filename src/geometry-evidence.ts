@@ -185,20 +185,29 @@ export async function validateGeometryEvidence(input: {
 }
 
 type OpenGeometryEvidence = { source: GeometryEvidenceSource; projectId: string; requestId: string;
-  native: GeometrySessionInput['native']; signal: AbortSignal; current?: () => Promise<GeometrySessionInput['native']> };
+  native: GeometrySessionInput['native']; signal: AbortSignal; current?: () => Promise<GeometrySessionInput['native']>;
+  inherited?: GeometryEvidence };
 
 /** One host-owned request session. Guest decisions cannot supply, erase or replace receipts. */
 export class GeometryEvidenceSession {
   readonly #input: OpenGeometryEvidence;
   readonly #session: GeometrySession;
+  readonly #inherited: GeometryEvidence | undefined;
   readonly #measurements: GeometryEvidence['measurements'] = [];
   #closed = false;
-  private constructor(input: OpenGeometryEvidence, session: GeometrySession) { this.#input = input; this.#session = session; }
+  private constructor(input: OpenGeometryEvidence, session: GeometrySession) {
+    this.#input = input; this.#session = session; this.#inherited = input.inherited;
+    if (this.#inherited) this.#measurements.push(...structuredClone(this.#inherited.measurements));
+  }
   static async open(input: OpenGeometryEvidence): Promise<GeometryEvidenceSession> {
+    const inherited = input.inherited ? parseGeometryEvidence(input.inherited) : undefined;
+    if (inherited && (inherited.projectId !== input.projectId || inherited.requestId === input.requestId)) {
+      throw new GeometryEvidenceConflict('Inherited geometry evidence belongs to another project or the same request generation.');
+    }
     const snapshot = await readGeometrySnapshot(input.source, input.projectId, input.native, input.signal);
     const session = await createGeometrySession(snapshot.input, { signal: input.signal, lifetimeMs: 180000 });
     if (input.signal.aborted) { await session.close(); input.signal.throwIfAborted(); }
-    return new GeometryEvidenceSession({ ...input, native: structuredClone(input.native) }, session);
+    return new GeometryEvidenceSession({ ...input, native: structuredClone(input.native), ...(inherited ? { inherited } : {}) }, session);
   }
   #assertAlive(): void {
     this.#input.signal.throwIfAborted();
@@ -217,9 +226,13 @@ export class GeometryEvidenceSession {
     this.#assertAlive(); const value = await call(); this.#assertAlive(); return value;
   }
   async #current(): Promise<GeometrySessionInput['native']> { return this.#input.current ? this.#input.current() : this.#input.native; }
+  #receipts(): GeometryReceipt[] {
+    const receipts = [...(this.#inherited?.receipts ?? []), ...this.#session.receipts()];
+    return [...new Map(receipts.map(receipt => [geometryDigest(receipt), receipt])).values()];
+  }
   async assertFresh(candidate?: ModelSnapshot): Promise<void> {
     this.#assertAlive();
-    const receipts = this.#session.receipts();
+    const receipts = this.#receipts();
     if (!receipts.length) return;
     const native = await this.#current();
     this.#assertAlive();
@@ -232,12 +245,16 @@ export class GeometryEvidenceSession {
   }
   async seal(candidate: ModelSnapshot): Promise<GeometryEvidence | undefined> {
     this.#assertAlive();
-    if (!this.#session.receipts().length) return;
+    if (!this.#receipts().length && !this.#inherited) return;
     await this.assertFresh(candidate);
     this.#assertAlive();
     const evidence = parseGeometryEvidence({ version: 1, projectId: this.#input.projectId, requestId: this.#input.requestId,
       baseRevisionId: this.#input.native.revisionId, proposalSnapshotSha256: geometrySnapshotHash(candidate),
-      receipts: this.#session.receipts(), measurements: this.#measurements });
+      receipts: this.#receipts(), measurements: this.#measurements,
+      ...(this.#inherited ? { inheritedFrom: [...(this.#inherited.inheritedFrom ?? []), {
+        requestId: this.#inherited.requestId, baseRevisionId: this.#inherited.baseRevisionId,
+        proposalSnapshotSha256: this.#inherited.proposalSnapshotSha256, evidenceSha256: geometryDigest(this.#inherited),
+      }] } : {}) });
     await validateGeometryEvidence({ evidence, source: this.#input.source, native: await this.#current(), candidate, signal: this.#input.signal });
     this.#assertAlive(); return evidence;
   }

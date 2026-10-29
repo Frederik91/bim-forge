@@ -24,7 +24,7 @@ import { MAX_EVIDENCE_PINS, MAX_EVIDENCE_CONTEXT_ENTRIES, MAX_EVIDENCE_CONTEXT_B
   parseEvidencePin, parseEvidenceReadSet, parseEvidenceEntry, evidenceCanonical } from './model-evidence.ts';
 import type { EvidenceEntry, EvidencePin, EvidenceReadSet, EvidenceSubject, EvidenceUse } from './model-evidence.ts';
 import { GeometryEvidenceSession, geometryNativeInput, encodeGeometryEvidence } from './geometry-evidence.ts';
-import type { GeometryEvidenceSource } from './geometry-evidence.ts';
+import type { GeometryEvidenceSource, GeometryEvidence } from './geometry-evidence.ts';
 import type { GeometrySessionInput } from './geometry-session.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
@@ -88,7 +88,7 @@ export interface ProposalEvidenceContext {
     | { kind: 'unknown-required'; message: string; entryId: string })[];
 }
 export interface ModelProposalOptions {
-  geometry?: { source: GeometryEvidenceSource; current?: () => Promise<GeometrySessionInput['native']> };
+  geometry?: { source: GeometryEvidenceSource; current?: () => Promise<GeometrySessionInput['native']>; inherited?: GeometryEvidence };
   evidenceContext?: ProposalEvidenceContext;
   conversation?: RequestConversation;
   initialDraft?: ModelSnapshot;
@@ -300,7 +300,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     if (executions.length >= MAX_SCRIPT_EXECUTIONS || hostCalls >= MAX_SCRIPT_HOST_CALLS) { fatal = true; options.onPreview?.(null); fail('The model worker exceeded the aggregate script budget.'); }
     running = true;
     try {
-      await geometry?.assertFresh();
+      await geometry?.assertFresh(options.initialDraft);
       signal.throwIfAborted();
       fields(argumentsValue, ['language', 'source']);
       if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
@@ -314,7 +314,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       parseScriptExecutions([...executions, result.evidence]);
       executions.push(result.evidence); hostCalls += result.evidence.calls.length;
       signal.throwIfAborted();
-      await geometry?.assertFresh(result.kind === 'proposal' ? result.snapshot : undefined);
+      await geometry?.assertFresh(result.kind === 'proposal' ? result.snapshot : options.initialDraft);
       signal.throwIfAborted();
       if (result.kind === 'failed') {
         fatal ||= ['cancelled', 'timed-out', 'resource-limit'].includes(result.evidence.status)
@@ -352,8 +352,9 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       geometry = await GeometryEvidenceSession.open({ source: options.geometry.source, projectId: repository.projectId,
         requestId: bound.requestId, native: geometryNativeInput({ snapshot: bound.base.snapshot, revisionId: bound.base.id,
           target: bound.target?.target ?? { kind: 'main' }, ...(bound.scope ? { scope: bound.scope } : {}) }), signal,
+        ...(options.geometry.inherited ? { inherited: options.geometry.inherited } : {}),
         ...(options.geometry.current ? { current: options.geometry.current } : {}) });
-      await geometry.assertFresh();
+      await geometry.assertFresh(options.initialDraft);
     }
     const declarations = await scripts.declarations();
     signal.throwIfAborted();

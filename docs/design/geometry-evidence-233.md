@@ -44,6 +44,12 @@ interface GeometryEvidenceSource {
 
 The parent supplies `ChangeRequests.open(file, worker, {geometry: source})`.
 Standalone proposal preparation accepts `geometry: {source, current?}` where `current` reads the current native target input.
+An optional host-only `geometry.inherited` carries authenticated evidence for an unaccepted private conversation draft.
+The queue checks the original request/ticket/attempt body before inheritance. It copies original receipts and typed measurements,
+deduplicates identical observations, records a bounded hash-linked `inheritedFrom` lineage, and revalidates/reseals the final follow-up
+even when that worker makes no geometry calls. Missing origin or relevant stale geometry fails closed before a continuation can bind.
+Completed accepted geometry is native baseline rather than an unaccepted private draft; unrelated later native requests do not reactivate
+historical source constraints. Archived requests and their original source pins remain unchanged in either case.
 The provider returns data and verified correspondence pairs. It does not create workers.
 Revalidation extracts a bounded, deduplicated set of historical IFC references from trusted receipt object reads,
 full query members, level/exclusion predicates, the host's implicit candidate exclusion and measured object subjects. The provider resolves only those retained versions,
@@ -124,6 +130,7 @@ All assertions below are **unrun**.
 | Alternative acceptance, unchanged Main/As-is, historical pins, restart and final acceptance receipts | `demo/geometry-evidence-queue.test.ts` |
 | Ready-proposal source changes and catalogue update during pending acceptance | `demo/geometry-evidence-queue.test.ts` |
 | Native reconciliation and independent unrelated native acceptance | `demo/geometry-evidence-queue.test.ts` |
+| Authenticated private-draft continuation, review-only follow-up, relevant/unrelated source changes and preserved lineage | `demo/geometry-evidence-queue.test.ts` |
 | Finite against-object loophole and missing host-authenticated evidence | `demo/geometry-evidence-queue.test.ts` |
 | Real linked cross-process reservation, converter, app UI, connected agent and independent oracle | #232 / #234 / parent #230 |
 
@@ -136,6 +143,12 @@ the test binding goes through the real request parser, and digest verification s
 The synchronous storage-authority parser remains synchronous. Parent fixes its separate provider fixture constructor errors.
 Exact red log: `/ssd1/bim-forge-qualification/issue230/run-256071ce2ec5581e468d69d21e03e459d4e755bf-component-02/artifacts/validate.log`.
 These corrections have not been rerun; the parent will assign the next bounded qualification attempt.
+Parent component 3 at `f6ef6f9edc4080c66d40c7502a7c1bbfc11fbdd6` subsequently passed root validation, explicit policy,
+browser build, geometry 28/28 and linked revision 12/12. Evidence tests failed before bootstrap because the pinned ScriptBox package
+does not support tuple `additionalItems`. A owns equivalent exact bounded-array canonical schemas; uniqueness is preserved pending upstream
+ScriptBox issue 24 support. Component 4 at `aee595c` passed root validation, policy, geometry 31/31 and provider 3/3, without repeating
+the blocked ScriptBox bootstrap. No independent #233 run occurred. The ignored `artifacts/private/issue233-contract-audit.ts` diagnostic
+is prepared for parent execution, never evaluated locally; the parent retains all run logs and the ten-attempt budget.
 Static verification performed: source/diff inspection and `git -c core.whitespace=cr-at-eol diff --check`.
 The app worktree creation failed during Git configuration discovery; direct isolated Git worktree creation succeeded.
 The shell profile initially reset relative paths to MacType; explicit non-login shell and absolute owned paths resolved it.

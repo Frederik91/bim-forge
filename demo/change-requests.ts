@@ -30,7 +30,7 @@ import { MAX_EVIDENCE_PINS, parseEvidenceEntry, parseEvidencePin, parseEvidenceR
 import type { EvidencePin, EvidenceReadSet } from '../src/model-evidence.ts';
 import { GeometryEvidenceConflict, geometryNativeInput, readGeometryEvidence, validateGeometryEvidence,
   publishWithGeometryGuard } from '../src/geometry-evidence.ts';
-import type { GeometryEvidenceSource } from '../src/geometry-evidence.ts';
+import type { GeometryEvidenceSource, GeometryEvidence } from '../src/geometry-evidence.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
@@ -687,17 +687,23 @@ export class ChangeRequests {
   #pinEvidence(requestId: string, evidence: EvidenceReadSet | undefined): void {
     if (evidence) this.#evidence.pinReadSet({ requestId, readSet: evidence });
   }
+  #trustedGeometryEvidence(ticket: Ticket, proposed: RoomRepository): GeometryEvidence | undefined {
+    const review = proposed.review(ticket.request.proposalName);
+    const row = this.#db.prepare('SELECT body FROM request_geometry_evidence WHERE request_id=? AND ticket_id=? AND attempt=?')
+      .get(ticket.request.requestId, ticket.id, ticket.attempts);
+    if (review.geometryEvidence !== undefined || row) {
+      if (!this.#geometry || !row || row.body !== review.geometryEvidence) throw new GeometryEvidenceConflict('Trusted geometry read evidence is missing or differs from this request attempt.');
+    }
+    return review.geometryEvidence === undefined ? undefined : readGeometryEvidence(review.geometryEvidence);
+  }
   #proposalReadiness(ticket: Ticket, current: RoomRepository, proposed: RoomRepository): ProposalReadiness {
     const review = proposed.review(ticket.request.proposalName);
     const head = current.freezeDesignTarget(ticket.request.target?.target ?? { kind: 'main' }).revisionId;
     if (ticket.request.selectedObjectIds.length && !current.view(head).snapshot.entities.some(entity => ticket.request.selectedObjectIds.includes(entity.id))) {
       return { state: 'needs-input', error: 'Every originally selected native object disappeared. Start a fresh chat or select a new explicit context before revising.' };
     }
-    const row = this.#db.prepare('SELECT body FROM request_geometry_evidence WHERE request_id=? AND ticket_id=? AND attempt=?')
-      .get(ticket.request.requestId, ticket.id, ticket.attempts);
-    if (review.geometryEvidence !== undefined || row) {
-      if (!this.#geometry || !row || row.body !== review.geometryEvidence) return { state: 'needs-input', error: 'Trusted geometry read evidence is missing or differs from this request attempt.' };
-    }
+    try { this.#trustedGeometryEvidence(ticket, proposed); }
+    catch (error) { return { state: 'needs-input', error: error instanceof Error ? error.message.slice(0, 1000) : 'Trusted geometry evidence is unavailable.' }; }
     if (!isDeepStrictEqual(review.evidence, ticket.evidence)) return { state: 'needs-input', error: 'Proposal evidence differs from the submitted evidence. Reopen this chat before deciding.' };
     if (ticket.evidence) {
       if (!isDeepStrictEqual(this.#evidence.readPinned({ projectId: ticket.projectId, requestId: ticket.request.requestId }), ticket.evidence)) {
@@ -1026,12 +1032,14 @@ export class ChangeRequests {
       }
       const continuation = this.#db.prepare('SELECT request_id FROM request_continuations WHERE request_id=? AND ticket_id=?').get(ticket.request.requestId, ticket.id);
       const prior = continuation ? [...ticket.history].reverse().map(text => parseTicket(text, reference)).find(item => item.result?.status === 'ready' && isDeepStrictEqual(item.scope, ticket.scope)) : undefined;
-      const priorRepository = prior?.result ? await RoomRepository.restore(this.#projects.read(prior.result.project)) : null;
-      const initialDraft = prior && priorRepository ? repository.proposalSnapshot(priorRepository, prior.request.proposalName, prior.request.target) : undefined;
+      const privatePrior = prior?.state === 'completed' ? undefined : prior;
+      const priorRepository = privatePrior?.result ? await RoomRepository.restore(this.#projects.read(privatePrior.result.project)) : null;
+      const inherited = privatePrior && priorRepository ? this.#trustedGeometryEvidence(privatePrior, priorRepository) : undefined;
+      const initialDraft = privatePrior && priorRepository ? repository.proposalSnapshot(priorRepository, privatePrior.request.proposalName, privatePrior.request.target) : undefined;
       const result = await prepareModelProposal(repository, ticket.request, trackedWorker, (event) => {
         if (this.#isWorking(ticket)) this.#put(recordActivity(this.#get(ticket.id), event));
       }, { signal, scripts: this.#scripts, conversation: this.#conversation(ticket.id),
-        ...(this.#geometry ? { geometry: { source: this.#geometry, current: async () => {
+        ...(this.#geometry ? { geometry: { source: this.#geometry, ...(inherited ? { inherited } : {}), current: async () => {
           const current = await RoomRepository.restore(this.#projects.read(this.#requiredCurrent(ticket.projectId)));
           signal.throwIfAborted();
           if (!this.#isWorking(ticket)) throw new GeometryEvidenceConflict('This request attempt was superseded.');
@@ -1053,6 +1061,7 @@ export class ChangeRequests {
         }
       } });
       if (evidenceError) throw evidenceError;
+      if (inherited && result.status === 'ready' && result.review.geometryEvidence === undefined) throw new GeometryEvidenceConflict('Inherited geometry dependencies were not retained in the follow-up proposal.');
       if (!this.#isWorking(ticket)) return;
       let boundDocumentId: string | undefined;
       const saveResult = (): void => this.#transaction(() => {

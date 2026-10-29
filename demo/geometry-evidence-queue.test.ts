@@ -232,3 +232,67 @@ test('final native floor support accepts only certified contact; positive gap, s
     }
   }
 });
+
+test('a review-only continuation inherits authenticated geometry dependencies and cannot accept after a relevant source update', async t => {
+  for (const relevant of [false, true]) {
+    const source = new FixtureGeometrySource(); let currentWorker = agent();
+    const queue = await ChangeRequests.open(':memory:', () => currentWorker, { geometry: source }); t.after(() => queue.close());
+    const repository = await RoomRepository.create(); const first = await queue.submit(repository.serialize(), request(repository, 'geometry-parent'));
+    await ready(queue, first.id);
+    const original = queue.get(first.id); const originalProject = await RoomRepository.restore(original.result?.project);
+    const originalEvidence = originalProject.review(original.request.proposalName).geometryEvidence;
+    source.replace([evidenceWall({ version: 'v2', x: relevant ? .1 : 0 })]);
+    currentWorker = agent(`return {kind:'propose',review:${JSON.stringify(geometryReview)}};`);
+    await queue.appendMessage(first.id, { messageId: 'geometry-child', expectedSequence: original.conversation?.sequence,
+      baseRevisionId: repository.head('main'), text: 'Keep the private cube and clarify its review, without new geometry calls.', sources: [], visual: null });
+    if (relevant) {
+      const deadline = Date.now() + 30000;
+      while (queue.get(first.id).state === 'queued' || queue.get(first.id).state === 'working') {
+        assert.ok(Date.now() < deadline, 'Inherited geometry validation did not finish'); await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(queue.get(first.id).state, 'failed'); assert.equal(queue.get(first.id).result, null);
+    } else {
+      await ready(queue, first.id); const child = queue.get(first.id);
+      const proposed = await RoomRepository.restore(child.result?.project); const review = proposed.review(child.request.proposalName);
+      const inherited = readGeometryEvidence(review.geometryEvidence);
+      assert.equal(inherited.requestId, 'geometry-child'); assert.equal(inherited.measurements.length, 1);
+      assert.equal(inherited.inheritedFrom?.[0]?.requestId, 'geometry-parent');
+      assert.ok(inherited.receipts.some(receipt => receipt.reads.some(read => read.kind === 'query' && read.members.some(ref => ref.kind === 'ifc' && ref.revision === 'v1'))));
+      assert.deepEqual(review.scriptExecutions?.flatMap(execution => execution.calls.filter(call => call.method.startsWith('geometry.'))), []);
+      assert.notEqual(review.geometryEvidence, originalEvidence);
+      source.replace([evidenceWall({ version: 'v3', x: .1 })]);
+      await assert.rejects(accept(queue, first.id), /geometry|Geometry|projection|membership/);
+    }
+    assert.equal(queue.project(repository.projectId), repository.serialize()); assert.ok(queue.get(first.id).history.length);
+  }
+});
+
+test('completed geometry acceptance is native baseline, while missing prior host origin blocks private-draft inheritance', async t => {
+  const source = new FixtureGeometrySource(); let currentWorker = agent();
+  const queue = await ChangeRequests.open(':memory:', () => currentWorker, { geometry: source }); t.after(() => queue.close());
+  const repository = await RoomRepository.create(); const ticket = await queue.submit(repository.serialize(), request(repository, 'accepted-parent'));
+  await ready(queue, ticket.id); const accepted = await accept(queue, ticket.id); const current = await RoomRepository.restore(accepted.project);
+  source.replace([evidenceWall({ version: 'v2', x: .1 })]); currentWorker = agent(doorScript);
+  const before = queue.get(ticket.id);
+  await queue.appendMessage(ticket.id, { messageId: 'unrelated-native-child', expectedSequence: before.conversation?.sequence,
+    baseRevisionId: current.head('main'), text: 'Widen the native door; retain the already accepted cube.', sources: [], visual: null });
+  await ready(queue, ticket.id); const child = queue.get(ticket.id); const proposed = await RoomRepository.restore(child.result?.project);
+  assert.equal(proposed.review(child.request.proposalName).geometryEvidence, undefined);
+  assert.equal((await accept(queue, ticket.id, 'accept-native-child')).ticket.state, 'completed');
+
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'geometry-inherit-origin-')); const file = path.join(directory, 'queue.sqlite');
+  const privateSource = new FixtureGeometrySource(); const privateQueue = await ChangeRequests.open(file, () => agent(), { geometry: privateSource });
+  t.after(async () => { await privateQueue.close(); await fs.rm(directory, { recursive: true, force: true }); });
+  const privateRepository = await RoomRepository.create(); const privateTicket = await privateQueue.submit(privateRepository.serialize(), request(privateRepository, 'private-parent'));
+  await ready(privateQueue, privateTicket.id);
+  const db = new DatabaseSync(file); try { db.prepare('DELETE FROM request_geometry_evidence WHERE request_id=?').run('private-parent'); } finally { db.close(); }
+  const prior = privateQueue.get(privateTicket.id);
+  await privateQueue.appendMessage(privateTicket.id, { messageId: 'untrusted-child', expectedSequence: prior.conversation?.sequence,
+    baseRevisionId: privateRepository.head('main'), text: 'Keep the earlier private draft.', sources: [], visual: null });
+  const deadline = Date.now() + 30000;
+  while (privateQueue.get(privateTicket.id).state === 'queued' || privateQueue.get(privateTicket.id).state === 'working') {
+    assert.ok(Date.now() < deadline, 'Missing inherited origin did not finish'); await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(privateQueue.get(privateTicket.id).state, 'failed'); assert.match(privateQueue.get(privateTicket.id).error ?? '', /Trusted geometry/);
+  assert.equal(privateQueue.project(privateRepository.projectId), privateRepository.serialize());
+});
