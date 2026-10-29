@@ -24,9 +24,29 @@ export function receivingSnapshot() {
     { id: 'service-entry', type: 'Door', name: 'Service entrance', width: 1, height: 2.2 },
     { id: 'receiving-slab', type: 'Slab', name: 'Receiving floor slab', levelId: 'receiving-level',
       bounds: { minX: 0, minY: 0, maxX: 50, maxY: 55 }, thickness: .25 },
+    // Elevated exterior doors do not establish ground exits. Provide a real
+    // connected ground floor/stair while retaining the receiving floor at 3.5m.
+    { id: 'ground-level', type: 'Level', name: 'Ground access floor', elevation: 0 },
+    { id: 'ground-hall', type: 'Space', name: 'Ground access hall', levelId: 'ground-level',
+      bounds: { minX: 0, minY: 0, maxX: 50, maxY: 50 } },
+    { id: 'ground-service', type: 'Space', name: 'Ground service room', levelId: 'ground-level',
+      bounds: { minX: 0, minY: 50, maxX: 50, maxY: 55 } },
+    { id: 'ground-south', type: 'Wall', name: 'Ground south enclosure', levelId: 'ground-level', start: [0, 0], end: [50, 0], thickness: .2, height: 3 },
+    { id: 'ground-north', type: 'Wall', name: 'Ground north enclosure', levelId: 'ground-level', start: [0, 55], end: [50, 55], thickness: .2, height: 3 },
+    { id: 'ground-west', type: 'Wall', name: 'Ground west enclosure', levelId: 'ground-level', start: [0, 0], end: [0, 55], thickness: .2, height: 3 },
+    { id: 'ground-east', type: 'Wall', name: 'Ground east enclosure', levelId: 'ground-level', start: [50, 0], end: [50, 55], thickness: .2, height: 3 },
+    { id: 'ground-partition', type: 'Wall', name: 'Ground service partition', levelId: 'ground-level', start: [0, 50], end: [50, 50], thickness: .2, height: 3 },
+    { id: 'ground-entry', type: 'Door', name: 'Ground exterior entrance', width: 1.2, height: 2.2 },
+    { id: 'ground-service-entry', type: 'Door', name: 'Ground service entrance', width: 1, height: 2.2 },
+    { id: 'ground-slab', type: 'Slab', name: 'Ground access slab', levelId: 'ground-level',
+      bounds: { minX: 0, minY: 0, maxX: 50, maxY: 55 }, thickness: .25 },
+    { id: 'receiving-stair', type: 'Stair', name: 'Receiving floor access stair', fromLevelId: 'ground-level', toLevelId: 'receiving-level',
+      start: [40, 36], end: [40, 42], width: 1.2, steps: 20 },
   ], relationships: [
     { id: 'host-receiving-entry', type: 'hosted-by', source: 'receiving-entry', target: 'receiving-south', offset: 2 },
     { id: 'host-service-entry', type: 'hosted-by', source: 'service-entry', target: 'service-partition', offset: 2 },
+    { id: 'host-ground-entry', type: 'hosted-by', source: 'ground-entry', target: 'ground-south', offset: 2 },
+    { id: 'host-ground-service-entry', type: 'hosted-by', source: 'ground-service-entry', target: 'ground-partition', offset: 2 },
   ] });
 }
 
