@@ -119,7 +119,36 @@ def facts():
     wall = doorway_wall()
     probes = {"free-side-500mm": box(.5, .8, .5, .5, .5, 1), "doorway-passage": box(2.2, .05, .1, .6, .2, 1.8),
               "touching": box(.5, .3, .5, .5, .5, 1), "contained": box(.5, .1, .5, .2, .1, .2),
+              "penetrating": box(.5, .2, .5, .5, .5, 1),
               "above-lintel": box(2.2, .05, 3.5, .6, .2, .5)}
     measured = {name: union_distance((project(probe),), wall) for name, probe in probes.items()}
     measured["l-recess"] = distance(project(box(1.5, 6.5, .5, .5, .5, .5)), l_solid())
     return measured
+
+
+def product_probes():
+    """Withheld harness cases for the actual public GeometryContext measurement API.
+
+    The production engine never chooses the expected answer. These measurements are
+    reconstructed here from independently authored finite-prism source facts.
+    """
+    shapes = {"free-side-500mm": box(.5, .8, .5, .5, .5, 1), "doorway-passage": box(2.2, .05, .1, .6, .2, 1.8),
+              "touching": box(.5, .3, .5, .5, .5, 1), "contained": box(.5, .1, .5, .2, .1, .2),
+              "penetrating": box(.5, .2, .5, .5, .5, 1), "above-lintel": box(2.2, .05, 3.5, .6, .2, .5),
+              "l-recess": box(1.5, 6.5, .5, .5, .5, .5)}
+    probes = []
+    for occurrence in ("a", "b"):
+        origin = frame((0, 0, 0), occurrence)
+        basis = [frame(axis, occurrence) for axis in ((1, 0, 0), (0, 1, 0), (0, 0, 1))]
+        matrix = [[*(basis[column][row] - origin[row] for column in range(3)), origin[row]] for row in range(3)]
+        matrix.append([0., 0., 0., 1.])
+        for name, shape in shapes.items():
+            probes.append({"id": name, "occurrence": occurrence, "obstacleName": "Invented l-solid" if name == "l-recess" else "Invented wall",
+                           "bounds": {"min": [min(x for x, _ in shape.polygon), min(y for _, y in shape.polygon), shape.bottom],
+                                      "max": [max(x for x, _ in shape.polygon), max(y for _, y in shape.polygon), shape.top]},
+                           "localToProject": matrix,
+                           "expectedDistanceMetres": distance(project(shape, occurrence), l_solid(occurrence)) if name == "l-recess"
+                               else union_distance((project(shape, occurrence),), doorway_wall(occurrence=occurrence)),
+                           "nonPenetrating": name not in ("contained", "penetrating"),
+                           "strictlySeparated": name not in ("contained", "penetrating", "touching")})
+    return probes
