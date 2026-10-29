@@ -1,98 +1,47 @@
 # Source-bound qualification handoff
 
-Parent [#230](https://github.com/Frederik91/bim-forge/issues/230).
-No merge or preview deployment is claimed by this record.
+Parent [#230](https://github.com/Frederik91/bim-forge/issues/230), combined draft [PR236](https://github.com/Frederik91/bim-forge/pull/236). BIM merge remains unapproved. Qualified source, deployed executable and pending live evidence are separate. Failed attempts remain in Git history and retained server ledgers.
 
-## ScriptBox 4.1.1
+## Qualified source
 
-The owner corrected the next release to **4.1.1**. Earlier unpublished 0.2.0/0.2.1
-candidate receipts remain historical evidence, rather than release instructions.
-[ScriptBox PR25](https://github.com/Frederik91/ScriptBox/pull/25) at
-`bb0a5e3cce77c0062c9ebcfdb892cce51fa1bf14` passes all four GitHub checks, server
-build/typecheck/lint, 193 Node tests with no skips, artifact checks and a clean
-network-off official Node 24 consumer with real JS/TS and catalog calls.
+Executable `65f8cebf05dff27741a604f89d47084286cb9101` passes server `npm run validate`, explicit changed-path policy and the complete default suite: **943 tests, 941 passed, zero failed, two optional skips**.
 
-Server receipts: `/ssd1/bim-forge-qualification/scriptbox24/release411-01/evidence/`
-and `/ssd1/bim-forge-qualification/scriptbox24/release411-consumer-01/evidence/`.
-The qualified tar SHA-256 is
-`e4fec17c14697c2f877d7834bf5e29b4c32b00a93b91dc19dbb38a0e43887a6e`.
-BIM's candidate lock binds its exact integrity. **4.1.1 is not yet public on npm**;
-the registry URL in that lock is a release target, not an available installation.
-Merge/staging authorization and maintainer npm two-factor approval remain necessary.
-Check the actual published tar and its integrity before treating the lock as final:
-the release workflow repacks and may produce different archive bytes.
+Evidence: `/ssd1/bim-forge-qualification/issue230/preseal-integration/attempt-4-65f8cebf05dff27741a604f89d47084286cb9101/artifacts/`.
 
-Plan for the dependency integration: change only `package.json` and
-`package-lock.json`; create a separate SSD dependency cache from the qualified
-packed consumer; verify every unrelated dependency and nested compiler is unchanged;
-run root validation and the full suite in a bounded network-off server container.
-No model entities, persistence contracts or acceptance authority change in this bump.
-The new dependency's integration results and final image remain pending here.
+An SSH disconnect did not interrupt the original supervisor/container; their retained exit file and terminal ledger report zero. No duplicate run started. Targeted attempt 3 also passes. Attempt 1 preserves the actual failing response-order regression; attempt2 preserves three integration assertion failures and their corrections. A separate helper syntax error stopped before a container started and is retained.
 
-## Actual converter, geometry and UI
+Final host geometry validation now precedes successful script evidence and the provider's ready response. Only designated complete candidate failures permit existing bounded retries. Failed/corrected executions, measurements and every observation remain in the same request. Staleness, incomplete geometry, worker/session/integrity failures and exhausted evidence limits remain fatal. The later seal, publication guards, endpoint/member replay and human acceptance remain intact. Safe diagnostics reach tool responses/chat activity; unknown handler details do not.
 
-Exact BIM source: `19cd354a047e2aa930f2aa9a3ed299bfa801122b`, with the earlier
-qualified private ScriptBox 0.2.0 candidate. Retained runs:
-`/ssd1/bim-forge-qualification/issue230/issue234/shared-picker-05/`.
-The five phases pass: validate, real converter/oracle, native receiving project,
-five geometry runtime tests, and one full browser workflow. All earlier failed
-attempts remain retained; this is cumulative attempts 30 through 34.
+`@frederik91/scriptbox` **4.1.1 is public on npm**. Owner-approved SDK PR25 merged at `fc18058badad330e517cad98f5055a6d99366f9c` with the qualified tree. Public tar SHA256 `e4fec17c14697c2f877d7834bf5e29b4c32b00a93b91dc19dbb38a0e43887a6e` is byte-identical to the qualified clean consumer and matches lock SRI. SDK 193 tests and the clean network-off Node24 consumer pass. All 16,164 unrelated installed files and nested TypeScript 6.0.3 remain unchanged. Historical unpublished 0.2 candidates are not installation instructions.
 
-The real browser uses public UI actions and real server/converter routes. It proves:
+## Deployed preview and preservation
 
-- One viewer; linked selection hides native Move and exposes source properties.
-  EI60 and hostile source text render as plain text. Native reselection clears
-  linked selection. Scalar properties at the depth boundary are now visible.
-- Exact project/source/version/GlobalId/occurrence context pins, independently
-  checked occurrence-matrix hashes, and immutable older attachment bytes.
-- Failed replacement preserves current geometry. Property and moved-wall versions
-  can be reviewed/adopted, with stable identity and original download history.
-- A second browser commits placement while an unchanged adoption request waits;
-  the stale adoption returns 409. Fresh adoption retains the newer placement.
-- Both actual chat submissions persist: chosen receiving hall/level, and an empty
-  native selection in a legacy project. Neither includes the previously selected
-  native door. No fake provider, auth, worker or proposal is used.
-- Serialized Main stays unchanged. Foreign original/prepared reads are refused
-  without source bytes. Desktop and 390 px layouts avoid horizontal page overflow.
+`https://192.168.1.17:9443/` currently runs executable `8843208edd494f0cdb7360f191401904e301437a`, image `sha256:2f3c1f0308d883ce13a090f66e1327b155e3242421681b0ab6e18ec1bc80497c`. Actual-image source/dependency/ownership, worker geometry, ScriptBox guest, socket healthcheck and real READY legacy IFC upgrade/restart checks pass. This runtime predates final preseal feedback.
 
-The runtime/oracle tests cover actual rotated metre/mm geometry, doorway and
-concave-shape bounds traps, zero-clearance safety, meshless semantic discovery,
-incomplete geometry abstention, scoped hidden dependencies, and an ordinary
-receiving floor at 3.5 m with no prefilled candidate assets or oracle answers.
-Boundary-touching cases may explicitly abstain; this is not a universal solid or
-clearance certificate. Responsive screenshots do not establish physical touch UX.
+Recovery 43 passed strict ORIGINAL preservation before reopening: nine original projects, 25 original requests, all 14 original source blobs, every other original native/linked table and all immutable IFC files matched. Actual served assets/health passed and ChatGPT remains connected. No credentials were copied or restored.
 
-The browser receipt is `attempt-5-browser-19cd354a047e/artifacts/issue234-browser-receipt.json`.
-Its concrete receiving and legacy outcomes both say `submitted`; its generic
-provider note is stale about UI submission gates. Connected-provider behavior is
-still untested by that receipt.
+Cutover 35 and pre-public rollback 36 both detected unchanged old/new startup collection of an expired unattached upload. Source 884 removes only constructor collection, retaining logical expiry, upload-time collection, budgets and access checks. Recovery restored the original paired checkpoint and byte-verified both databases/four empty WAL/SHM companions before fixed startup. Public writes since recovery 43 must never be overwritten by earlier checkpoints. Future deployment must fingerprint CURRENT state anew.
 
-## Earlier core and image results
+Final-source image attempt 44 passed artifact ownership setup. Attempt 45 stopped BEFORE a prepare container launched: the active-test guard matched the live app's inherited image-build labels. Its reservation/evidence remain counted. A reviewed fresh recipe permits only the exact qualified live app identity and rejects every other active V4 container. Fresh qualification plus publication needs at least 52 cumulative attempts. Current owner allowance is 50; extension to 60 is requested and **not assumed**. No new image job is authorized by this record. Original 2 GiB cumulative image storage and all validators remain unchanged.
 
-Core source `cac791b0dcab67ff5d74f0c14783634ddee42b60` passed 925 checks:
-923 passed, zero failed, two optional skips, plus strict lint/typecheck/policy/build.
-It does not substitute for testing the new 4.1.1 dependency.
+## Real IFC and UI evidence
 
-Image `sha256:321fb719629148dfc22a8da297509d5b02fadd7a9ade5b6e29dc2a00563bf1ed`
-at executable source `5721f53fcd5f2cc9d93f93b353781d1c6fde278c` passed actual
-runtime and synthetic old-SQLite upgrade/restart preservation at image attempt 17/20.
-Its legacy sample Main/baseline/alternative, retained IFC original and old checkpoint
-were preserved. No connected provider or converted old-mesh migration was claimed.
-That image still contains the earlier SDK, so it is **not the final 4.1.1 image**.
-Failed images and their raw evidence are retained. Additional root image-store
-growth remains capped at 2 GiB; source, deps, temporary files and logs stay on SSD.
+At source `19cd354a047e2aa930f2aa9a3ed299bfa801122b`, using the earlier qualified SDK candidate, actual converter/oracle, native receiving setup, five geometry runtime checks and a complete browser workflow pass. Receipts: `/ssd1/bim-forge-qualification/issue230/issue234/shared-picker-05/`.
 
-## Remaining merge gates
+Coverage includes rotated metre/mm sources, doorway/concave-shape bounds traps, incomplete-geometry abstention, hidden dependencies, exact source/occurrence/transform attachments, same-GlobalId separation, failed replacement, adoption/history and a real two-client stale-adoption race. Main stays unchanged. Desktop/390px layouts pass; no physical-touch claim.
 
-- Public 4.1.1 artifact verification, final BIM lock/cache and integration checks.
-- Final actual-image/static/converter qualification and paired rollback evidence.
-- Real connected ChatGPT geometry query and native proposal independently verified
-  at 500 mm clearance from a selected linked wall; no oracle answers in its prompt.
-- Explicit acceptance in a disposable alternative, with unchanged Main/As-is.
-- Final combined draft PR, required green CI and source-bound preservation/deployment
-  receipts. Existing user projects and auth must remain untouched.
+Live UI at deployed 884 imported separate public-synthetic project `67c5e0ba-a80d-430e-a5c7-428488f86f1b`, captured As-is, created Alternative 1, converted the public mm IFC, displayed EI60/hostile source text literally, hid native Move for IFC selection and attached the exact linked wall context. Main and fixed baseline remain revision `15da929cc186cc80d9ef5733c3d327038fbc5745123f23e69e97638eea6b2ad8`.
 
-Single-server browser placement/adoption interleaving does not establish
-cross-process acceptance, cancellation/restart, or final proposal freshness.
-Those claims require their own core/runtime receipts; pending rows in the original
-requirements matrix must not be inferred green from this UI run.
+Real-provider request `fd0d0b62-907c-4efa-968d-dd187691e537` retains two failed turns. First: generic bounded-evidence validation. Local-query continuation: final incomplete/unsupported/violated-measurement guard. Both generated graph-valid previews; neither published a review proposal or accepted a change. New source fixes the confirmed response-order gap, but connected-provider repair/acceptance is **pending** deployment.
+
+An independent synthetic diagnostic does NOT establish the first live failure's cause: native broad 51,119 B, native+IFC broad 62,166 B and regional 14,934 B envelopes all passed schema and real seal. Receipts: `/ssd1/bim-forge-qualification/issue230/evidence-budget-diagnostic-01/evidence/`. Do not describe it as reconstruction of hash-only provider arguments.
+
+## Remaining gates
+
+1. Obtain the explicit retry-budget extension, retaining all 45 attempts.
+2. Qualify final actual image, including real guest rejection/correction using only `/app` modules, plus real READY legacy conversion/upgrade/restart.
+3. Publish paired final static/runtime/converter source after exact CURRENT data preservation. Client-reachable contract changes the browser bundle; use the new full-root manifest.
+4. Repeat connected-agent UI request; inspect bound evidence; accept only the synthetic alternative; prove Main/As-is unchanged.
+5. Refresh PR evidence and obtain separate human BIM merge approval.
+
+Builds/tests use bounded isolated server containers, network off, source/dependencies read-only and SSD artifacts. Local substitutes, fake providers, automatic acceptance, validator weakening and database rewinds do not qualify these gates.

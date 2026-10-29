@@ -11,7 +11,7 @@ No merge is authorized. The owner requests a complete, adversarially tested merg
 - [x] Compare immutable evaluated-read-model and per-source-provider design candidates.
 - [x] Synthesize the initial contract and publish separate ownership.
 - [x] Implement the three tracks, reviewing material seam changes here.
-- [ ] Combine actual source, validate on the server and fix reproduced defects.
+- [x] Combine actual source, validate on the server and fix reproduced defects.
 - [ ] Exercise real connected-agent UI workflows and difficult external update cases.
 - [ ] Audit every requirement against retained evidence; publish a qualified preview/draft PR.
 - [ ] Replace the design if repeated implementation workarounds contradict its ownership.
@@ -19,6 +19,15 @@ No merge is authorized. The owner requests a complete, adversarially tested merg
 Current source-bound results and release blockers are in
 [the qualification handoff](../../experiments/geometry-qualification-230/qualified-status.md).
 The original pending tables below describe the starting gates, not current runtime results.
+
+Final feedback source65f8ceb passed943 server checks (941 passes, two optional
+skips). Host geometry validation now precedes successful script evidence and the
+provider's ready response, allowing designated complete candidate failures to be
+corrected within the same bounded request. Every original observation remains;
+authority, incomplete-geometry, session, integrity and evidence-budget failures
+remain fatal. Later sealing/publication/acceptance still revalidate independently.
+The preview currently runs8843208; final-image and connected-provider repair/
+acceptance evidence remain separate gates. See the current handoff above.
 
 ## Problem and authority
 
