@@ -7,8 +7,10 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import http from 'node:http';
 import { LinkedModelStore } from './linked-model-store.ts';
-import { IDENTITY_LINK_TRANSFORM, MAX_LINK_REVISIONS, linkedDelta, parseLinkedPrepared } from '../src/linked-model.ts';
+import { handleLinkedModelRoute } from './linked-model-routes.ts';
+import { IDENTITY_LINK_TRANSFORM, MAX_LINK_REVISIONS, linkedDelta, parseLinkedJob, parseLinkedPrepared, parseLinkedReview } from '../src/linked-model.ts';
 import type { LinkedJob, LinkedSelection } from '../src/linked-model.ts';
 
 const gid = '0000000000000000000001';
@@ -59,6 +61,7 @@ test('replacement stages separately, adopts atomically, retains original pins an
   assert.equal(request.id, candidate.id); assert.equal(request.occurrence, first.job.occurrence);
   assert.equal(store.snapshotCurrent(projectId).catalogToken, oldToken, 'staging does not change current or its concurrency token');
   complete({ spool, job: candidate, bytes, offset: 2 }); store.refresh();
+  assert.equal(store.prepareReplacement({ projectId, linkId: first.job.id, expectedGeneration: 1, name: 'v2.ifc', bytes }).id, candidate.id, 'lost prepare response reuses the matching candidate');
   assert.equal(store.snapshotCurrent(projectId).catalogToken, oldToken);
   assert.deepEqual(store.reviewCandidate(projectId, first.job.id, candidate.id).delta.moved, [gid]);
   assert.deepEqual(store.reviewCandidate(projectId, first.job.id, candidate.id).delta.ambiguous, [gid]);
@@ -102,7 +105,8 @@ test('placement is independent, rigid, bounded, CAS protected and retains histor
   assert.deepEqual(store.prepared(projectId, first.job.id).manifest.occurrence.sourceToProjectMetres, transformed);
   assert.deepEqual(store.original(projectId, first.job.id), first.bytes); assert.equal(store.readVersion(projectId, selection(first.prepared)).kind, 'ok');
   assert.throws(() => store.adopt({ projectId, linkId: first.job.id, candidateId: candidate.id, expectedGeneration: 2 }), /different current/);
-  assert.throws(() => store.place({ projectId, linkId: first.job.id, expectedGeneration: 1, sourceToProjectMetres: transformed }), /changed/);
+  assert.deepEqual(store.place({ projectId, linkId: first.job.id, expectedGeneration: 1, sourceToProjectMetres: transformed }), placed, 'lost placement response reuses current state');
+  assert.throws(() => store.place({ projectId, linkId: first.job.id, expectedGeneration: 1, sourceToProjectMetres: structuredClone(IDENTITY_LINK_TRANSFORM) }), /changed/);
   for (const bad of [NaN, Infinity, 1e7]) {
     const invalid = structuredClone(transformed); const row = invalid[0]; assert.ok(row); row[3] = bad;
     assert.throws(() => store.place({ projectId, linkId: first.job.id, expectedGeneration: 2, sourceToProjectMetres: invalid }), /transform/);
@@ -160,4 +164,47 @@ test('same GlobalId in another namespace is distinct, duplicate IDs fail, and co
   let called = false; assert.deepEqual(store.withCatalogGuard(projectId, token, () => { called = true; }), { kind: 'catalog-changed' }); assert.equal(called, false);
   assert.equal(store.readVersion(projectId, selection(first.prepared)).kind, 'unavailable');
   assert.deepEqual(store.originalVersion(projectId, first.job.id), first.bytes);
+});
+
+test('revision routes enforce origin/project/version associations and retain exact historic downloads after adoption', async t => {
+  const input = setup(t); const first = attachReady(input); const { store, projectId, spool } = input; const foreignProject = randomUUID();
+  const socket = path.join(os.tmpdir(), `ifc232-${randomUUID()}.sock`);
+  const server = http.createServer((request, response) => {
+    void handleLinkedModelRoute({ request, response, store, hasProject: id => id === projectId || id === foreignProject,
+      authorize: req => { if (req.headers.origin !== 'https://preview.example') throw new Error('Same-origin required.'); } })
+      .then(handled => { if (!handled) { response.statusCode = 404; response.end(); } })
+      .catch(error => { response.statusCode = 500; response.end(String(error)); });
+  });
+  await new Promise<void>(resolve => server.listen(socket, resolve));
+  t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
+  const request = (url: string, options: { method?: string; body?: Buffer | string; headers?: Record<string, string> } = {}) =>
+    new Promise<{ status: number | undefined; bytes: Buffer }>((resolve, reject) => {
+      const req = http.request({ socketPath: socket, path: url, method: options.method ?? 'GET',
+        headers: { Host: 'preview.example', Origin: 'https://preview.example', ...options.headers } }, response => {
+        const chunks: Buffer[] = []; response.on('data', chunk => { chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); });
+        response.on('end', () => resolve({ status: response.statusCode, bytes: Buffer.concat(chunks) }));
+      }); req.on('error', reject); req.end(options.body);
+    });
+  const root = `/api/projects/${projectId}/ifc-links`; const link = `${root}/${first.job.id}`;
+  for (const suffix of ['/catalog', `/${first.job.id}/placement`, `/${first.job.id}/candidate`, `/${first.job.id}/versions/${first.job.id}/review`, `/${first.job.id}/versions/${first.job.id}/adopt`, `/${first.job.id}/versions/${first.job.id}/original`]) {
+    for (const method of ['GET', 'POST']) assert.equal((await request(root + suffix, { method, headers: { Origin: 'https://attacker.invalid' } })).status, 400);
+  }
+  assert.equal((await request(`${root}/catalog?path=/secret`)).status, 400);
+  assert.equal((await request(`/api/projects/${randomUUID()}/ifc-links/catalog`)).status, 404);
+  assert.equal((await request(`/api/projects/${foreignProject}/ifc-links/${first.job.id}/versions/${first.job.id}/original`)).status, 400);
+  const bytes = source('HTTP v2');
+  const upload = { method: 'POST', headers: { 'Content-Type': 'application/x-step', 'X-Source-Name': 'v2.ifc', 'X-Expected-Generation': '1' }, body: bytes };
+  assert.equal((await request(`${link}/candidate`, { ...upload, headers: { ...upload.headers, 'X-Expected-Generation': 'wrong' } })).status, 400);
+  const accepted = await request(`${link}/candidate`, upload); assert.equal(accepted.status, 202, accepted.bytes.toString());
+  const raw: unknown = JSON.parse(accepted.bytes.toString()); assert.ok(typeof raw === 'object' && raw !== null && 'link' in raw); const candidate = parseLinkedJob(raw.link);
+  complete({ spool, job: candidate, bytes, name: 'Changed wall' }); store.refresh();
+  const review = await request(`${link}/versions/${candidate.id}/review`); assert.equal(review.status, 200); assert.deepEqual(parseLinkedReview(JSON.parse(review.bytes.toString())).delta.properties, [gid]);
+  const adoption = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedGeneration: 1 }) };
+  assert.equal((await request(`${link}/versions/${candidate.id}/adopt`, { ...adoption, body: JSON.stringify({ expectedGeneration: '1' }) })).status, 400);
+  assert.equal((await request(`${link}/placement`, { ...adoption, body: ' '.repeat(4097) })).status, 400);
+  assert.deepEqual((await request(`${link}/original`)).bytes, first.bytes);
+  const adopted = await request(`${link}/versions/${candidate.id}/adopt`, adoption); assert.equal(adopted.status, 200, adopted.bytes.toString());
+  assert.deepEqual((await request(`${link}/original`)).bytes, bytes); assert.deepEqual((await request(`${link}/versions/${first.job.id}/original`)).bytes, first.bytes);
+  const other = attachReady(input, 'separate link');
+  assert.equal((await request(`${link}/versions/${other.job.id}/original`)).status, 400);
 });
