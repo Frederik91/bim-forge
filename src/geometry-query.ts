@@ -253,6 +253,7 @@ export class GeometryContext {
   describe(input: unknown): GeometryDescriptionResult {
     const { outcome, receipt } = this.#run<GeometryDescription>('describe', input, (value, reads) => {
       const record = this.#resolve(parseGeometryRef(value)); this.#objectRead(record, 'description', reads);
+      if (record.shape) this.#objectRead(record, 'geometry', reads);
       return record.shape || record.description.role === 'context' ? { kind: 'complete', value: record.description }
         : { kind: 'partial', value: record.description, reason: 'missing-geometry', detail: 'Object identity exists but physical geometry is unavailable.' };
     });

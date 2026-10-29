@@ -5,12 +5,12 @@ Component [#231](https://github.com/Frederik91/bim-forge/issues/231) of
 Implementation base: `f4285c644e52b5bdba8e4f6afeb6e099bc02b891`.
 This component changes derived read records and calculations. Native model delta is empty.
 
-Qualification status on 2026-10-29: **unqualified**. The server was unreachable at integration kickoff and connectivity later returned.
-The parent reserves the sole serial qualification slot. No local build or test substitutes were run.
-Parent integration attempt 1 passed strict lint on 306 sources, then failed TypeScript checking before component tests ran.
-A later parent run passed the earlier geometry source 28/28 and then exposed a ScriptBox schema bootstrap failure.
-Subsequent clearance and schema corrections remain unqualified pending another parent run.
-The source and test assertions below describe implementation intent until server evidence confirms them.
+Qualification status on 2026-10-29: **kernel checks pass in parent integration; product qualification pending**.
+The parent reported attempt 4 at `aee595c4217273b09814353bb645c25841ee49c5`: root validation on 315 sources, explicit policy on 97 paths,
+geometry 31/31, and geometry-source integration 3/3 passed, including the clearance and canonical-array corrections.
+Combined ScriptBox, final acceptance, real converter, and connected UI checks remain pending.
+The subsequent `describe` geometry-read producer seam and its controls await the parent's next qualification run.
+The parent reserves the sole serial qualification slot. No child server runs or local substitutes occurred.
 
 ## Host construction and authority
 
@@ -57,6 +57,9 @@ Explicit exclusions require current revision, source hash, and placement pins du
 An automatic measured-candidate exclusion is recorded separately and requires the final candidate context during freshness replay.
 
 `describe(ref)` supplies project bounds, units, source authority, capability, and at most twelve triangle surface samples.
+Whenever a shape exists, its receipt includes both the description projection and the full evaluated geometry projection for that exact reference.
+This includes native hosted voids and prepared IFC opening meshes. Only the geometry digest is recorded, not a mesh dump.
+An absent shape retains a description-only receipt, including semantic levels and spaces whose solid geometry is unsupported.
 Each sample supplies a point, a unit normal in mesh winding order, and triangle area.
 Samples can be truncated. They do not describe all planes, oriented extents, or connected patches.
 Native level descriptions expose elevation. Native space descriptions expose their declared footprint at the owning level.
@@ -181,58 +184,67 @@ High-complexity containment can exhaust the bounded work budget. No hospital-sca
 
 ## Evidence matrix and defect record
 
-Execution status in this matrix concerns the current source. Earlier source passes are recorded separately below.
+Component statuses below refer to parent kernel attempt 4, which includes executable component head `75cca36` and its prerequisites.
+The historical failures and exact evidence directory remain in the qualification record.
 
 | Requirement | Authored evidence | Execution status |
 | --- | --- | --- |
-| Shared native and IFC semantics | Equivalent native and IFC wall measurement test | Unrun |
-| Units and transforms | Independent composed rotation, translation, 200 km offset, and mm-metadata fixture | Unrun |
-| Irregular shapes and openings | Independently authored L-prism and U-profile triangle fixtures | Unrun |
-| Solid distance and witnesses | Analytic cube gap and containment invariants | Unrun |
-| Supported boundary contact | Evaluated native asset on a native slab, native wall, rotated IFC wall, positive-gap rejection, sub-tolerance penetration and coincident/coplanar ambiguity controls | Unrun |
-| Contact and penetration | Zero-gap and positive-gap overlap, containment, and contact controls | Unrun |
-| Identity and scope | Namespace, occurrence, stale reference, private host, filtered relations, and scope-domain tests | Unrun |
-| Complete candidate membership | Absence, new obstruction, off-page membership changes, discovery-only height change, measurement geometry change, missing mesh, and unavailable source tests | Unrun |
-| Relevant updates | Verified correspondence, property-only change, and moved source controls | Unrun |
-| Final candidate binding | Object candidate versus changed reconciled geometry test | Unrun |
-| Budgets and termination | Work and pair limits, deterministic deadline, abort, and late-reply controls | Unrun |
-| ScriptBox schema representation | Fixed-array length/type/range controls, internal vector construction, and absence of tuple-only keywords | Unrun; parent owns actual guest bootstrap |
+| Shared native and IFC semantics | Equivalent native and IFC wall measurement test | Parent attempt 4 passed |
+| Units and transforms | Independent composed rotation, translation, 200 km offset, and mm-metadata fixture | Parent attempt 4 passed |
+| Irregular shapes and openings | Independently authored L-prism and U-profile triangle fixtures | Parent attempt 4 passed |
+| Solid distance and witnesses | Analytic cube gap and containment invariants | Parent attempt 4 passed |
+| Supported boundary contact | Evaluated native asset on a native slab, native wall, rotated IFC wall, positive-gap rejection, sub-tolerance penetration and coincident/coplanar ambiguity controls | Parent attempt 4 passed |
+| Contact and penetration | Zero-gap and positive-gap overlap, containment, and contact controls | Parent attempt 4 passed |
+| Identity and scope | Namespace, occurrence, stale reference, private host, filtered relations, and scope-domain tests | Parent attempt 4 passed |
+| Complete candidate membership | Absence, new obstruction, off-page membership changes, discovery-only height change, measurement geometry change, missing mesh, and unavailable source tests | Parent attempt 4 passed |
+| Relevant updates | Verified correspondence, property-only change, and moved source controls | Parent attempt 4 passed |
+| Final candidate binding | Object candidate versus changed reconciled geometry test | Parent attempt 4 passed |
+| Describe geometry producer seam | Full IFC cavity and native hosted-void changes behind unchanged bounds/samples, native and IFC opening reads, shape-absent semantic descriptions | Authored after attempt 4; unrun |
+| Budgets and termination | Work and pair limits, deterministic deadline, abort, and late-reply controls | Parent attempt 4 passed |
+| ScriptBox schema representation | Fixed-array length/type/range controls, internal vector construction, and absence of tuple-only keywords | Component controls passed; actual guest bootstrap pending |
 | Real converter and connected UI | Parent and independent #234 qualification | Pending |
-| Root validation and changed-path policy | Server-only qualification script | Unrun |
+| Root validation and changed-path policy | Parent serial kernel run, 315 sources and 97 changed paths | Parent attempt 4 passed |
 
-Source inspection found the following defects before any test run:
+The defect record retains source-review findings and subsequent runtime failures:
 
 | Defect | Correction | Evidence state |
 | --- | --- | --- |
-| Parameter property conflicts with `erasableSyntaxOnly` | Explicit error field and constructor assignment | Static correction; compiler unrun |
-| Containment returned distance zero with separated witnesses | Coincident solid witnesses for contained points | Assertion authored; unrun |
-| Zero requested gap could bless penetration | Overlap and containment always violate clearance | Assertion authored; unrun |
-| Semantic context discovery inherited missing-solid uncertainty | Nonspatial membership and solid capability are distinct | Assertion authored; unrun |
-| Full native graph could expose private scope identities | Private evaluation followed by authorized record and relation filtering | Assertion authored; unrun |
-| Worker lifetime could expire during a valid provider turn | Separate 180 s default lifetime and hard per-operation deadline | Lifecycle controls authored; unrun |
-| A stale exclusion could hide a current obstruction | Resolve explicit pins before selection and rebind only during verified replay | Assertions authored; unrun |
-| Discovery inherited unconsumed off-page geometry dependencies | Separate discovery membership from measurement geometry observations | Positive and negative freshness controls authored; unrun |
-| A schema-valid changed reply could retain its prior receipt hash | Hash the canonical public payload and check it before collecting receipts | Four-method digest controls and private-worker transport mutation test authored; unrun |
-| TypeScript loses optional `query.level` narrowing inside a callback | Capture the validated level identity key before the callback | Parent attempt 1 failed TS2345; fix awaits parent rerun |
-| Floor-standing geometry could only return unresolved boundary contact | Certify nonpenetration through exact common supporting-plane signs on closed meshes; retain ambiguous fallback | Native slab and native/IFC wall controls authored; unrun |
-| Sub-tolerance positive gaps could promote ambiguous coincident geometry | Ambiguity blocks all clearance values and produces a partial result | Coincident gap matrix authored; unrun |
-| A closer contact could hide a different near-contained obstruction | Aggregate every obstruction independently of the closest pair | Both obstacle orders and clearance/intersection controls authored; unrun |
-| ScriptBox 0.1.1 rejects tuple-only schema keywords during bootstrap | Equivalent canonical bounded arrays with validated fixed-vector math boundary | Schema equivalence controls authored; actual guest rerun pending |
+| Parameter property conflicts with `erasableSyntaxOnly` | Explicit error field and constructor assignment | Parent compiler check passed |
+| Containment returned distance zero with separated witnesses | Coincident solid witnesses for contained points | Parent component checks passed |
+| Zero requested gap could bless penetration | Overlap and containment always violate clearance | Parent component checks passed |
+| Semantic context discovery inherited missing-solid uncertainty | Nonspatial membership and solid capability are distinct | Parent component checks passed |
+| Full native graph could expose private scope identities | Private evaluation followed by authorized record and relation filtering | Parent component checks passed |
+| Worker lifetime could expire during a valid provider turn | Separate 180 s default lifetime and hard per-operation deadline | Parent component checks passed |
+| A stale exclusion could hide a current obstruction | Resolve explicit pins before selection and rebind only during verified replay | Parent component checks passed |
+| Discovery inherited unconsumed off-page geometry dependencies | Separate discovery membership from measurement geometry observations | Parent component checks passed |
+| A schema-valid changed reply could retain its prior receipt hash | Hash the canonical public payload and check it before collecting receipts | Parent component checks passed |
+| TypeScript loses optional `query.level` narrowing inside a callback | Capture the validated level identity key before the callback | Attempt 1 failed TS2345; parent attempt 4 passed |
+| Floor-standing geometry could only return unresolved boundary contact | Certify nonpenetration through exact common supporting-plane signs on closed meshes; retain ambiguous fallback | Parent component checks passed |
+| Sub-tolerance positive gaps could promote ambiguous coincident geometry | Ambiguity blocks all clearance values and produces a partial result | Parent component checks passed; independent static follow-up confirms the source fix |
+| A closer contact could hide a different near-contained obstruction | Aggregate every obstruction independently of the closest pair | Parent component checks passed; independent static follow-up confirms the source fix |
+| ScriptBox 0.1.1 rejects tuple-only schema keywords during bootstrap | Equivalent canonical bounded arrays with validated fixed-vector math boundary | Component schema controls passed; actual guest rerun pending |
+| Final endpoint binding needs full geometry evidence from describe | Record the evaluated geometry projection beside the description whenever a shape exists | Producer controls authored; next parent run pending |
 
 ## Qualification record
 
 The owner allows ten total attempts for this new interactive item, as recorded in
 `docs/design/synthetic-residential-197.md`. Issue218 remains exhausted and is not rerun.
-Issue231 attempts consumed: **0**. Parent SSH and HTTPS kickoff failures were infrastructure probes, not executed test failures.
+Independent issue231 runs: **0**. Parent combined attempts are tracked by the issue230 ledger.
+Parent SSH and HTTPS kickoff failures were infrastructure probes, not executed test failures.
 The parent subsequently ran combined component attempt 1 at `88daaa82e38f3491d62b0866ba458bbf0bbada2c`.
 Its strict lint passed on 306 sources. TypeScript reported TS2345 at `geometry-query.ts:219` because callback access widened `query.level` to include `undefined`.
 The correction captures the already validated identity key outside that callback, without casts or non-null assertions.
 The retained parent log is `/ssd1/bim-forge-qualification/issue230/run-88daaa82e38f3491d62b0866ba458bbf0bbada2c-component-01/artifacts/validate.log`.
-This is parent-reported execution evidence. No independent child container or server probe ran, and the correction remains unqualified pending the parent's next run.
+This is parent-reported execution evidence. No independent child container or server probe ran.
 The parent later reported combined component attempt 3 at source `f6ef6f9`: root validation on 314 sources, explicit changed-path policy, and browser build passed.
 The geometry suite passed 28/28 including the then-current contact controls, and linked revision tests passed 12/12.
 Actual ScriptBox bootstrap then rejected tuple-only JSON schema keywords in `@frederik91/scriptbox` 0.1.1.
 These passes predate the subsequent clearance-aggregation and canonical-array corrections and do not qualify those later edits.
+The parent then reported kernel attempt 4 at `aee595c4217273b09814353bb645c25841ee49c5`, including component head `75cca36` and the clearance fix `c941208`.
+Root `npm run validate` passed on 315 sources, the explicit 97-path policy check passed, geometry tests passed 31/31, and geometry-source integration tests passed 3/3.
+Evidence is retained at `/ssd1/bim-forge-qualification/issue230/run-aee595c4217273b09814353bb645c25841ee49c5-kernel-04/artifacts`.
+Unchanged linked revision checks and ScriptBox bootstrap were not repeated in this kernel run. Linked revision 12/12 remains prior-source evidence from attempt 3.
+Independent follow-up review found both clearance P1 paths closed in source. Combined ScriptBox, acceptance, converter, and UI qualification still remain pending.
 The early Windows shell profile changed the working directory and hid the Git worktree.
 Explicit PowerShell path, `login:false`, and the exact work directory corrected command routing.
 Initial file-copy approvals completed. The owner later supplied direct worktree write access.
@@ -240,7 +252,8 @@ Initial file-copy approvals completed. The owner later supplied direct worktree 
 `experiments/geometry-231/qualify.sh` records exact source, image, raw output, explicit changed paths,
 exit status, hashes, and Docker inspection in a new issue-specific `/ssd1` directory.
 The script uses the cached tools image and read-only dependencies, no network, a read-only source mount,
-2 CPUs, 3 GiB memory and swap caps, 256 PIDs, dropped capabilities, and bounded commands.
-The script has not run. It does not open a PR or modify a preview.
+2 CPUs, 3 GiB RAM with no additional swap, 256 PIDs, dropped capabilities, and bounded commands.
+This standalone child script has not run. The qualified kernel evidence above comes from the parent's serial runner.
+The script does not open a PR or modify a preview.
 Root `npm run validate`, explicit changed-path policy, and all component tests must pass before a draft component PR.
 Parent owns package registration, Docker packaging, shared server mounts, independent IFC and browser qualification, and combined publication.
