@@ -259,10 +259,17 @@ test('dispatch refuses further guest work after its frozen geometry observations
 });
 
 test('final authored shape is independently remeasured; a correct guest box cannot certify an unsafe native cube', async () => {
-  const repository = await RoomRepository.create(); const source = new FixtureGeometrySource();
+  const repository = await RoomRepository.create(); const source = new FixtureGeometrySource(); const accepted = repository.serialize();
+  let rejectedBeforeReady = false;
   await assert.rejects(prepareModelProposal(repository, request(repository), worker(async session => {
-    await propose(session, geometryProposalScript.replace('position:[1,2]', 'position:[.75,2]'));
-  }), () => {}, { geometry: { source } }), /final authored shape|measurement|constraint/);
+    const output = await session.executeTool('run_model_script', { language: 'typescript',
+      source: geometryProposalScript.replace('position:[1,2]', 'position:[.75,2]') });
+    assert.equal(output.ok, false, JSON.stringify(output));
+    assert.equal(output.done, undefined);
+    assert.ok(typeof output.error === 'string'); assert.match(output.error, /\[clearance-violated\]/);
+    rejectedBeforeReady = true;
+  }), () => {}, { geometry: { source } }), /ended without proposing or declining/);
+  assert.equal(rejectedBeforeReady, true); assert.equal(repository.serialize(), accepted);
 });
 
 test('corrected trial measurements retain history while the final candidate satisfies the same constraint', async () => {

@@ -10,6 +10,7 @@ import type { ModelWorker } from '../src/model-proposal.ts';
 import { readGeometryEvidence, parseGeometryEvidence, geometrySnapshotHash } from '../src/geometry-evidence.ts';
 import { FixtureGeometrySource, evidenceWall, evidenceFloor, geometryProposalScript, geometryReview, cubeAuthoring, cubeMeasurement } from '../src/geometry-evidence.fixture.ts';
 import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
+import { parseScriptExecutionEvidence } from '../src/script-evidence.ts';
 
 const doorScript = `const view = await model.inspect(); if(!view.placement.layout) throw new Error('Fixture layout');
   await model.previewRectangle({...view.placement.layout,door:{...view.placement.layout.door,widthMm:1200}});
@@ -109,7 +110,18 @@ test('final native endpoint replay is symmetric for object order and query membe
       const source = new FixtureGeometrySource(); source.replace([evidenceWall({ x: 2 })]);
       const file = path.join(directory, `${endpoint}-${operation}-${x}.sqlite`);
       let guestSucceeded = false;
-      const queue = await ChangeRequests.open(file, () => agent(script, () => { guestSucceeded = true; }), { geometry: source }); queues.push(queue);
+      const endpointWorker: ModelWorker = { identity: { provider: 'test', model: 'geometry-endpoint-proof' }, async run(session) {
+        const output = await session.executeTool('run_model_script', { language: 'typescript', source: script });
+        const execution = parseScriptExecutionEvidence(output.execution);
+        guestSucceeded = execution.status === 'completed';
+        assert.equal(guestSucceeded, true, 'The actual guest must complete before final host validation.');
+        assert.ok(execution.calls.every(call => call.disposition === 'completed'));
+        assert.equal(output.ok, x === 3.5, JSON.stringify(output));
+        assert.equal(execution.disposition, x === 3.5 ? 'proposal' : 'discarded');
+        assert.equal(execution.validation, x === 3.5 ? 'passed' : 'failed');
+        if (x !== 3.5) assert.equal(execution.diagnostic?.code, 'invalid-proposal');
+      } };
+      const queue = await ChangeRequests.open(file, () => endpointWorker, { geometry: source }); queues.push(queue);
       const ticket = await queue.submit(repository.serialize(), { ...request(repository, `${endpoint}-${operation}-${x === 3.5 ? 'safe' : 'overlap'}`), selectedObjectIds: [instance.id] });
       if (x === 3.5) {
         await ready(queue, ticket.id);

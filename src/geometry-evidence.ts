@@ -82,7 +82,7 @@ export class GeometryProposalValidationError extends Error {
       'final-shape-mismatch': 'The final authored shape does not satisfy the inspected geometry measurement.',
       'final-intersection': 'The final candidate intersects or is contained by another physical object.',
     };
-    super(`${messages[diagnostic.code]} ${measurementSummary(diagnostic)}`);
+    super(`[${diagnostic.code}] ${messages[diagnostic.code]} ${measurementSummary(diagnostic)}`);
     this.name = 'GeometryProposalValidationError'; this.diagnostic = Object.freeze({ ...diagnostic });
   }
 }
