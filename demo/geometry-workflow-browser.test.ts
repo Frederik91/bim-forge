@@ -13,7 +13,7 @@ import { RoomRepository } from '../src/room-model.ts';
 import { parseLinkedPrepared } from '../src/linked-model.ts';
 import { GeometryRefSchema, parseGeometryRef } from '../src/geometry-contract.ts';
 import { parseRequestSources } from '../src/request-sources.ts';
-import { qualifyLinkedVersions } from '../experiments/geometry-qualification-230/linked-version-controls.ts';
+import { openProjectPicker, qualifyLinkedVersions } from '../experiments/geometry-qualification-230/linked-version-controls.ts';
 
 // This slice uses the real isolated server + external converter. It never injects a
 // provider, scripts a fake proposal, reads oracle facts into chat, or opens a live preview.
@@ -134,10 +134,12 @@ async function submitContextThroughUI(input: {
 
 async function createProject(page: Page, base: string, name: string) {
   await page.goto(base);
-  await page.locator('#project-template').selectOption('room');
-  await page.locator('#project-name').fill(name);
+  const picker = await openProjectPicker(page);
+  await picker.locator('#project-template').selectOption('room');
+  await picker.locator('#project-name').fill(name);
   const response = page.waitForResponse(item => item.url() === `${base}/api/projects` && item.request().method() === 'POST');
-  await page.locator('#create-project').click();
+  await picker.locator('#create-project').click();
+  await picker.waitFor({ state: 'hidden' });
   const created = await response;
   assert.equal(created.status(), 200);
   const value: unknown = await created.json();

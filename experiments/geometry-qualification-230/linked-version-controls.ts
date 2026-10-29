@@ -5,6 +5,16 @@ import { createHash } from 'node:crypto';
 import type { Page, Route } from 'playwright';
 import { parseLinkedCatalog, parseLinkedPrepared, parseLinkedReview } from '../../src/linked-model.ts';
 
+export async function openProjectPicker(page: Page) {
+  const picker = page.locator('#start-dialog');
+  if (!await picker.isVisible()) {
+    await page.locator('.workspace-file-menu > summary').click();
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  }
+  await picker.waitFor({ state: 'visible' });
+  return picker;
+}
+
 /** Actual disposable-project UI actions and public read routes. No provider or scene hooks. */
 export async function qualifyLinkedVersions(input: {
   page: Page; base: string; projectId: string; originalHref: string; artifacts: string; fixtures: string;
@@ -112,12 +122,7 @@ export async function qualifyLinkedVersions(input: {
   try {
     const other = await otherContext.newPage();
     await other.goto(base);
-    const projectPicker = other.locator('#start-dialog');
-    if (!await projectPicker.isVisible()) {
-      await other.locator('.workspace-file-menu > summary').click();
-      await other.getByRole('button', { name: 'Projects', exact: true }).click();
-    }
-    await projectPicker.waitFor({ state: 'visible' });
+    const projectPicker = await openProjectPicker(other);
     await projectPicker.locator('#saved-projects').selectOption(input.projectId);
     await projectPicker.getByRole('button', { name: 'Open latest accepted model', exact: true }).click();
     await projectPicker.waitFor({ state: 'hidden' });
