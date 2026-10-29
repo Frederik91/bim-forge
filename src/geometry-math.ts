@@ -1,9 +1,10 @@
-import type { GeometryBounds, GeometryMatrix, GeometryPoint } from './geometry-contract.ts';
+import type { GeometryBounds, GeometryMatrix } from './geometry-contract.ts';
 
-export type Vec3 = GeometryPoint;
+export type Vec3 = [number, number, number];
+export type MathBounds = { min: Vec3; max: Vec3 };
 export type Triangle = readonly [Vec3, Vec3, Vec3];
-export type GeometryMesh = { triangles: Triangle[]; bounds: GeometryBounds; closed: boolean };
-export type GeometryShape = { meshes: GeometryMesh[]; bounds: GeometryBounds };
+export type GeometryMesh = { triangles: Triangle[]; bounds: MathBounds; closed: boolean };
+export type GeometryShape = { meshes: GeometryMesh[]; bounds: MathBounds };
 export const NUMERIC_TOLERANCE_METRES = 1e-7;
 export class GeometryLimitError extends Error {
   readonly reason: 'budget' | 'deadline';
@@ -43,7 +44,7 @@ export function assertRigidTransform(matrix: GeometryMatrix | number[][]): void 
   }
   if (Math.abs(dot(rows[0], cross(rows[1], rows[2])) - 1) > 1e-8) throw new Error('Reflected geometry transform is unsupported.');
 }
-export function boundsOf(points: readonly Vec3[]): GeometryBounds {
+export function boundsOf(points: readonly Vec3[]): MathBounds {
   if (!points.length) throw new Error('Empty shape has no bounds.');
   const min: Vec3 = [Infinity, Infinity, Infinity]; const max: Vec3 = [-Infinity, -Infinity, -Infinity];
   for (const p of points) for (let i = 0; i < 3; i++) {
@@ -89,7 +90,14 @@ export function meshFromFaces(faces: readonly (readonly Vec3[])[], work: Geometr
   }
   return createMesh(triangles, work);
 }
-export function boxMesh(bounds: GeometryBounds, matrix: GeometryMatrix | number[][], work: GeometryWork): GeometryMesh {
+/** Refine the canonical fixed-length wire array once where it enters the numeric kernel. */
+export function vector3(value: readonly number[]): Vec3 {
+  const [x, y, z] = value;
+  if (value.length !== 3 || [x, y, z].some(n => !Number.isFinite(n) || Math.abs(n) > 1e6)) throw new Error('Geometry vector requires exactly three finite bounded coordinates.');
+  return [x, y, z];
+}
+export function boxMesh(input: GeometryBounds, matrix: GeometryMatrix | number[][], work: GeometryWork): GeometryMesh {
+  const bounds: MathBounds = { min: vector3(input.min), max: vector3(input.max) };
   assertRigidTransform(matrix);
   if (bounds.min.some((n, i) => n >= bounds.max[i])) throw new Error('Box dimensions must be positive.');
   const [x, y, z] = bounds.min; const [a, b, c] = bounds.max;
@@ -148,8 +156,8 @@ function triangleDistance(a: Triangle, b: Triangle): Witness {
   for (const [p, q] of edges(a)) for (const [x, y] of edges(b)) { const [s, t] = segmentSegment(p, q, x, y); offer(s, t); }
   return best;
 }
-type Tree = { kind: 'leaf'; bounds: GeometryBounds; triangles: Triangle[] }
-  | { kind: 'branch'; bounds: GeometryBounds; left: Tree; right: Tree };
+type Tree = { kind: 'leaf'; bounds: MathBounds; triangles: Triangle[] }
+  | { kind: 'branch'; bounds: MathBounds; left: Tree; right: Tree };
 function tree(triangles: Triangle[], work: GeometryWork): Tree {
   work.tick(triangles.length);
   const bounds = boundsOf(triangles.flatMap(t => [...t]));

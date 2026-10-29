@@ -7,12 +7,9 @@ const exact = { additionalProperties: false };
 const token = Type.String({ minLength: 1, maxLength: 128 });
 const hash = Type.String({ pattern: '^[a-f0-9]{64}$' });
 const coordinate = Type.Number({ minimum: -1e6, maximum: 1e6 });
-export const GeometryPointSchema = Type.Tuple([coordinate, coordinate, coordinate]);
+export const GeometryPointSchema = Type.Array(coordinate, { minItems: 3, maxItems: 3 });
 export const GeometryBoundsSchema = Type.Object({ min: GeometryPointSchema, max: GeometryPointSchema }, exact);
-export const GeometryMatrixSchema = Type.Tuple([
-  Type.Tuple([coordinate, coordinate, coordinate, coordinate]), Type.Tuple([coordinate, coordinate, coordinate, coordinate]),
-  Type.Tuple([coordinate, coordinate, coordinate, coordinate]), Type.Tuple([coordinate, coordinate, coordinate, coordinate]),
-]);
+export const GeometryMatrixSchema = Type.Array(Type.Array(coordinate, { minItems: 4, maxItems: 4 }), { minItems: 4, maxItems: 4 });
 export const GeometryRefSchema = Type.Union([
   Type.Object({ kind: Type.Literal('native'), projectId: token, target: DesignTargetSchema, revisionId: hash, entityId: token }, exact),
   Type.Object({ kind: Type.Literal('ifc'), projectId: token, namespace: token, revision: token,
@@ -70,7 +67,7 @@ export const GeometrySemanticsSchema = Type.Union([
   Type.Object({ kind: Type.Literal('none') }, exact),
   Type.Object({ kind: Type.Literal('level'), elevationMetres: Type.Union([coordinate, Type.Null()]) }, exact),
   Type.Object({ kind: Type.Literal('space'), footprintProjectMetres: Type.Union([
-    Type.Tuple([GeometryPointSchema, GeometryPointSchema, GeometryPointSchema, GeometryPointSchema]), Type.Null()]) }, exact),
+    Type.Array(GeometryPointSchema, { minItems: 4, maxItems: 4 }), Type.Null()]) }, exact),
 ]);
 export const GeometryDescriptionSchema = Type.Object({ ref: GeometryRefSchema, name: Type.String({ maxLength: 256 }),
   class: token, category: GeometryCategorySchema, role: Type.Union([Type.Literal('physical'), Type.Literal('context')]),
