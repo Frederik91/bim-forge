@@ -397,3 +397,35 @@ promote ambiguous overlap; nearest certified contact could hide a second unresol
 Owners #233/#231 are fixing these with targeted controls. No validator relaxation, evidence
 stripping, ambiguous-contact acceptance or ScriptBox runtime patch is an acceptable correction.
 Root attempts consumed: 3 of the owner's 10; no unchanged retry has run.
+
+Root attempt 4, a focused kernel/source-boundary run at `aee595c4217273b09814353bb645c25841ee49c5`,
+passed validation (315 sources), policy for 97 changed paths, geometry 31/31 and provider boundaries
+3/3. It did not repeat unchanged IFC tests or a known-blocked ScriptBox bootstrap. The fixed-array
+canonical schemas retain the exact coordinate/matrix/footprint lengths, values and ranges.
+
+The actual installed ScriptBox 0.1.1 compiler was then audited separately against every method's
+parameter/result schema. Only `uniqueItems` remained unsupported. Maximum depth is 12 against
+32, and the maximum parameter/result node sum is 1063 against 2000; no limit increase is needed.
+Diagnostic attempt 1 failed before code execution on a read-only file mount; attempt 2 used a
+read-only directory mount and retained all per-schema results. Unsupported keywords were not removed.
+
+Necessary upstream work is tracked in Frederik91/ScriptBox#24. Source `486679eaeb5be9e411f98fa62457777e0195016f`
+adds explicit bounded uniqueness validation, structural JSON equality and projected-result checks.
+Its third isolated server run passed build, five typecheck projects, lint, 193/193 Node checks,
+artifact checks and packing. The first two runs retained one lint fixture failure and one incorrect
+synchronous-error expectation. A clean Node 24.22.1 consumer then installed the actual tarball
+with normal `npm ci --offline`, passed strict consumer typechecking, real JS/TS uniqueness and
+dispatch/result/docs controls, plus the catalog draft/acceptance example from unrelated cwd `/`.
+Dependencies were downloaded separately as inert public tarballs, verified against the pinned lock,
+then consumed with no network. No repository package self-resolution or mocked runtime was used.
+
+The qualified package is the existing **unpublished 0.2.0 line**, not published 0.1.1. Its defaults
+retain serial dispatch for methods without explicit concurrency opt-in, matching the BIM registrations.
+The candidate tarball SHA-256 is `64138bd81d9ac8bb31db9211f8b5149e7ef3daa7d275d33becd939092dc2df8c`.
+This branch pins its exact version and SRI for qualification. Public release/merge remains a separate
+owner decision; ordinary registry installation is not yet available. No upstream publication occurred.
+
+Parent has also composed #233 continuation/endpoint/tolerance fixes through `4e7dff8` and #231's
+required describe geometry-read producer `063f8b3`. Static follow-ups confirmed the original
+continuation finding closed; remaining endpoint/refinement review and actual guest/queue tests
+are still required. New source code has not inherited the earlier kernel pass automatically.
