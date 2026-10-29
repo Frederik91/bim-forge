@@ -10,11 +10,15 @@ No merge is authorized. The owner requests a complete, adversarially tested merg
 - [x] Ground existing source, native acceptance, query research and deployment constraints.
 - [x] Compare immutable evaluated-read-model and per-source-provider design candidates.
 - [x] Synthesize the initial contract and publish separate ownership.
-- [ ] Implement the three tracks, reviewing material seam changes here.
+- [x] Implement the three tracks, reviewing material seam changes here.
 - [ ] Combine actual source, validate on the server and fix reproduced defects.
 - [ ] Exercise real connected-agent UI workflows and difficult external update cases.
 - [ ] Audit every requirement against retained evidence; publish a qualified preview/draft PR.
 - [ ] Replace the design if repeated implementation workarounds contradict its ownership.
+
+Current source-bound results and release blockers are in
+[the qualification handoff](../../experiments/geometry-qualification-230/qualified-status.md).
+The original pending tables below describe the starting gates, not current runtime results.
 
 ## Problem and authority
 

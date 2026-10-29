@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@babylonjs/core": "9.32.0",
-    "@frederik91/scriptbox": "0.2.0",
+    "@frederik91/scriptbox": "4.1.1",
     "@openai/codex": "0.164.0",
     "qrcode": "1.5.4",
     "sharp": "0.35.5",

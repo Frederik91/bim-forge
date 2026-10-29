@@ -2,7 +2,9 @@
 
 This directory owns synthetic fixture generation, an independent geometry oracle,
 and qualification receipts for parent #230. It changes no accepted model or app authority.
-All runtime results are **UNQUALIFIED / NOT RUN** until source-bound server receipts exist.
+Executed source-bound results and remaining gates are recorded in
+[qualified-status.md](qualified-status.md). Each result applies only to its named
+source and artifact; a passing UI test does not qualify connected-agent behavior.
 
 The ten-total-attempt interactive allowance applies to new #234 items. Preserve every
 red/green receipt; inspect failures before retrying. It does not reopen worker218.
