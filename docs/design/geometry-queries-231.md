@@ -9,6 +9,7 @@ Qualification status on 2026-10-29: **kernel checks pass in parent integration; 
 The parent reported attempt 4 at `aee595c4217273b09814353bb645c25841ee49c5`: root validation on 315 sources, explicit policy on 97 paths,
 geometry 31/31, and geometry-source integration 3/3 passed, including the clearance and canonical-array corrections.
 Combined ScriptBox, final acceptance, real converter, and connected UI checks remain pending.
+The subsequent `describe` geometry-read producer seam and its controls await the parent's next qualification run.
 The parent reserves the sole serial qualification slot. No child server runs or local substitutes occurred.
 
 ## Host construction and authority
@@ -56,6 +57,9 @@ Explicit exclusions require current revision, source hash, and placement pins du
 An automatic measured-candidate exclusion is recorded separately and requires the final candidate context during freshness replay.
 
 `describe(ref)` supplies project bounds, units, source authority, capability, and at most twelve triangle surface samples.
+Whenever a shape exists, its receipt includes both the description projection and the full evaluated geometry projection for that exact reference.
+This includes native hosted voids and prepared IFC opening meshes. Only the geometry digest is recorded, not a mesh dump.
+An absent shape retains a description-only receipt, including semantic levels and spaces whose solid geometry is unsupported.
 Each sample supplies a point, a unit normal in mesh winding order, and triangle area.
 Samples can be truncated. They do not describe all planes, oriented extents, or connected patches.
 Native level descriptions expose elevation. Native space descriptions expose their declared footprint at the owning level.
@@ -195,6 +199,7 @@ The historical failures and exact evidence directory remain in the qualification
 | Complete candidate membership | Absence, new obstruction, off-page membership changes, discovery-only height change, measurement geometry change, missing mesh, and unavailable source tests | Parent attempt 4 passed |
 | Relevant updates | Verified correspondence, property-only change, and moved source controls | Parent attempt 4 passed |
 | Final candidate binding | Object candidate versus changed reconciled geometry test | Parent attempt 4 passed |
+| Describe geometry producer seam | Full IFC cavity and native hosted-void changes behind unchanged bounds/samples, native and IFC opening reads, shape-absent semantic descriptions | Authored after attempt 4; unrun |
 | Budgets and termination | Work and pair limits, deterministic deadline, abort, and late-reply controls | Parent attempt 4 passed |
 | ScriptBox schema representation | Fixed-array length/type/range controls, internal vector construction, and absence of tuple-only keywords | Component controls passed; actual guest bootstrap pending |
 | Real converter and connected UI | Parent and independent #234 qualification | Pending |
@@ -218,6 +223,7 @@ The defect record retains source-review findings and subsequent runtime failures
 | Sub-tolerance positive gaps could promote ambiguous coincident geometry | Ambiguity blocks all clearance values and produces a partial result | Parent component checks passed; independent static follow-up confirms the source fix |
 | A closer contact could hide a different near-contained obstruction | Aggregate every obstruction independently of the closest pair | Parent component checks passed; independent static follow-up confirms the source fix |
 | ScriptBox 0.1.1 rejects tuple-only schema keywords during bootstrap | Equivalent canonical bounded arrays with validated fixed-vector math boundary | Component schema controls passed; actual guest rerun pending |
+| Final endpoint binding needs full geometry evidence from describe | Record the evaluated geometry projection beside the description whenever a shape exists | Producer controls authored; next parent run pending |
 
 ## Qualification record
 

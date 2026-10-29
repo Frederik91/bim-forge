@@ -489,3 +489,87 @@ test('canonical fixed-array schemas preserve vector, matrix and footprint bounds
   };
   for (const schema of [GeometryMeasureRequestSchema, GeometryDescriptionResultSchema, GeometryQueryResultSchema, GeometryRelationsResultSchema, GeometryMeasureResultSchema]) visit(schema);
 });
+
+test('describe receipts bind full IFC mesh geometry even when bounds and truncated surface samples do not change', () => {
+  const outer = cubeVertices.map(n => n * 10);
+  const cavityFaces = cubeFaces.flatMap((index, i) => i % 3 ? [] : [index + 8, cubeFaces[i + 2] + 8, cubeFaces[i + 1] + 8]);
+  const mesh = (shift: number, revision: string, originalSha256: string) => prepared({ revision, originalSha256,
+    vertices: [...outer, ...cubeVertices.map((n, i) => 4 + n + (i % 3 === 0 ? shift : 0))], triangles: [...cubeFaces, ...cavityFaces] });
+  const priorContext = createGeometryContext(input([mesh(0, 'v1', 'b'.repeat(64))]));
+  const current = createGeometryContext(input([mesh(.25, 'v2', 'd'.repeat(64))]));
+  const prior = priorContext.describe(discovered(priorContext)); const after = current.describe(discovered(current));
+  assert.equal(prior.kind, 'complete'); assert.equal(after.kind, 'complete');
+  if (prior.kind !== 'complete' || after.kind !== 'complete') return;
+  assert.deepEqual(prior.value.bounds, after.value.bounds);
+  assert.equal(prior.value.surfaceSamplesTruncated, true); assert.deepEqual(prior.value.surfaceSamples, after.value.surfaceSamples);
+  const oldDescription = prior.receipt.reads.find(read => read.kind === 'object' && read.projection === 'description');
+  const newDescription = after.receipt.reads.find(read => read.kind === 'object' && read.projection === 'description');
+  const oldGeometry = prior.receipt.reads.find(read => read.kind === 'object' && read.projection === 'geometry');
+  const newGeometry = after.receipt.reads.find(read => read.kind === 'object' && read.projection === 'geometry');
+  assert.ok(oldDescription && newDescription && oldGeometry && newGeometry);
+  assert.equal(oldGeometry.kind, 'object'); if (oldGeometry.kind !== 'object') return;
+  assert.equal(oldDescription.digest, newDescription.digest); assert.notEqual(oldGeometry.digest, newGeometry.digest);
+  assert.equal(geometryDigest(oldGeometry.ref), geometryDigest(prior.value.ref));
+  assert.equal(validateGeometryReceipts({ receipts: [prior.receipt], current, verifyCorrespondence: () => true }).kind, 'stale');
+});
+
+test('describe binds a native wall hosted void even when the wall body, bounds and twelve largest samples are unchanged', () => {
+  const snapshot = validateSnapshot({ units: 'm', entities: [
+    { id: 'described-wall', type: 'Wall', name: 'Wall with bounded window', start: [0, 0], end: [10, 0], thickness: .2, height: 3 },
+    { id: 'private-window', type: 'Window', name: 'Private evaluated dependency', width: .1, height: .1, sillHeight: 1.5 },
+  ], relationships: [{ id: 'private-window-host', type: 'hosted-by', source: 'private-window', target: 'described-wall', offset: 4 }] });
+  const changed = validateSnapshot({ ...snapshot, entities: snapshot.entities.map(entity => entity.type === 'Window' ? { ...entity, height: .2 } : entity) });
+  const contextInput = { ...input([]), native: { snapshot, revisionId, target: { kind: 'main' }, readableIds: ['described-wall'] } } satisfies GeometryContextInput;
+  const beforeContext = createGeometryContext(contextInput);
+  const current = createGeometryContext({ ...contextInput, native: { ...contextInput.native, snapshot: changed, revisionId: 'e'.repeat(64) } });
+  const before = beforeContext.describe({ kind: 'native', projectId, target: { kind: 'main' }, revisionId, entityId: 'described-wall' });
+  const after = current.describe({ kind: 'native', projectId, target: { kind: 'main' }, revisionId: 'e'.repeat(64), entityId: 'described-wall' });
+  assert.equal(before.kind, 'complete'); assert.equal(after.kind, 'complete'); if (before.kind !== 'complete' || after.kind !== 'complete') return;
+  assert.deepEqual(snapshot.entities.find(entity => entity.id === 'described-wall'), changed.entities.find(entity => entity.id === 'described-wall'));
+  assert.deepEqual(before.value.bounds, after.value.bounds); assert.equal(before.value.surfaceSamplesTruncated, true);
+  assert.deepEqual(before.value.surfaceSamples, after.value.surfaceSamples);
+  const descriptionBefore = before.receipt.reads.find(read => read.kind === 'object' && read.projection === 'description');
+  const descriptionAfter = after.receipt.reads.find(read => read.kind === 'object' && read.projection === 'description');
+  assert.ok(descriptionBefore && descriptionAfter); assert.equal(descriptionBefore.digest, descriptionAfter.digest);
+  assert.equal(validateGeometryReceipts({ receipts: [before.receipt], current }).kind, 'stale');
+  assert.equal(JSON.stringify(before).includes('private-window'), false);
+});
+
+test('describe includes geometry observations for native and IFC opening voids, including a private native host', () => {
+  const snapshot = validateSnapshot({ units: 'm', entities: [
+    { id: 'private-wall', type: 'Wall', name: 'PRIVATE HOST', start: [0, 0], end: [6, 0], thickness: .2, height: 3 },
+    { id: 'visible-opening', type: 'Door', name: 'Visible opening void', width: 2, height: 2 },
+  ], relationships: [{ id: 'private-host', type: 'hosted-by', source: 'visible-opening', target: 'private-wall', offset: 2 }] });
+  const native = createGeometryContext({ ...input([]), native: { snapshot, revisionId, target: { kind: 'main' }, readableIds: ['visible-opening'] } });
+  const linked = createGeometryContext(input([prepared({ ifcClass: 'IfcOpeningElement' })]));
+  for (const context of [native, linked]) {
+    const page = context.query({ query: { role: 'context', categories: ['opening'] } });
+    assert.equal(page.kind, 'complete'); if (page.kind !== 'complete') continue;
+    const result = context.describe(page.items[0].ref); assert.equal(result.kind, 'complete');
+    const geometryRead = result.receipt.reads.find(read => read.kind === 'object' && read.projection === 'geometry');
+    assert.ok(geometryRead?.kind === 'object'); assert.deepEqual(geometryRead.ref, page.items[0].ref);
+    assert.equal(JSON.stringify(result).includes('PRIVATE HOST'), false); assert.equal(JSON.stringify(result).includes('private-wall'), false);
+  }
+  const ref: GeometryRef = { kind: 'native', projectId, target: { kind: 'main' }, revisionId, entityId: 'visible-opening' };
+  const observed = native.describe(ref);
+  const changedHost = validateSnapshot({ ...snapshot, entities: snapshot.entities.map(entity => entity.type === 'Wall' ? { ...entity, thickness: .3 } : entity) });
+  const after = createGeometryContext({ ...input([]), native: { snapshot: changedHost, revisionId: 'e'.repeat(64), target: { kind: 'main' }, readableIds: ['visible-opening'] } });
+  assert.equal(validateGeometryReceipts({ receipts: [observed.receipt], current: after }).kind, 'stale');
+});
+
+test('shape-absent semantic level and space descriptions keep description-only receipts without fabricated geometry', () => {
+  const snapshot = residentialFloor();
+  const readableIds = snapshot.entities.filter(entity => entity.type === 'Level' || entity.type === 'Space').map(entity => entity.id);
+  const native = createGeometryContext({ ...input([]), native: { snapshot, revisionId, target: { kind: 'main' }, readableIds } });
+  const linked = createGeometryContext(input([prepared({ ifcClass: 'IfcBuildingStorey', missing: true }), prepared({ namespace: 'space-source', ifcClass: 'IfcSpace', missing: true })]));
+  for (const context of [native, linked]) {
+    const page = context.query({ query: { role: 'context', categories: ['level', 'space'] } });
+    assert.equal(page.kind, 'complete'); if (page.kind !== 'complete') continue;
+    for (const item of page.items) {
+      const result = context.describe(item.ref); assert.equal(result.kind, 'complete');
+      assert.equal(result.receipt.reads.length, 1);
+      const read = result.receipt.reads[0]; assert.equal(read.kind, 'object'); if (read.kind === 'object') assert.equal(read.projection, 'description');
+      assert.equal(validateGeometryReceipts({ receipts: [result.receipt], current: context }).kind, 'fresh');
+    }
+  }
+});
