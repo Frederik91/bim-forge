@@ -26,8 +26,14 @@ import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts'
 import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 import type { WallShiftImpact } from './wall-dependencies.ts';
+import { previewRoomDimensionChange } from './room-dimension-preview.ts';
 import { parseEvidenceUses } from './model-evidence.ts';
 import type { EvidenceUse } from './model-evidence.ts';
+import { GEOMETRY_SCRIPT_METHODS, GEOMETRY_SCRIPT_CAPABILITIES, GEOMETRY_SCRIPT_GUIDANCE } from './geometry-evidence-api.ts';
+import type { GeometryEvidenceSession } from './geometry-evidence.ts';
+import { GeometryEvidenceConflict, GeometryProposalValidationError } from './geometry-evidence.ts';
+import { GeometryEvidenceLimitError } from './geometry-evidence-contract.ts';
+import { GeometrySessionError } from './geometry-session.ts';
 
 const identifier = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const name = Type.String({ minLength: 1, maxLength: 80 });
@@ -88,6 +94,32 @@ const wallShiftImpacts = Type.Array(Type.Object({
     Type.Literal('support'), Type.Literal('level-envelope'),
   ]), { maxItems: 8 }), changed: Type.Boolean(),
 }, { additionalProperties: false }), { maxItems: 200 });
+const dimensionAxis = Type.Union([Type.Literal('x'), Type.Literal('y')]);
+const sourceRef = Type.String({ minLength: 1, maxLength: 256 });
+const confirmedDimension = Type.Object({ kind: Type.Literal('confirmed'),
+  metres: Type.Number({ minimum: .001, maximum: 1000 }), sourceRef }, { additionalProperties: false });
+const unresolvedDimension = Type.Object({ kind: Type.Literal('unresolved'),
+  reason: Type.Union([Type.Literal('unknown-scale'), Type.Literal('ambiguous-dimension'), Type.Literal('contradictory-evidence')]),
+  sourceRefs: Type.Array(sourceRef, { minItems: 1, maxItems: 24 }) }, { additionalProperties: false });
+const minimumClearSpan = { roomId: identifier, axis: dimensionAxis, metres: Type.Number({ minimum: .001, maximum: 1000 }) };
+const roomDimensionRequest = Type.Object({ roomId: identifier, wallId: identifier, axis: dimensionAxis,
+  measurement: Type.Union([confirmedDimension, unresolvedDimension]),
+  minimumClearSpans: Type.Array(Type.Object(minimumClearSpan, { additionalProperties: false }), { maxItems: 24 }) }, { additionalProperties: false });
+const dimensionSpans = Type.Object({ x: Type.Number(), y: Type.Number() }, { additionalProperties: false });
+const evaluatedRoomDimension = Type.Object({ bounds, centrelineSpans: dimensionSpans, clearSpans: dimensionSpans }, { additionalProperties: false });
+const evaluatedDimensionOpening = Type.Object({ hostId: identifier, start: point, end: point }, { additionalProperties: false });
+const dimensionDependency = { id: identifier, storedChanged: Type.Boolean(), evaluatedChanged: Type.Boolean() };
+const roomDimensionResult = Type.Union([
+  Type.Object({ status: Type.Literal('unresolved'), measurement: unresolvedDimension }, { additionalProperties: false }),
+  Type.Object({ status: Type.Literal('ready'), model: snapshot, changes, impacts: wallShiftImpacts,
+    offsetMetres: Type.Number(), measurement: confirmedDimension,
+    clearSpanChecks: Type.Array(Type.Object({ ...minimumClearSpan, beforeMetres: Type.Number(), afterMetres: Type.Number() }, { additionalProperties: false }), { maxItems: 24 }),
+    dependencies: Type.Array(Type.Union([
+      Type.Object({ ...dimensionDependency, kind: Type.Literal('room'), before: evaluatedRoomDimension, after: evaluatedRoomDimension }, { additionalProperties: false }),
+      Type.Object({ ...dimensionDependency, kind: Type.Literal('opening'), before: evaluatedDimensionOpening, after: evaluatedDimensionOpening }, { additionalProperties: false }),
+    ], { title: 'RoomDimensionDependency' }), { maxItems: 100 }),
+  }, { additionalProperties: false }),
+]);
 const inspection = Type.Object({
   revisionId: Type.String(), selectedObjectIds: Type.Array(identifier), model: snapshot,
   parameters: Type.Array(Type.Object({ entityId: identifier, parameters: Type.Array(ModelParameterSchema, { maxItems: 32 }) }), { maxItems: 100 }),
@@ -117,6 +149,17 @@ export interface ScriptReviewText {
   summary: string; rationale: string; constraints: string; uncertainty: string; intent: IntentAssessment;
   evidenceUses?: EvidenceUse[];
 }
+export const MODEL_REVIEW_TEXT_CONTRACT = Object.freeze({
+  maximumLengths: Object.freeze({ summary: 240, rationale: 800, constraints: 600, uncertainty: 400 }),
+  forbiddenControls: '[\\u0000-\\u001f]',
+  forbiddenControlsDescription: 'control characters U+0000-U+001F (including newlines and tabs)',
+});
+export const MODEL_REVIEW_TEXT_GUIDANCE = 'Each proposal review text field must be a nonempty string with non-whitespace content. ' +
+  Object.entries(MODEL_REVIEW_TEXT_CONTRACT.maximumLengths).map(([field, maximum]) => `review.${field}: 1-${maximum} characters`).join('; ') + '. ' +
+  `Use single-line text with no ${MODEL_REVIEW_TEXT_CONTRACT.forbiddenControlsDescription}. ` +
+  'Limits count JavaScript string.length (UTF-16 code units) on the supplied string before trimming. ' +
+  'If invalid-proposal names a review field, repair that field and replay the complete proposed operations. Do not silently truncate review facts or change geometry just to repair review text.';
+const reviewTextControls = new RegExp(MODEL_REVIEW_TEXT_CONTRACT.forbiddenControls);
 export interface ScriptDiagnostic { code: string; message: string; line: number | null; column: number | null }
 export type ModelScriptResult =
   | { kind: 'observation'; observation: JsonValue; evidence: ScriptExecutionEvidence }
@@ -125,6 +168,7 @@ export type ModelScriptResult =
   | { kind: 'failed'; diagnostic: ScriptDiagnostic; evidence: ScriptExecutionEvidence };
 
 interface Draft {
+  geometry?: GeometryEvidenceSession;
   readonly base: ModelSnapshot;
   snapshot: ModelSnapshot;
   binding: ModelScriptBinding;
@@ -133,6 +177,7 @@ interface Draft {
   onPreview?: (snapshot: ModelSnapshot | null) => void;
 }
 interface RunInput {
+  geometry?: GeometryEvidenceSession;
   base: ModelSnapshot;
   initialDraft?: ModelSnapshot;
   binding: ModelScriptBinding;
@@ -165,6 +210,19 @@ function text(value: unknown, maximum: number): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\u0000-\u001f]/.test(value)) throw new Error(`Review text requires 1 to ${maximum} readable characters.`);
   return value.trim();
 }
+function reviewText(value: unknown, field: keyof typeof MODEL_REVIEW_TEXT_CONTRACT.maximumLengths): string {
+  const maximum = MODEL_REVIEW_TEXT_CONTRACT.maximumLengths[field];
+  const label = `review.${field}`;
+  if (typeof value !== 'string') {
+    throw new Error(`${label} must be a nonempty string (1-${maximum} characters); received ${value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value}.`);
+  }
+  if (reviewTextControls.test(value)) {
+    throw new Error(`${label} contains forbidden ${MODEL_REVIEW_TEXT_CONTRACT.forbiddenControlsDescription}; use a single line. Received length ${value.length}; maximum ${maximum}.`);
+  }
+  if (!value.trim()) throw new Error(`${label} must be a nonempty string (1-${maximum} characters); received an empty or whitespace-only string (length ${value.length}).`);
+  if (value.length > maximum) throw new Error(`${label} length ${value.length} exceeds maximum ${maximum}; shorten this field to 1-${maximum} characters on a single line.`);
+  return value.trim();
+}
 function decision(value: unknown):
   | { kind: 'observe'; observation: JsonValue }
   | { kind: 'propose'; review: ScriptReviewText }
@@ -180,8 +238,8 @@ function decision(value: unknown):
     fields(value, ['kind', 'review']);
     const hasEvidenceUses = record(value.review) && Object.hasOwn(value.review, 'evidenceUses');
     fields(value.review, ['summary', 'rationale', 'constraints', 'uncertainty', 'intent', ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
-    return { kind: 'propose', review: { summary: text(value.review.summary, 240), rationale: text(value.review.rationale, 800),
-      constraints: text(value.review.constraints, 600), uncertainty: text(value.review.uncertainty, 400),
+    return { kind: 'propose', review: { summary: reviewText(value.review.summary, 'summary'), rationale: reviewText(value.review.rationale, 'rationale'),
+      constraints: reviewText(value.review.constraints, 'constraints'), uncertainty: reviewText(value.review.uncertainty, 'uncertainty'),
       intent: parseIntentAssessment(value.review.intent),
       ...(hasEvidenceUses ? { evidenceUses: parseEvidenceUses(value.review.evidenceUses) } : {}) } };
   }
@@ -259,6 +317,24 @@ function selectedLevel(current: ModelGraph, binding: ModelScriptBinding) {
 }
 
 const api = createApiKit<Draft>();
+async function geometryRead<T>(draft: Draft, revoked: () => void, read: (session: GeometryEvidenceSession) => Promise<T>): Promise<T> {
+  revoked(); draft.signal.throwIfAborted();
+  if (!draft.geometry) throw new Error('No authorized geometry context is bound to this request.');
+  draft.onActivity({ stage: 'inspecting', message: 'Reading source-bound geometry through the unified geometry tools.' });
+  const value = await read(draft.geometry);
+  revoked(); draft.signal.throwIfAborted();
+  return value;
+}
+const geometry = api.namespace({ name: 'geometry', description: GEOMETRY_SCRIPT_GUIDANCE, methods: {
+  describe: api.method({ ...GEOMETRY_SCRIPT_METHODS.describe, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.describe(input)) }),
+  query: api.method({ ...GEOMETRY_SCRIPT_METHODS.query, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.query(input)) }),
+  relations: api.method({ ...GEOMETRY_SCRIPT_METHODS.relations, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.relations(input)) }),
+  measure: api.method({ ...GEOMETRY_SCRIPT_METHODS.measure, effect: 'read',
+    handler: ({ input }, call) => geometryRead(call.context, () => call.throwIfRevoked(), session => session.measure(input)) }),
+} });
 const model = api.namespace({ name: 'model', description: 'Read a bound model and stage validated changes in this script only. Nothing here accepts or saves a project.', methods: {
   scope: api.method({ summary: 'Read the frozen request scope and live working graph. Context is read-only; this graph is not a complete project.',
     effect: 'read', result: Type.Object({ scope: Type.Union([scopeRead, Type.Null()]), graph: snapshot }),
@@ -287,6 +363,30 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
         return preview.snapshot;
       }, () => call.throwIfRevoked());
       return { ...result, impacts };
+    } }),
+  previewRoomDimensionChange: api.method({ summary: 'Drive one bounded partition from a confirmed centreline room span and check minimum clear spans.',
+    description: 'Input matches RoomDimensionRequest: roomId, wallId, axis:x|y, measurement, minimumClearSpans. Confirmed measurement:{kind:confirmed,metres,sourceRef} is an agent/user interpretation for separate human review, never verified evidence or acceptance authority. Centreline driving spans are distinct from conservative clear spans, which use the existing maximum boundary half-thickness inset on every side. Unknown scale, ambiguous dimensions or contradictory evidence use measurement:{kind:unresolved,reason,sourceRefs}; they return status:unresolved without changing the current draft or publishing a preview. Ready results contain working model, cumulative stored changes, impacts, derived offsetMetres, measurement, clearSpanChecks and evaluated room/opening before/after dependencies. Constraints and driving references must be readable in the frozen scope; dependencies are projected to that same scope. Every stored write, including adjacent Spaces, still needs existing scope authority. Source references are opaque context; existing frozen target/evidence and explicit human acceptance requirements are unchanged. No source claims are resolved or promoted.',
+    effect: 'draft-write', metadata: { units: 'm', acceptsOrPublishesModel: false },
+    params: { input: roomDimensionRequest }, result: roomDimensionResult,
+    handler: ({ input }, call) => {
+      const draft = call.context;
+      const readable = new Set<string>(modelWorkingGraph(draft.snapshot, draft.binding.scope).entities.map(item => item.id));
+      let preview: ReturnType<typeof previewRoomDimensionChange>;
+      try {
+        if (draft.binding.scope && ![input.wallId, input.roomId, ...input.minimumClearSpans.map(item => item.roomId)].every(id => readable.has(id))) {
+          throw new Error('Dimension driving and constraint references must be readable within the frozen model scope.');
+        }
+        preview = previewRoomDimensionChange(draft.snapshot, input);
+      } catch (error) {
+        draft.onActivity({ stage: 'validation-failed', message: 'A scripted dimension change failed model validation. Its draft is unchanged; the script can correct it.' });
+        throw new ScriptApiError({ name: 'ModelValidationError', message: publicMessage(error instanceof Error ? error.message : 'Invalid room dimension change.') });
+      }
+      call.throwIfRevoked(); draft.signal.throwIfAborted();
+      if (preview.status === 'unresolved') return preview;
+      const ready = preview;
+      const result = stage(draft, () => ready.snapshot, () => call.throwIfRevoked());
+      return { status: ready.status, ...result, offsetMetres: ready.offsetMetres, measurement: ready.measurement,
+        clearSpanChecks: ready.clearSpanChecks, impacts: ready.impacts, dependencies: ready.dependencies.filter(item => readable.has(item.id)) };
     } }),
   inspect: api.method({ summary: 'Inspect the current draft, selected identities, room membership and placement constraints.', effect: 'read', result: inspection,
     handler: (_args, call) => {
@@ -349,13 +449,15 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
       () => previewRoomFurnishings(call.context.snapshot, input), () => call.throwIfRevoked()) }),
 } });
 
-export { model as modelScriptApi };
+export { model as modelScriptApi, geometry as geometryScriptApi };
 
 const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, draft lifecycle and script decisions.',
   'A propose decision returns review:{summary,rationale,constraints,uncertainty,intent,evidenceUses?}. Optional evidenceUses is an array of {pin,subject,rationale} choosing exact pinned known sourceEvidence facts as proposal-local assumptions for human review. Copy the complete frozen subject including anchor.target; preserve competing claims and explain the choice without promoting global truth. The host validates choices against the bound read set and context; self-rated certainty grants no authority. ' +
+  MODEL_REVIEW_TEXT_GUIDANCE + ' ' +
   'For scoped requests, await model.scope() returns {scope,graph}: immutable target/context/dependent/writable IDs and a live partial working graph. Context is never write authority. model.inspect and mutation results use this same context. It is not a standalone valid project. ' +
   'Call model.previewParameters({edits:[{definitionId,name,value}]}) to edit frozen targets with explicit typed units. All mutation tools enforce frozen write limits; query matches never expand during a proposal. Changed membership or dependencies require a fresh human review. ' +
   'Call model.previewWallShift({wallId,offsetMetres}) for a bounded complete shared partition. Offsets are nonzero metres on a 1 mm grid, at most one metre; positive means global +X for vertical walls or +Y for horizontal walls. The existing helper updates adjacent rectangular Spaces and supported wall junctions, then validates contents and openings atomically. Frozen scope must authorize every stored write; adjacent Spaces in read-only context do not grant permission. The result contains model, cumulative stored changes from the execution base, and impacts for this operation. An impact with changed:false can still move in world geometry when its host moves. Impacts never expand write authority. Unsupported topology or invalid contents leave the draft unchanged. ' +
+  'Call model.previewRoomDimensionChange({roomId,wallId,axis:"x"|"y",measurement,minimumClearSpans:[]}) to derive one bounded shared-partition move from a centreline room span. A confirmed measurement is {kind:"confirmed",metres,sourceRef}; sourceRef is opaque context and confirmed is an agent/user interpretation for human review, not new evidence authority. Require confirmed units/scale and distinguish centreline driving dimensions from minimumClearSpans:[{roomId,axis,metres}]. Clear spans preserve the existing conservative maximum boundary half-thickness inset on every side, not surveyed face-specific dimensions. Unknown scale, ambiguity or contradictions require {kind:"unresolved",reason:"unknown-scale"|"ambiguous-dimension"|"contradictory-evidence",sourceRefs:[...]}; the result is status:"unresolved" with no model/changes and no draft mutation or preview. A ready result has status:"ready",model,cumulative changes,impacts,offsetMetres,measurement,clearSpanChecks with beforeMetres/afterMetres, and sorted dependencies with before/after room bounds/spans or opening world endpoints, storedChanged and evaluatedChanged. Named references must be readable in frozen scope and evaluated dependencies use that same projection. Existing atomic validation, adjacent-room write scope, abort/preview fences, frozen target/evidence read sets and separate human acceptance remain required. Constraints are design inputs, not code compliance or evidence claims. ' +
   'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base or the supplied prior proposal draft for a conversation continuation. ' +
   'placement.levels lists stable levels and world elevations; placement.selectedLevelId binds a selected Level, spatial reference or unambiguous selected-object owner. ' +
   'placement.entities supplies entityId, levelId and world floor-base elevation. placement.rooms supplies levelId and entityIds computed within that level. ' +
@@ -418,7 +520,9 @@ export class ModelScripts {
   constructor(limits: Partial<Pick<ExecutionLimits, 'timeoutMs' | 'hostCalls' | 'sourceBytes' | 'resultBytes'>> = {}) { this.#limits = limits; }
   #get(): Promise<ScriptBoxRuntime<Draft>> {
     if (this.#disposed) throw new Error('The model script runtime is disposed.');
-    this.#runtime ??= createRuntime<Draft>({ apis: [model], docs: [guide], contractVersion: 'bim-model-scripts-v2', policyVersion: 'proposal-intent-v1',
+    this.#runtime ??= createRuntime<Draft>({ apis: [model, geometry], docs: [guide,
+      new DocsTree().addFile('/guides/geometry.md', 'Unified source-bound geometry reads, limits and proposal evidence.', GEOMETRY_SCRIPT_GUIDANCE)],
+      contractVersion: 'bim-model-scripts-v3', policyVersion: 'proposal-intent-v1',
       sealResults: true, compilerWorkers: 1,
       limits: { memoryBytes: 64 * 1024 * 1024, compilerHeapMb: 256, sourceBytes: 32 * 1024, resultBytes: 64 * 1024,
         hostCalls: MAX_SCRIPT_HOST_CALLS, evidenceRecords: MAX_SCRIPT_HOST_CALLS, ...this.#limits },
@@ -442,9 +546,11 @@ export class ModelScripts {
       }
       const runtime = await this.#get();
       const draft: Draft = { base: input.base, snapshot: input.initialDraft ?? input.base, binding, signal: input.signal,
+        ...(input.geometry ? { geometry: input.geometry } : {}),
         onActivity: input.onActivity, ...(input.onPreview ? { onPreview: input.onPreview } : {}) };
       const session = runtime.createSession({ context: draft,
-        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewWallShift', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewWallShift', 'model.previewRoomDimensionChange', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+          ...(input.geometry ? GEOMETRY_SCRIPT_CAPABILITIES : []),
           ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
           ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
         limits: { hostCalls: Math.max(0, Math.min(runtime.limits.hostCalls, input.remainingHostCalls - 1)) },
@@ -483,7 +589,23 @@ export class ModelScripts {
         if (binding.scope) assertModelScopeWrites({ before: input.base, after: candidate, binding: binding.scope });
         const delta = summarizeModelDelta(diffSnapshots(input.base, candidate));
         if (!Object.values(delta).some((collection) => Object.values(collection).some((ids) => ids.length))) throw new Error('The proposed model is identical to the bound revision.');
-        input.signal.throwIfAborted();
+        try {
+          input.signal.throwIfAborted();
+          await input.geometry?.seal(candidate);
+          input.signal.throwIfAborted();
+        } catch (error) {
+          const correctable = error instanceof GeometryProposalValidationError && !input.signal.aborted;
+          const controlled = correctable || error instanceof GeometryEvidenceConflict
+            || error instanceof GeometryEvidenceLimitError || error instanceof GeometrySessionError;
+          const message = publicMessage(controlled && error instanceof Error ? error.message : 'Host proposal validation failed. Staged changes discarded.');
+          try { input.onActivity({ stage: 'validation-failed', message }); }
+          catch {
+            return failed({ code: 'host-failure', message: 'Host proposal validation failed. Staged changes discarded.',
+              line: null, column: null }, 'failed');
+          }
+          return failed({ code: correctable ? 'invalid-proposal' : 'host-failure', message,
+            line: null, column: null }, 'failed');
+        }
         const proposal: ModelScriptResult = { kind: 'proposal', snapshot: candidate, review: result.review, evidence: evidence('proposal', 'passed', null) };
         retainPreview = true;
         return proposal;

@@ -6,7 +6,7 @@ import type { ModelSnapshot, Entity, EntityId, ProposalReview, Revision, RoomRep
 import { parseVisualRequest } from './visual-request.ts';
 import type { VisualRequest } from './visual-request.ts';
 import type { ActivityUpdate } from './request-activity.ts';
-import { ModelScripts, summarizeModelDelta, modelWorkingGraph } from './model-script.ts';
+import { ModelScripts, summarizeModelDelta, modelWorkingGraph, MODEL_REVIEW_TEXT_GUIDANCE } from './model-script.ts';
 import type { ModelScriptResult } from './model-script.ts';
 import { MAX_SCRIPT_EXECUTIONS, MAX_SCRIPT_HOST_CALLS, parseScriptExecutions } from './script-evidence.ts';
 import type { ScriptExecutionEvidence } from './script-evidence.ts';
@@ -23,6 +23,9 @@ import type { FrozenDesignTarget } from './design-targets.ts';
 import { MAX_EVIDENCE_PINS, MAX_EVIDENCE_CONTEXT_ENTRIES, MAX_EVIDENCE_CONTEXT_BYTES,
   parseEvidencePin, parseEvidenceReadSet, parseEvidenceEntry, evidenceCanonical } from './model-evidence.ts';
 import type { EvidenceEntry, EvidencePin, EvidenceReadSet, EvidenceSubject, EvidenceUse } from './model-evidence.ts';
+import { GeometryEvidenceSession, geometryNativeInput, encodeGeometryEvidence } from './geometry-evidence.ts';
+import type { GeometryEvidenceSource, GeometryEvidence } from './geometry-evidence.ts';
+import type { GeometrySessionInput } from './geometry-session.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
@@ -85,6 +88,7 @@ export interface ProposalEvidenceContext {
     | { kind: 'unknown-required'; message: string; entryId: string })[];
 }
 export interface ModelProposalOptions {
+  geometry?: { source: GeometryEvidenceSource; current?: () => Promise<GeometrySessionInput['native']>; inherited?: GeometryEvidence };
   evidenceContext?: ProposalEvidenceContext;
   conversation?: RequestConversation;
   initialDraft?: ModelSnapshot;
@@ -159,7 +163,7 @@ function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
     if (new Set(evidencePins.map(pin => pin.entryId)).size !== evidencePins.length) fail('Evidence entries must be unique.');
     freezeScopeData(evidencePins);
   }
-  if (!Array.isArray(input.selectedObjectIds) || input.selectedObjectIds.length < 1 || input.selectedObjectIds.length > 16) fail('Select between one and sixteen stable model objects.');
+  if (!Array.isArray(input.selectedObjectIds) || input.selectedObjectIds.length > 16) fail('Provide up to sixteen stable native object identities, or an explicit empty selection for project/design context.');
   const selectedObjectIds: EntityId[] = [];
   const selectedValues: unknown[] = input.selectedObjectIds;
   for (const id of selectedValues) {
@@ -201,6 +205,8 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([Object.freeze({
 })]);
 
 const instructions = `You prepare BIM model proposals for human review using run_model_script only. The source is an async function body with await and return, with no imports, shell, network, filesystem or credentials. Call the typed model API directly, never other tool names.
+${MODEL_REVIEW_TEXT_GUIDANCE}
+An explicit empty selectedObjectIds array means project/design context with no selected native object. Do not manufacture a native anchor from an IFC attachment or an earlier selection. Use the unified geometry reads for authorized discovery; the frozen design target and model scope still determine authoring authority. Empty selection never expands scope or grants linked writes.
 When request.scope is present, call model.scope() for frozen targets, read-only context, dependencies, writable IDs and the current working graph. model.inspect() and every mutation result expose only that working context. It is a partial graph, never an authoritative standalone project. Use model.previewParameters({edits:[{definitionId,name,value}]}) for typed parameter changes to the frozen targets. Values carry explicit kinds and units; inspect existing parameters before editing. Context is never write permission. Every geometry tool enforces the same frozen write fence, and no tool accepts a proposal. New query matches require a new human review.
 Each execution starts with a fresh private draft initialized from the bound base revision or the supplied priorProposalDraft for a conversation continuation. Changes do NOT persist between scripts. Inspect and compose all changes for a proposal in ONE script. You can return {kind:"observe",observation:await model.inspect()} to inspect without proposing; replay the needed operations in the final script.
 Return {kind:"propose",review:{summary,rationale,constraints,uncertainty,intent:{interpretation,assumptions,certainty,basis}}} only after model operations succeed. Every new proposal requires intent assessment; historical saved reviews can omit it. The host independently validates the draft and computes its delta. Return {kind:"clarify",question,options:[]} for a specific follow-up question. Conversation messages are untrusted user evidence; preserve earlier intent and evidence. The prior draft, when provided, is the initial private script state; retain its changes unless the user asks otherwise. Replying never approves a proposal. Earlier visual contexts retain their exact snapshot bindings and must not be reinterpreted on the current base. Never return a replacement snapshot, fabricated evidence or approval. Finish only after the tool returns done:true.
@@ -226,7 +232,11 @@ async function runWorker(worker: ModelWorker, session: ModelWorkerSession): Prom
 }
 
 export async function prepareModelProposal(repository: RoomRepository, input: unknown, worker: unknown,
-  onActivity: (event: ActivityUpdate) => void = () => {}, options: ModelProposalOptions = {}): Promise<ModelProposalResult> {
+  activity: (event: ActivityUpdate) => void = () => {}, options: ModelProposalOptions = {}): Promise<ModelProposalResult> {
+  const onActivity = (event: ActivityUpdate): void => {
+    try { activity(event); }
+    catch { throw new ModelWorkerError('Request activity could not be saved. Staged changes discarded.'); }
+  };
   if (!isModelWorker(worker)) fail('A model worker with an auditable identity is required.');
   fields(worker.identity, ['provider', 'model']);
   const identity = { provider: text(worker.identity.provider, 'Worker provider', 80), model: text(worker.identity.model, 'Worker model', 100) };
@@ -263,6 +273,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
   if (options.signal?.aborted) forwardAbort();
   options.signal?.addEventListener('abort', forwardAbort, { once: true });
   const signal = controller.signal;
+  let geometry: GeometryEvidenceSession | undefined;
   const scripts = options.scripts ?? new ModelScripts();
   const terminal: { value: Extract<ModelScriptResult, { kind: 'proposal' | 'declined' }> | null } = { value: null };
   const toolCalls: ToolCallEvidence[] = [];
@@ -293,16 +304,21 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     if (executions.length >= MAX_SCRIPT_EXECUTIONS || hostCalls >= MAX_SCRIPT_HOST_CALLS) { fatal = true; options.onPreview?.(null); fail('The model worker exceeded the aggregate script budget.'); }
     running = true;
     try {
+      await geometry?.assertFresh();
+      signal.throwIfAborted();
       fields(argumentsValue, ['language', 'source']);
       if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
       if (typeof argumentsValue.source !== 'string' || !argumentsValue.source.trim()) fail('A script source body is required.');
       const result = await scripts.run({ base: bound.base.snapshot, ...(options.initialDraft ? { initialDraft: options.initialDraft } : {}), binding: bound, language: argumentsValue.language, source: argumentsValue.source,
+        ...(geometry ? { geometry } : {}),
         remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity, onPreview: snapshot => {
           if (snapshot === null || (!signal.aborted && !finished && !fatal)) options.onPreview?.(snapshot);
         } });
       options.onExecution?.(result.evidence);
       parseScriptExecutions([...executions, result.evidence]);
       executions.push(result.evidence); hostCalls += result.evidence.calls.length;
+      signal.throwIfAborted();
+      await geometry?.assertFresh();
       signal.throwIfAborted();
       if (result.kind === 'failed') {
         fatal ||= ['cancelled', 'timed-out', 'resource-limit'].includes(result.evidence.status)
@@ -336,6 +352,14 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     return pending;
   };
   try {
+    if (options.geometry) {
+      geometry = await GeometryEvidenceSession.open({ source: options.geometry.source, projectId: repository.projectId,
+        requestId: bound.requestId, native: geometryNativeInput({ snapshot: bound.base.snapshot, revisionId: bound.base.id,
+          target: bound.target?.target ?? { kind: 'main' }, ...(bound.scope ? { scope: bound.scope } : {}) }), signal,
+        ...(options.geometry.inherited ? { inherited: options.geometry.inherited } : {}),
+        ...(options.geometry.current ? { current: options.geometry.current } : {}) });
+      await geometry.assertFresh();
+    }
     const declarations = await scripts.declarations();
     signal.throwIfAborted();
     await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
@@ -362,6 +386,8 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       ...(result.intent ? { intent: result.intent } : {}),
     } };
     if (bound.scope) assertModelScopeWrites({ before: bound.base.snapshot, after: result.snapshot, binding: bound.scope });
+    const geometryEvidence = geometry ? await geometry.seal(result.snapshot) : undefined;
+    signal.throwIfAborted();
     const next = await repository.proposeReviewedModel({ name: bound.proposalName, from: bound.base.id, snapshot: result.snapshot,
       ...(bound.target ? { target: bound.target } : {}),
       review: { requestId: bound.requestId, selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction,
@@ -369,15 +395,19 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
           usage: providerEvents.reduce((sum, event) => ({ inputTokens: sum.inputTokens + event.inputTokens, outputTokens: sum.outputTokens + event.outputTokens,
             totalTokens: sum.totalTokens + event.totalTokens }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 }) },
         toolCalls, scriptExecutions: executions, ...(bound.sources ? { sources: bound.sources } : {}),
+        ...(geometryEvidence ? { geometryEvidence: encodeGeometryEvidence(geometryEvidence) } : {}),
         ...(evidenceContext ? { evidence: evidenceContext.readSet } : {}),
         ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}), ...(bound.scope ? { scope: bound.scope } : {}), validator: 'room-graph-v1' },
     });
+    signal.throwIfAborted();
+    await geometry?.assertFresh();
     signal.throwIfAborted();
     return { status: 'ready', repository: next, review: { ...next.review(bound.proposalName), changes: summarizeModelDelta(diffSnapshots(bound.base.snapshot, result.snapshot)) } };
   } catch (error) { throw new ModelWorkerError(error instanceof Error ? error.message : 'The model worker failed.', { cause: error }); }
   finally {
     finished = true; controller.abort(); options.onPreview?.(null);
     await Promise.allSettled([...activeTools]);
+    await geometry?.close();
     options.signal?.removeEventListener('abort', forwardAbort);
     if (!options.scripts) await scripts.dispose();
   }

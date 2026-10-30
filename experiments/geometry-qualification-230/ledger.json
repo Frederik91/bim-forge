@@ -1,0 +1,65 @@
+{
+  "issue": 234,
+  "parent": 230,
+  "status": "unqualified-awaiting-parent-serial-reservation",
+  "implementationBase": "f4285c644e52b5bdba8e4f6afeb6e099bc02b891",
+  "docsBase": "e43dd859a631ff8676d080011607447806beeb34",
+  "attemptAllowance": 10,
+  "runtimeAttemptsStarted": 1,
+  "runtimeAttemptsExecutedByThisChat": 0,
+  "parentReportedConverterAttempts": [
+    {
+      "attempt": 1,
+      "sourcePrefix": "a4269f99e57f",
+      "rawEvidence": "/ssd1/bim-forge-qualification/issue230/issue234/attempt-1-converter-a4269f99e57f/raw.log",
+      "result": "Failed only m-huge exact-code expectation; parent reports the other eight test methods/subcases passed.",
+      "rootCause": "Fixture changes IfcLocalPlacement.RelativePlacement.Location to 2e6 m. axis_matrix catches LinkError as ValueError from rigid() and exposes UNSAFE_PLACEMENT; UNSAFE_TRANSFORM is the direct occurrence-transform boundary code.",
+      "ownedCorrection": "Expect exactly UNSAFE_PLACEMENT. Keep rejection, unpublished failure, absent manifest, exact retained original and unchanged current-artifact assertions.",
+      "verification": "Parent-reported runtime receipt plus local source inspection. No server/log probe or test by this chat; corrected-source rerun remains pending."
+    }
+  ],
+  "initialUnqualifiedCommit": "faa6a80274adce99aaf8758d786e52d082e17391",
+  "selectionUnqualifiedCommit": "423bfc37c0de68c9e4bee805eded8a5418e7f2ec",
+  "runtimeDependencyParent": "f5c3210f166ccfa4041aa6acc42dd41d6d833224",
+  "retainedPythonInvocation": {
+    "source": "Local issue-223-server-packaging deploy/preview/compose.yaml and docs/design/linked-model-packaging-223.md, inspected read-only 2026-10-29",
+    "image": "sha256:4b96c3cba2f461d2bb9b6a285e5514fcf58968c9614eddd3441bcdb2def38dff",
+    "entrypoint": "/qualification/python/bin/python",
+    "mounts": "retained venv -> /qualification/python:ro; pinned packages -> /python-deps:ro",
+    "status": "Historical compatible invocation found; no current server probe or execution"
+  },
+  "combinedBrowserBudget": "App 1.5 CPU/2 GiB plus separately parent-owned sidecar at most 0.5 CPU/1 GiB; no swap; no handoff to child yet",
+  "qualification": {
+    "fixtureGeneration": "not-run",
+    "independentOracle": "not-run",
+    "receivingNativeGeneration": "not-run",
+    "geometryContextRuntime": "not-run",
+    "converter": "not-run",
+    "rootValidate": "not-run",
+    "explicitChangedPaths": "not-run",
+    "browser": "not-run",
+    "connectedProvider": "parent-reserved-not-run",
+    "proposalAcceptance": "not-run"
+  },
+  "availability": [
+    {
+      "source": "parent kickoff and bounded parent recheck, 2026-10-28",
+      "condition": "SSH and HTTPS to 192.168.1.17 timed out; parent reports Twingate /32 route ahead of WiFi",
+      "action": "No child network reprobe, no local build/test substitution. Continue static source work."
+    },
+    {
+      "source": "parent report, 2026-10-29",
+      "condition": "SSH restored; parent verified fun-server and healthy preview. One serial slot, max two CPUs and 3 GiB RAM with no swap.",
+      "action": "No child probe/container/build/test. Runner limits updated; await explicit parent reservation handoff. Previous unrun results remain unchanged."
+    }
+  ],
+  "defectsReproduced": [],
+  "staticHarnessCorrections": [
+    "Use explicit PowerShell executable/login:false/workdir; native git with absolute -C. Outer shell redirected native command cwd.",
+    "Writable roots exclude managed checkout. Staged files in writable visualization directory; requested explicit owned-checkout copy.",
+    "Use existing server's HTTP 200 project import response, confirmed by source read; no invented 201 assertion.",
+    "Retain trace before browser closes; retained failure evidence must survive teardown."
+  ],
+  "permissionUpdate": "2026-10-29 owner enabled direct access to the assigned checkout; no approval remains pending. No server/test restriction changed.",
+  "delivery": "No PR until server root validation and all-changed-path policy pass. No merge/deploy authorized for this child."
+}

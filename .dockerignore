@@ -3,12 +3,15 @@
 !package-lock.json
 !demo/
 !demo/server.ts
+!demo/geometry-source.ts
 !demo/change-requests.ts
 !demo/request-source-store.ts
 !demo/project-evidence-store.ts
 !demo/versioned-project-store.ts
 !demo/versioned-project-contract.ts
 !demo/model-scope-store.ts
+!demo/linked-model-store.ts
+!demo/linked-model-routes.ts
 !src/
 !src/**
 !scripts/

@@ -1,0 +1,442 @@
+{
+  "verification": "Read-only stored graph verification after UI-only submission and acceptance",
+  "executable": "c534eeadf8e675ba09ebf9e108de389e331d251e",
+  "syntheticProjectId": "a5af9d2f-39c2-44db-a4c3-80dd34a308b4",
+  "reconstructionRequest": "95b9efa4-540d-432f-a23d-c32feb2b5985",
+  "alternativeRequest": "03fa4d7b-fe8b-4436-ae71-95a857ca2e46",
+  "targets": [
+    {
+      "target": {
+        "kind": "main"
+      },
+      "name": "Main",
+      "revisionId": "0d9a3621ec7046724d065311a42f8ba5ee294a7427c7386d48792e49a4e5bcc5"
+    },
+    {
+      "target": {
+        "kind": "baseline",
+        "id": "baseline-2f5b9a91a031d196046715a0f0df931e"
+      },
+      "name": "As-is",
+      "revisionId": "0d9a3621ec7046724d065311a42f8ba5ee294a7427c7386d48792e49a4e5bcc5"
+    },
+    {
+      "target": {
+        "kind": "alternative",
+        "id": "alternative-1df2384f063e7db4bbf9d660c4de1c61"
+      },
+      "name": "Alternative 1",
+      "revisionId": "7a735c70e705c971f677372c1d3c43c9fc45683e59576a4220552ba3212de1f6"
+    }
+  ],
+  "mainUnchanged": true,
+  "lockedBaselineUnchanged": true,
+  "acceptedAlternativeOnly": true,
+  "sourceInterpretation": "Live connected ChatGPT; one declared width and documented assumptions, not survey accuracy",
+  "before": {
+    "units": "m",
+    "entities": [
+      {
+        "id": "door-entry",
+        "type": "Door",
+        "name": "Entry door",
+        "width": 0.9,
+        "height": 2.1
+      },
+      {
+        "id": "door-internal",
+        "type": "Door",
+        "name": "Shared-wall doorway",
+        "width": 0.9,
+        "height": 2.1
+      },
+      {
+        "id": "floor-wall-h-p0-p0-p6000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p0-p0-p6000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          6,
+          0
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-h-p4000-p0-p6000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p4000-p0-p6000",
+        "start": [
+          0,
+          4
+        ],
+        "end": [
+          6,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-v-p0-p0-p4000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p0-p0-p4000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          0,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-v-p3000-p0-p4000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p3000-p0-p4000",
+        "start": [
+          3,
+          0
+        ],
+        "end": [
+          3,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-v-p6000-p0-p4000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p6000-p0-p4000",
+        "start": [
+          6,
+          0
+        ],
+        "end": [
+          6,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "level-ground",
+        "type": "Level",
+        "name": "Ground floor",
+        "elevation": 0
+      },
+      {
+        "id": "room-living",
+        "type": "Space",
+        "name": "Living room",
+        "levelId": "level-ground",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 3,
+          "maxY": 4
+        }
+      },
+      {
+        "id": "room-office",
+        "type": "Space",
+        "name": "Office",
+        "levelId": "level-ground",
+        "bounds": {
+          "minX": 3,
+          "minY": 0,
+          "maxX": 6,
+          "maxY": 4
+        }
+      }
+    ],
+    "relationships": [
+      {
+        "id": "floor-host-1b3fbnekfyh3ld9ews9aw37ucjly6k4zxs0ibyycjyql8bbziv",
+        "type": "hosted-by",
+        "source": "door-entry",
+        "target": "floor-wall-h-p0-p0-p6000",
+        "offset": 0.6
+      },
+      {
+        "id": "floor-host-5oglgdd8vgf25hdbdg7v6q32dvgqozhbwvqzfyuxf6w112mcqs",
+        "type": "hosted-by",
+        "source": "door-internal",
+        "target": "floor-wall-v-p3000-p0-p4000",
+        "offset": 0.85
+      }
+    ]
+  },
+  "after": {
+    "units": "m",
+    "entities": [
+      {
+        "id": "door-entry",
+        "type": "Door",
+        "name": "Entry door",
+        "width": 0.9,
+        "height": 2.1
+      },
+      {
+        "id": "door-internal",
+        "type": "Door",
+        "name": "Shared-wall doorway",
+        "width": 0.9,
+        "height": 2.1
+      },
+      {
+        "id": "floor-wall-h-p0-p0-p6000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p0-p0-p6000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          6,
+          0
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-h-p4000-p0-p6000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-h-p4000-p0-p6000",
+        "start": [
+          0,
+          4
+        ],
+        "end": [
+          6,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-v-p0-p0-p4000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p0-p0-p4000",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          0,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-v-p3000-p0-p4000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p3000-p0-p4000",
+        "start": [
+          3.3,
+          0
+        ],
+        "end": [
+          3.3,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "floor-wall-v-p6000-p0-p4000",
+        "type": "Wall",
+        "name": "Floor wall floor-wall-v-p6000-p0-p4000",
+        "start": [
+          6,
+          0
+        ],
+        "end": [
+          6,
+          4
+        ],
+        "thickness": 0.15,
+        "height": 2.7
+      },
+      {
+        "id": "level-ground",
+        "type": "Level",
+        "name": "Ground floor",
+        "elevation": 0
+      },
+      {
+        "id": "room-living",
+        "type": "Space",
+        "name": "Living room",
+        "levelId": "level-ground",
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 3.3,
+          "maxY": 4
+        }
+      },
+      {
+        "id": "room-office",
+        "type": "Space",
+        "name": "Office",
+        "levelId": "level-ground",
+        "bounds": {
+          "minX": 3.3,
+          "minY": 0,
+          "maxX": 6,
+          "maxY": 4
+        }
+      }
+    ],
+    "relationships": [
+      {
+        "id": "floor-host-1b3fbnekfyh3ld9ews9aw37ucjly6k4zxs0ibyycjyql8bbziv",
+        "type": "hosted-by",
+        "source": "door-entry",
+        "target": "floor-wall-h-p0-p0-p6000",
+        "offset": 0.6
+      },
+      {
+        "id": "floor-host-5oglgdd8vgf25hdbdg7v6q32dvgqozhbwvqzfyuxf6w112mcqs",
+        "type": "hosted-by",
+        "source": "door-internal",
+        "target": "floor-wall-v-p3000-p0-p4000",
+        "offset": 0.85
+      }
+    ]
+  },
+  "delta": {
+    "entities": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        {
+          "id": "floor-wall-v-p3000-p0-p4000",
+          "before": {
+            "id": "floor-wall-v-p3000-p0-p4000",
+            "type": "Wall",
+            "name": "Floor wall floor-wall-v-p3000-p0-p4000",
+            "start": [
+              3,
+              0
+            ],
+            "end": [
+              3,
+              4
+            ],
+            "thickness": 0.15,
+            "height": 2.7
+          },
+          "after": {
+            "id": "floor-wall-v-p3000-p0-p4000",
+            "type": "Wall",
+            "name": "Floor wall floor-wall-v-p3000-p0-p4000",
+            "start": [
+              3.3,
+              0
+            ],
+            "end": [
+              3.3,
+              4
+            ],
+            "thickness": 0.15,
+            "height": 2.7
+          }
+        },
+        {
+          "id": "room-living",
+          "before": {
+            "id": "room-living",
+            "type": "Space",
+            "name": "Living room",
+            "levelId": "level-ground",
+            "bounds": {
+              "minX": 0,
+              "minY": 0,
+              "maxX": 3,
+              "maxY": 4
+            }
+          },
+          "after": {
+            "id": "room-living",
+            "type": "Space",
+            "name": "Living room",
+            "levelId": "level-ground",
+            "bounds": {
+              "minX": 0,
+              "minY": 0,
+              "maxX": 3.3,
+              "maxY": 4
+            }
+          }
+        },
+        {
+          "id": "room-office",
+          "before": {
+            "id": "room-office",
+            "type": "Space",
+            "name": "Office",
+            "levelId": "level-ground",
+            "bounds": {
+              "minX": 3,
+              "minY": 0,
+              "maxX": 6,
+              "maxY": 4
+            }
+          },
+          "after": {
+            "id": "room-office",
+            "type": "Space",
+            "name": "Office",
+            "levelId": "level-ground",
+            "bounds": {
+              "minX": 3.3,
+              "minY": 0,
+              "maxX": 6,
+              "maxY": 4
+            }
+          }
+        }
+      ]
+    },
+    "relationships": {
+      "added": [],
+      "removed": [],
+      "modified": []
+    }
+  },
+  "visualChanges": [
+    {
+      "id": "door-internal",
+      "name": "Shared-wall doorway",
+      "status": "modified",
+      "reason": "placement"
+    },
+    {
+      "id": "floor-wall-v-p3000-p0-p4000",
+      "name": "Floor wall floor-wall-v-p3000-p0-p4000",
+      "status": "modified",
+      "reason": "object"
+    },
+    {
+      "id": "room-living",
+      "name": "Living room",
+      "status": "modified",
+      "reason": "object"
+    },
+    {
+      "id": "room-office",
+      "name": "Office",
+      "status": "modified",
+      "reason": "object"
+    }
+  ]
+}

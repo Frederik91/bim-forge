@@ -1,5 +1,6 @@
 import { parseEvidenceReadSet, parseEvidenceUses, evidenceCanonical } from './model-evidence.ts';
 import type { EvidenceReadSet, EvidenceUse } from './model-evidence.ts';
+import { readGeometryEvidence, assertGeometryEvidenceBound } from './geometry-evidence-contract.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 import type { WallShiftRequest, WallShiftImpact } from './wall-dependencies.ts';
 import { parseDesignTarget, parseWritableDesignTarget, parseFrozenDesignTarget, parseDesignTargets, sameDesignTarget } from './design-targets.ts';
@@ -210,6 +211,7 @@ export interface ProposalReview {
   target?: FrozenDesignTarget;
   evidence?: EvidenceReadSet;
   evidenceUses?: EvidenceUse[];
+  geometryEvidence?: string;
   validator: 'room-graph-v1';
   decision: ReviewDecision;
 }
@@ -448,6 +450,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   const review = copy(input);
   const hasEvidence = review !== null && typeof review === 'object' && Object.hasOwn(review, 'evidence');
   const hasEvidenceUses = review !== null && typeof review === 'object' && Object.hasOwn(review, 'evidenceUses');
+  const hasGeometryEvidence = review !== null && typeof review === 'object' && Object.hasOwn(review, 'geometryEvidence');
   const hasTarget = review !== null && typeof review === 'object' && Object.hasOwn(review, 'target');
   const hasScripts = review !== null && typeof review === 'object' && Object.hasOwn(review, 'scriptExecutions');
   const hasIntent = review !== null && typeof review === 'object' && Object.hasOwn(review, 'intent');
@@ -456,7 +459,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   const hasScope = review !== null && typeof review === 'object' && Object.hasOwn(review, 'authoringScope');
   fields(review, ['requestId', 'proposalName', 'baseRevisionId', 'proposalRevisionId', 'selectedObjectIds', 'instruction',
     'summary', 'rationale', 'constraints', 'uncertainty', 'worker', 'toolCalls', 'validator', 'decision',
-    ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
+    ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []), ...(hasGeometryEvidence ? ['geometryEvidence'] : []),
     ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasTarget ? ['target'] : []), ...(hasEvidence ? ['evidence'] : []), ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
   const requestId = requestIdentifier(review.requestId);
   const proposalName = branchName(review.proposalName);
@@ -468,7 +471,7 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
   if (!proposal) fail('Review is not bound to its proposal history.');
   if (proposal.parentId !== base.id || branch?.revisionId !== proposal.id) fail('Review is not bound to its proposal history.');
   const selectedValues = review.selectedObjectIds;
-  if (!Array.isArray(selectedValues) || selectedValues.length < 1 || selectedValues.length > 16) fail('Invalid reviewed object identities.');
+  if (!Array.isArray(selectedValues) || selectedValues.length > 16) fail('Invalid reviewed object identities.');
   const selectedObjectIds = selectedValues.map(identifier);
   if (new Set(selectedObjectIds).size !== selectedObjectIds.length) fail('Invalid reviewed object identities.');
   const baseObjects = new Set(base.snapshot.entities.map((entity) => entity.id));
@@ -510,6 +513,11 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     validateScriptReview(scriptEvidence.scriptExecutions, toolCalls);
   }
   const evidence = hasEvidence ? parseEvidenceReadSet(review.evidence) : undefined;
+  const geometryEvidence = hasGeometryEvidence ? readGeometryEvidence(review.geometryEvidence) : undefined;
+  if (geometryEvidence && (geometryEvidence.projectId !== projectId || geometryEvidence.requestId !== requestId
+      || geometryEvidence.baseRevisionId !== baseRevisionId)) {
+    fail('Geometry read evidence must match the exact proposal project, request, base and final authored snapshot.');
+  }
   if (evidence && (evidence.projectId !== projectId || evidence.revisionId !== baseRevisionId
       || evidence.subjects.some(item => item.subject.anchor.projectId !== projectId))) {
     fail('Evidence read set must match the exact review project and base revision.');
@@ -563,7 +571,8 @@ function reviewRecord(input: unknown, revisions: Map<RevisionId, Revision>, bran
     toolCalls, ...scriptEvidence, ...(hasIntent ? { intent: parseIntentAssessment(review.intent) } : {}),
     ...(hasSources ? { sources: parseRequestSources(review.sources) } : {}),
     ...(hasScope ? { authoringScope: parseAuthoringScope(review.authoringScope) } : {}), ...(scope ? { scope } : {}), ...(target ? { target } : {}), ...(evidence ? { evidence } : {}),
-    ...(evidenceUses ? { evidenceUses } : {}), validator: 'room-graph-v1', decision,
+    ...(evidenceUses ? { evidenceUses } : {}), ...(hasGeometryEvidence && typeof review.geometryEvidence === 'string' ? { geometryEvidence: review.geometryEvidence } : {}),
+    validator: 'room-graph-v1', decision,
   });
 }
 
@@ -1232,7 +1241,11 @@ export class RoomRepository {
       const validated = await revision(parentId, validateSnapshot(item.snapshot));
       if (validated.id !== id) fail('Saved revision content does not match its hash.');
     }
-    return RoomRepository.#restoreState(value);
+    const repository = RoomRepository.#restoreState(value);
+    for (const review of repository.reviews()) if (review.geometryEvidence !== undefined) {
+      await assertGeometryEvidenceBound(readGeometryEvidence(review.geometryEvidence), repository.view(review.proposalRevisionId).snapshot);
+    }
+    return repository;
   }
 
   /** Storage has already verified revision hashes; synchronously check native authority. */
@@ -1678,13 +1691,14 @@ export class RoomRepository {
     const details = proposal.review;
     const hasEvidence = details !== null && typeof details === 'object' && Object.hasOwn(details, 'evidence');
     const hasEvidenceUses = details !== null && typeof details === 'object' && Object.hasOwn(details, 'evidenceUses');
+    const hasGeometryEvidence = details !== null && typeof details === 'object' && Object.hasOwn(details, 'geometryEvidence');
     const hasScripts = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scriptExecutions');
     const hasIntent = details !== null && typeof details === 'object' && Object.hasOwn(details, 'intent');
     const hasSources = details !== null && typeof details === 'object' && Object.hasOwn(details, 'sources');
     const hasFrozenScope = details !== null && typeof details === 'object' && Object.hasOwn(details, 'scope');
     const hasScope = details !== null && typeof details === 'object' && Object.hasOwn(details, 'authoringScope');
     fields(details, ['requestId', 'selectedObjectIds', 'instruction', 'summary', 'rationale', 'constraints',
-      'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []),
+      'uncertainty', 'worker', 'toolCalls', 'validator', ...(hasScripts ? ['scriptExecutions'] : []), ...(hasIntent ? ['intent'] : []), ...(hasGeometryEvidence ? ['geometryEvidence'] : []),
       ...(hasSources ? ['sources'] : []), ...(hasScope ? ['authoringScope'] : []), ...(hasFrozenScope ? ['scope'] : []), ...(hasEvidence ? ['evidence'] : []), ...(hasEvidenceUses ? ['evidenceUses'] : [])]);
     const base = this.view(from);
     const target = this.#proposalTarget(proposal, from);
@@ -1704,8 +1718,10 @@ export class RoomRepository {
       ...(target ? { target } : {}),
       ...(hasEvidence ? { evidence: details.evidence } : {}),
       ...(hasEvidenceUses ? { evidenceUses: details.evidenceUses } : {}),
+      ...(hasGeometryEvidence ? { geometryEvidence: details.geometryEvidence } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches), this.projectId);
+    if (record.geometryEvidence !== undefined) await assertGeometryEvidenceBound(readGeometryEvidence(record.geometryEvidence), next.view(record.proposalRevisionId).snapshot);
     const reviews = [...next.reviews(), record];
     if (reviews.some((item, index) => reviews.findIndex((other) => other.requestId === item.requestId || other.proposalName === item.proposalName) !== index)) {
       fail('Duplicate proposal review identity.');

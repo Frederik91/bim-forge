@@ -1,0 +1,288 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { Type } from 'typebox';
+import { Check } from 'typebox/value';
+import { parseLinkedPrepared } from '../../src/linked-model.ts';
+import type { LinkedPrepared } from '../../src/linked-model.ts';
+import { GeometryBoundsSchema, GeometryMatrixSchema } from '../../src/geometry-contract.ts';
+import type { GeometryDescription, GeometryMeasureResult, GeometryRef } from '../../src/geometry-contract.ts';
+import { createGeometryContext, validateGeometryReceipts } from '../../src/geometry-query.ts';
+import { RoomRepository, validateSnapshot } from '../../src/room-model.ts';
+import { receivingProject } from './receiving-native.ts';
+
+// Production calculation is the system under test. All expected distances and box
+// transforms come from the withheld independent Python prism oracle, never its math.
+const ProbeSchema = Type.Array(Type.Object({ id: Type.String(), occurrence: Type.Union([Type.Literal('a'), Type.Literal('b')]),
+  obstacleName: Type.String(), bounds: GeometryBoundsSchema, localToProject: GeometryMatrixSchema,
+  expectedDistanceMetres: Type.Number({ minimum: 0 }), nonPenetrating: Type.Boolean(), strictlySeparated: Type.Boolean(),
+}), { minItems: 14, maxItems: 32 });
+
+async function inputs() {
+  assert.equal(process.env.QUAL_SERVER_CONTAINER, 'issue234', 'No local fallback for geometry qualification.');
+  await fs.stat('/.dockerenv');
+  const artifacts = process.env.QUAL_CONVERTER_ARTIFACTS;
+  assert.ok(artifacts && path.resolve(artifacts).startsWith('/ssd1/'));
+  const output = process.env.QUAL_ARTIFACTS;
+  assert.ok(output && path.resolve(output).startsWith('/ssd1/'));
+  const source = process.env.QUAL_SOURCE_SHA;
+  assert.ok(source && /^[a-f0-9]{40}$/.test(source));
+  const probes: unknown = JSON.parse(await fs.readFile(path.join(artifacts, 'private-product-probes.json'), 'utf8'));
+  assert.ok(Check(ProbeSchema, probes));
+  const prepared: LinkedPrepared[] = [];
+  for (const directory of await fs.readdir(artifacts, { withFileTypes: true })) {
+    if (!directory.isDirectory() || !directory.name.startsWith('converted-')) continue;
+    const root = path.join(artifacts, directory.name);
+    const manifest: unknown = JSON.parse(await fs.readFile(path.join(root, 'manifest.json'), 'utf8'));
+    const index: unknown = JSON.parse(await fs.readFile(path.join(root, 'index.json'), 'utf8'));
+    const geometry: unknown = JSON.parse(await fs.readFile(path.join(root, 'geometry.json'), 'utf8'));
+    const parsed = parseLinkedPrepared({ manifest, index, geometry });
+    const names: ('original.ifc' | 'index.json' | 'geometry.json')[] = ['original.ifc', 'index.json', 'geometry.json'];
+    for (const name of names) {
+      const data = await fs.readFile(path.join(root, name));
+      assert.equal(data.byteLength, parsed.manifest.artifacts[name].bytes);
+      assert.equal(createHash('sha256').update(data).digest('hex'), parsed.manifest.artifacts[name].sha256);
+    }
+    assert.equal(parsed.manifest.source.originalSha256, parsed.manifest.artifacts['original.ifc'].sha256);
+    prepared.push(parsed);
+  }
+  const project = await receivingProject();
+  const native = { snapshot: project.view(project.head('main')).snapshot, revisionId: project.head('main'), target: { kind: 'main' } } satisfies Parameters<typeof createGeometryContext>[0]['native'];
+  return { artifacts, output, source, probes, prepared, projectId: project.projectId, native };
+}
+
+function sourceBy(input: LinkedPrepared[], revision: string, occurrence = 'occurrence-a'): LinkedPrepared {
+  const found = input.find(item => item.manifest.source.revision === revision && item.manifest.occurrence.id === occurrence);
+  assert.ok(found, `Missing real converted fixture ${revision}/${occurrence}`);
+  return found;
+}
+
+function one(items: GeometryDescription[], name: string): GeometryDescription {
+  const matches = items.filter(item => item.name === name);
+  assert.equal(matches.length, 1);
+  const found = matches[0];
+  assert.ok(found);
+  return found;
+}
+
+test('real converted rotated metre/mm geometry matches independent prism distances and zero-clearance controls', async () => {
+  const input = await inputs();
+  const retained: { source: string; unit: string; probe: string; occurrence: string; expectedDistanceMetres: number; result: GeometryMeasureResult }[] = [];
+  const boundaryAbstentions: { unit: string; occurrence: string; operation: 'distance' | 'clearance-zero'; probe: string }[] = [];
+  const retainAbstentions = async () => fs.writeFile(path.join(input.output, 'unsupported-boundary-abstentions.json'), JSON.stringify({
+    source: input.source, count: boundaryAbstentions.length, cases: boundaryAbstentions,
+    qualification: 'Unsupported representation uncertainty; these are not certified contact/clearance results. IEEE vertex-level cause is unverified.',
+  }, null, 2) + '\n');
+  await retainAbstentions();
+  // Write each result before its assertion, so a red run preserves the offending witness/receipt.
+  for (const unit of ['m', 'mm']) for (const probe of input.probes) {
+    const linked = sourceBy(input.prepared, `${unit}-v1`, `occurrence-${probe.occurrence}`);
+    const context = createGeometryContext({ projectId: input.projectId, native: input.native, linked: [linked] });
+    const discovery = context.query({ query: { role: 'physical' }, limit: 32 });
+    if (discovery.kind !== 'complete') throw new Error(JSON.stringify(discovery));
+    const obstacle = one(discovery.items, probe.obstacleName);
+    const subject = { kind: 'box', candidateId: `${unit}-${probe.occurrence}-${probe.id}`, bounds: probe.bounds, localToProject: probe.localToProject };
+    const result = context.measure({ subject, against: { kind: 'object', ref: obstacle.ref }, operation: 'distance' });
+    retained.push({ source: input.source, unit, probe: probe.id, occurrence: probe.occurrence,
+      expectedDistanceMetres: probe.expectedDistanceMetres, result });
+    await fs.writeFile(path.join(input.output, 'private-runtime-measurements.json'), JSON.stringify(retained, null, 2) + '\n');
+    if (result.kind === 'unavailable') throw new Error(JSON.stringify(result));
+    if (result.kind === 'partial') {
+      assert.ok(probe.nonPenetrating && !probe.strictlySeparated, 'Only the independently boundary-only control may abstain.');
+      assert.equal(result.reason, 'unsupported');
+      assert.equal(result.value.relation, 'contact-or-overlap');
+      assert.equal(result.value.distanceMetres, 0);
+      assert.equal(result.value.clearance, 'not-requested');
+      assert.equal(result.receipt.status, 'partial');
+      boundaryAbstentions.push({ unit, occurrence: probe.occurrence, operation: 'distance', probe: probe.id });
+      await retainAbstentions();
+    }
+    assert.notEqual(result.value.distanceMetres, null);
+    assert.ok(Math.abs((result.value.distanceMetres ?? Infinity) - probe.expectedDistanceMetres) <= 1e-6, JSON.stringify({ probe, result }));
+    assert.equal(result.value.exactness, 'prepared-representation');
+    if (probe.strictlySeparated) {
+      assert.equal(result.value.relation, 'separated');
+      assert.ok(result.value.witness);
+      assert.ok(Math.abs(Math.hypot(...result.value.witness.subject.map((value, index) => value - (result.value.witness?.obstacle[index] ?? Infinity)))
+        - probe.expectedDistanceMetres) <= 1e-6);
+    }
+    const zero = context.measure({ subject, against: { kind: 'object', ref: obstacle.ref }, operation: 'clearance', clearanceMetres: 0 });
+    retained.push({ source: input.source, unit, probe: `${probe.id}:clearance-zero`, occurrence: probe.occurrence,
+      expectedDistanceMetres: probe.expectedDistanceMetres, result: zero });
+    await fs.writeFile(path.join(input.output, 'private-runtime-measurements.json'), JSON.stringify(retained, null, 2) + '\n');
+    if (zero.kind === 'unavailable') throw new Error(JSON.stringify(zero));
+    if (zero.kind === 'partial') {
+      assert.ok(probe.nonPenetrating && !probe.strictlySeparated, 'Separated/contained/penetrating controls must remain complete.');
+      assert.equal(zero.reason, 'unsupported');
+      assert.equal(zero.value.relation, 'contact-or-overlap');
+      assert.equal(zero.value.distanceMetres, 0);
+      assert.equal(zero.value.clearance, 'unknown', 'An ambiguous boundary cannot certify even zero clearance.');
+      assert.equal(zero.receipt.status, 'partial');
+      boundaryAbstentions.push({ unit, occurrence: probe.occurrence, operation: 'clearance-zero', probe: probe.id });
+      await retainAbstentions();
+    } else if (!probe.nonPenetrating) {
+      assert.notEqual(zero.value.clearance, 'satisfied-mesh', JSON.stringify({ probe: probe.id, zero }));
+    } else if (!probe.strictlySeparated) {
+      // The private prism control establishes a boundary-only touching case.
+      // A satisfied zero-clearance result additionally requires the public
+      // certified-contact relation; ambiguous contact cannot certify clearance.
+      if (zero.value.clearance === 'satisfied-mesh') assert.equal(zero.value.relation, 'contact');
+      else assert.ok(zero.value.clearance === 'unknown' || zero.value.clearance === 'violated-mesh');
+    } else assert.equal(zero.value.clearance, 'satisfied-mesh');
+  }
+});
+
+test('meshless native and IFC levels/spaces remain complete semantic discoveries; solid measurement still refuses', async () => {
+  const input = await inputs();
+  const linked = sourceBy(input.prepared, 'm-v1');
+  const context = createGeometryContext({ projectId: input.projectId, native: input.native, linked: [linked] });
+  for (const category of ['level', 'space']) {
+    const semantic = context.query({ query: { role: 'context', categories: [category] }, limit: 32 });
+    if (semantic.kind !== 'complete') throw new Error(JSON.stringify(semantic));
+    assert.equal(semantic.uncertainMembers, 0);
+    assert.ok(semantic.items.some(item => item.ref.kind === 'native'));
+    assert.ok(semantic.items.some(item => item.ref.kind === 'ifc'));
+    for (const object of semantic.items) assert.equal(context.describe(object.ref).kind, 'complete');
+    const meshless = semantic.items.find(item => item.capability.kind === 'unavailable');
+    assert.ok(meshless, 'The fixture must retain a declared semantic object without a physical mesh.');
+    const probe = input.probes[0]; assert.ok(probe);
+    const measured = context.measure({ subject: { kind: 'box', candidateId: 'semantic-no-solid', bounds: probe.bounds,
+      localToProject: probe.localToProject }, against: { kind: 'object', ref: meshless.ref }, operation: 'clearance', clearanceMetres: .5 });
+    assert.notEqual(measured.kind, 'complete');
+    if (measured.kind !== 'unavailable') assert.notEqual(measured.value.clearance, 'satisfied-mesh');
+  }
+});
+
+test('unavailable active source and missing physical shape prevent absence and clearance certainty', async () => {
+  const input = await inputs();
+  const region = { min: [100, 100, 3], max: [103, 103, 7] };
+  const subject = { kind: 'box', candidateId: 'empty-region', bounds: { min: [101, 101, 4], max: [102, 102, 5] },
+    localToProject: [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]] };
+  const unavailable = createGeometryContext({ projectId: input.projectId, native: input.native, linked: [],
+    unavailableSources: [{ id: 'active-link-with-no-index-or-mesh', reason: 'Current prepared artifacts unavailable' }] });
+  const absence = unavailable.query({ query: { role: 'physical', region } });
+  assert.notEqual(absence.kind, 'complete');
+  const clearance = unavailable.measure({ subject, against: { kind: 'query', query: { role: 'physical', region } }, operation: 'clearance', clearanceMetres: .5 });
+  assert.notEqual(clearance.kind, 'complete');
+  if (clearance.kind !== 'unavailable') assert.equal(clearance.value.clearance, 'unknown');
+  const partial = createGeometryContext({ projectId: input.projectId, native: input.native, linked: [sourceBy(input.prepared, 'm-partial')] });
+  // Unbounded identity inventory may be complete without certifying any geometry.
+  const inventory = partial.query({ query: { role: 'physical' }, limit: 32 });
+  if (inventory.kind !== 'complete') throw new Error(JSON.stringify(inventory));
+  const missing = one(inventory.items, 'Invented no-representation');
+  assert.equal(missing.class, 'IfcBuildingElementProxy');
+  assert.equal(missing.role, 'physical');
+  assert.equal(missing.capability.kind, 'unavailable');
+  if (missing.capability.kind !== 'unavailable') throw new Error('Expected a declared physical object without geometry.');
+  assert.equal(missing.capability.reason, 'missing-geometry');
+  const spatial = partial.query({ query: { role: 'physical', region }, limit: 32 });
+  if (spatial.kind !== 'partial') throw new Error(JSON.stringify(spatial));
+  assert.ok(spatial.uncertainMembers > 0);
+  assert.ok(spatial.items.some(item => JSON.stringify(item.ref) === JSON.stringify(missing.ref)), 'An unlocated physical candidate cannot disappear from spatial membership.');
+  const measured = partial.measure({ subject, against: { kind: 'query', query: { role: 'physical', region } }, operation: 'clearance', clearanceMetres: .5 });
+  if (measured.kind !== 'partial') throw new Error(JSON.stringify(measured));
+  assert.equal(measured.value.clearance, 'unknown');
+  const direct = partial.measure({ subject: { kind: 'object', ref: missing.ref },
+    against: { kind: 'query', query: { role: 'physical', region } }, operation: 'clearance', clearanceMetres: .5 });
+  if (direct.kind !== 'unavailable') throw new Error(JSON.stringify(direct));
+  assert.equal(direct.reason, 'missing-geometry');
+});
+
+test('receiving native project is ordinary valid context, matching floor elevation without any proposed asset', async () => {
+  const input = await inputs();
+  const snapshot = input.native.snapshot;
+  const hall = snapshot.entities.find(item => item.id === 'receiving-hall');
+  const level = snapshot.entities.find(item => item.id === 'receiving-level');
+  assert.ok(hall?.type === 'Space' && level?.type === 'Level');
+  assert.equal(level.elevation, 3.5);
+  assert.deepEqual(hall.bounds, { minX: 0, minY: 0, maxX: 50, maxY: 50 });
+  assert.equal(snapshot.entities.filter(item => item.type === 'AssetFamily' || item.type === 'AssetInstance').length, 0);
+  const context = createGeometryContext({ projectId: input.projectId, native: input.native, linked: [sourceBy(input.prepared, 'm-v1')] });
+  const walls = context.query({ query: { classes: ['IfcWall'], role: 'physical' } });
+  if (walls.kind !== 'complete') throw new Error(JSON.stringify(walls));
+  for (const wall of walls.items) {
+    assert.ok(wall.bounds);
+    assert.ok(wall.bounds.min[0] > hall.bounds.minX && wall.bounds.max[0] < hall.bounds.maxX);
+    assert.ok(wall.bounds.min[1] > hall.bounds.minY && wall.bounds.max[1] < hall.bounds.maxY);
+    assert.ok(Math.abs(wall.bounds.min[2] - level.elevation) <= 1e-7);
+  }
+});
+
+test('scoped geometry privately evaluates hosts/families without exposing their IDs or claiming whole-project completeness', async () => {
+  const input = await inputs();
+  // This private authorization control is not written into the receiving project,
+  // imported through UI, or supplied as a live-provider proposal/candidate answer.
+  const snapshot = validateSnapshot({ ...input.native.snapshot, entities: [...input.native.snapshot.entities,
+    { id: 'scope-private-family', type: 'AssetFamily', name: 'PRIVATE FAMILY NAME', description: 'Private dependency control.',
+      parts: [{ id: 'body', kind: 'box', min: [0, 0, 0], size: [1, 1, 1], color: '#546778' }] },
+    { id: 'scope-visible-instance', type: 'AssetInstance', name: 'Readable instance', familyId: 'scope-private-family',
+      position: [30, 30], rotationDeg: 0, size: { width: 1, depth: 1, height: 1 }, placement: { kind: 'room', roomId: 'receiving-hall' } },
+  ] });
+  const privateProject = await RoomRepository.createProject({ projectId: input.projectId,
+    name: 'Private scope authorization control', snapshot });
+  const revisionId = privateProject.head('main');
+  const readableIds = ['receiving-entry', 'scope-visible-instance'];
+  const native = { ...input.native, snapshot, revisionId, readableIds } satisfies Parameters<typeof createGeometryContext>[0]['native'];
+  const context = createGeometryContext({ projectId: input.projectId, native, linked: [] });
+  const nativeRef = (entityId: string): GeometryRef => ({ kind: 'native', projectId: input.projectId,
+    target: { kind: 'main' }, revisionId, entityId });
+  const discovered = context.query({ query: { role: 'all' }, limit: 32 });
+  if (discovered.kind !== 'complete') throw new Error(JSON.stringify(discovered));
+  assert.equal(discovered.domain.kind, 'authorized-native-scope');
+  assert.deepEqual(discovered.domain, context.domain);
+  assert.deepEqual(discovered.receipt.domain, context.domain);
+  assert.equal(discovered.total, 2);
+  assert.equal(discovered.nextCursor, null);
+  assert.deepEqual(discovered.items.map(item => item.ref.kind === 'native' ? item.ref.entityId : '').sort(), [...readableIds].sort());
+  const instance = discovered.items.find(item => item.ref.kind === 'native' && item.ref.entityId === 'scope-visible-instance');
+  const door = discovered.items.find(item => item.ref.kind === 'native' && item.ref.entityId === 'receiving-entry');
+  assert.ok(instance && door);
+  assert.equal(instance.capability.kind, 'mesh');
+  // Independently declared unit box at a known named-room floor. Resolving it
+  // requires the hidden family + room + level in the private full graph.
+  assert.deepEqual(instance.bounds, { min: [29.5, 29.5, 3.5], max: [30.5, 30.5, 4.5] });
+  assert.equal(door.capability.kind, 'mesh');
+  assert.deepEqual(door.bounds, { min: [2, -.1, 3.5], max: [3.2, .1, 5.7] });
+  const hidden = ['receiving-south', 'receiving-level', 'receiving-hall', 'scope-private-family'];
+  const publicPage = JSON.stringify(discovered);
+  for (const id of hidden) {
+    assert.ok(!publicPage.includes(id), `Hidden ID leaked through discovery/receipt: ${id}`);
+    assert.equal(context.describe(nativeRef(id)).kind, 'unavailable');
+    assert.equal(context.relations(nativeRef(id)).kind, 'unavailable');
+  }
+  assert.ok(!publicPage.includes('PRIVATE FAMILY NAME'));
+  for (const object of [door, instance]) {
+    const relations = context.relations(object.ref);
+    if (relations.kind !== 'complete') throw new Error(JSON.stringify(relations));
+    for (const relation of relations.items) {
+      assert.ok(relation.target.kind === 'native' && readableIds.includes(relation.target.entityId));
+    }
+  }
+  const hiddenClassQuery = context.query({ query: { role: 'all', classes: ['Wall', 'AssetFamily'] } });
+  if (hiddenClassQuery.kind !== 'complete') throw new Error(JSON.stringify(hiddenClassQuery));
+  assert.equal(hiddenClassQuery.total, 0);
+  assert.equal(hiddenClassQuery.domain.kind, 'authorized-native-scope', 'An empty authorized domain is not a whole-project absence claim.');
+  assert.equal(context.query({ query: { role: 'all', level: nativeRef('receiving-level') } }).kind, 'unavailable');
+  const clean = createGeometryContext({ projectId: input.projectId, native, linked: [] });
+  const observation = clean.query({ query: { role: 'all' } });
+  if (observation.kind !== 'complete') throw new Error(JSON.stringify(observation));
+  assert.equal(validateGeometryReceipts({ receipts: [observation.receipt], current: clean }).kind, 'fresh');
+  const expanded = createGeometryContext({ projectId: input.projectId,
+    native: { ...native, readableIds: [...readableIds, 'receiving-south'] }, linked: [] });
+  assert.notEqual(expanded.domain.digest, clean.domain.digest);
+  assert.equal(validateGeometryReceipts({ receipts: [observation.receipt], current: expanded }).kind, 'stale');
+  const wholeProject = createGeometryContext({ projectId: input.projectId, native: { ...input.native, snapshot, revisionId }, linked: [] });
+  assert.equal(validateGeometryReceipts({ receipts: [observation.receipt], current: wholeProject }).kind, 'stale');
+  const empty = createGeometryContext({ projectId: input.projectId, native: { ...native, readableIds: [] }, linked: [] });
+  const emptyPage = empty.query({ query: { role: 'all' } });
+  if (emptyPage.kind !== 'complete') throw new Error(JSON.stringify(emptyPage));
+  assert.equal(emptyPage.total, 0);
+  assert.equal(emptyPage.domain.kind, 'authorized-native-scope');
+  assert.equal(empty.describe(door.ref).kind, 'unavailable');
+  await fs.writeFile(path.join(input.output, 'scope-domain-controls.json'), JSON.stringify({ source: input.source, revisionId,
+    scopedDomain: clean.domain, expandedDomain: expanded.domain, emptyDomain: empty.domain,
+    directHiddenReferencesRefused: hidden, hiddenHostAndFamilyEvaluation: 'Independent door/unit-box bounds',
+    limits: 'Native read-domain behavior only; IFC/source access and write authority have separate checks' }, null, 2) + '\n');
+});

@@ -225,7 +225,6 @@ export class RequestSourceStore {
         source_id TEXT PRIMARY KEY REFERENCES request_source_blobs(id), project_id TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS request_source_retained_project ON request_source_project_retention(project_id);
       CREATE INDEX IF NOT EXISTS request_source_retained_page ON request_source_project_retention(project_id, source_id);`);
-    this.#write(() => this.#expire());
   }
 
   #write<T>(operation: () => T): T {
