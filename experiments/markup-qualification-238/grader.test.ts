@@ -14,7 +14,6 @@ before(() => {
 
 function value<T>(result: OracleResult<T>): T {
   assert.equal(result.kind, 'supported', JSON.stringify(result));
-  if (result.kind !== 'supported') throw new Error(result.detail);
   assert.equal(result.toleranceMetres, 0.002);
   return result.value;
 }

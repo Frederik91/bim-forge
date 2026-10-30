@@ -27,7 +27,7 @@ function location(entity: SpatialEntity, snapshot: ModelSnapshot): MarkupPoint {
 }
 function footprint(entity: SpatialEntity, snapshot: ModelSnapshot): Footprint {
   return { kind: 'oriented-rectangle', center: location(entity, snapshot), widthMetres: entity.type === 'AssetInstance' ? entity.size.width : entity.width,
-    depthMetres: entity.type === 'AssetInstance' ? entity.size.depth : entity.depth, yawRadians: entity.rotationDeg / 180 * Math.PI };
+    depthMetres: entity.type === 'AssetInstance' ? entity.size.depth : entity.depth, yawRadians: entity.type === 'Equipment' ? 0 : entity.rotationDeg / 180 * Math.PI };
 }
 function enclosingRectangle(shape: SpatialMarkup): SpatialMarkup {
   const points = shape.kind === 'circle' ? [[shape.center[0] - shape.radius, shape.center[1] - shape.radius, shape.center[2]],
