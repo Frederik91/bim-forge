@@ -49,6 +49,8 @@ test('draw spatial context through the real app, queue it and replay the saved c
   assert.ok(projectValue && typeof projectValue === 'object' && 'project' in projectValue && typeof projectValue.project === 'string');
   const repo = await RoomRepository.restore(projectValue.project); const before = projectValue.project;
   await page.locator('#view-3d').click();
+  await page.locator('#model-explorer .model-tree-name').getByText('Attic', { exact: true }).click();
+  if (await page.locator('#show-roof').isChecked()) await page.locator('#show-roof').uncheck();
   await page.waitForFunction(() => document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready') === 'true');
   assert.equal(await page.locator('canvas:visible').count(), 1);
   const canvas = page.locator('.babylon-viewer canvas'); const controls = page.locator('.model-markup-controls');
@@ -63,7 +65,6 @@ test('draw spatial context through the real app, queue it and replay the saved c
   await draw('Rectangle'); await count(1);
   await page.screenshot({ path: path.join(output, 'rectangle.png') });
   const chip = await page.locator('.composer-context-chip').allTextContents(); assert.ok(chip.some(text => text.includes('Rectangle')));
-  const cameraBefore = await page.locator('.babylon-viewer').getAttribute('data-camera');
   const box = await canvas.boundingBox(); assert.ok(box);
   await page.mouse.move(box.x + box.width * .6, box.y + box.height * .65); await page.mouse.down();
   await page.mouse.move(box.x + box.width * .7, box.y + box.height * .66, { steps: 8 }); await page.mouse.up(); await count(1);
@@ -74,6 +75,12 @@ test('draw spatial context through the real app, queue it and replay the saved c
   await page.getByRole('button', { name: 'Line', exact: true }).click();
   await canvas.press('Escape'); await count(2);
   assert.equal(await controls.getAttribute('data-tool'), 'select');
+  await page.getByRole('button', { name: 'Polyline', exact: true }).click();
+  await page.mouse.click(box.x + box.width * .45, box.y + box.height * .65);
+  await page.mouse.click(box.x + box.width * .50, box.y + box.height * .68);
+  await page.mouse.click(box.x + box.width * .55, box.y + box.height * .65);
+  await page.getByRole('button', { name: 'Finish polyline', exact: true }).click(); await count(3);
+  await page.getByRole('button', { name: 'Undo markup', exact: true }).click(); await count(2);
   await page.locator('#request-text').fill('Add a kitchen here, using the rectangle as the intended area.');
   const submitted = page.waitForResponse(response => response.url() === base + '/api/change-requests' && response.request().method() === 'POST');
   await page.locator('#save-proposal').click(); const submittedResponse = await submitted; assert.equal(submittedResponse.status(), 202);
@@ -85,12 +92,17 @@ test('draw spatial context through the real app, queue it and replay the saved c
   assert.ok(!JSON.stringify(payload.request.selectedObjectIds).includes('door'), 'A highlighted door must not become the region anchor.');
   const shapes: SpatialMarkup[] = saved.annotations.filter(shape => shape.kind !== 'pin' && shape.kind !== 'arrow');
   assert.equal(shapes[0]?.kind, 'rectangle'); assert.equal(shapes[1]?.kind, 'circle');
+  assert.equal(saved.levelId, 'level-attic');
+  if (shapes[0]?.kind === 'rectangle') assert.ok(shapes[0].corners.every(point => Math.abs(point[2] - 3) < .00001));
   await page.waitForFunction(() => document.querySelector('.model-markup-controls')?.getAttribute('data-reference-markup-count') === '2');
   await page.screenshot({ path: path.join(output, 'saved-chat.png') });
   const stored = await page.request.get(base + '/api/projects/' + repo.projectId); const after: unknown = await stored.json();
   assert.ok(after && typeof after === 'object' && 'project' in after); assert.equal(after.project, before);
   await page.locator('#new-chat').click(); await count(0);
   assert.equal(await controls.getAttribute('data-reference-markup-count'), '0');
-  await fs.writeFile(path.join(output, 'context.json'), JSON.stringify({ saved, cameraBefore, acceptedProjectUnchanged: true, errors }, null, 2));
+  await page.locator('#chat-switcher-button').click();
+  await page.locator('.chat-switcher-item').filter({ hasText: 'Add a kitchen here' }).click();
+  await page.waitForFunction(() => document.querySelector('.model-markup-controls')?.getAttribute('data-reference-markup-count') === '2');
+  await fs.writeFile(path.join(output, 'context.json'), JSON.stringify({ saved, acceptedProjectUnchanged: true, errors }, null, 2));
   assert.deepEqual(errors, []);
 });
