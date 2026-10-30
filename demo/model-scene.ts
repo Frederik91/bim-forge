@@ -13,8 +13,10 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial.js';
 import { RawTexture } from '@babylonjs/core/Materials/Textures/rawTexture.js';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
-import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
+import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator.js';
+import { FxaaPostProcess } from '@babylonjs/core/PostProcesses/fxaaPostProcess.js';
+import { SceneMeshBatches, SourceShadowLight } from './model-scene-batches.ts';
 import '@babylonjs/core/Rendering/outlineRenderer.js';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { furnitureFaces } from '../src/furniture-geometry.ts';
@@ -22,7 +24,7 @@ import { assetGeometry } from '../src/asset-family.ts';
 import { floorBounds, boundsMm, spaces } from '../src/floor-plan.ts';
 import { entityElevation, entityLevel, levels, levelView, roofHeightAt } from '../src/building-levels.ts';
 import { slabPieces, wallSections } from '../src/viewer-geometry.ts';
-import type { Bounds, Entity, ModelSnapshot, Point, Roof, Slab, Stair, Wall } from '../src/room-model.ts';
+import type { Bounds, Entity, ModelSnapshot, Point, ProjectId, Roof, Slab, Stair, Wall } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 
 RegisterFileTools();
@@ -139,6 +141,12 @@ export class ModelScene {
   private selectedId = '';
   private hoveredId: string | null = null;
   private readonly pickParts = new Map<number, RenderPart>();
+  private readonly batches: SceneMeshBatches;
+  private readonly unitParts = new Map<string, RenderPart[]>();
+  private projected: ModelSnapshot | null = null;
+  private projectedBefore: ModelSnapshot | null = null;
+  private beforeFilter = '';
+  private projectId: ProjectId | null = null;
   private cutaway = true;
   private levelId: string | null = null;
   private roofVisible = true;
@@ -147,13 +155,14 @@ export class ModelScene {
   private markerLine: Mesh | null = null;
   private readonly markerMaterial: StandardMaterial;
 
-  constructor(engine: AbstractEngine) {
+  constructor(engine: AbstractEngine, batching: 'auto' | 'off' = 'auto') {
     this.scene = new Scene(engine);
     this.scene.clearColor = Color4.FromHexString('#e8efedff');
     this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
     this.scene.imageProcessingConfiguration.toneMappingType = 1;
     this.scene.imageProcessingConfiguration.exposure = 1.15;
     this.camera = new ArcRotateCamera('room-camera', -Math.PI / 2.4, .86, 10, new Vector3(3, .5, 2), this.scene);
+    if (engine.getRenderingCanvas()) new FxaaPostProcess('model-antialiasing', 1, this.camera);
     this.camera.minZ = .05; this.camera.maxZ = 500;
     this.camera.lowerBetaLimit = .08; this.camera.upperBetaLimit = Math.PI / 2 - .02;
     this.camera.lowerRadiusLimit = 1; this.camera.upperRadiusLimit = 150;
@@ -161,10 +170,12 @@ export class ModelScene {
     this.camera.pinchDeltaPercentage = .008;
     this.ambient = new HemisphericLight('sky-fill', new Vector3(.2, 1, .3), this.scene);
     this.ambient.groundColor = Color3.FromHexString('#778b80'); this.ambient.intensity = .85;
-    this.sun = new DirectionalLight('daylight', new Vector3(-.7, -1.4, .7), this.scene);
+    this.sun = new SourceShadowLight('daylight', new Vector3(-.7, -1.4, .7), this.scene,
+      () => this.parts.filter(part => !part.before && part.surface !== 'floor').map(part => part.mesh));
     this.sun.position = new Vector3(8, 12, -6); this.sun.intensity = 2.2;
     this.sun.diffuse = Color3.FromHexString('#fff1db');
     this.shadow = new ShadowGenerator(1024, this.sun);
+    this.batches = new SceneMeshBatches(this.scene, this.shadow, batching === 'auto');
     this.shadow.usePercentageCloserFiltering = true; this.shadow.bias = .0005; this.shadow.normalBias = .025;
     this.wood = woodTexture(this.scene);
     this.markerMaterial = new StandardMaterial('annotation-only', this.scene);
@@ -263,6 +274,7 @@ export class ModelScene {
     const dx = wall.end[0] - wall.start[0]; const dy = wall.end[1] - wall.start[1];
     const length = Math.hypot(dx, dy); const angle = Math.atan2(dy, dx);
     const base = entityElevation(snapshot, wall);
+    let piece = 0;
     const openings = snapshot.relationships.filter((link) => link.target === wall.id).flatMap((link) => {
       const item = snapshot.entities.find((candidate) => candidate.id === link.source);
       return item?.type === 'Door' || item?.type === 'Window' ? [{ item, offset: link.offset, bottom: item.type === 'Window' ? item.sillHeight : 0 }] : [];
@@ -278,7 +290,7 @@ export class ModelScene {
         const c = at(section.end, section.endTop, -half); const d = at(section.start, section.startTop, -half);
         const e = at(section.start, bottom, half); const f = at(section.end, bottom, half);
         const g = at(section.end, section.endTop, half); const h = at(section.start, section.startTop, half);
-        this.solid(snapshot, `${wall.id}-solid-${this.parts.length}`,
+        this.solid(snapshot, `${wall.id}-solid-${piece++}`,
           [[a, b, c, d], [f, e, h, g], [e, a, d, h], [b, f, g, c], [d, c, g, h], [e, f, b, a]].map((face) => face.reverse()), wall, wall.id, 'wall', '#eeeae1');
       }
     };
@@ -298,17 +310,21 @@ export class ModelScene {
     segment(cursor, length, 0, wall.height);
   }
 
-  private addSnapshot(snapshot: ModelSnapshot): void {
+  private addSnapshot(snapshot: ModelSnapshot, unit: (key: string, owners: readonly string[], build: () => void) => void): void {
     const b = boundsMm(floorBounds(snapshot));
     const width = (b.maxX - b.minX) / 1000; const depth = (b.maxY - b.minY) / 1000;
     const rooms = spaces(snapshot);
-    if (!rooms.length && snapshot.version !== 2) this.box(snapshot, 'room-floor', new Vector3(width + .16, .12, depth + .16), modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, -.07), null, null, 'floor', '#d1c3a9');
+    if (!rooms.length && snapshot.version !== 2) unit('floor:' + JSON.stringify(b), [], () => {
+      this.box(snapshot, 'room-floor', new Vector3(width + .16, .12, depth + .16), modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000, -.07), null, null, 'floor', '#d1c3a9');
+    });
     for (const room of rooms) {
       if (snapshot.entities.some((item) => item.type === 'Slab' && item.levelId === room.levelId)) continue;
       const r = room.bounds;
-      this.box(snapshot, room.id + '-floor', new Vector3(r.maxX - r.minX, .12, r.maxY - r.minY), modelPoint((r.minX + r.maxX) / 2, (r.minY + r.maxY) / 2, entityElevation(snapshot, room) - .07), room.id, null, 'floor', '#d1c3a9');
+      unit('floor:' + room.id, [room.id], () => this.box(snapshot, room.id + '-floor', new Vector3(r.maxX - r.minX, .12, r.maxY - r.minY), modelPoint((r.minX + r.maxX) / 2, (r.minY + r.maxY) / 2, entityElevation(snapshot, room) - .07), room.id, null, 'floor', '#d1c3a9'));
     }
     for (const item of snapshot.entities) {
+      const owners = item.type === 'Wall' ? [item.id, ...snapshot.relationships.filter(link => link.target === item.id).map(link => link.source)] : [item.id];
+      unit('entity:' + item.id, owners, () => {
       if (item.type === 'Wall') this.wall(item, snapshot);
       else if (item.type === 'Slab') this.slab(item, snapshot);
       else if (item.type === 'Stair') this.stair(item, snapshot);
@@ -342,28 +358,57 @@ export class ModelScene {
           this.register(mesh, item.id, null, surface, color, snapshot);
         }
       }
+      });
     }
   }
 
-  setModel(snapshot: ModelSnapshot, comparison: ModelSnapshot | null = null): boolean {
+  setModel(snapshot: ModelSnapshot, comparison: ModelSnapshot | null = null, projectId: ProjectId | null = null): boolean {
     const signature = JSON.stringify([snapshot, comparison]);
-    if (signature === this.signature) return false;
-    const first = !this.snapshot; this.clearModel();
+    if (signature === this.signature && projectId === this.projectId) return false;
+    const first = !this.snapshot || projectId !== null && projectId !== this.projectId;
+    // Snapshots have no project identity. Retention requires the caller's explicit
+    // project ID; legacy callers retain conservative full-replacement behavior.
+    if (projectId === null || projectId !== this.projectId) this.clearModel();
+    this.projectId = projectId; this.mark(null); this.hoveredId = null;
+    const invalid = (before: ModelSnapshot | null, after: ModelSnapshot): Set<string> | null =>
+      !before || before.version !== after.version ? null : new Set(modelChanges(before, after).map(change => change.id));
+    const changed = invalid(this.projected, snapshot);
+    const changedBefore = comparison ? invalid(this.projectedBefore, comparison) : null;
     this.snapshot = snapshot; this.comparison = comparison; this.signature = signature;
     this.changes.clear();
     if (comparison) for (const change of modelChanges(comparison, snapshot)) this.changes.set(change.id, change);
-    this.addSnapshot(snapshot);
-    if (comparison) {
-      const afterCount = this.parts.length;
-      this.addSnapshot(comparison);
-      for (let i = this.parts.length - 1; i >= afterCount; i -= 1) {
-        const part = this.parts[i]; const change = part.objectId ? this.changes.get(part.objectId) : null;
-        this.shadow.removeShadowCaster(part.mesh);
-        if (!change || change.status === 'added') { this.pickParts.delete(part.mesh.uniqueId); part.mesh.dispose(); this.parts.splice(i, 1); continue; }
-        part.before = true; part.mesh.name = 'before:' + part.mesh.name;
+    const filter = JSON.stringify([...this.changes.values()].map(change => [change.id, change.status]));
+    const nextUnits = new Map<string, RenderPart[]>(); const nextParts: RenderPart[] = [];
+    const project = (before: boolean, invalidated: Set<string> | null) => (key: string, owners: readonly string[], build: () => void): void => {
+      if (before && !owners.some(id => this.changes.has(id))) return;
+      const fullKey = (before ? 'before:' : 'after:') + key; const existing = this.unitParts.get(fullKey);
+      if (existing && invalidated && !owners.some(id => invalidated.has(id)) && (!before || filter === this.beforeFilter)) {
+        nextUnits.set(fullKey, existing); nextParts.push(...existing); return;
       }
-      this.walls.clear();
-      for (const item of snapshot.entities) if (item.type === 'Wall') this.walls.set(item.id, item);
+      const start = this.parts.length; build(); const built = this.parts.splice(start);
+      const retained = built.filter(part => {
+        const change = part.objectId ? this.changes.get(part.objectId) : null;
+        if (before && (!change || change.status === 'added')) {
+          this.shadow.removeShadowCaster(part.mesh); this.pickParts.delete(part.mesh.uniqueId); part.mesh.dispose(); return false;
+        }
+        if (before) { this.shadow.removeShadowCaster(part.mesh); part.before = true; part.mesh.name = 'before:' + part.mesh.name; }
+        return true;
+      });
+      nextUnits.set(fullKey, retained); nextParts.push(...retained);
+    };
+    this.addSnapshot(snapshot, project(false, changed));
+    if (comparison) {
+      this.addSnapshot(comparison, project(true, changedBefore));
+    }
+    const live = new Set(nextParts);
+    for (const part of this.parts) if (!live.has(part)) {
+      this.shadow.removeShadowCaster(part.mesh); this.pickParts.delete(part.mesh.uniqueId); part.mesh.dispose();
+    }
+    this.parts.length = 0; this.parts.push(...nextParts); this.unitParts.clear();
+    for (const [key, parts] of nextUnits) this.unitParts.set(key, parts);
+    this.walls.clear(); for (const item of snapshot.entities) if (item.type === 'Wall') this.walls.set(item.id, item);
+    for (const line of this.comparisonLines) line.mesh.dispose(); this.comparisonLines.length = 0;
+    if (comparison) {
       for (const change of this.changes.values()) {
         if (change.status !== 'modified') continue;
         if (change.before.type === 'AssetFamily' || change.after.type === 'AssetFamily') continue;
@@ -377,6 +422,7 @@ export class ModelScene {
         this.comparisonLines.push({ mesh: line, levelIds: owners });
       }
     }
+    this.projected = structuredClone(snapshot); this.projectedBefore = comparison ? structuredClone(comparison) : null; this.beforeFilter = filter;
     this.applyAppearance(); this.select(this.selectedId);
     if (first) this.frame();
     this.updateCutaway();
@@ -413,6 +459,7 @@ export class ModelScene {
     this.sun.intensity = mode === 'realistic' ? 2.2 : .35;
     this.ambient.intensity = mode === 'realistic' ? .85 : .8;
     this.applyAppearance();
+    this.syncBatches();
   }
 
   select(id: string): void {
@@ -435,6 +482,7 @@ export class ModelScene {
       part.mesh.renderOverlay = !part.before && (selected || hovered);
       part.mesh.overlayColor = part.mesh.outlineColor; part.mesh.overlayAlpha = selected ? .3 : .18;
     }
+    this.syncBatches();
   }
 
   frame(focusId: string | null = this.focusId): void {
@@ -512,23 +560,38 @@ export class ModelScene {
     for (const line of this.comparisonLines) line.mesh.setEnabled(this.levelId === null || line.levelIds.includes(this.levelId));
     const markerVisible = this.levelId === null || this.markerLevelId === this.levelId;
     this.marker?.setEnabled(markerVisible); this.markerLine?.setEnabled(markerVisible);
+    this.syncBatches();
   }
 
+  private syncBatches(): void {
+    this.batches.update(this.parts.map(part => ({ mesh: part.mesh, castsShadow: !part.before && part.surface !== 'floor' })), this.comparison === null);
+    // Review context and ghosts already require individual sorting. Keep the
+    // entire review pass and its caster order consistent with source parts.
+    if (this.comparison) {
+      const map = this.shadow.getShadowMap();
+      if (map) map.renderList = this.parts.filter(part => !part.before && part.surface !== 'floor').map(part => part.mesh);
+    }
+  }
+
+  renderResources(): ReturnType<SceneMeshBatches['resources']> { return this.batches.resources(); }
+
   objectAt(x: number, y: number): string | null {
-    const hit = this.scene.pick(x, y, (mesh) => mesh.isPickable && mesh.isEnabled() && mesh.isVisible && mesh.visibility > 0 && this.pickParts.get(mesh.uniqueId)?.objectId != null);
-    return hit?.pickedMesh ? this.pickParts.get(hit.pickedMesh.uniqueId)?.objectId ?? null : null;
+    const hit = this.batches.pick(x, y, mesh => mesh.isPickable && this.pickParts.get(mesh.uniqueId)?.objectId != null);
+    return hit ? this.pickParts.get(hit.mesh.uniqueId)?.objectId ?? null : null;
   }
 
   referenceAt(x: number, y: number): SpatialReference | null {
     if (!this.snapshot) return null;
-    const hit = this.scene.pick(x, y, (mesh) => mesh.isEnabled() && mesh.isVisible && this.parts.some((part) => part.mesh === mesh && !part.before && (part.surface === 'floor' || part.wallId !== null)));
-    if (!hit?.pickedPoint) return null;
-    const part = this.parts.find((candidate) => candidate.mesh === hit.pickedMesh);
+    const hit = this.batches.pick(x, y, mesh => {
+      const part = this.pickParts.get(mesh.uniqueId); return !!part && !part.before && (part.surface === 'floor' || part.wallId !== null);
+    });
+    if (!hit) return null;
+    const part = this.pickParts.get(hit.mesh.uniqueId);
     if (this.snapshot.version === 2 && part?.surface === 'floor') {
       const level = part.levelIds[0];
-      if (!level || Math.abs(hit.pickedPoint.y - entityElevation(this.snapshot, level)) > .03) return null;
+      if (!level || Math.abs(hit.point.y - entityElevation(this.snapshot, level)) > .03) return null;
     }
-    return referenceFromHit(this.snapshot, hit.pickedPoint, part?.wallId ?? null, part?.levelIds[0]);
+    return referenceFromHit(this.snapshot, hit.point, part?.wallId ?? null, part?.levelIds[0]);
   }
 
   mark(reference: SpatialReference | null): void {
@@ -566,6 +629,7 @@ export class ModelScene {
 
   private clearModel(): void {
     this.mark(null);
+    this.batches.clear(); this.unitParts.clear(); this.projected = null; this.projectedBefore = null;
     for (const part of this.parts) { this.shadow.removeShadowCaster(part.mesh); part.mesh.dispose(); }
     this.parts.length = 0; this.walls.clear(); this.pickParts.clear(); this.hoveredId = null;
     for (const line of this.comparisonLines) line.mesh.dispose();

@@ -9,10 +9,11 @@ import { LinkedModelLayer } from './linked-model-render.ts';
 import type { LinkedDisplay } from './linked-model-render.ts';
 import type { LinkedSelection } from '../src/linked-model.ts';
 import type { RenderingMode } from './model-scene.ts';
-import type { ModelSnapshot, Point } from '../src/room-model.ts';
+import type { ModelSnapshot, Point, ProjectId } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 
 export interface ViewerState {
+  projectId?: ProjectId;
   snapshot: ModelSnapshot;
   comparison: ModelSnapshot | null;
   selectedId: string;
@@ -115,7 +116,8 @@ export class ModelViewer {
     this.selection.className = 'model-object-picker'; this.selection.setAttribute('aria-label', 'Select 3D object');
     this.selection.addEventListener('change', () => this.select(this.selection.value));
     this.root.append(this.canvas, this.handle, this.caption, this.selection);
-    this.engine = new Engine(this.canvas, true, { preserveDrawingBuffer: false, stencil: true, powerPreference: 'high-performance' });
+    // ModelScene owns FXAA; the default framebuffer does not need MSAA.
+    this.engine = new Engine(this.canvas, false, { preserveDrawingBuffer: false, stencil: true, powerPreference: 'high-performance' });
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 1.5));
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
@@ -244,7 +246,11 @@ export class ModelViewer {
     const camera = this.model.camera; camera.update();
     const signature = `${camera.alpha}:${camera.beta}:${camera.radius}:${camera.target.toString()}`;
     if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; this.hover(null); }
-    if (this.frames <= 0 && this.model.scene.isReady()) return;
+    const ready = this.model.scene.isReady();
+    // Async shaders/textures can become ready after the last budgeted frame.
+    // Render that transition before publishing readiness or going idle.
+    if (ready && this.root.dataset.sceneReady !== 'true') this.frames = Math.max(1, this.frames);
+    if (this.frames <= 0 && ready) return;
     this.model.scene.render(false); this.frames -= 1;
     this.root.dataset.sceneReady = String(this.model.scene.isReady());
     this.root.dataset.activeMeshes = String(this.model.scene.getActiveMeshes().length);
@@ -259,8 +265,9 @@ export class ModelViewer {
 
   show(host: HTMLElement, state: ViewerState): void {
     let next: ActiveViewerState = { ...state, levelId: state.levelId ?? null, roofVisible: state.roofVisible ?? true };
-    if (this.drag && (!state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
-    if (!state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
+    const projectChanged = this.state?.projectId !== next.projectId;
+    if (this.drag && (projectChanged || !state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
+    if (projectChanged || !state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
     next = { ...next, selectedId: this.comparisonSelection ?? state.selectedId };
     const inLevel = (snapshot: ModelSnapshot | null, id: string): boolean => {
       const item = snapshot?.entities.find((candidate) => candidate.id === id);
@@ -275,7 +282,7 @@ export class ModelViewer {
     }
     const focusChanged = this.state?.focusId !== state.focusId;
     const levelChanged = this.state?.levelId !== next.levelId;
-    const viewChanged = !this.active || this.root.parentElement !== host || focusChanged || levelChanged
+    const viewChanged = !this.active || projectChanged || this.root.parentElement !== host || focusChanged || levelChanged
       || this.state?.mode !== next.mode || this.state?.cutaway !== next.cutaway || this.state?.roofVisible !== next.roofVisible
       || JSON.stringify([this.state?.snapshot, this.state?.comparison]) !== JSON.stringify([next.snapshot, next.comparison]);
     if (viewChanged) { this.pointer.cancelClick(); this.hover(null); }
@@ -287,7 +294,7 @@ export class ModelViewer {
     }
     this.selection.value = next.selectedId;
     if (this.root.parentElement !== host) host.replaceChildren(this.root);
-    this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison); this.model.select(this.linkedSelection ? '' : next.selectedId);
+    this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison, state.projectId ?? null); this.model.select(this.linkedSelection ? '' : next.selectedId);
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
     if (focusChanged || levelChanged) this.model.frame(state.focusId);
     this.model.setCutaway(state.cutaway);

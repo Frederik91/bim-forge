@@ -3219,7 +3219,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
-    modelViewer.show(host, { snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
+    modelViewer.show(host, { projectId: requireRepository().projectId, snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
       interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;

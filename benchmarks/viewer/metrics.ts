@@ -3,10 +3,16 @@ import type { Static } from 'typebox';
 import { Check } from 'typebox/value';
 
 const sampleSchema = Type.Object({ operation: Type.String({ minLength: 1 }), durationMs: Type.Number({ minimum: 0 }),
-  drawCalls: Type.Integer({ minimum: 0 }), triangles: Type.Integer({ minimum: 0 }) }, { additionalProperties: false });
+  drawCalls: Type.Integer({ minimum: 0 }), triangles: Type.Integer({ minimum: 0 }),
+  phases: Type.Optional(Type.Object({ validationMs: Type.Number({ minimum: 0 }), diffMs: Type.Number({ minimum: 0 }),
+    applyMs: Type.Number({ minimum: 0 }), readbackMs: Type.Number({ minimum: 0 }) }, { additionalProperties: false })),
+  resources: Type.Optional(Type.Object({ rebuiltBatches: Type.Integer({ minimum: 0 }), uploadedVertices: Type.Integer({ minimum: 0 }),
+    uploadedIndices: Type.Integer({ minimum: 0 }), preservedBatches: Type.Integer({ minimum: 0 }), batches: Type.Integer({ minimum: 0 }),
+    elements: Type.Integer({ minimum: 0 }), storedTriangles: Type.Integer({ minimum: 0 }) }, { additionalProperties: false })),
+}, { additionalProperties: false });
 export const ResultSchema = Type.Object({
-  version: Type.Literal(1), candidate: Type.Union([Type.Literal('babylon'), Type.Literal('fragments')]),
-  profile: Type.Literal('viewer-192-v1'), purpose: Type.Literal('setup-smoke'),
+  version: Type.Literal(1), candidate: Type.Union([Type.Literal('babylon'), Type.Literal('babylon-batched'), Type.Literal('fragments')]),
+  profile: Type.Literal('viewer-192-v1'), purpose: Type.Union([Type.Literal('setup-smoke'), Type.Literal('initial-local')]),
   status: Type.Union([Type.Literal('completed'), Type.Literal('failed')]), qualified: Type.Literal(false),
   reviewCycles: Type.Integer({ minimum: 1, maximum: 100 }),
   samples: Type.Array(sampleSchema), frameIntervalsMs: Type.Array(Type.Number({ minimum: 0 })),
@@ -25,6 +31,10 @@ export function parseResult(input: unknown, expected?: { candidate: Candidate; r
   if (expected && (input.candidate !== expected.candidate || input.reviewCycles !== expected.reviewCycles)) throw new Error('Benchmark result does not match requested candidate/cycles');
   if (input.samples.some(sample => !Number.isFinite(sample.durationMs))
     || input.frameIntervalsMs.some(value => !Number.isFinite(value))) throw new Error('Non-finite measurements');
+  for (const sample of input.samples) if (sample.phases) {
+    const values = Object.values(sample.phases);
+    if (values.some(value => !Number.isFinite(value)) || values.reduce((sum, value) => sum + value, 0) > sample.durationMs + 1) throw new Error('Invalid timing phase breakdown');
+  }
   if (input.status === 'completed') {
     const operations = { load: 1, select: 1, properties: 1, pick: 1, filter: 1, section: 1,
       proposal: input.reviewCycles, comparison: input.reviewCycles, 'comparison-exit': input.reviewCycles, discard: input.reviewCycles };

@@ -8,6 +8,11 @@ const finite = Type.Number();
 const vec3 = Type.Tuple([finite, finite, finite]);
 const sha256 = Type.String({ pattern: '^[a-f0-9]{64}$' });
 const cameraSchema = Type.Object({ eye: vec3, target: vec3 }, options);
+const sourceEvidence = {
+  sourceHashes: Type.Array(sha256, { minItems: 1 }), permissionEvidence: text,
+  floorAreaEvidence: text, coordinateReference: text, conversionEvidence: text,
+  inventoryEvidence: text, limitations: Type.Array(text),
+};
 const elementSchema = Type.Object({
   id: text, category: text, discipline: text, storey: text, geometryId: text,
   position: vec3, scale: vec3, color: vec3,
@@ -20,14 +25,12 @@ const geometrySchema = Type.Object({ id: text,
 export const ModelSchema = Type.Object({
   version: Type.Literal(1), id: text, revision: text,
   coordinateSystem: Type.Literal('right-handed-y-up-metres'),
-  grossFloorAreaM2: Type.Number({ minimum: 0 }),
+  grossFloorAreaM2: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
   cameraPath: Type.Array(cameraSchema, { minItems: 1 }),
   provenance: Type.Union([
     Type.Object({ kind: Type.Literal('synthetic'), seed: Type.Integer() }, options),
-    Type.Object({ kind: Type.Literal('real'), sourceHashes: Type.Array(sha256, { minItems: 1 }),
-      permissionEvidence: text, floorAreaEvidence: text, coordinateReference: text,
-      conversionEvidence: text, inventoryEvidence: text, limitations: Type.Array(text),
-    }, options),
+    Type.Object({ kind: Type.Literal('real'), ...sourceEvidence }, options),
+    Type.Object({ kind: Type.Literal('public-unverified'), ...sourceEvidence }, options),
   ]),
   geometries: Type.Array(geometrySchema, { minItems: 1 }),
   elements: Type.Array(elementSchema, { minItems: 1 }),
@@ -36,6 +39,29 @@ export type Model = Static<typeof ModelSchema>;
 export type Element = Model['elements'][number];
 export type Geometry = Model['geometries'][number];
 export type Vec3 = Element['position'];
+export const NativeManifestSchema = Type.Object({ version: Type.Literal(1), format: Type.Literal('fragments-3.6.0-raw'),
+  modelId: text, revision: text, sourceSha256: Type.String({ pattern: '^[a-f0-9]{64}$' }), sha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  preprocessorSha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  bytes: Type.Integer({ minimum: 1 }), elements: Type.Integer({ minimum: 1 }), triangles: Type.Integer({ minimum: 1 }),
+  disciplines: Type.Record(Type.String(), Type.Integer({ minimum: 1 })), preparationMs: Type.Number({ minimum: 0 }),
+  qualified: Type.Literal(false), grossFloorAreaM2: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+}, options);
+export const FragmentsInputSchema = Type.Union([Type.Object({ kind: Type.Literal('raw-edit') }, options),
+  Type.Object({ kind: Type.Literal('native'), manifest: NativeManifestSchema }, options)]);
+export type NativeManifest = Static<typeof NativeManifestSchema>;
+export function parseFragmentsInput(input: unknown): Static<typeof FragmentsInputSchema> {
+  if (!Check(FragmentsInputSchema, input)) throw new Error('Invalid Fragments input configuration');
+  return input;
+}
+export function assertNativeManifest(manifest: NativeManifest, model: Model, sourceSha256: string): void {
+  const disciplines = Object.fromEntries([...new Set(model.elements.map(item => item.discipline))].map(discipline =>
+    [discipline, model.elements.filter(item => item.discipline === discipline).length]));
+  const trianglesByGeometry = new Map(model.geometries.map(item => [item.id, item.indices.length / 3]));
+  const triangles = model.elements.reduce((sum, item) => sum + (trianglesByGeometry.get(item.geometryId) ?? 0), 0);
+  if (manifest.modelId !== model.id || manifest.revision !== model.revision || manifest.sourceSha256 !== sourceSha256 || manifest.triangles !== triangles
+    || manifest.elements !== model.elements.length || manifest.grossFloorAreaM2 !== model.grossFloorAreaM2
+    || JSON.stringify(Object.entries(manifest.disciplines).sort()) !== JSON.stringify(Object.entries(disciplines).sort())) throw new Error('Native Fragments input does not match the common model');
+}
 export const ProposalSchema = Type.Object({
   id: text, baseRevision: text, nextRevision: text,
   upsert: Type.Array(elementSchema), remove: Type.Array(text),
@@ -44,6 +70,10 @@ export type Proposal = Static<typeof ProposalSchema>;
 export interface Changes { upsert: Element[]; remove: string[] }
 export interface Camera { eye: Vec3; target: Vec3 }
 export interface Readback { id: string; position: Vec3; min: Vec3; max: Vec3 }
+export interface ResourceWork {
+  rebuiltBatches: number; uploadedVertices: number; uploadedIndices: number; preservedBatches: number;
+  batches: number; elements: number; storedTriangles: number;
+}
 export interface Adapter {
   load(model: Model): Promise<void>;
   apply(changes: Changes): Promise<void>;
@@ -56,10 +86,11 @@ export interface Adapter {
   readback(): Promise<Readback[]>;
   frame(): Promise<void>;
   stats(): { drawCalls: number; triangles: number };
+  resources?(): ResourceWork;
   dispose(): Promise<void>;
 }
 
-export function parseModel(input: unknown): Model {
+export function parseModel(input: unknown, ownership: 'copy' | 'transfer' = 'copy'): Model {
   if (!Check(ModelSchema, input)) throw new Error('Invalid viewer model schema');
   const ids = new Set<string>(); const geometries = new Map<string, Geometry>();
   for (const geometry of input.geometries) {
@@ -80,7 +111,7 @@ export function parseModel(input: unknown): Model {
     if ([...camera.eye, ...camera.target].some(value => !Number.isFinite(value))
       || camera.eye.every((value, axis) => value === camera.target[axis])) throw new Error('Invalid camera');
   }
-  return structuredClone(input);
+  return ownership === 'copy' ? structuredClone(input) : input;
 }
 
 export function applyProposal(base: Model, input: unknown): Model {
@@ -96,7 +127,21 @@ export function applyProposal(base: Model, input: unknown): Model {
     if (touched.has(item.id)) throw new Error('Duplicate proposal change');
     touched.add(item.id); elements.set(item.id, item);
   }
-  return parseModel({ ...base, revision: input.nextRevision, elements: [...elements.values()] });
+  // Proposals replace element records; tessellation is shared and read-only.
+  return parseModel({ ...base, revision: input.nextRevision, elements: structuredClone([...elements.values()]) }, 'transfer');
+}
+
+export function unchangedModel(model: Model): () => boolean {
+  const header = (): string => JSON.stringify({ ...model, geometries: [], elements: [] });
+  const originalHeader = header();
+  const geometries = model.geometries.map(item => JSON.stringify(item));
+  const elements = model.elements.map(item => JSON.stringify(item));
+  // Exact per-record comparisons retain full mutation coverage without another
+  // federation-sized temporary string during every accepted-state assertion.
+  return () => header() === originalHeader
+    && model.geometries.length === geometries.length && model.elements.length === elements.length
+    && model.geometries.every((item, index) => JSON.stringify(item) === geometries[index])
+    && model.elements.every((item, index) => JSON.stringify(item) === elements[index]);
 }
 
 export function changesBetween(before: Element[], after: Element[]): Changes {
@@ -124,8 +169,10 @@ export function comparisonElements(base: Model, proposal: Model): Element[] {
 
 export function admission(model: Model): { qualified: boolean; reasons: string[] } {
   const reasons: string[] = [];
-  if (model.provenance.kind !== 'real') reasons.push('Synthetic fixture cannot qualify a realistic project');
-  if (model.grossFloorAreaM2 < 200000) reasons.push('Gross floor area is below 200,000 m²');
+  if (model.provenance.kind === 'synthetic') reasons.push('Synthetic fixture cannot qualify a realistic project');
+  if (model.provenance.kind === 'public-unverified') reasons.push('Public model identity, area and rights have not been admitted');
+  if (model.grossFloorAreaM2 === null) reasons.push('Gross floor area is unknown');
+  else if (model.grossFloorAreaM2 < 200000) reasons.push('Gross floor area is below 200,000 m²');
   const disciplines = new Set(model.elements.map(item => item.discipline));
   for (const discipline of ['architecture', 'structure', 'mechanical', 'electrical', 'plumbing']) {
     if (!disciplines.has(discipline)) reasons.push('Missing discipline: ' + discipline);
@@ -135,7 +182,7 @@ export function admission(model: Model): { qualified: boolean; reasons: string[]
 }
 
 export function assertReadback(model: Model, elements: Element[], actual: Readback[]): void {
-  if (elements.length !== actual.length || new Set(actual.map(item => item.id)).size !== actual.length) throw new Error('Renderer element count/identity mismatch');
+  if (elements.length !== actual.length || new Set(actual.map(item => item.id)).size !== actual.length) throw new Error('Renderer element count/identity mismatch: expected=' + elements.length + ' actual=' + actual.length + ' unique=' + new Set(actual.map(item => item.id)).size);
   const byId = new Map(actual.map(item => [item.id, item]));
   const geometryBounds = new Map(model.geometries.map(geometry => {
     const min: Vec3 = [Infinity, Infinity, Infinity]; const max: Vec3 = [-Infinity, -Infinity, -Infinity];

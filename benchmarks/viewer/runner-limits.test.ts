@@ -95,7 +95,9 @@ test('real browser evaluations hanging after replay are terminated with failed e
       response.setHeader('Content-Type', 'text/html');
       response.end(`<canvas width="16" height="16"></canvas><script>
         window.viewerBenchmark={run:async()=>(${JSON.stringify(result)}),preview:async()=>{},compare:async()=>{},
-          inspect:async()=>({}),discard:async()=>{},dispose:async()=>{}};
+          inspect:async()=>({}),discard:async()=>{},dispose:async()=>{},
+          focusReview:async(stage)=>{const ctx=document.querySelector('canvas').getContext('2d');
+            ctx.fillStyle=stage==='preview'?'blue':stage==='comparison'?'green':'red';ctx.fillRect(0,0,16,16);return{};}};
         window.viewerBenchmark[${JSON.stringify(method)}]=()=>new Promise(()=>{});
       </script>`);
     });
@@ -104,7 +106,7 @@ test('real browser evaluations hanging after replay are terminated with failed e
       const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing fixture address');
       const passed = await runCandidateProcess({ candidate: 'babylon', output, timeoutMs: 15000, executable: process.execPath,
         args: [fileURLToPath(new URL('./runner-candidate.ts', import.meta.url)), JSON.stringify({
-          candidate: 'babylon', url: 'http://127.0.0.1:' + address.port, output, channel: '', headed: false, cycles: 1, timeout: 15000,
+          candidate: 'babylon', url: 'http://127.0.0.1:' + address.port, output, channel: process.env.VIEWER_BENCHMARK_CHANNEL ?? '', headed: false, cycles: 1, timeout: 15000,
         })],
       });
       assert.equal(passed, false);
