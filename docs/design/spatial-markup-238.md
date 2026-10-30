@@ -33,3 +33,39 @@ All files are owned by the issue238 integration attempt; no concurrent writer sh
 6. Publish qualified paired static/runtime artifacts to the server preview under standing owner authorization, preserving CURRENT model/source data and auth. Retired issue230 publishers must not be replayed. Any new installer must check paths with lstat/lexists before writes and preserve exact service identity/restart fencing and post-stop data authority.
 
 Open a draft PR with source-bound evidence. Human approval remains required for merging the extended conversation/geometry-context contract.
+
+## Qualification and published preview — 30 October 2026
+
+Qualified executable: `f34414f35453801dc9008f6eb88fbe6e49fd931d`.
+Preview: <https://192.168.1.17:9443/>. Runtime image: `sha256:9b3c1cd97fab96c1b3604c44a3cdffeba2dd7798e68b7b2b71d48db8ea0332ce`.
+Receipts and failed attempts remain under `/ssd1/bim-forge-qualification/issue238/`.
+
+| Evidence | Exact scope and outcome |
+| --- | --- |
+| Broad regression at `f49a10a` | `source-03/evidence/full-suite.log`: 977 passing checks, two existing optional skips, zero failures. This predates the later UI refresh, toolbar and tentative-floor fixes; it is not presented as a full-suite run of the final executable. |
+| Final strict validation and build | `source-07/evidence/`: `npm run validate`, explicit 20-path policy check and browser build pass. |
+| Final affected checks | Same source: 19 focused conversation/shape/queue checks and 63 viewer, batching, composer, actual ScriptBox and conversation checks pass. Source meshes provide actual surface normals in both rendering modes. |
+| Final source-hosted browser workflow | `browser-03/`: one actual-app markup workflow plus 14 existing browser checks pass. At DPR 2, draw a rectangle on the 3 m attic floor, orbit, draw a circle and line, undo, cancel, finish a polyline, send, switch chats and restore the reference. Accepted project bytes remain identical. |
+| Tentative-floor regression | The guided floor browser fixture holds the worker after it stages a new storey. The accepted-model location panel stays unavailable during this tentative view; accepted Main remains unchanged. Reconstruction, acceptance, baseline/alternative isolation, restart, phone PDF preparation and source removal still pass. |
+| Actual runtime image | `image-03/`: the pinned production image accepts a region-only request over HTTP, preserves the accepted project, retains the shape after SQLite restart and executes the actual ScriptBox guest with markup context. No credentials or provider are used in this isolated check. |
+| Publication | `publish-f34414f35453801dc9008f6eb88fbe6e49fd931d-01/evidence/`: paired static/runtime publication passed. A read-only, post-stop CURRENT fingerprint of every native/linked table and retained immutable IFC file equals the fingerprint after the new app starts. Original restart policies are restored; public assets match the qualified manifest, ChatGPT is connected and IFC remains configured. No database restore or credential copy occurred. |
+
+The isolated browser workflow verifies application behavior, not public TLS/proxy routing or live-provider quality. Those were checked separately after publication through the real preview UI:
+
+- Created **3D markup — kitchen preview QA238**, project `901c7869-16e9-476d-87e7-09dd9c77b324`.
+- Drew one 3.49 m × 0.58 m floor rectangle and sent exactly **“Add a kitchen here.”**, without a selected native anchor or a kitchen-specific tool.
+- ChatGPT generated a validated proposal on ticket `da970531-b0a5-4460-907e-88801cdc2fdd`: four new asset families and four occurrences for storage/worktop, sink, cooker and refrigerator; no existing entity or relationship changed.
+- Its intent assessment explicitly used the marked dimensions, assumed a freestanding linear kitchenette, reported certainty 87/100 and retained the shell. These are model-generated assessment statements, not independently certified design quality.
+- The accepted head remains `c050c7bdae…`. **No acceptance was made.** The ready proposal remains open in the test project for human review. The exact synthetic ticket, activity, visual context and accepted-project hash are retained in `live-kitchen-ui.json`.
+
+### Failures retained and corrections
+
+Source attempt 1 found a missing test-boundary type annotation; attempt 2 passed strict validation and all 19 focused checks but the broader qualification fixtures correctly refused an archive without Git history. Later runs use an exact Git bundle/checkout. Image attempt 1 incorrectly treated a local image ID as a registry image name; the corrected build verifies an explicit local base tag against the immutable image ID and uses the existing engine without networked build steps or dependency installation. Image attempt 3 used about 679 MB of the original cumulative 2 GiB root-disk allowance; it did not reset that allowance.
+
+Browser attempt 2 passed the markup workflow but exposed an intermittent `Unknown level` error in the existing reconstruction flow. The legacy location panel mixed accepted geometry with a tentative replacement floor's storey. The fix makes that editor unavailable while a live draft is displayed, matching its existing mutation guard. The final test deliberately holds the live draft instead of relying on timing, and retains full page-error stacks. No validator or failure assertion was weakened.
+
+### Limits and rollback
+
+These are approximate planar outlines, not volumetric zones, surveyed measurements or editable BIM objects. A circle retains its exact centre, normal and radius; its rendered segments and axis-aligned bounds do not change its intended shape. Existing scopes, source freshness, constraints and human acceptance remain authoritative. Surface-normal plumbing covers native and linked meshes; this handback does not claim a separate live IFC-surface drawing test, actual-phone gesture test or VR support.
+
+The existing JSON conversation format now admits additional annotation variants. Historical pins/arrows remain valid, but an older application may reject new shape-bearing messages. Keep the old paired static/runtime artifacts for recovery; a downgrade must retain all CURRENT data and account for those new messages. Do not restore an old database snapshot to make an old reader work.
