@@ -493,3 +493,11 @@ manifest publication, exact original retention and unchanged-current checks rema
 The failed run remains retained; the corrected converter/oracle run is pending. This does not
 constitute browser, actual-image, connected-provider or preview qualification. No deployment,
 upstream public release, GitHub merge, live data/auth modification or validator weakening occurred.
+
+## Preview and real-provider handoff, 30 October 2026
+
+Qualified executable `ce21445a98f4f23980d1ab247a2e6a86480e8228` is deployed with its paired static build and immutable converter source. Actual-image attempt59, stopped-state CURRENT/WAL audit60 and installer61 pass. The deployment preserved exact current native/linked fingerprints and immutable IFC sources; ChatGPT remains connected. Full9 remains 948 passing tests and two optional skips. See the [source-bound qualification record](../../experiments/geometry-qualification-230/qualified-status.md) for exact pins, receipts and retained failures.
+
+In the separate synthetic project, real provider turn5 generated a closed-box cabinet family beside an actual linked IFC wall. Final host replay measured 0.873547631076985 m wall clearance and zero support distance. Explicit UI acceptance advanced only Alternative1 to `93baba3be3678a6dd7360358f4daa8d98cbd5fa09f7b54df021889036436e446`; Main and locked As-is remain exactly `15da929cc186cc80d9ef5733c3d327038fbc5745123f23e69e97638eea6b2ad8`. The acceptance journal retains actual native-object final measurements, not only the guest's trial boxes.
+
+This is a guided solid-asset proof. Two new ordinary-furniture attempts failed safely before it and remain in the chat, alongside two earlier failures. Automatic representation selection needs [#237](https://github.com/Frederik91/bim-forge/issues/237); open display surfaces must not be promoted to certified solids. No geometry validator was weakened. PR236 remains unmerged and requires the owner's separate approval.
