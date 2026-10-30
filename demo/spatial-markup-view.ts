@@ -94,6 +94,9 @@ export class SpatialMarkupView {
   }
 
   update(state: MarkupState): void {
+    if (this.state?.annotations.length && !state.annotations.length && state.references.length) {
+      this.panel.hidden = true; this.toggle.setAttribute('aria-expanded', 'false');
+    }
     if (this.state && (state.binding !== this.state.binding || !state.enabled || state.floor.elevation !== this.state.floor.elevation)) this.choose(null);
     this.state = state;
     const signature = JSON.stringify([state.annotations, state.references]);

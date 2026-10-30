@@ -132,6 +132,7 @@ input[aria-invalid="true"] { border: 2px solid #a44932; }
 .model-markup-controls[hidden], .model-markup-toolbar[hidden] { display: none; }
 .model-markup-controls button, .model-markup-controls select { pointer-events: auto; min-height: 36px; padding: .35rem .55rem; font-size: .8rem; border: 1px solid #becac4; border-radius: 6px; background: #fffffff2; color: #203d35; }
 .model-markup-toolbar { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .3rem; padding: .4rem; border: 1px solid #ccd5d0; border-radius: 8px; background: #f8fbf8f5; box-shadow: 0 3px 12px #1d35251a; pointer-events: auto; }
+.model-markup-controls select { width: auto; max-width: 100%; }
 .model-markup-controls button[aria-pressed="true"] { background: #fff0de; border-color: #d96b13; color: #853b00; }
 .model-markup-controls button:disabled { opacity: .5; }
 .model-markup-status { display: block; width: fit-content; max-width: 100%; margin-top: .3rem; border-radius: 5px; padding: .25rem .45rem; background: #fffffff0; color: #593810; font-size: .75rem; }
