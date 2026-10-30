@@ -10,9 +10,10 @@ import { parseConversationVisual } from '../../src/request-conversation.ts';
 import type { MarkupPoint, SpatialMarkup } from '../../src/spatial-markup.ts';
 import { gradeInside, gradeOutside, gradeCentreDistance, measureFootprintBoundaryDistances, TOLERANCE_METRES } from './grader.ts';
 import type { Footprint } from './grader.ts';
+import { gradeBelowWall } from './surface-grader.ts';
 
 const CaseSchema = Type.Object({ id: Type.String(), relation: Type.Union([Type.Literal('inside'), Type.Literal('outside-gap'), Type.Literal('edge-centres'),
-  Type.Literal('undefined-region'), Type.Literal('outside-within-bounds'), Type.Literal('impossible-inside')]),
+  Type.Literal('undefined-region'), Type.Literal('outside-within-bounds'), Type.Literal('impossible-inside'), Type.Literal('surface-wall')]),
   count: Type.Optional(Type.Integer({ minimum: 1, maximum: 32 })), gap: Type.Optional(Type.Number({ minimum: 0 })), instruction: Type.String(),
   widthMetres: Type.Optional(Type.Number({ minimum: .001 })), depthMetres: Type.Optional(Type.Number({ minimum: .001 })), heightMetres: Type.Optional(Type.Number({ minimum: .001 })) });
 const TicketSchema = Type.Object({ id: Type.String(), project: Type.String(), state: Type.String(), error: Type.Union([Type.String(), Type.Null()]),
@@ -100,7 +101,8 @@ for (const entry of value.entries) {
   assert.equal(shapes.length, 1); const shape = shapes[0]; assert.ok(shape);
   const measurements = entities.map(entity => {
     const region = footprint(entity, after);
-    const grade = entry.case.relation === 'inside' || entry.case.relation === 'impossible-inside' ? gradeInside({ markup: shape, footprint: region })
+    const grade = entry.case.relation === 'surface-wall' ? gradeBelowWall({ markup: shape, footprint: region, heightMetres: entry.case.heightMetres ?? 0, gapMetres: entry.case.gap ?? 0 })
+      : entry.case.relation === 'inside' || entry.case.relation === 'impossible-inside' ? gradeInside({ markup: shape, footprint: region })
       : entry.case.relation === 'outside-gap' || entry.case.relation === 'outside-within-bounds' ? shape.kind === 'line'
         ? measureFootprintBoundaryDistances({ markup: shape, footprint: region }) : gradeOutside({ markup: shape, footprint: region, minimumGapMetres: entry.case.gap ?? 0 })
       : gradeCentreDistance({ markup: shape, centre: location(entity, after), targetDistanceMetres: 0 });
