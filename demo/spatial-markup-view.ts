@@ -94,7 +94,7 @@ export class SpatialMarkupView {
   }
 
   update(state: MarkupState): void {
-    if (this.state?.annotations.length && !state.annotations.length && state.references.length) {
+    if (!state.annotations.length && state.references.length && (this.state?.annotations.length || !this.state?.references.length)) {
       this.panel.hidden = true; this.toggle.setAttribute('aria-expanded', 'false');
     }
     if (this.state && (state.binding !== this.state.binding || !state.enabled || state.floor.elevation !== this.state.floor.elevation)) this.choose(null);
