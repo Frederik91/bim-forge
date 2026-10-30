@@ -6,6 +6,8 @@ import { parseConversationReply } from '../src/request-conversation.ts';
 import type { FrozenModelScope } from '../src/model-scope-contract.ts';
 import { entitySpace } from '../src/floor-plan.ts';
 import { requestContext } from './request-context.ts';
+import { parseSpatialMarkup, spatialMarkupDescription } from '../src/spatial-markup.ts';
+import type { SpatialMarkup } from '../src/spatial-markup.ts';
 
 type SnapshotBinding = ConversationVisual['snapshot'];
 
@@ -22,6 +24,7 @@ export function conversationSelection(input: { graph: ModelGraph; selectedObject
 export function conversationInspection(graph: ModelGraph, visual: ConversationVisual): {
   kind: 'inspection'; snapshot: SnapshotBinding; reference: SpatialReference | null;
   context: ReturnType<typeof conversationSelection>;
+  annotations: ConversationVisual['annotations'];
 } {
   if (visual.selectedObjectIds.some(id => !graph.entities.some(entity => entity.id === id))) throw new Error('The stored selection is absent from its bound snapshot.');
   const context = conversationSelection({ graph, selectedObjectIds: visual.selectedObjectIds, visual });
@@ -33,13 +36,14 @@ export function conversationInspection(graph: ModelGraph, visual: ConversationVi
   const reference: SpatialReference | null = pin ? levelId
     ? { kind: 'floor-point', levelId, positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] }
     : { kind: 'floor-point', positionMm: [Math.round(pin.position[0] * 1000), Math.round(pin.position[1] * 1000)] } : null;
-  return { kind: 'inspection', snapshot: structuredClone(visual.snapshot), reference, context: { ...context, levelId } };
+  return { kind: 'inspection', snapshot: structuredClone(visual.snapshot), reference, context: { ...context, levelId }, annotations: structuredClone(visual.annotations) };
 }
 
 /** A visual attachment names the exact displayed snapshot; it never grants write access. */
 export function captureConversationVisual(input: {
   graph: ModelGraph; snapshot: SnapshotBinding; view: '2d' | '3d'; levelId: string | null;
   selectedObjectIds: readonly string[]; reference: SpatialReference | null;
+  markups?: readonly SpatialMarkup[];
 }): ConversationVisual {
   const { graph, reference } = input;
   const selectedObjectIds = [...new Set(input.selectedObjectIds)];
@@ -65,6 +69,7 @@ export function captureConversationVisual(input: {
     annotations.push({ kind: 'pin', position: [wall.start[0] + (wall.end[0] - wall.start[0]) * fraction,
       wall.start[1] + (wall.end[1] - wall.start[1]) * fraction, entityElevation(graph, wall)], label: `Marked wall location: ${wall.name}` });
   }
+  annotations.push(...(input.markups ?? []).map(markup => structuredClone(parseSpatialMarkup(markup))));
   const visual: ConversationVisual = { snapshot: input.snapshot, view: input.view, levelId, selectedObjectIds, annotations };
   return parseConversationReply({ messageId: 'capture', expectedSequence: 0, baseRevisionId: input.snapshot.revisionId, text: 'Visual evidence', sources: [], visual }).visual ?? visual;
 }
@@ -79,4 +84,17 @@ export function requireCurrentVisual(visual: ConversationVisual, current: Snapsh
 export function visualLabel(visual: ConversationVisual): string {
   const snapshot = visual.snapshot.kind === 'accepted' ? 'Accepted model' : `Proposal ${visual.snapshot.proposalName}`;
   return `${snapshot} · ${visual.snapshot.revisionId.slice(0, 10)} · ${visual.view === '2d' ? '2D plan' : '3D'}${visual.levelId ? ` · ${visual.levelId}` : ''}`;
+}
+
+export function conversationMarkups(visual: Pick<ConversationVisual, 'annotations'> | null | undefined): SpatialMarkup[] {
+  return visual?.annotations.filter(annotation => annotation.kind !== 'pin' && annotation.kind !== 'arrow') ?? [];
+}
+
+export function annotationDescription(annotation: ConversationVisual['annotations'][number]): string {
+  if (annotation.kind === 'pin') return `● ${annotation.label}: ${annotation.position.join(', ')} m`;
+  if (annotation.kind === 'arrow') return `↗ ${annotation.label}: ${annotation.from.join(', ')} → ${annotation.to.join(', ')} m`;
+  const location = annotation.kind === 'circle' ? `Centre ${annotation.center.join(', ')} m`
+    : annotation.kind === 'rectangle' ? `Corners ${annotation.corners.map(point => `(${point.join(', ')})`).join(' ')} m`
+    : annotation.kind === 'line' ? `${annotation.from.join(', ')} → ${annotation.to.join(', ')} m` : annotation.points.map(point => `(${point.join(', ')})`).join(' → ') + ' m';
+  return `${spatialMarkupDescription(annotation)} · ${location} · approximate user intent`;
 }

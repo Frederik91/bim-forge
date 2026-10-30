@@ -4,7 +4,7 @@ import { ACTIVITY_STAGES } from '../src/request-activity.ts';
 import type { RequestActivity } from '../src/request-activity.ts';
 import type { RequestState } from './change-requests.ts';
 import { renderSourceContext } from './request-source-ui.ts';
-import { visualLabel } from './request-chat-evidence.ts';
+import { annotationDescription, visualLabel } from './request-chat-evidence.ts';
 import { anchoredChatScrollTop, canDecideProposal, chatDomKey, chatRequestStatus, groupTurnActivity, matchingProposalReview, shouldFollowChat, visibleChatAnchor } from './request-chat-status.ts';
 import type { RequestChatDecision, RequestChatProposalReview } from './request-chat-status.ts';
 export type { RequestChatDecision, RequestChatProposalReview } from './request-chat-status.ts';
@@ -207,9 +207,7 @@ export class RequestChat {
   #visualEvidence(visual: ConversationVisual): HTMLElement {
     const details = node('details', undefined, 'request-chat-visual');
     details.append(node('summary', visualLabel(visual)), node('p', `Selected IDs: ${visual.selectedObjectIds.join(', ') || 'None'}`));
-    for (const annotation of visual.annotations) details.append(node('p', annotation.kind === 'pin'
-      ? `● ${annotation.label}: ${annotation.position.join(', ')} m`
-      : `↗ ${annotation.label}: ${annotation.from.join(', ')} → ${annotation.to.join(', ')} m`));
+    for (const annotation of visual.annotations) details.append(node('p', annotationDescription(annotation)));
     details.append(this.#control('Inspect bound snapshot', () => this.#actions.inspect(visual))); return details;
   }
 

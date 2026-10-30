@@ -26,6 +26,7 @@ import type { EvidenceEntry, EvidencePin, EvidenceReadSet, EvidenceSubject, Evid
 import { GeometryEvidenceSession, geometryNativeInput, encodeGeometryEvidence } from './geometry-evidence.ts';
 import type { GeometryEvidenceSource, GeometryEvidence } from './geometry-evidence.ts';
 import type { GeometrySessionInput } from './geometry-session.ts';
+import { spatialMarkupBounds, spatialMarkupDescription } from './spatial-markup.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
@@ -205,6 +206,7 @@ export const MODEL_PROPOSAL_TOOLS = Object.freeze([Object.freeze({
 })]);
 
 const instructions = `You prepare BIM model proposals for human review using run_model_script only. The source is an async function body with await and return, with no imports, shell, network, filesystem or credentials. Call the typed model API directly, never other tool names.
+request.markupContext contains approximate user-drawn intent in project coordinates [X east, Y north, Z elevation], metres. Lines and polylines indicate paths; rectangles and circles indicate regions on their drawing plane. Interpret "here" using these shapes and their snapshot binding. Circle bounds are axis-aligned extents, not a rectangular requested area. A planar outline has no implied vertical extent. Never treat an outline as measured source evidence, a room boundary, available-space or clearance proof, or permission to modify everything inside it. Inspect actual native and linked geometry using the unified geometry tools, preserve unrelated objects, and explain reasonable assumptions in the proposal. Do not invent a selected native anchor for a region-only request. Historical shapes retain their original snapshot; do not silently rebind them to a newer model.
 ${MODEL_REVIEW_TEXT_GUIDANCE}
 An explicit empty selectedObjectIds array means project/design context with no selected native object. Do not manufacture a native anchor from an IFC attachment or an earlier selection. Use the unified geometry reads for authorized discovery; the frozen design target and model scope still determine authoring authority. Empty selection never expands scope or grants linked writes.
 When request.scope is present, call model.scope() for frozen targets, read-only context, dependencies, writable IDs and the current working graph. model.inspect() and every mutation result expose only that working context. It is a partial graph, never an authoritative standalone project. Use model.previewParameters({edits:[{definitionId,name,value}]}) for typed parameter changes to the frozen targets. Values carry explicit kinds and units; inspect existing parameters before editing. Context is never write permission. Every geometry tool enforces the same frozen write fence, and no tool accepts a proposal. New query matches require a new human review.
@@ -361,6 +363,12 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       await geometry.assertFresh();
     }
     const declarations = await scripts.declarations();
+    const latestUser = options.conversation?.messages.findLast(message => message.kind === 'user');
+    const visual = latestUser?.kind === 'user' ? latestUser.visual : bound.conversationVisual;
+    const markupContext = visual ? { snapshot: visual.snapshot, levelId: visual.levelId, units: 'metres',
+      meaning: 'approximate user intent, not verified geometry or write authority',
+      shapes: visual.annotations.filter(item => item.kind !== 'pin' && item.kind !== 'arrow').map(shape => ({ shape,
+        bounds: spatialMarkupBounds(shape), description: spatialMarkupDescription(shape) })) } : null;
     signal.throwIfAborted();
     await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
       input: { ...(options.conversation ? { conversation: options.conversation } : {}),
@@ -368,6 +376,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
         ...(options.initialDraft ? { priorProposalDraft: modelWorkingGraph(options.initialDraft, bound.scope) } : {}), request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
         ...(bound.target ? { target: bound.target } : {}),
         selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
+        ...(visual ? { conversationVisual: visual } : {}), ...(markupContext?.shapes.length ? { markupContext } : {}),
         ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}),
         ...(bound.scope ? { scope: bound.scope } : {}) },
         selectedObjects: modelWorkingGraph(bound.base.snapshot, bound.scope).entities.filter(item => bound.selectedObjectIds.includes(item.id)),
