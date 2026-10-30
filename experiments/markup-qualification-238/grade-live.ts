@@ -21,6 +21,7 @@ const TicketSchema = Type.Object({ id: Type.String(), project: Type.String(), st
 const EnvelopeSchema = Type.Object({ capturedAt: Type.String(), entries: Type.Array(Type.Object({ case: CaseSchema, status: Type.String(),
   acceptedHeadUnchanged: Type.Optional(Type.Boolean()), ticket: Type.Optional(TicketSchema) }), { maxItems: 32 }) });
 const ReadySchema = Type.Object({ status: Type.Literal('ready'), project: Type.String(), review: Type.Unknown() });
+const DeclinedSchema = Type.Object({ status: Type.Literal('declined'), project: Type.String(), review: Type.Unknown() });
 type SpatialEntity = Extract<Entity, { type: 'Furniture' | 'AssetInstance' | 'Equipment' }>;
 
 function location(entity: SpatialEntity, snapshot: ModelSnapshot): MarkupPoint {
@@ -87,10 +88,18 @@ assert.ok(Check(EnvelopeSchema, value), 'The collected live evidence is malforme
 const results = [];
 for (const entry of value.entries) {
   const ticket = entry.ticket;
+  if (ticket && entry.status === 'needs-input' && entry.case.relation === 'impossible-inside' && Check(DeclinedSchema, ticket.result)) {
+    const shape = parseConversationVisual(ticket.request.conversationVisual).annotations[0];
+    assert.ok(shape?.kind === 'circle' && entry.case.widthMetres && entry.case.depthMetres);
+    const requiredRadius = Math.hypot(entry.case.widthMetres, entry.case.depthMetres) / 2;
+    const before = await RoomRepository.restore(ticket.project); const declined = await RoomRepository.restore(ticket.result.project);
+    const preserved = entry.acceptedHeadUnchanged === true && before.serialize() === declined.serialize();
+    results.push({ case: entry.case.id, ticketId: ticket.id, outcome: preserved && requiredRadius > shape.radius + TOLERANCE_METRES ? 'infeasibility-proved-needs-semantic-review' : 'fail',
+      preserved, requiredRadius, actualRadius: shape.radius, review: ticket.result.review }); continue;
+  }
   if (!ticket || entry.status !== 'ready') {
     results.push({ case: entry.case.id, state: entry.status, outcome: ['undefined-region','impossible-inside'].includes(entry.case.relation) && entry.status === 'needs-input' ? 'manual-semantic-review' : 'not-qualified', error: ticket?.error }); continue;
   }
-  if (entry.case.relation === 'undefined-region') { results.push({ case: entry.case.id, state: entry.status, outcome: 'manual-semantic-review', result: ticket.result }); continue; }
   assert.ok(Check(ReadySchema, ticket.result));
   const before = await RoomRepository.restore(ticket.project); const proposal = await RoomRepository.restore(ticket.result.project);
   const base = before.view(ticket.request.baseRevisionId).snapshot; const after = proposal.view(proposal.head(ticket.request.proposalName)).snapshot;
@@ -101,7 +110,10 @@ for (const entry of value.entries) {
   assert.equal(shapes.length, 1); const shape = shapes[0]; assert.ok(shape);
   const measurements = entities.map(entity => {
     const region = footprint(entity, after);
-    const grade = entry.case.relation === 'surface-wall' ? gradeBelowWall({ markup: shape, footprint: region, heightMetres: entry.case.heightMetres ?? 0, gapMetres: entry.case.gap ?? 0 })
+    const centre = location(entity, after);
+    const midpoint = shape.kind === 'line' ? [(shape.from[0] + shape.to[0]) / 2, (shape.from[1] + shape.to[1]) / 2, (shape.from[2] + shape.to[2]) / 2] satisfies MarkupPoint : null;
+    const grade = entry.case.relation === 'undefined-region' ? { kind: 'supported', value: midpoint !== null && distance(centre, midpoint) <= TOLERANCE_METRES } satisfies { kind: 'supported'; value: boolean }
+      : entry.case.relation === 'surface-wall' ? gradeBelowWall({ markup: shape, footprint: region, heightMetres: entry.case.heightMetres ?? 0, gapMetres: entry.case.gap ?? 0 })
       : entry.case.relation === 'inside' || entry.case.relation === 'impossible-inside' ? gradeInside({ markup: shape, footprint: region })
       : entry.case.relation === 'outside-gap' || entry.case.relation === 'outside-within-bounds' ? shape.kind === 'line'
         ? measureFootprintBoundaryDistances({ markup: shape, footprint: region }) : gradeOutside({ markup: shape, footprint: region, minimumGapMetres: entry.case.gap ?? 0 })
@@ -119,8 +131,9 @@ for (const entry of value.entries) {
   const separation = entry.case.relation === 'edge-centres' ? spacing(shape, entities.map(entity => location(entity, after))) : null;
   const preserved = entry.acceptedHeadUnchanged === true && delta.entities.modified.length === 0 && delta.entities.removed.length === 0
     && delta.relationships.modified.length === 0 && delta.relationships.removed.length === 0;
-  const passed = preserved && entities.length === entry.case.count && measurements.every(item => item.satisfied) && (!separation || separation.satisfied);
-  results.push({ case: entry.case.id, ticketId: ticket.id, outcome: passed ? 'pass' : 'fail', preserved, expectedCount: entry.case.count,
+  const expectedCount = entry.case.count ?? (entry.case.relation === 'undefined-region' ? 1 : undefined);
+  const passed = preserved && entities.length === expectedCount && measurements.every(item => item.satisfied) && (!separation || separation.satisfied);
+  results.push({ case: entry.case.id, ticketId: ticket.id, outcome: passed ? entry.case.relation === 'undefined-region' ? 'midpoint-proved-needs-semantic-review' : 'pass' : 'fail', preserved, expectedCount,
     count: entities.length, shape, measurements, spacing: separation, review: ticket.result.review });
 }
 const receipt = { capturedAt: value.capturedAt, evidenceSha256: createHash('sha256').update(bytes).digest('hex'),
