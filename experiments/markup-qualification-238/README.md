@@ -90,3 +90,35 @@ boundary distances, nonzero/negative elevations, open-path undefined-inside,
 self-intersections, warped inputs, invalid values, winding and input immutability.
 They do not establish browser drawing, actual model-provider quality, proposal
 geometry completeness, acceptance, deployment or production behavior.
+
+## Live proposal receipts
+
+`grade-live.ts` reads a bounded, retained observation file from the parent. It
+restores each frozen base and proposed repository, computes the actual delta,
+checks requested dimensions and preservation, and grades new footprints or
+explicitly requested centres. Circle/concavity traps require a footprint outside
+the actual region while inside its bounding rectangle. No provider review text
+can satisfy those predicates. Edge cases also check the requested spacing.
+
+`surface-grader.ts` independently checks the declared zero-elevation,
+floor-standing cabinet case below a vertical rectangle: complete footprint stays
+on one side of the wall, actual nearest plane gap, horizontal centring, width,
+floor elevation and top below the outline. It abstains on a horizontal reference;
+it is not a general sloping-surface or multi-storey placement oracle.
+
+The open-line case separately checks the midpoint that the provider explicitly
+assumed. The infeasible square/circle case checks the rotation-independent
+half-diagonal radius and unchanged declined repository. Both retain a distinct
+semantic-review outcome: arithmetic does not establish whether the explanation
+honestly disclosed an assumption or declined the incompatible instruction.
+
+Parent-only server commands also include `surface-grader.test.ts`. Keep original
+case instructions, world coordinates, failed attempts and successive observation
+files. A later retry does not erase a first-attempt failure. Recheck accepted
+project hashes between observations; no live proposal in this exercise is accepted.
+
+`cases.json` preserves the original ambiguous "either side" instruction and its
+explicit one-cube clarification. The original count failure and subsequent
+inherited-evidence revision failure remain failures; #240 tracks the latter.
+`line-offset-one` is a separately drawn, fresh request with explicit cardinality,
+not a replacement or relaxed score for the earlier conversation.
