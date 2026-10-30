@@ -4,6 +4,7 @@ import { createMarkupPlane, createSpatialMarkup, parseSpatialMarkup, spatialMark
 import { parseConversationVisual, parseRequestConversation } from './request-conversation.ts';
 import { RoomRepository } from './room-model.ts';
 import { prepareModelProposal } from './model-proposal.ts';
+import type { ModelWorkerSession } from './model-proposal.ts';
 
 const plane = createMarkupPlane({ origin: [0, 0, 3.2], normal: [0, 0, 1] });
 const rectangle = createSpatialMarkup({ tool: 'rectangle', plane, start: [1, 2, 99], end: [4, 4, -1], label: 'Kitchen area' });
@@ -57,7 +58,7 @@ test('the actual worker receives generic region context without a fabricated sel
   const result = await prepareModelProposal(repo, { requestId: 'region-context', proposalName: 'region-context', baseRevisionId: revisionId,
     selectedObjectIds: [], instruction: 'Add a kitchen here', visualIntent: { kind: 'selection' },
     conversationVisual: { ...visual, snapshot: { kind: 'accepted', revisionId }, annotations: [mark] } }, {
-    identity: { provider: 'test', model: 'markup' }, async run(session) {
+    identity: { provider: 'test', model: 'markup' }, async run(session: ModelWorkerSession) {
       assert.ok(session.input && typeof session.input === 'object' && 'request' in session.input);
       const request = session.input.request;
       assert.ok(request && typeof request === 'object' && 'markupContext' in request && 'selectedObjectIds' in request);
