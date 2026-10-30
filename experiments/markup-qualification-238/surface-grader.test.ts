@@ -1,8 +1,14 @@
-import test from 'node:test';
+import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { gradeBelowWall } from './surface-grader.ts';
 import type { Footprint } from './grader.ts';
 import type { SpatialMarkup } from '../../src/spatial-markup.ts';
+
+before(() => {
+  assert.equal(process.env.QUAL_SERVER_CONTAINER, 'issue238');
+  assert.equal(process.platform, 'linux'); assert.ok(existsSync('/.dockerenv'));
+});
 
 const wall: SpatialMarkup = { kind: 'rectangle', label: 'Wall outline', corners: [[1,4,1],[3,4,1],[3,4,2],[1,4,2]] };
 function cabinet(x = 2, y = 3.75, z = 0): Footprint {
