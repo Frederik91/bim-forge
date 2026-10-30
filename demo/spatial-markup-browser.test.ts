@@ -49,7 +49,7 @@ test('draw spatial context through the real app, queue it and replay the saved c
   assert.ok(projectValue && typeof projectValue === 'object' && 'project' in projectValue && typeof projectValue.project === 'string');
   const repo = await RoomRepository.restore(projectValue.project); const before = projectValue.project;
   await page.locator('#view-3d').click();
-  await page.locator('#model-explorer .model-tree-name').getByText('Attic', { exact: true }).click();
+  await page.locator('#model-explorer').getByText('Attic', { exact: true }).click();
   if (await page.locator('#show-roof').isChecked()) await page.locator('#show-roof').uncheck();
   await page.waitForFunction(() => document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready') === 'true');
   assert.equal(await page.locator('canvas:visible').count(), 1);
