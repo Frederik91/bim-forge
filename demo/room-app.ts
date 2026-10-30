@@ -2779,8 +2779,8 @@ function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamer
 function renderVisualPanel(): void {
   const selected = preview?.entities.find((item) => item.id === selectedObject);
   const reference = visibleReference();
-  ui['visual-panel'].hidden = !selected;
-  if (!selected || !preview) return;
+  ui['visual-panel'].hidden = Boolean(liveChatPreview) || !selected;
+  if (liveChatPreview || !selected || !preview) return;
   ui['visual-context'].textContent = `Reference: ${selected.name}. A location does not imply moving this object or its neighbours. Describe what to create, move or copy.`;
   const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
   ui['visual-wall'].replaceChildren(new Option('Optional wall reference', ''), ...view.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
