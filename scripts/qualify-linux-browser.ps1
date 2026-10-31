@@ -24,7 +24,8 @@ foreach ($test in $Tests) {
 New-Item -ItemType Directory -Path $OutputRoot | Out-Null
 $context = Join-Path $OutputRoot 'context'
 $artifacts = Join-Path $OutputRoot 'artifacts'
-New-Item -ItemType Directory -Path $context, $artifacts | Out-Null
+$release = Join-Path $OutputRoot 'release-assets'
+New-Item -ItemType Directory -Path $context, $artifacts, $release | Out-Null
 $containerId = $null
 Push-Location $repository
 try {
@@ -77,6 +78,7 @@ const command = (executable, args) => {
   return (result.stdout + result.stderr).trim();
 };
 const receipt = { source, platform:process.platform, node:process.version, commands:[], results:[],
+  releaseManifestSha256:hash('dist/demo/manifest.json'),
   tools: { chromiumExecutable:chromium.executablePath(), chromium: command(chromium.executablePath(), ['--version']), prlimit: command('/usr/bin/prlimit', ['--version']),
     pdfinfo: command('/usr/bin/pdfinfo', ['-v']), pdftoppm: command('/usr/bin/pdftoppm', ['-v']), pdftotext: command('/usr/bin/pdftotext', ['-v']) },
   networkInterfaces: fs.readdirSync('/sys/class/net'), total:{tests:0, pass:0, fail:0, cancelled:0, skipped:0, todo:0} };
@@ -132,8 +134,14 @@ process.exitCode = receipt.passed ? 0 : 1;
   & docker build --build-arg "QUAL_BASE=$baseTag" --file "$context/Qualification.Dockerfile" --tag $image $context 2>&1 | Tee-Object -FilePath "$artifacts/image-build.txt"
   if ($LASTEXITCODE) { throw 'Linux QA image build failed.' }
   $imageId = (& docker image inspect $image --format '{{.Id}}').Trim()
+  $stagingId = (& docker create --name "bim-forge-linux-browser-assets-258-$run" --label 'bim-forge.qualification=258-linux-browser' --network none --entrypoint /bin/true $imageId).Trim()
+  if ($LASTEXITCODE) { throw 'Cannot create the owned release-asset staging container.' }
+  try {
+    & docker cp "${stagingId}:/qualification/dist/demo/." $release
+    if ($LASTEXITCODE) { throw 'Cannot copy the actual built release into disposable fixture storage.' }
+  } finally { & docker rm $stagingId | Out-Null }
   $name = "bim-forge-linux-browser-258-$run"
-  $containerId = (& docker create --name $name --label 'bim-forge.qualification=258-linux-browser' --network none --read-only --init --cap-drop ALL --security-opt no-new-privileges:true --cpus 2 --memory 4g --memory-swap 4g --pids-limit 512 --shm-size 512m --tmpfs /tmp:rw,nosuid,nodev,size=1g,mode=1777 --mount "type=bind,source=$artifacts,target=/artifacts" --mount "type=bind,source=$artifacts,target=/qualification/artifacts" $imageId).Trim()
+  $containerId = (& docker create --name $name --label 'bim-forge.qualification=258-linux-browser' --network none --read-only --init --cap-drop ALL --security-opt no-new-privileges:true --cpus 2 --memory 4g --memory-swap 4g --pids-limit 512 --shm-size 512m --tmpfs /tmp:rw,nosuid,nodev,size=1g,mode=1777 --mount "type=bind,source=$artifacts,target=/artifacts" --mount "type=bind,source=$artifacts,target=/qualification/artifacts" --mount "type=bind,source=$release,target=/qualification/dist/demo" $imageId).Trim()
   if ($LASTEXITCODE) { throw 'Linux QA container creation failed.' }
   @{ source = $source; image = $image; imageId = $imageId; containerId = $containerId; name = $name; root = $OutputRoot } | ConvertTo-Json | Set-Content -LiteralPath "$artifacts/owned-handles.json"
   & docker inspect $containerId | Set-Content -LiteralPath "$artifacts/container-before.json"
@@ -150,6 +158,7 @@ process.exitCode = receipt.passed ? 0 : 1;
     $summary = Get-Content -LiteralPath "$artifacts/linux-summary.json" -Raw | ConvertFrom-Json
     $summary | Add-Member -NotePropertyName ownedHandles -NotePropertyValue (@{ source = $source; image = $image; imageId = $imageId; containerId = $containerId; name = $name; root = $OutputRoot })
     $summary | Add-Member -NotePropertyName isolation -NotePropertyValue (@{ network = $configuration.NetworkMode; readOnlyRoot = $configuration.ReadonlyRootfs; user = $inspection[0].Config.User; memory = $configuration.Memory; memorySwap = $configuration.MemorySwap; nanoCpus = $configuration.NanoCpus; pids = $configuration.PidsLimit; capDrop = $configuration.CapDrop; securityOpt = $configuration.SecurityOpt; tmpfs = $configuration.Tmpfs; mountDestinations = @($inspection[0].Mounts | ForEach-Object { $_.Destination }) })
+    if ($summary.releaseManifestSha256 -ne (Get-FileHash -LiteralPath "$release/manifest.json" -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'The release manifest changed during the filesystem lifecycle tests.' }
     $inventory = @(Get-ChildItem -LiteralPath $artifacts -Recurse -File | Where-Object { $_.Name -ne 'linux-summary.json' } | ForEach-Object {
       @{ name = [IO.Path]::GetRelativePath($artifacts, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
