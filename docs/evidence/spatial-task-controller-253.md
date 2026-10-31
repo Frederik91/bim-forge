@@ -40,6 +40,22 @@ At that WIP checkpoint the owning cause was not proven; stale switcher state was
 
 ## Implemented boundary and integration surface
 
+### Same-task response ordering repair after independent review
+
+The parent independently reproduced two remaining races at `ca7013d`: an old detail poll could replace a confirmed appended conversation within the same selected-task generation, and an old backlog snapshot could replace a newer detail's request binding. Selection/project generations alone did not order responses inside one task.
+
+Added regressions expecting the new state, then ran them against the unchanged `ca7013d` controller. Both failed: the detail case lacked the expected stale-response rejection; the backlog case returned `ticket-one` instead of confirmed `reply-two`. The constant-timestamp fresh-transition control passed. These were negative proofs of the reported product bugs, not changed assertions accepting the bad state.
+
+The repair is confined to `spatial-tasks.ts`, its unit/browser tests and this evidence. No concurrent `room-app.ts` integration source was edited. Public methods, argument shapes, projection types and exported names are unchanged.
+
+- Validated transcript sequence and its latest user/request binding establish turn freshness. A lower sequence is rejected before either the ticket summary or transcript can change. A higher sequence can advance even when its read was dispatched before a later read carrying an older snapshot. Equal-sequence reads use local causal order; no timestamp or status ranking is used.
+- Confirmed sends/decisions install per-task barriers against in-flight older detail or draft reads. Parsed/raw ticket adapters retain their original project/order provenance; reapplying the same response cannot give it a fresh age. Detail/selection/inspection updates publish together.
+- List snapshots retain newer confirmed details, including tasks absent from an older list, while admitting unrelated tasks. A changed known request/state/attempt/error requires a fresh full detail before that summary can change the task projection. A confirmed new turn clears the previous proposal inspection. A newer initial summary binding also prevents an older first detail from introducing a contradictory transcript.
+- Summary ordering is separate from detail/write barriers, so unchanged backlog polling does not starve a slower live-draft read. Legitimate fresh remote turns and failed→queued→working retry transitions still update with an unchanged `updatedAt` value. The last confirmed decision's accepted-project response is retained over an older in-flight list snapshot.
+- The shipped browser regression now holds an actual same-task GET before a reply, confirms the reply through the real server, then releases the old GET. The latest message remains visible, with no false offline/error state. It also retains the earlier lost-acknowledgement, attachment, task/project switching, accepted-head and cross-task late-poll checks.
+
+Latest evidence for this ordering increment: **22/22 controller unit tests**, **69/69 focused unit checks**, **19/19 shipped browser checks**, build, validation, explicit publication policy and diff checks. Existing Windows PDF/socket qualifications remain the separate limitations below. The successful synthetic controller trace is refreshed with the same-task overlap case.
+
 - `SpatialTasks<Draft>` owns current project/task/draft identity, ticket parsing and summaries, validated conversation projection, inspected proposal projection, offline freshness, per-task draft storage, polling coordination and every change-request endpoint caller.
 - Exports: `SpatialTasks`, `BacklogItem`, `TaskSubmission`, `TaskAcknowledgement`, `TaskGeneration`, `TaskProjection`, `StaleTaskResponse`, `TaskConflict`.
 - Intents/read ports: `setProject`, `startTask`, `selectTask`, `openTask`, `readTask`, `readDraft`, `refresh`, `submit`, `append`, `decide`, `inspectProposal`, `observeWorkspace`, `generation`, `isCurrent`, `requireCurrent`, `key`, `projection`.
@@ -54,9 +70,9 @@ At that WIP checkpoint the owning cause was not proven; stale switcher state was
 - `npm ci --ignore-scripts`: passed, 203 packages installed, 0 reported vulnerabilities.
 - `npm run validate`: passed after the controller extraction, including strict TypeScript, type checking and repository policy.
 - `npm run build:demo`: passed; production room-app bundle includes the extracted controller.
-- Latest controller tests: **11/11 passed**, including the summary-only acknowledgement regression, covering identical lost-acknowledgement envelope/source replay, append sequence replay/conflict draft retention, task ABA and project ABA rejection, independent drafts, delayed submission and decision replies, polling generation isolation, readonly/offline state, later-edit retention and exact task-message inspection.
+- Latest controller tests: **22/22 passed**, including the summary-only acknowledgement regression, the same-task/order/sequence cases above, identical lost-acknowledgement envelope/source replay, append sequence replay/conflict draft retention, task ABA and project ABA rejection, independent drafts, delayed submission and decision replies, polling generation isolation, readonly/offline state, later-edit retention and exact task-message inspection.
 - Existing shipped browser checks: **18/18 passed** in `canvas-studio-browser.test.ts`, `request-chat.test.ts`, and `workspace-shell.test.ts`. Includes source upload, actual proposal display with unchanged accepted head, explicit server acceptance, offline/stale controls, revise-to-focused-composer, one preserved viewer and desktop/phone panel behavior. The newly added shipped task journey also passes as detailed above.
-- Latest focused unit run: **58/58 passed** across controller/conversation/status/evidence/context/composer/source/floor-guide/tabs. The new shipped task-controller browser journey also passes. Earlier broadened run: **64 passed / 1 baseline host failure** across conversation, evidence, status, context, composer, retained sources, controller, floor guide, tabs and draft lifecycle suites. Real cancellation, reply supersession, retry and draft cleanup assertions passed.
+- Latest focused unit run: **69/69 passed** across controller/conversation/status/evidence/context/composer/source/floor-guide/tabs. The new shipped task-controller browser journey also passes. Earlier broadened run: **64 passed / 1 baseline host failure** across conversation, evidence, status, context, composer, retained sources, controller, floor guide, tabs and draft lifecycle suites. Real cancellation, reply supersession, retry and draft cleanup assertions passed.
 - Construction model delta for this refactor: **zero**. Browser fixtures exercise existing proposal/acceptance behavior; no production model/provider/deployment mutation occurred in this lane.
 
 ### Separate baseline Windows limitations
