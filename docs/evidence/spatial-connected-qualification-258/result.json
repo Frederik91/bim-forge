@@ -1,0 +1,11 @@
+{
+  "source": "895e6c26464ceff85acc8da7b7089c4dd44bc042",
+  "started": "2026-10-31T16:16:06.862Z",
+  "finished": "2026-10-31T16:16:38.778Z",
+  "outcome": "passed-proposal-and-explicit-acceptance",
+  "terminalState": "ready",
+  "invocations": 1,
+  "id": "f5b442da-be16-47db-8775-636c8381d129",
+  "projectId": "fbdc36ed-1f9a-4867-a4c3-3a0733485761",
+  "browserErrors": []
+}

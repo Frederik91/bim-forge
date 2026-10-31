@@ -1,3 +1,7 @@
+import { SpatialWorkspacePresentation } from './spatial-workspace-presentation.ts';
+import type { TaskAgentDescriptor } from './spatial-task-layer.ts';
+import { parseTaskPlacement } from '../src/task-placement.ts';
+import type { TaskOrigin, TaskPlacement } from '../src/task-placement.ts';
 import { createResidentialProject } from '../src/residential-floor.ts';
 import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
 import { syntheticResidentialFixture } from '../src/synthetic-residential-fixture.ts';
@@ -6,6 +10,8 @@ import { DesignWorkspace } from './design-workspace.ts';
 import { designSaveStatus } from './design-status.ts';
 import { ProjectEvidenceClient } from './project-evidence-client.ts';
 import { retainSubmittedSources } from './submitted-sources.ts';
+import { SpatialTasks, StaleTaskResponse, TaskConflict } from './spatial-tasks.ts';
+import type { BacklogItem } from './spatial-tasks.ts';
 import { parseDesignTarget, parseFrozenDesignTarget } from '../src/design-targets.ts';
 import type { DesignTarget, FrozenDesignTarget } from '../src/design-targets.ts';
 import { MAX_EVIDENCE_PINS, evidenceCanonical, parseEvidencePin, parseEvidenceUses } from '../src/model-evidence.ts';
@@ -14,13 +20,18 @@ import { ProjectEvidencePanel } from './project-evidence-ui.ts';
 import type { ProjectEvidenceContext } from './project-evidence-ui.ts';
 import { parseRequestSources } from '../src/request-sources.ts';
 import type { RequestSource } from '../src/request-sources.ts';
-import { levels, levelView, entityLevel, stairFootprint } from '../src/building-levels.ts';
+import { levels, levelView, entityLevel } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
-import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint, identifier } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
+import { createModelPlan, renderModelPlan, hitTestModelPlan } from './model-plan.ts';
+import type { ModelPlan, PlanProjection, PlanSource } from './model-plan.ts';
+import { spatialTokens } from './ui/design-tokens.ts';
+import { walkElevation } from './view-navigation.ts';
+import type { ViewIntent, InsidePose, NavigationPoint } from './view-navigation.ts';
 import { LinkedModelPanel } from './linked-model-ui.ts';
 import { LinkedModelClient } from './linked-model-client.ts';
 import { linkedReferenceText, linkedSelectionKey } from '../src/linked-model.ts';
@@ -50,16 +61,15 @@ import { parseIntentAssessment } from '../src/model-intent.ts';
 import type { IntentAssessment } from '../src/model-intent.ts';
 import { RequestSourcePicker, parseSourceContext, renderSourceContext } from './request-source-ui.ts';
 import type { RequestSourceContext } from './request-source-ui.ts';
-import { ModelScopeBuilder, renderScopeEvidence, requestScopeContext, reviewScopeContext } from './model-scope-client.ts';
-import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contract.ts';
+import { ModelScopeBuilder, renderScopeEvidence, reviewScopeContext } from './model-scope-client.ts';
+import type { FrozenModelScope } from '../src/model-scope-contract.ts';
 import { RequestChat, conversationFromTicket } from './request-chat.ts';
 import { RequestComposer } from './request-composer.ts';
 import { FloorPlanGuide, parseFloorGuideDraft } from './floor-plan-guide-ui.ts';
 import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection, conversationMarkups } from './request-chat-evidence.ts';
 import type { SpatialMarkup } from '../src/spatial-markup.ts';
 import { parseConversationReply } from '../src/request-conversation.ts';
-import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
-import { parseRequestDraft } from '../src/request-draft.ts';
+import type { ConversationMessage, ConversationVisual } from '../src/request-conversation.ts';
 import type { RequestDraft } from '../src/request-draft.ts';
 
 type PageName = 'project' | 'request' | 'backlog' | 'activity' | 'review' | 'history' | 'evidence';
@@ -105,7 +115,7 @@ interface ActiveReview extends RequestSourceContext {
   validator: string | undefined;
   decision?: { status: 'pending' | 'accepted' | 'superseded' };
 }
-interface PlanCamera { minX: number; maxX: number; minY: number; maxY: number; scale: number }
+type PlanCamera = PlanProjection;
 interface GestureState {
   id: number;
   root: SVGSVGElement;
@@ -323,28 +333,31 @@ let gesture: GestureState | null = null;
 let activeReview: ActiveReview | null = null;
 let reviewRepository: RoomRepository | null = null;
 let activeTicketId: string | null = null;
-let backlogItems: BacklogItem[] = [];
+const tasks = new SpatialTasks<ReturnType<typeof captureChatDraft>>({
+  retainSources: (projectId, sources) => retainSubmittedSources({ projectId, sources, client: submittedSourceClient }),
+});
 let serverProjectText: string | null = null;
 let serverAcceptedRepository: RoomRepository | null = null;
-let submission: { fingerprint: string; requestId: string } | null = null;
-let chatTicketId: string | null = null;
 let activeChatProposalMessageId: string | null = null;
 let liveChatPreview: RequestDraft | null = null;
 let livePreviewSelection: string | null = null;
 const pausedChatPreviews = new Set<string>();
 let chatVisual: ConversationVisual | null = null;
-let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
-let chatRefreshing = false;
-let chatOffline = false;
-let newDraftId = 'new';
 let chatEvidencePins: readonly EvidencePin[] = [];
 let chatEvidenceEdited = false;
-const chatDrafts = new Map<string, ReturnType<typeof captureChatDraft>>();
 const chatInspectionOrigins = new Map<string, ReturnType<typeof captureChatDraft>>();
 let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = '3d';
+let workspaceView: ViewIntent = { kind: 'inside', motion: 'walk' };
+let insideMotion: 'walk' | 'fly' = 'walk';
+let navigationNotice = '';
+let draftOrigin: TaskOrigin | null = null;
+let draftCreationPose: InsidePose | null = null;
+let draftOriginKey = '';
+
+export function getWorkspaceViewIntent(): ViewIntent { return { ...workspaceView }; }
 let modelViewer: ModelViewer | null = null;
 let linkedDisplays: LinkedDisplay[] = [];
 let linkedSelection: LinkedSelection | null = null;
@@ -355,19 +368,20 @@ let reviewDelta = false;
 let changesTab: ChangesTab = '3d';
 let activityTicketId: string | null = null;
 let activityRequestId: string | null = null;
-let activityRefreshing = false;
 let activitySignature = '';
 let viewerFailed = false;
 let visualDraft: VisualDraft | null = null;
 let visualGesture: VisualGesture | null = null;
 let drawingWidth = 0;
+let drawingHeight = 0;
 const drawingResizeObserver = new ResizeObserver((entries) => {
-  const width = entries[0]?.contentRect.width;
-  if (!width || Math.abs(width - drawingWidth) < .5 || !repo || busy || gesture || visualGesture) return;
-  drawingWidth = width;
+  const width = entries[0]?.contentRect.width; const height = entries[0]?.contentRect.height ?? 0;
+  if (!width || Math.abs(width - drawingWidth) < .5 && Math.abs(height - drawingHeight) < .5 || !repo || busy || gesture || visualGesture) return;
+  drawingWidth = width; drawingHeight = height;
   renderComparison();
 });
 drawingResizeObserver.observe(ui['proposal-drawing']);
+drawingResizeObserver.observe(ui['review-drawing']);
 let authBusy = false;
 let authSession: AuthSession = { status: 'disconnected', connected: false, account: null, models: [], selectedModel: null };
 let authPollTimer: number | null = null;
@@ -396,8 +410,8 @@ const requestChat = new RequestChat(generic('request-chat-mount'), {
   inspect: visual => { void perform(() => inspectChatVisual(visual)); },
 });
 const proposalTray = mountProposalTray(generic('canvas-proposal-tray-mount'), {
-  inspect: messageId => { if (chatOffline || busy || !serverAvailable) return; assertChatProposal(messageId); showPage('review'); },
-  delta: messageId => { if (chatOffline || busy || !serverAvailable) return; assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
+  inspect: messageId => { if (tasks.projection.offline || busy || !serverAvailable) return; assertChatProposal(messageId); showPage('review'); },
+  delta: messageId => { if (tasks.projection.offline || busy || !serverAvailable) return; assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
   decision: dispatchChatProposalDecision,
 });
 const composer = new RequestComposer({ root: generic('request-composer'), form: ui['proposal-form'], input: ui['request-text'],
@@ -457,7 +471,7 @@ function useRetainedSources(sources: readonly RequestSource[]): void {
           || previous.byteLength !== source.byteLength || previous.sha256 !== source.sha256)) throw new Error('A source identity has changed. Reopen the project source library.');
     }
     const combined = parseRequestSources([...new Map([...existing, ...sources].map(source => [source.id, source])).values()]);
-    sourcePicker.restore(requireRepository().projectId, combined); submission = null; chatReply = null;
+    sourcePicker.restore(requireRepository().projectId, combined);
     showPage('request'); showRequestPane('details'); updateControls();
     status('Retained files attached to this chat. Remove individual files from the composer if needed.');
 }
@@ -531,7 +545,7 @@ const evidencePanel = new ProjectEvidencePanel(generic('project-evidence-mount')
   },
   useEvidence: (pins, context, signal) => {
     assertEvidenceDestination(context, signal);
-    chatEvidencePins = pins.map(parseEvidencePin); chatEvidenceEdited = true; submission = null; chatReply = null;
+    chatEvidencePins = pins.map(parseEvidencePin); chatEvidenceEdited = true;
     showPage('request'); showRequestPane('details'); updateControls();
     status(pins.length ? 'Evidence records attached. Their relevance and sources are checked when the agent starts and before acceptance.' : 'Evidence selection cleared for the next message. Earlier messages retain their references.');
   },
@@ -562,7 +576,7 @@ function renderEvidenceContext(): void {
     remove.disabled = busy || selectedDesignTarget.kind === 'baseline';
     remove.addEventListener('click', () => {
       chatEvidencePins = chatEvidencePins.filter(item => item.entryId !== pin.entryId); chatEvidenceEdited = true;
-      submission = null; chatReply = null; updateControls();
+      updateControls();
     });
     chip.append(remove); mount.append(chip);
   }
@@ -590,7 +604,7 @@ async function designAction(action: () => Promise<void>): Promise<void> {
   try { await action(); } finally { busy = false; render(); updateControls(); }
 }
 function beginDesignDraft(): void {
-  closeChat(); newDraftId = `draft-${crypto.randomUUID()}`; sourcePicker.switchDraft(currentChatKey());
+  closeChat(); tasks.startTask(); sourcePicker.switchDraft(currentChatKey());
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = ''; chatVisual = null;
 }
 const designWorkspace = new DesignWorkspace(generic('design-views-mount'), {
@@ -655,14 +669,14 @@ ui['reconstruction-scope'].addEventListener('change', () => { if (ui['reconstruc
 function clearRequestSources(): void {
   floorGuide.clear();
   chatEvidencePins = []; chatEvidenceEdited = false;
-  ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; submission = null; sourcePicker.clear(); scopeBuilder.reset();
+  ui['request-reconstruct'].checked = false; ui['reconstruction-scope'].value = 'floor-plan-reconstruction'; sourcePicker.clear(); scopeBuilder.reset();
 }
 
 function requestDirty(): boolean {
   return dirty() || Boolean(chatVisual) || chatEvidenceEdited || scopeBuilder.dirty || sourcePicker.hasSources || ui['request-reconstruct'].checked || Boolean(ui['request-text'].value.trim());
 }
 
-function currentChatKey(): string { return `${repo?.projectId ?? 'none'}:${chatTicketId ?? newDraftId}`; }
+function currentChatKey(): string { return tasks.key; }
 
 function markupBinding(): string { return `${currentChatKey()}:${selectedRevision}:${selectedBranch}`; }
 function attachMarkup(markups: readonly SpatialMarkup[], binding: string): boolean {
@@ -684,14 +698,17 @@ function attachMarkup(markups: readonly SpatialMarkup[], binding: string): boole
 
 function referenceMarkups(): SpatialMarkup[] {
   if (inspectedChatView) return conversationMarkups(inspectedChatView);
-  const conversation = requestChat.conversation;
-  if (!conversation || conversation.ticketId !== chatTicketId) return [];
+  const conversation = tasks.projection.conversation;
+  if (!conversation || conversation.ticketId !== tasks.projection.ticketId) return [];
   const message = conversation.messages.findLast(item => item.kind === 'user');
-  return message?.kind === 'user' ? conversationMarkups(message.visual) : [];
+  const latest = message?.kind === 'user' ? conversationMarkups(message.visual) : [];
+  const placement = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId)?.taskPlacement;
+  const regions = placement?.kind === 'placed' ? placement.targets.regions.filter(region => region.snapshot.revisionId === selectedRevision && region.snapshot.projectId === repo?.projectId && JSON.stringify(region.snapshot.target) === JSON.stringify(selectedDesignTarget)).map(region => region.markup) : [];
+  return [...new Map([...regions, ...latest].map(markup => [JSON.stringify(markup), markup])).values()];
 }
 const FLOOR_DRAFT_KEY = 'bim-forge-floor-plan-draft-v1:';
 function rememberFloorDraft(): void {
-  if (!repo || busy || chatTicketId || !floorGuide.enabled || !sourcePicker.ready || selectedDesignTarget.kind === 'baseline') return;
+  if (!repo || busy || tasks.projection.ticketId || !floorGuide.enabled || !sourcePicker.ready || selectedDesignTarget.kind === 'baseline') return;
   try {
     sessionStorage.setItem(FLOOR_DRAFT_KEY + repo.projectId, JSON.stringify({ binding: currentChatKey(), projectId: repo.projectId,
       revisionId: selectedDesignHead(), target: selectedDesignTarget, text: ui['request-text'].value, name: ui['proposal-name'].value,
@@ -719,7 +736,7 @@ function recoverFloorDraft(): boolean {
     const sources = Array.isArray(value.sources) && value.sources.length === 0 ? [] : parseRequestSources(value.sources);
     const guide = parseFloorGuideDraft(value.guide);
     selectedDesignTarget = target; selectedRevision = view.revisionId;
-    newDraftId = value.binding.slice(repo.projectId.length + 1); sourcePicker.switchDraft(currentChatKey());
+    tasks.startTask(value.binding.slice(repo.projectId.length + 1)); sourcePicker.switchDraft(currentChatKey());
     sourcePicker.restore(repo.projectId, sources); resetEditor();
     floorGuide.update({ binding: currentChatKey(), projectId: repo.projectId, sources, disabled: busy }); floorGuide.restore(guide);
     ui['request-text'].value = value.text; ui['proposal-name'].value = value.name;
@@ -727,11 +744,116 @@ function recoverFloorDraft(): boolean {
     render(); composer.refresh(); return true;
   } catch (error) { report(error); return false; }
 }
+function taskIdentity(): { projectId: string | undefined; ticketId: string | null; draftId: string } {
+  return { projectId: repo?.projectId, ticketId: tasks.projection.ticketId, draftId: tasks.projection.draftId };
+}
+const spatialWorkspace = new SpatialWorkspacePresentation({
+  stage: generic('workspace-shell').querySelector<HTMLElement>('.workspace-stage') ?? generic('workspace-shell'),
+  panel: generic('workspace-context'),
+  open: identity => { void perform(async () => {
+    if (!repo || identity.projectId !== repo.projectId) return;
+    if (identity.kind === 'task') await openConversation(identity.ticketId);
+    else {
+      const draft = tasks.getDraft(`${identity.projectId}:${identity.draftId}`);
+      if (draft) { saveChatDraft(); sourcePicker.switchDraft(`${identity.projectId}:${identity.draftId}`); restoreChatDraft(draft); }
+      showPage('request'); showRequestPane('details');
+    }
+  }); },
+  returnToTask: () => {
+    const ticket = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId);
+    const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
+    if (!origin) { status('This task is unplaced. Its conversation is available in Tasks.'); return; }
+    if (!ticket && draftCreationPose && returnWorkspaceToPose(draftCreationPose)) return;
+    changeWorkspaceView({ kind: 'overview' }); modelViewer?.frameTaskOrigin(origin.point);
+    status('Showing the saved task point in Overview. A creation eye pose is unavailable; no Walk surface is inferred.');
+  },
+  rebind: () => {
+    if (!repo || tasks.projection.ticketId || !draftOrigin || selectedDesignTarget.kind === 'baseline') return;
+    draftOrigin = { ...draftOrigin, snapshot: { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision } };
+    saveChatDraft(); updateSpatialWorkspace(); status('Draft context refreshed explicitly. Its original point, message and attachments are retained.');
+  },
+});
+let spatialProjectionPending = false;
+tasks.observeWorkspace(() => {
+  if (spatialProjectionPending) return;
+  spatialProjectionPending = true;
+  queueMicrotask(() => { spatialProjectionPending = false; updateSpatialWorkspace(); });
+});
+function ensureDraftOrigin(): void {
+  if (!repo || tasks.projection.ticketId || selectedDesignTarget.kind === 'baseline' || reviewRepository || liveChatPreview) return;
+  if (draftOriginKey !== tasks.key) { draftOriginKey = tasks.key; draftOrigin = null; draftCreationPose = null; }
+  if (draftOrigin) return;
+  const snapshot: TaskOrigin['snapshot'] = { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision };
+  const pose = modelView === '3d' ? captureWorkspaceInsidePose() : null;
+  if (pose) {
+    draftCreationPose = pose;
+    draftOrigin = { snapshot, frame: 'project-engineering-metres', view: '3d', levelId: activeLevelId,
+      point: [pose.eye[0] + pose.forward[0] * 1.25, pose.eye[1] + pose.forward[1] * 1.25, pose.eye[2] - .55 + pose.forward[2] * 1.25] };
+  } else if (modelView === 'plan') {
+    const svg = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg'); const plan = svg ? getWorkspacePlanContext(svg) : null;
+    if (plan) { const point = plan.projection.inverse([plan.width / 2, plan.height / 2]).point;
+      draftOrigin = { snapshot, frame: 'project-engineering-metres', view: '2d', levelId: plan.levelId, point: [...point] }; }
+  }
+}
+function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlacement {
+  ensureDraftOrigin(); const origin = draftOrigin;
+  if (!origin) return { version: 1, kind: 'unplaced', reason: 'not-provided' };
+  if (!repo || origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget)) {
+    throw new Error('The draft source changed. Use Refresh draft context to retain its point and explicitly bind the new source before sending.');
+  }
+  return parseTaskPlacement({ version: 1, kind: 'placed', origin, targets: {
+    objects: selectedObjectIds.map(entityId => ({ kind: 'native', ...origin.snapshot, entityId })),
+    regions: conversationMarkups(chatVisual).map(markup => ({ snapshot: origin.snapshot, markup })),
+  } });
+}
+function currentTaskHighlights(): string[] {
+  const ticket = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId);
+  return ticket ? currentTaskObjectIds(ticket.taskPlacement) : [];
+}
+function currentTaskObjectIds(placement: TaskPlacement): string[] {
+  if (!repo || placement.kind !== 'placed') return [];
+  const repository = repo;
+  return placement.targets.objects.flatMap(ref => ref.kind === 'native' && ref.projectId === repository.projectId
+    && ref.revisionId === selectedRevision && JSON.stringify(ref.target) === JSON.stringify(selectedDesignTarget)
+    && repository.view(selectedRevision).snapshot.entities.some(entity => entity.id === ref.entityId) ? [ref.entityId] : []);
+}
+function spatialDescriptors(): TaskAgentDescriptor[] {
+  if (!repo) return [];
+  const projectId = repo.projectId;
+  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.map(ticket => ({
+    identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state,
+    placement: ticket.taskPlacement.kind === 'placed' ? { kind: 'placed', origin: ticket.taskPlacement.origin.point } : { kind: 'unplaced' },
+    selected: ticket.id === tasks.projection.ticketId, visible: true,
+  }));
+  for (const [key, draft] of tasks.projection.drafts) {
+    if (draft.projectId !== projectId || draft.ticketId || key === tasks.key) continue;
+    descriptors.push({ identity: { kind: 'draft', projectId, draftId: draft.draftId }, title: draft.text.trim().slice(0, 60) || 'New conversation', state: 'unsent',
+      placement: draft.spatial.origin ? { kind: 'placed', origin: draft.spatial.origin.point } : { kind: 'unplaced' }, selected: false, visible: true });
+  }
+  if (!tasks.projection.ticketId) descriptors.push({ identity: { kind: 'draft', projectId, draftId: tasks.projection.draftId }, title: 'New conversation', state: 'unsent',
+    placement: draftOrigin ? { kind: 'placed', origin: draftOrigin.point } : { kind: 'unplaced' }, selected: true, visible: true });
+  return descriptors;
+}
+function updateSpatialWorkspace(): void {
+  const ticket = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId);
+  const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
+  const staleDraft = !ticket && !!origin && (origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget));
+  const stale = ticket?.taskPlacement.kind === 'placed' && (ticket.taskPlacement.origin.snapshot.revisionId !== selectedRevision || ticket.taskPlacement.targets.objects.some(ref => ref.kind === 'ifc'));
+  const resolution = tasks.projection.placementResolution;
+  const unresolved = resolution?.kind === 'placed' ? [resolution.origin, ...resolution.objects, ...resolution.regions].filter(pin => pin.status !== 'current') : [];
+  const showingProposal = !!origin && serverAcceptedRepository?.designTargets().find(view => designKey(view.target) === designKey(parseDesignTarget(origin.snapshot.target)))?.revisionId === origin.snapshot.revisionId && selectedRevision !== origin.snapshot.revisionId;
+  const notice = tasks.projection.offline ? 'Connection unavailable. Showing the last server task state; decisions wait for reconnection.' : unresolved.length ? unresolved.map(pin => `${pin.status}: ${pin.detail}`).join(' ') : staleDraft ? 'Draft source changed. Refresh context explicitly before sending.' : showingProposal ? 'Task targets refer to the accepted model. Showing proposal geometry.' : stale ? 'Saved context is historical or needs source verification. Original targets are retained; inspect their evidence before refreshing context.'
+    : !origin ? 'Unplaced conversation. Open it from Tasks; no spatial point has been inferred.' : '';
+  const descriptors = spatialDescriptors();
+  spatialWorkspace.update(descriptors, notice, !!origin, staleDraft);
+  modelViewer?.setTasks(repo?.projectId ?? null, descriptors);
+}
+
 function captureChatDraft() {
-  return { projectId: repo?.projectId, ticketId: chatTicketId, draftId: newDraftId, text: ui['request-text'].value, name: ui['proposal-name'].value,
+  return { ...taskIdentity(), spatial: { origin: draftOrigin, pose: draftCreationPose, key: draftOriginKey }, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, designTarget: selectedDesignTarget, conversationTarget, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
-    invalid: invalidInput, reply: chatReply, submission, evidencePins: chatEvidencePins, evidenceEdited: chatEvidenceEdited,
+    sources: sourcePicker.ready ? sourcePicker.sources : [], invalid: invalidInput, evidencePins: chatEvidencePins, evidenceEdited: chatEvidenceEdited,
     review: activeReview, reviewTicketId: activeTicketId, proposalMessageId: activeChatProposalMessageId,
     geometryValues: [ui['door-width'].value, ui['door-offset'].value, ui['wall-position'].value, ui['wall-length'].value],
     scope: scopeBuilder.captureDraft(), reconstruction: ui['request-reconstruct'].checked,
@@ -740,7 +862,7 @@ function captureChatDraft() {
 function saveChatDraft(): void {
   if (!repo) return;
   const key = currentChatKey();
-  if (requestDirty()) chatDrafts.set(key, captureChatDraft()); else chatDrafts.delete(key);
+  if (requestDirty()) tasks.saveDraft(key, captureChatDraft()); else tasks.deleteDraft(key);
 }
 function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   if (!draft.model) return;
@@ -749,7 +871,9 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   selectedDesignTarget = draft.designTarget; conversationTarget = draft.conversationTarget;
   selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
   preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
-  invalidInput = draft.invalid; chatReply = draft.reply; submission = draft.submission; newDraftId = draft.draftId;
+  invalidInput = draft.invalid;
+  draftOrigin = draft.spatial.origin; draftCreationPose = draft.spatial.pose; draftOriginKey = draft.spatial.key;
+  if (draft.ticketId) tasks.selectTask(draft.ticketId); else tasks.startTask(draft.draftId);
   chatEvidencePins = draft.evidencePins; chatEvidenceEdited = draft.evidenceEdited;
   activeReview = draft.review; activeTicketId = draft.reviewTicketId; activeChatProposalMessageId = draft.proposalMessageId;
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
@@ -764,14 +888,14 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
 let chatListSignature = '';
 function renderChatSwitcher(): void {
   const projectId = repo?.projectId; const query = input('chat-search').value.toLowerCase();
-  const drafts = [...chatDrafts].filter(([, draft]) => draft.projectId === projectId && !draft.ticketId).map(([key, draft]) => ({
+  const drafts = [...tasks.projection.drafts].filter(([, draft]) => draft.projectId === projectId && !draft.ticketId).map(([key, draft]) => ({
     key, ticket: null, title: draft.text.trim().slice(0, 64) || 'New chat draft', state: 'Unsent draft', at: draft.updatedAt, draft: true,
   }));
-  const tickets = backlogItems.map(ticket => ({ key: `${projectId}:${ticket.id}`, ticket: ticket.id, title: ticket.title,
-    state: stateLabels[ticket.state], at: ticket.updatedAt, draft: chatDrafts.has(`${projectId}:${ticket.id}`) || ticket.id === chatTicketId && requestDirty() }));
+  const tickets = tasks.projection.tickets.map(ticket => ({ key: `${projectId}:${ticket.id}`, ticket: ticket.id, title: ticket.title,
+    state: stateLabels[ticket.state], at: ticket.updatedAt, draft: tasks.projection.drafts.has(`${projectId}:${ticket.id}`) || ticket.id === tasks.projection.ticketId && requestDirty() }));
   const entries = [...drafts, ...tickets].sort((a, b) => b.at - a.at);
   generic('chat-count').textContent = String(entries.length);
-  const ready = backlogItems.filter(ticket => ticket.state === 'ready').length;
+  const ready = tasks.projection.tickets.filter(ticket => ticket.state === 'ready').length;
   ui['open-backlog'].textContent = `Chats · ${entries.length}${ready ? ` · ${ready} ready` : ''}`;
   const signature = JSON.stringify([projectId, query, currentChatKey(), entries]); if (signature === chatListSignature) return; chatListSignature = signature;
   const host = generic('chat-list'); host.replaceChildren();
@@ -782,8 +906,8 @@ function renderChatSwitcher(): void {
     control.addEventListener('click', () => { void perform(async () => {
       if (entry.ticket) await openConversation(entry.ticket);
       else {
-        const draft = chatDrafts.get(entry.key); if (!draft) return;
-        saveChatDraft(); closeChat(); chatTicketId = null; sourcePicker.switchDraft(entry.key); restoreChatDraft(draft);
+        const draft = tasks.getDraft(entry.key); if (!draft) return;
+        saveChatDraft(); closeChat(); tasks.selectTask(null); sourcePicker.switchDraft(entry.key); restoreChatDraft(draft);
         showPage('request'); showRequestPane('details');
       }
       closeChatSwitcher();
@@ -808,7 +932,7 @@ async function discardRequest(message: string): Promise<boolean> {
   generic('discard-request-message').textContent = message;
   target.returnValue = 'keep';
   return new Promise<boolean>((resolve) => {
-    target.addEventListener('close', () => { if (target.returnValue === 'discard') { forgetFloorDraft(currentChatKey()); chatDrafts.delete(currentChatKey()); } resolve(target.returnValue === 'discard'); }, { once: true });
+    target.addEventListener('close', () => { if (target.returnValue === 'discard') { forgetFloorDraft(currentChatKey()); tasks.deleteDraft(currentChatKey()); } resolve(target.returnValue === 'discard'); }, { once: true });
     openDialog(target);
   });
 }
@@ -942,6 +1066,7 @@ function reviewState(review: ActiveReview | null): ReviewState | null {
 }
 
 function showPage(name: PageName): void {
+  modelViewer?.stopNavigation(); endPlanPan();
   if (name !== 'request') { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; }
   if (name === 'review' && !activeReview) return;
   if ((name === 'project' || name === 'history') && !repo) return;
@@ -1121,14 +1246,14 @@ function updateControls() {
   const projectControls: Array<HTMLInputElement | HTMLButtonElement> = [ui['project-name'], ui['create-project'], ui['load-sample'], ui['import-project'], ui['import-server-project']];
   for (const control of projectControls) control.disabled = !writable;
   const geometryControls = [ui['door-width'], ui['door-offset'], ui['wall-position'], ui['wall-length']];
-  for (const control of geometryControls) control.disabled = !authoring || !layout || Boolean(gesture) || Boolean(chatTicketId);
+  for (const control of geometryControls) control.disabled = !authoring || !layout || Boolean(gesture) || Boolean(tasks.projection.ticketId);
   ui['project-template'].disabled = !writable;
   ui['selected-object'].disabled = busy || !preview || dragging;
-  ui['proposal-name'].disabled = !authoring || !preview || Boolean(gesture) || Boolean(chatTicketId);
+  ui['proposal-name'].disabled = !authoring || !preview || Boolean(gesture) || Boolean(tasks.projection.ticketId);
   ui['request-text'].disabled = !authoring || !preview || Boolean(gesture);
-  sourcePicker.setDisabled(!authoring || !preview || Boolean(reviewRepository && !chatTicketId));
-  scopeBuilder.setDisabled(!authoring || !preview || Boolean(reviewRepository) || Boolean(chatTicketId));
-  ui['request-reconstruct'].disabled = !authoring || !preview || Boolean(reviewRepository) || Boolean(chatTicketId);
+  sourcePicker.setDisabled(!authoring || !preview || Boolean(reviewRepository && !tasks.projection.ticketId));
+  scopeBuilder.setDisabled(!authoring || !preview || Boolean(reviewRepository) || Boolean(tasks.projection.ticketId));
+  ui['request-reconstruct'].disabled = !authoring || !preview || Boolean(reviewRepository) || Boolean(tasks.projection.ticketId);
   ui['reconstruction-scope'].disabled = ui['request-reconstruct'].disabled || !ui['request-reconstruct'].checked;
   floorGuide.update({ binding: currentChatKey(), projectId: repo?.projectId ?? '', sources: sourcePicker.ready ? sourcePicker.sources : [],
     disabled: ui['request-reconstruct'].disabled });
@@ -1171,7 +1296,7 @@ function updateControls() {
   ui['recover-save'].disabled = busy;
   const reviewMatches = activeReview?.proposalRevisionId === null || activeReview?.proposalRevisionId === selectedRevision
     || (repo !== null && selectedReviewAt(requireRepository(), selectedRevision)?.review.requestId === activeReview?.requestId);
-  const ticket = backlogItems.find((item) => item.id === activeTicketId);
+  const ticket = tasks.projection.tickets.find((item) => item.id === activeTicketId);
   ui['accept-proposal'].disabled = !authoring || !activeTicketId || ticket?.state !== 'ready' || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || reviewState(activeReview) !== 'pending';
   ui['reject-proposal'].disabled = !authoring || !ticket || ticket.request.requestId !== activeReview?.requestId || !reviewMatches || !['ready', 'needs-input', 'failed'].includes(ticket.state);
   const state = reviewState(activeReview);
@@ -1210,8 +1335,8 @@ function resetEditor() {
   ui['selected-object'].replaceChildren(...objects.map((object) => {
     const option = element('option', object.name); option.value = object.id; return option;
   }));
-  if (!objects.some((object) => object.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
-  if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
+  if (!objects.some((object) => object.id === selectedObject) && !(tasks.projection.ticketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
+  if (tasks.projection.ticketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
   syncInspector();
 }
 
@@ -1322,7 +1447,7 @@ ui['discard-preview'].addEventListener('click', () => {
   if (busy || gesture || visualGesture || !repo) return;
   resetEditor(); renderComparison(); updateControls(); status('Visual request sketch discarded. Saved model history is unchanged.');
 });
-window.addEventListener('beforeunload', (event) => { if (requestDirty() || chatDrafts.size || sourcePicker.hasAnySources) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', (event) => { if (requestDirty() || tasks.projection.drafts.size || sourcePicker.hasAnySources) { event.preventDefault(); event.returnValue = ''; } });
 
 async function perform(action: () => void | Promise<void>): Promise<void> {
   if (busy || gesture || visualGesture) return;
@@ -1345,8 +1470,9 @@ function displayAccepted(next: RoomRepository): void {
   const text = next.serialize();
   savedText = text;
   const projectChanged = repo?.projectId !== next.projectId;
+  if (projectChanged) saveChatDraft();
   if (projectChanged || !next.designTargets().some(view => designKey(view.target) === designKey(selectedDesignTarget))) selectedDesignTarget = { kind: 'main' };
-  if (projectChanged) { newDraftId = 'new'; backlogItems = []; ticketScopes.clear(); submission = null; activeLevelId = null; focusedRoomId = null; closeChat(); }
+  if (projectChanged) { tasks.setProject(next.projectId); tasks.startTask(); activeLevelId = null; focusedRoomId = null; closeChat(); }
   serverProjectText = text;
   serverAcceptedRepository = next;
   historyEpoch += 1; historyLoading = false; historyPage = null; historyProjectId = null;
@@ -1361,7 +1487,7 @@ function displayAccepted(next: RoomRepository): void {
   selectedBranch = 'main';
   selectedRevision = selectedDesignHead(repo); inspectedComparison = null;
   resetEditor();
-  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; clearRequestSources(); sourcePicker.setProject(next.projectId); scopeBuilder.setProject(next.projectId); linkedPanel.setProject(next.projectId); }
+  if (projectChanged) { ui['request-text'].value = ''; ui['proposal-name'].value = ''; sourcePicker.setProject(next.projectId); sourcePicker.switchDraft(currentChatKey()); clearRequestSources(); scopeBuilder.setProject(next.projectId); linkedPanel.setProject(next.projectId); }
   try { localStorage.setItem(LAST_PROJECT, next.projectId); } catch { /* Selection memory is optional; project state is on the server. */ }
   serverConnection(true, `Server saved · accepted ${selectedRevision.slice(0, 10)} · request sketches are unsaved`);
   ui['project-name'].value = next.name;
@@ -1574,7 +1700,7 @@ button('chat-proposal-return').addEventListener('click', () => { void perform(as
   pausedChatPreviews.add(currentChatKey()); liveChatPreview = null; livePreviewSelection = null;
   const origin = chatInspectionOrigins.get(currentChatKey());
   const current = captureChatDraft();
-  if (origin) restoreChatDraft({ ...origin, text: current.text, name: current.name, visual: current.visual, reply: current.reply });
+  if (origin) restoreChatDraft({ ...origin, text: current.text, name: current.name, visual: current.visual });
   else if (repo) displayAccepted(await projects.read(repo.projectId));
   activeChatProposalMessageId = null; inspectedComparison = null; render();
   status('Request model restored. Your message and attachments are retained.');
@@ -1589,11 +1715,14 @@ ui['open-room'].addEventListener('click', () => {
 async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
   if (selectedDesignTarget.kind === 'baseline') throw new Error('Create an alternative from this baseline to request changes.');
-  const accepted = await projects.read(repo.projectId);
   saveChatDraft();
   closeChat();
-  newDraftId = `draft-${crypto.randomUUID()}`;
-  sourcePicker.switchDraft(`${repo.projectId}:${newDraftId}`);
+  tasks.startTask();
+  draftOrigin = null; draftCreationPose = null; draftOriginKey = tasks.key;
+  sourcePicker.switchDraft(`${repo.projectId}:${tasks.projection.draftId}`);
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
+  renderComparison();
+  const accepted = await projects.read(repo.projectId);
   displayAccepted(accepted);
   reviewRepository = null; activeTicketId = null; activeReview = null;
   selectedBranch = 'main'; selectedRevision = selectedDesignHead(repo);
@@ -1622,23 +1751,44 @@ ui['open-backlog'].addEventListener('click', () => {
   input('chat-search').focus();
 });
 ui['nav-review'].addEventListener('click', () => {
-  const ticketId = activeTicketId ?? backlogItems.find(item => item.request.requestId === activeReview?.requestId)?.id;
+  const ticketId = activeTicketId ?? tasks.projection.tickets.find(item => item.request.requestId === activeReview?.requestId)?.id;
   if (ticketId) void perform(() => openTicket(ticketId)); else showPage('review');
 });
 ui['nav-history'].addEventListener('click', () => { showPage('history'); void loadServerHistory(); });
-function switchModelView(next: ModelView): void {
-  if (!repo || modelView === next) return;
+export function captureWorkspaceInsidePose(): InsidePose | null { return modelViewer?.captureInsidePose() ?? null; }
+export function returnWorkspaceToPose(pose: InsidePose): boolean {
+  if (!repo) return false;
+  insideMotion = pose.motion; modelView = '3d'; workspaceView = { kind: 'inside', motion: pose.motion }; renderComparison();
+  const result = modelViewer?.returnToPose(pose);
+  if (result?.kind === 'unsupported') status(result.reason);
+  updateViewChrome(); return result?.kind === 'changed';
+}
+export function changeWorkspaceView(intent: ViewIntent): void {
+  if (!repo) return;
+  if (intent.kind === 'section') { status('Section requires true source-derived cuts. Use native Plan or Overview.'); return; }
   if (gesture) endGesture(true);
   if (visualGesture) endVisualGesture(true);
-  modelView = next;
+  modelViewer?.stopNavigation(); endPlanPan();
+  if (intent.kind === 'inside') insideMotion = intent.motion;
+  navigationNotice = '';
+  workspaceView = intent; modelView = intent.kind === 'plan' ? 'plan' : '3d';
+  if (intent.kind === 'plan') modelViewer?.changeView(intent);
   renderComparison();
-  status(`${next === 'plan' ? 'Plan' : '3D'} view opened at revision ${selectedRevision.slice(0, 10)}. Selection remains ${selectedObject}.`);
+  status(navigationNotice || `${intent.kind === 'inside' ? 'Inside' : intent.kind === 'plan' ? 'Plan' : 'Overview'} opened. Selection and unsent task are retained.`);
+}
+function switchModelView(next: ModelView): void {
+  changeWorkspaceView(next === 'plan' ? { kind: 'plan' } : { kind: 'overview' });
 }
 ui['view-plan'].addEventListener('click', () => switchModelView('plan'));
 ui['view-3d'].addEventListener('click', () => switchModelView('3d'));
-button('show-linked-3d').addEventListener('click', () => { switchModelView('3d'); modelViewer?.frameLinkedModels(); });
 ui['review-plan'].addEventListener('click', () => switchModelView('plan'));
 ui['review-3d'].addEventListener('click', () => switchModelView('3d'));
+for (const prefix of ['', 'review-']) {
+  button(`${prefix}view-inside`).addEventListener('click', () => changeWorkspaceView({ kind: 'inside', motion: insideMotion }));
+  button(`${prefix}view-fly`).addEventListener('click', () => changeWorkspaceView({ kind: 'inside', motion: insideMotion === 'fly' ? 'walk' : 'fly' }));
+  button(`${prefix}mouse-look`).addEventListener('click', () => { void modelViewer?.activateMouseLook().then(mode => status(mode === 'locked' ? 'Mouse-look active. Escape releases movement.' : 'Drag to look. Escape releases movement.')); });
+}
+button('show-linked-3d').addEventListener('click', () => { switchModelView('3d'); modelViewer?.frameLinkedModels(); });
 ui['review-drawing'].addEventListener('click', (event) => {
   if (busy || !(event.target instanceof Element)) return;
   const id = event.target.closest<SVGElement>('[data-object]')?.dataset.object;
@@ -1651,7 +1801,7 @@ ui['review-drawing'].addEventListener('keydown', (event) => {
   if (id) { event.preventDefault(); chooseObject(id); }
 });
 for (const id of ['reset-3d', 'review-reset-3d', 'delta-reset-3d']) button(id).addEventListener('click', () => {
-  modelViewer?.frame();
+  workspaceView = { kind: 'overview' }; modelViewer?.frame(); updateViewChrome();
   status('3D camera framed. Model geometry and revision are unchanged.');
 });
 for (const prefix of ['', 'review-', 'delta-']) {
@@ -1775,7 +1925,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (linkedReferencePending) throw new Error('Wait for the selected reference attachment before sending.');
     if (!repo || !preview || invalidInput) throw new Error('Open a project and fix the request input first.');
     if (selectedDesignTarget.kind === 'baseline') throw new Error('A fixed baseline is read only. Create an alternative first.');
-    if (chatTicketId) { await sendChatReply(); return; }
+    if (tasks.projection.ticketId) { await sendChatReply(); return; }
     if (reviewRepository) throw new Error('Start a new request or revision from the accepted model.');
     const name = ui['proposal-name'].value.trim();
     if (name && (!/^[a-z]+(?:-[a-z]+)*$/.test(name) || name === 'main')) throw new Error('Choose lowercase words separated by hyphens for the proposal name.');
@@ -1787,7 +1937,6 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const scope = scopeBuilder.request();
     const hasMarkup = conversationMarkups(chatVisual).length > 0;
     const implicitNativeSelection = !hasMarkup && linkedSelection === null && selectedObject ? [selectedObject] : [];
-    const contextLevelId = activeLevelId ?? (!hasMarkup && linkedSelection === null ? entityLevel(preview, selectedObject)?.id ?? null : null);
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const frozenTarget = repo.freezeDesignTarget(selectedDesignTarget);
@@ -1795,53 +1944,46 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (explicitTarget && selectedRevision !== frozenTarget.revisionId) throw new Error('Open the current selected design or start a new chat before submitting.');
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: explicitTarget ? frozenTarget.revisionId : selectedRevision,
       ...(explicitTarget ? { target: frozenTarget } : {}),
-      selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...implicitNativeSelection, ...(!hasMarkup && focusedRoomId ? [focusedRoomId] : []),
-        ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
+      selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...implicitNativeSelection])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
       ...(chatEvidencePins.length ? { evidencePins: chatEvidencePins } : {}),
       ...(chatVisual ? { conversationVisual: checkedChatVisual() } : {}),
       ...(scope ? { scope } : {}),
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
-    const fingerprint = JSON.stringify(content);
-    if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint, requestId: globalThis.crypto.randomUUID() };
-    await retainSubmittedSources({ projectId: repo.projectId, sources, client: submittedSourceClient });
+    const taskPlacement = captureTaskPlacement(content.request.selectedObjectIds);
+    saveChatDraft();
+    const acknowledgement = await tasks.submit({ ...content, request: { ...content.request, taskPlacement } });
     void refreshSourceMentions(repo.projectId).catch(() => {});
-    const response = await fetch('/api/change-requests', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...content, request: { ...content.request, requestId: submission.requestId } }),
-    });
-    const acknowledgement = await proposalJson(response);
-    if (!isRecord(acknowledgement)) throw new Error('Invalid request acknowledgement.');
-    const submittedTicket = parseBacklogItem(acknowledgement.ticket);
+    const submittedTicket = acknowledgement.ticket;
     const submittedName = submittedTicket.request.proposalName;
-    chatTicketId = submittedTicket.id;
-    submission = null;
+    tasks.selectTask(submittedTicket.id);
+
     forgetFloorDraft(draftKey);
-    clearRequestSources();
-    chatEvidencePins = submittedTicket.request.evidencePins ?? []; chatEvidenceEdited = false;
-    chatDrafts.delete(draftKey); sourcePicker.switchDraft(currentChatKey());
-    chatVisual = null; composer.setVisual(null);
-    ui['request-text'].value = ''; ui['proposal-name'].value = '';
-    resetEditor(); renderComparison();
+    if (acknowledgement.preserveDraft) {
+      const unsentSources = sourcePicker.sources;
+      sourcePicker.switchDraft(currentChatKey()); sourcePicker.restore(repo.projectId, unsentSources); saveChatDraft();
+    } else {
+      clearRequestSources();
+      chatEvidencePins = submittedTicket.request.evidencePins ?? []; chatEvidenceEdited = false;
+      sourcePicker.switchDraft(currentChatKey()); chatVisual = null; composer.setVisual(null);
+      ui['request-text'].value = ''; ui['proposal-name'].value = '';
+    }
+    tasks.deleteDraft(draftKey);
+    if (!acknowledgement.preserveDraft) resetEditor();
+    renderComparison();
     await refreshBacklog();
     await refreshConversation();
-    status(`“${requestLabel(submittedName)}” started. Continue this conversation below while the agent works.`);
+    status(acknowledgement.preserveDraft ? 'The original submission was confirmed. Your later edits and attachments remain unsent in this conversation.' : `“${requestLabel(submittedName)}” started. Continue this conversation below while the agent works.`);
     showRequestPane('details');
   }).then(() => ui['request-text'].focus());
 });
 
-async function proposalJson(response: Response): Promise<unknown> {
-  let value: unknown;
-  try { value = await response.json(); } catch { throw new Error(`The request service returned unreadable data (HTTP ${response.status}). Retry the same submission safely.`); }
-  if (!response.ok) throw new Error(isRecord(value) && typeof value.error === 'string' ? value.error : `Request service failed (HTTP ${response.status}).`);
-  return value;
-}
-
 function closeChat(): void {
   conversationTarget = null;
+  draftOrigin = null; draftCreationPose = null; draftOriginKey = '';
   chatEvidencePins = []; chatEvidenceEdited = false;
   liveChatPreview = null; livePreviewSelection = null;
-  chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null;
+  tasks.selectTask(null); activeChatProposalMessageId = null; chatVisual = null; inspectedChatView = null;
   requestChat.close(); setConversationOffline(false); proposalTray.show(null); composer.setVisual(null);
 }
 
@@ -1874,11 +2016,11 @@ function chatActivity(value: unknown) {
 }
 
 async function refreshChatModel(value: unknown): Promise<void> {
-  if (!repo || !chatTicketId || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
-  const ticket = parseBacklogItem(value); const projectId = repo.projectId;
-  if (ticket.id !== chatTicketId || ticket.projectId !== projectId) return;
+  if (!repo || !tasks.projection.ticketId || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  const ticket = tasks.parseTicket(value); const projectId = repo.projectId;
+  if (ticket.id !== tasks.projection.ticketId || ticket.projectId !== projectId) return;
   if (ticket.state === 'ready') {
-    const message = requestChat.conversation?.messages.findLast(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === ticket.request.requestId);
+    const message = tasks.projection.conversation?.messages.findLast(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === ticket.request.requestId);
     if (message && (liveChatPreview || activeChatProposalMessageId !== message.id || activeTicketId !== ticket.id)) await openTicket(ticket.id, message, true);
     return;
   }
@@ -1886,12 +2028,11 @@ async function refreshChatModel(value: unknown): Promise<void> {
     if (liveChatPreview) { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; renderComparison(); syncInspector(); updateControls(); }
     return;
   }
-  const response = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(ticket.id)}/draft`));
-  if (!repo || repo.projectId !== projectId || chatTicketId !== ticket.id || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
-  const latest = requestChat.conversation?.messages.findLast(item => item.kind === 'user');
+  const draft = await tasks.readDraft(ticket.id);
+  if (!repo || repo.projectId !== projectId || tasks.projection.ticketId !== ticket.id || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  const latest = tasks.projection.conversation?.messages.findLast(item => item.kind === 'user');
   if (latest?.requestId !== ticket.request.requestId) return;
-  if (!isRecord(response) || !Object.hasOwn(response, 'draft')) throw new Error('Invalid live draft response.');
-  const draft = parseRequestDraft(response.draft);
+
   if (!draft) {
     if (liveChatPreview) { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; renderComparison(); syncInspector(); updateControls(); }
     return;
@@ -1918,22 +2059,23 @@ function inspectLiveObject(id: string, graph: ModelSnapshot): void {
 }
 
 function assertChatProposal(messageId: string): void {
-  const message = requestChat.conversation?.messages.find(item => item.id === messageId);
-  if (messageId !== activeChatProposalMessageId || chatTicketId !== activeTicketId || !activeReview
+  const message = tasks.projection.conversation?.messages.find(item => item.id === messageId);
+  if (messageId !== activeChatProposalMessageId || tasks.projection.ticketId !== activeTicketId || !activeReview
     || message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== activeReview.requestId
     || message.content.proposalRevisionId !== activeReview.proposalRevisionId) throw new Error('Inspect this exact proposal before deciding or comparing it.');
 }
 
 function setChatProposalReview(view: RequestChatProposalReview | null): void {
-  requestChat.setProposalReview(view);
-  proposalTray.show(chatOffline ? null : view);
+  tasks.inspectProposal(view);
+  requestChat.setProposalReview(tasks.projection.inspection);
+  proposalTray.show(tasks.projection.offline ? null : tasks.projection.inspection);
 }
 
 function updateChatProposalCard(): void {
-  if (liveChatPreview || chatOffline) { setChatProposalReview(null); return; }
+  if (liveChatPreview || tasks.projection.offline) { setChatProposalReview(null); return; }
   const review = activeReview; const messageId = activeChatProposalMessageId;
-  if (!review?.proposalRevisionId || !messageId || chatTicketId !== activeTicketId) { setChatProposalReview(null); return; }
-  const message = requestChat.conversation?.messages.find(item => item.id === messageId);
+  if (!review?.proposalRevisionId || !messageId || tasks.projection.ticketId !== activeTicketId) { setChatProposalReview(null); return; }
+  const message = tasks.projection.conversation?.messages.find(item => item.id === messageId);
   if (message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== review.requestId
     || message.content.proposalRevisionId !== review.proposalRevisionId) { setChatProposalReview(null); return; }
   setChatProposalReview({ messageId, requestId: review.requestId, proposalRevisionId: review.proposalRevisionId,
@@ -1946,7 +2088,7 @@ function updateChatProposalCard(): void {
 
 function dispatchChatProposalDecision(action: 'accept' | 'reject' | 'revise', messageId: string): void {
   const control = action === 'accept' ? ui['accept-proposal'] : action === 'reject' ? ui['reject-proposal'] : ui['request-revision'];
-  if (control.disabled || chatOffline || busy || gesture || visualGesture || !serverAvailable) return;
+  if (control.disabled || tasks.projection.offline || busy || gesture || visualGesture || !serverAvailable) return;
   if (action === 'revise') { void decideChatProposal(action, messageId).catch(report); return; }
   void perform(() => decideChatProposal(action, messageId));
 }
@@ -1957,21 +2099,21 @@ async function decideChatProposal(action: 'accept' | 'reject' | 'revise', messag
     showPage('request'); showRequestPane('details'); ui['request-text'].focus();
     status('Describe the refinement here. Your reply continues this conversation.'); return;
   }
-  const ticket = backlogItems.find(item => item.id === activeTicketId);
+  const ticket = tasks.projection.tickets.find(item => item.id === activeTicketId);
   if (!ticket || !activeReview || ticket.request.requestId !== activeReview.requestId
     || (action === 'accept' ? ticket.state !== 'ready' || reviewState(activeReview) !== 'pending' : !['ready', 'needs-input', 'failed'].includes(ticket.state))) throw new Error('This proposal is no longer eligible for that decision.');
   await decideTicket(ticket.id, action, activeReview.requestId);
 }
 
 function setConversationOffline(offline: boolean): void {
-  chatOffline = offline;
+  tasks.setOffline(offline);
   requestChat.setOffline(offline);
   if (offline) proposalTray.show(null);
 }
 
 function showChatTicket(value: unknown): void {
   const previousMarkups = JSON.stringify(referenceMarkups());
-  const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
+  const ticket = tasks.parseTicket(value); const conversation = conversationFromTicket(value);
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
   conversationTarget = ticket.request.target ?? null;
   selectedDesignTarget = conversationTarget?.target ?? { kind: 'main' };
@@ -1979,7 +2121,7 @@ function showChatTicket(value: unknown): void {
     liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null;
     renderComparison(); syncInspector();
   }
-  chatTicketId = ticket.id; setConversationOffline(false);
+  tasks.receiveTask(value); setConversationOffline(false);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
     title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
@@ -1990,12 +2132,15 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   if (!repo) return;
   saveChatDraft();
   const projectId = repo.projectId;
-  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+  const browsingLevel = activeLevelId; const browsingView = modelView;
+  const value = await tasks.openTask(id);
+  const generation = tasks.generation;
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing conversation.');
-  const ticket = parseBacklogItem(value.ticket);
+  const ticket = tasks.parseTicket(value.ticket);
   if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
-  const key = `${projectId}:${id}`; const draft = chatDrafts.get(key);
-  if (!keepProposal) displayAccepted(await projects.read(projectId));
+  await tasks.readPlacement(id);
+  const key = `${projectId}:${id}`; const draft = tasks.getDraft(key);
+  if (!keepProposal) { const accepted = await projects.read(projectId); tasks.requireCurrent(generation); displayAccepted(accepted); }
   selectedDesignTarget = ticket.request.target?.target ?? { kind: 'main' };
   conversationTarget = ticket.request.target ?? null;
   if (!keepProposal) { selectedRevision = selectedDesignHead(repo ?? undefined); selectedBranch = 'main'; }
@@ -2005,15 +2150,17 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   const visual = latestUser?.kind === 'user' ? latestUser.visual : null;
   const context = conversationSelection({ graph: requireRepository().view(selectedRevision).snapshot,
     selectedObjectIds: ticket.request.selectedObjectIds, ...(visual ? { visual } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}) });
-  activeLevelId = context.levelId; focusedRoomId = context.roomId; selectedObject = context.selectedId ?? '';
-  if (context.view) modelView = context.view === '2d' ? 'plan' : '3d';
+  activeLevelId = browsingLevel; focusedRoomId = context.roomId; selectedObject = context.selectedId ?? '';
+  modelView = browsingView;
+  if (ticket.taskPlacement.kind === 'placed') selectedObject = currentTaskObjectIds(ticket.taskPlacement)[0] ?? '';
+  draftOrigin = null; draftCreationPose = null; draftOriginKey = '';
   resetEditor();
   if (!context.selectedId) {
     selectedObject = ''; ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', '', true, true)); syncInspector();
   }
   if (!draft) { clearRequestSources(); chatEvidencePins = ticket.request.evidencePins ?? []; chatEvidenceEdited = false; }
   ui['request-text'].value = ''; ui['proposal-name'].value = '';
-  chatVisual = null; chatReply = null; composer.setVisual(null);
+  chatVisual = null;  composer.setVisual(null);
   showChatTicket(value.ticket);
   if (draft) restoreChatDraft(draft); else render();
   showPage('request'); showRequestPane('details'); ui['request-text'].focus(); closeChatSwitcher();
@@ -2023,49 +2170,43 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
 }
 
 async function refreshConversation(): Promise<void> {
-  const id = chatTicketId; const projectId = repo?.projectId;
-  if (!id || !projectId || chatRefreshing) return;
-  chatRefreshing = true;
+  const id = tasks.projection.ticketId; const projectId = repo?.projectId; const generation = tasks.generation;
+  if (!id || !projectId) return;
   try {
-    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
-    if (chatTicketId !== id || repo?.projectId !== projectId) return;
+    const value = await tasks.readTask(id);
+    if (tasks.projection.ticketId !== id || repo?.projectId !== projectId) return;
     if (!isRecord(value)) throw new Error('Missing conversation.');
     showChatTicket(value.ticket);
     await refreshChatModel(value.ticket);
     updateControls();
   } catch (error) {
-    if (chatTicketId === id && repo?.projectId === projectId) {
+    if (error instanceof StaleTaskResponse) return;
+    if (tasks.isCurrent(generation) && tasks.projection.ticketId === id && repo?.projectId === projectId) {
       setConversationOffline(true); status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`);
     }
-  } finally { chatRefreshing = false; }
+  }
 }
 
 async function sendChatReply(): Promise<void> {
-  const id = chatTicketId; const conversation = requestChat.conversation;
+  const id = tasks.projection.ticketId; const conversation = tasks.projection.conversation;
   if (!id || !conversation || !repo) throw new Error('Open this conversation again before replying.');
   const target = conversationTarget?.target ?? { kind: 'main' };
   if (designKey(target) !== designKey(selectedDesignTarget)) throw new Error('Reopen this conversation in its bound design before replying.');
   const content = { baseRevisionId: repo.freezeDesignTarget(target).revisionId, text: ui['request-text'].value.trim(), sources: sourcePicker.sources, visual: checkedChatVisual(),
     ...(chatEvidencePins.length || chatEvidenceEdited ? { evidencePins: chatEvidencePins } : {}) };
   const evidenceSelection = chatEvidencePins;
-  const fingerprint = JSON.stringify(content);
-  if (!chatReply || chatReply.fingerprint !== fingerprint) chatReply = { fingerprint, body: parseConversationReply({
-    ...content, messageId: globalThis.crypto.randomUUID(), expectedSequence: conversation.sequence,
-  }) };
-  await retainSubmittedSources({ projectId: repo.projectId, sources: content.sources, client: submittedSourceClient });
-  void refreshSourceMentions(repo.projectId).catch(() => {});
-  const response = await fetch(`/api/change-requests/${encodeURIComponent(id)}/messages`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatReply.body),
-  });
-  if (response.status === 409) {
-    const conflict: unknown = await response.json();
-    chatReply = null; await refreshConversation();
-    throw new Error(`${isRecord(conflict) && typeof conflict.error === 'string' ? conflict.error : 'The conversation changed. Refresh before sending.'} Your draft and attachments are retained.`);
+  let value: Record<string, unknown>;
+  saveChatDraft();
+  try { value = await tasks.append({ ...content, expectedSequence: conversation.sequence }); }
+  catch (error) {
+    if (error instanceof TaskConflict) { await refreshConversation(); throw new Error(`${error.message} Your draft and attachments are retained.`); }
+    throw error;
   }
-  const value = await proposalJson(response);
-  if (chatTicketId !== id || !isRecord(value)) throw new Error('The reply was submitted; reopen the conversation to inspect its acknowledgement.');
-  showChatTicket(value.ticket); chatReply = null; chatVisual = null; chatEvidenceEdited = false; composer.setVisual(null);
-  chatDrafts.delete(currentChatKey());
+  void refreshSourceMentions(repo.projectId).catch(() => {});
+  showChatTicket(value.ticket);
+  if (value.preserveDraft) { saveChatDraft(); await refreshBacklog(); status('The original reply was confirmed. Your later edits and attachments remain unsent.'); return; }
+  chatVisual = null; chatEvidenceEdited = false; composer.setVisual(null);
+  tasks.deleteDraft(currentChatKey());
   clearRequestSources(); chatEvidencePins = evidenceSelection; ui['request-text'].value = ''; visualDraft = null; renderComparison();
   await refreshBacklog(); status('Reply saved on this request. The assistant will continue with the complete conversation and earlier proposal.');
 }
@@ -2091,20 +2232,22 @@ function boundChatProposal(ticket: Record<string, unknown>, message: Conversatio
 }
 
 async function openChatProposal(message: ConversationMessage): Promise<void> {
-  if (!chatTicketId) throw new Error('Open this conversation before inspecting its proposal.');
-  await openTicket(chatTicketId, message);
+  if (!tasks.projection.ticketId) throw new Error('Open this conversation before inspecting its proposal.');
+  await openTicket(tasks.projection.ticketId, message);
 }
 
 async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
   if (!repo || !await discardRequest('Inspect this saved visual evidence and discard the unsent message?')) return;
+  const generation = tasks.generation;
   let model = repo;
-  if (chatTicketId) {
-    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(chatTicketId)}`));
+  if (tasks.projection.ticketId) {
+    const value = await tasks.readTask(tasks.projection.ticketId);
     if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing evidence provenance.');
     for (const version of archivedTickets(value.ticket)) {
       const project = isRecord(version.result) && typeof version.result.project === 'string' ? version.result.project : version.project;
       if (typeof project !== 'string') continue;
       const candidate = await RoomRepository.restore(project);
+      tasks.requireCurrent(generation);
       if (candidate.projectId !== repo.projectId || candidate.root() !== repo.root()) throw new Error('Visual evidence project mismatch.');
       try { candidate.view(visual.snapshot.revisionId); model = candidate; break; } catch { /* Search other retained snapshots. */ }
     }
@@ -2119,72 +2262,29 @@ async function inspectChatVisual(visual: ConversationVisual): Promise<void> {
   render(); showPage('request'); showRequestPane('canvas'); status(`Inspecting ${visualLabel(visual)}. Coordinates belong to this saved snapshot.`);
 }
 
-interface BacklogItem {
-  id: string; projectId: string; title: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
-  request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; target?: FrozenDesignTarget; evidencePins?: readonly EvidencePin[]; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
-  scope?: FrozenModelScope;
-}
-const ticketScopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
-function parseBacklogItem(value: unknown): BacklogItem {
-  if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
-      || typeof value.createdAt !== 'number' || typeof value.updatedAt !== 'number' || typeof value.attempts !== 'number' || (value.error !== null && typeof value.error !== 'string')) throw new Error('Invalid backlog item.');
-  const state = value.state;
-  if (state !== 'queued' && state !== 'working' && state !== 'needs-input' && state !== 'ready'
-      && state !== 'completed' && state !== 'rejected' && state !== 'cancelled' && state !== 'failed') throw new Error('Invalid backlog state.');
-  const requestId = requiredText(value.request, 'requestId');
-  const baseRevisionId = requiredText(value.request, 'baseRevisionId');
-  const target = Object.hasOwn(value.request, 'target') ? parseFrozenDesignTarget(value.request.target) : null;
-  if (target && (target.projectId !== value.projectId || target.revisionId !== baseRevisionId)) throw new Error('Request design target does not match its project and base.');
-  let evidencePins: EvidencePin[] | undefined;
-  if (Object.hasOwn(value.request, 'evidencePins')) {
-    if (!Array.isArray(value.request.evidencePins) || value.request.evidencePins.length > MAX_EVIDENCE_PINS) throw new Error('Invalid request evidence selection.');
-    evidencePins = value.request.evidencePins.map(parseEvidencePin);
-    if (new Set(evidencePins.map(pin => pin.entryId)).size !== evidencePins.length) throw new Error('Duplicate request evidence selection.');
-  }
-  if (!Array.isArray(value.request.selectedObjectIds) || value.request.selectedObjectIds.length > 100) throw new Error('Invalid saved request selection.');
-  const selectedObjectIds = value.request.selectedObjectIds.map(identifier);
-  const requestScope = requestScopeContext(value.request);
-  const frozen = reviewScopeContext(value).scope ?? (isRecord(value.result) && isRecord(value.result.review) ? reviewScopeContext(value.result.review).scope : undefined);
-  if (frozen) {
-    if (frozen.baseRevisionId !== baseRevisionId || !requestScope.scope || JSON.stringify(frozen.query) !== JSON.stringify(requestScope.scope.query)) throw new Error('Frozen scope does not match this request binding.');
-    ticketScopes.set(requestId, { projectId: value.projectId, scope: frozen });
-  }
-  const cached = ticketScopes.get(requestId);
-  const scope = cached?.projectId === value.projectId && cached.scope.baseRevisionId === baseRevisionId
-    && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
-  const first = typeof value.title === 'string' ? value.title : Object.hasOwn(value, 'conversation') ? conversationFromTicket(value).messages.find(message => message.kind === 'user')?.text ?? '' : requiredText(value.request, 'instruction');
-  if (!first.trim() || first.length > 1000) throw new Error('Invalid chat title.');
-  return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
-    ...(scope ? { scope } : {}),
-    request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId,
-      ...(target ? { target } : {}), ...(evidencePins ? { evidencePins } : {}), selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
-}
 async function inspectTicketScope(item: BacklogItem): Promise<void> {
-  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(item.id)}`));
+  const value = await tasks.readTask(item.id);
   if (!isRecord(value)) throw new Error('Missing request scope evidence.');
-  const ticket = parseBacklogItem(value.ticket);
+  const ticket = tasks.parseTicket(value.ticket);
   if (ticket.projectId !== repo?.projectId || ticket.request.requestId !== item.request.requestId) throw new Error('This request changed. Refresh the backlog before inspecting its scope.');
   if (!ticket.scope) throw new Error('No frozen proposal scope is available yet. The submitted query is retained; inspect the scope when the proposal is ready.');
-  backlogItems = backlogItems.map(current => current.id === ticket.id ? ticket : current);
+  tasks.updateTicket(ticket);
   renderBacklog(); status('Frozen targets, read-only context and writable dependency impact opened. No model geometry changed.');
 }
 const stateLabels: Record<RequestState, string> = { queued: 'Queued', working: 'Working', 'needs-input': 'Needs your input',
-  ready: 'Ready for review', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed' };
-let backlogRefreshing = false;
+  ready: 'Ready for review', completed: 'Accepted', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed' };
 async function refreshBacklog(): Promise<void> {
-  if (!repo || backlogRefreshing) return;
-  backlogRefreshing = true;
-  const projectId = repo.projectId;
+  if (!repo) return;
+  const generation = tasks.generation;
+  const projectId = repo.projectId; const previousTickets = JSON.stringify(tasks.projection.tickets);
   try {
-    const value = await proposalJson(await fetch(`/api/projects/${encodeURIComponent(projectId)}/change-requests`));
-    if (!isRecord(value) || !Array.isArray(value.tickets) || (value.project !== null && typeof value.project !== 'string')) throw new Error('Invalid project backlog.');
-    const items = value.tickets.map(parseBacklogItem);
-    if (items.some(item => item.projectId !== projectId)) throw new Error('Backlog contains a different project.');
+    const value = await tasks.refresh();
+    const items = value.tickets;
     const accepted = typeof value.project === 'string' && value.project !== serverProjectText ? await RoomRepository.restore(value.project) : null;
-    if (repo?.projectId !== projectId) return;
+    if (repo?.projectId !== projectId || !tasks.isCurrent(generation, true)) return;
     if (accepted && (accepted.projectId !== projectId || accepted.root() !== repo.root())) throw new Error('Accepted backlog model identity mismatch.');
-    const changed = JSON.stringify(items) !== JSON.stringify(backlogItems);
-    backlogItems = items; serverProjectText = value.project;
+    const changed = JSON.stringify(items) !== previousTickets;
+    serverProjectText = value.project;
     if (accepted) serverAcceptedRepository = accepted;
     serverConnection(true, designSaveStatus({ name: designLabel(), target: selectedDesignTarget,
       displayedRevisionId: selectedDesignHead(repo), serverRevisionId: selectedDesignHead(serverAcceptedRepository ?? repo) }));
@@ -2192,12 +2292,13 @@ async function refreshBacklog(): Promise<void> {
     if (changed) renderBacklog();
     updateControls();
   } catch (error) {
+    if (!tasks.isCurrent(generation, true)) return;
     ui['backlog-connection'].textContent = `Backlog offline · ${error instanceof Error ? error.message : 'retrying'} · server work is independent of this page`;
     if (repo?.projectId === projectId) {
       serverConnection(false, 'Server status unavailable · displayed model is the last accepted state read · no offline acceptance');
       updateControls();
     }
-  } finally { backlogRefreshing = false; }
+  }
 }
 function requestLabel(name: string): string {
   if (!/-[a-p]{32}$/.test(name)) return name;
@@ -2231,7 +2332,7 @@ const requestTabs = REQUEST_TABS.map((tab, index) => {
 });
 
 function renderBacklog(): void {
-  const items = backlogItems.filter((item) => item.projectId === repo?.projectId);
+  const items = tasks.projection.tickets.filter((item) => item.projectId === repo?.projectId);
   const groups = groupRequests(items);
   const ready = items.filter((item) => item.state === 'ready').length;
   const pending = items.filter((item) => item.state === 'queued' || item.state === 'working').length;
@@ -2276,16 +2377,16 @@ function renderBacklog(): void {
 }
 async function openActivity(id: string): Promise<void> {
   if (!await discardRequest('Open request activity and discard the unsent request?')) return;
-  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+  const value = await tasks.readTask(id);
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
-  const ticket = parseBacklogItem(value.ticket);
+  const ticket = tasks.parseTicket(value.ticket);
   if (ticket.projectId !== repo?.projectId) throw new Error('Request project mismatch.');
   clearRequestSources(); ui['request-text'].value = ''; resetEditor(); activityTicketId = id; activitySignature = '';
   renderActivity(value.ticket); showPage('activity');
 }
 
 function renderActivity(value: Record<string, unknown>): void {
-  const ticket = parseBacklogItem(value);
+  const ticket = tasks.parseTicket(value);
   const events = parseRequestActivity(value.activity);
   activityRequestId = ticket.request.requestId;
   if (events.some((event) => event.requestId !== ticket.request.requestId)) throw new Error('Activity belongs to another request revision.');
@@ -2316,15 +2417,15 @@ function renderActivity(value: Record<string, unknown>): void {
 }
 
 async function refreshActivity(): Promise<void> {
-  if (currentPage !== 'activity' || !activityTicketId || !repo || activityRefreshing) return;
-  activityRefreshing = true; const id = activityTicketId; const projectId = repo.projectId;
+  if (currentPage !== 'activity' || !activityTicketId || !repo) return;
+  const id = activityTicketId; const projectId = repo.projectId;
   try {
-    const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
+    const value = await tasks.readTask(id);
     if (currentPage !== 'activity' || activityTicketId !== id || repo?.projectId !== projectId) return;
-    if (!isRecord(value) || !isRecord(value.ticket) || parseBacklogItem(value.ticket).projectId !== projectId) throw new Error('Invalid request activity.');
+    if (!isRecord(value) || !isRecord(value.ticket) || tasks.parseTicket(value.ticket).projectId !== projectId) throw new Error('Invalid request activity.');
     renderActivity(value.ticket);
   } catch { if (activityTicketId === id) generic('activity-connection').textContent = 'Activity connection interrupted. Last recorded actions remain visible; server work continues.'; }
-  finally { activityRefreshing = false; }
+
 }
 button('activity-back').addEventListener('click', () => showPage('backlog'));
 button('activity-open-proposal').addEventListener('click', () => { if (activityTicketId) void perform(() => openTicket(activityTicketId ?? '')); });
@@ -2334,20 +2435,22 @@ for (const action of ['cancel', 'retry']) button(`activity-${action}`).addEventL
 
 async function openTicket(id: string, message?: ConversationMessage, automatic = false): Promise<void> {
   const cameraContext = { level: activeLevelId, room: focusedRoomId, view: modelView };
-  if (chatTicketId !== id) await openConversation(id); else saveChatDraft();
+  if (tasks.projection.ticketId !== id) await openConversation(id); else saveChatDraft();
   if (!reviewRepository && !liveChatPreview && !chatInspectionOrigins.has(currentChatKey())) chatInspectionOrigins.set(currentChatKey(), captureChatDraft());
-  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}`));
-  if (automatic && (chatTicketId !== id || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey()))) return;
+  const generation = tasks.generation;
+  const value = await tasks.readTask(id);
+  if (automatic && (tasks.projection.ticketId !== id || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey()))) return;
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
-  const ticket = parseBacklogItem(value.ticket);
+  const ticket = tasks.parseTicket(value.ticket);
   if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
-  backlogItems = backlogItems.map((item) => item.id === ticket.id ? ticket : item);
+  tasks.updateTicket(ticket);
   if (!isRecord(value.ticket.request)) throw new Error('Missing request binding.');
   const result = parseProposalResponse((message ? boundChatProposal(value.ticket, message) : value.ticket.result) ?? { status: 'declined', project: value.ticket.project, review: {
     ...value.ticket.request, proposalRevisionId: null, summary: 'No model proposal is available for this attempt.',
     rationale: ticket.error ?? `Request ${stateLabels[ticket.state].toLowerCase()}.`, constraints: 'The accepted model has not been changed by this attempt.', uncertainty: 'No validated proposal was produced.',
   } });
   const proposed = await RoomRepository.restore(result.project);
+  tasks.requireCurrent(generation);
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
   if (result.review.target && (result.review.target.projectId !== repo.projectId || result.review.target.revisionId !== result.review.baseRevisionId)) throw new Error('Review target differs from its frozen project/base.');
   if (ticket.request.target && (!result.review.target || designKey(result.review.target.target) !== designKey(ticket.request.target.target))) throw new Error('Review target differs from the conversation design.');
@@ -2364,7 +2467,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   activeLevelId = context.levelId; focusedRoomId = context.roomId;
   selectedObject = context.selectedId ?? selectedObject;
   showChatTicket(value.ticket);
-  const proposalMessage = message ?? requestChat.conversation?.messages.find(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === activeReview?.requestId && item.content.proposalRevisionId === activeReview?.proposalRevisionId);
+  const proposalMessage = message ?? tasks.projection.conversation?.messages.find(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === activeReview?.requestId && item.content.proposalRevisionId === activeReview?.proposalRevisionId);
   activeChatProposalMessageId = proposalMessage?.id ?? null;
   if (automatic) { activeLevelId = cameraContext.level; focusedRoomId = cameraContext.room; modelView = cameraContext.view; }
   resetEditor(); render(); showPage('request');
@@ -2373,7 +2476,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
     if (typeof archived !== 'string') throw new Error('Invalid request history.');
     const version: unknown = JSON.parse(archived);
     if (!isRecord(version)) throw new Error('Invalid earlier request.');
-    const earlier = parseBacklogItem(version);
+    const earlier = tasks.parseTicket(version);
     const detail = element('details'); detail.append(element('summary', `Earlier attempt ${index + 1} · ${requestLabel(earlier.request.proposalName)}`), element('p', earlier.request.instruction));
     const sources = element('section', undefined, 'retained-sources');
     renderSourceContext(sources, earlier.projectId, earlier.request); detail.append(sources);
@@ -2382,17 +2485,17 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   }
 }
 async function decideTicket(id: string, action: string, activityVersion: string | null = null): Promise<void> {
-  const keepChat = currentPage === 'request' && chatTicketId === id;
-  const expectedRequestId = activityVersion ?? (activeTicketId === id && activeReview ? activeReview.requestId : backlogItems.find((item) => item.id === id)?.request.requestId);
+  const keepChat = currentPage === 'request' && tasks.projection.ticketId === id;
+  const expectedRequestId = activityVersion ?? (activeTicketId === id && activeReview ? activeReview.requestId : tasks.projection.tickets.find((item) => item.id === id)?.request.requestId);
   if (!expectedRequestId) throw new Error('Refresh the ticket before deciding.');
-  const value = await proposalJson(await fetch(`/api/change-requests/${encodeURIComponent(id)}/decision`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, decisionId: globalThis.crypto.randomUUID(), expectedRequestId }),
-  }));
-  if (!isRecord(value) || typeof value.project !== 'string') throw new Error('Missing accepted server project.');
+  const generation = tasks.generation; const projectId = repo?.projectId;
+  await tasks.decide({ ticketId: id, action, expectedRequestId });
   if (action === 'accept') {
     if (!repo) throw new Error('Open the accepted project again to view the saved decision.');
     const next = await projects.read(repo.projectId);
-    displayAccepted(next); activeReview = next.review(backlogItems.find((item) => item.id === id)?.request.proposalName ?? '');
+    tasks.requireCurrent(generation);
+    if (repo.projectId !== projectId) return;
+    displayAccepted(next); activeReview = next.review(tasks.projection.tickets.find((item) => item.id === id)?.request.proposalName ?? '');
     renderReview(); showPage('backlog'); status('Proposal accepted. The server model and decision were saved together.');
   } else { showPage('backlog'); status(`Request ${action === 'retry' ? 'queued for another attempt' : action === 'reject' ? 'rejected' : 'cancelled'}.`); }
   await refreshBacklog();
@@ -2410,14 +2513,19 @@ ui['open-current-model'].addEventListener('click', () => {
     status('Opened the current accepted server model.');
   });
 });
-window.setInterval(() => { void refreshBacklog(); void refreshActivity(); void refreshConversation(); }, 2000);
+tasks.startPolling(() => {
+  void tasks.poll('backlog', refreshBacklog);
+  void tasks.poll('activity', refreshActivity);
+  void tasks.poll('conversation', refreshConversation);
+});
+window.addEventListener('pagehide', event => { if (!event.persisted) tasks.dispose(); });
 
 function renderReview() {
   const review = activeReview;
   ui['review-panel'].hidden = !review;
   if (!review) return;
   const state = reviewState(review);
-  const ticket = backlogItems.find((item) => item.id === activeTicketId);
+  const ticket = tasks.projection.tickets.find((item) => item.id === activeTicketId);
   const sourceContext = { ...(ticket?.request.requestId === review.requestId ? parseSourceContext(ticket.request) : {}), ...parseSourceContext(review) };
   renderSourceContext(generic('review-sources'), repo?.projectId ?? '', sourceContext, true);
   renderScopeEvidence(generic('review-scope'), review.scope);
@@ -2454,7 +2562,7 @@ ui['reject-proposal'].addEventListener('click', () => {
   if (activeTicketId) void perform(() => decideTicket(activeTicketId ?? '', 'reject'));
 });
 ui['request-revision'].addEventListener('click', () => {
-  const item = backlogItems.find((ticket) => ticket.id === activeTicketId);
+  const item = tasks.projection.tickets.find((ticket) => ticket.id === activeTicketId);
   if (item) void perform(() => openConversation(item.id, true));
 });
 ui['request-revision'].textContent = 'Continue conversation';
@@ -2538,226 +2646,51 @@ function svgNode<K extends keyof SVGElementTagNameMap>(tag: K, attributes: SvgAt
   return node;
 }
 
-function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, identifier: string, label: string): SVGSVGElement {
+const modelPlans = new WeakMap<SVGSVGElement, ModelPlan>();
+const planBounds = new Map<string, PlanProjection['bounds']>();
+export function getWorkspacePlanContext(root: SVGSVGElement): ModelPlan | null { return modelPlans.get(root) ?? null; }
+function planSource(snapshot: ModelGraph, revisionId: string): PlanSource {
+  return { snapshot, projectId: requireRepository().projectId, target: selectedDesignTarget, revisionId };
+}
+function workspacePlan(fullSnapshot: ModelSnapshot, fullReference: ModelSnapshot | null, identifier: string, label: string,
+  revisionId: string = selectedRevision, referenceId: string = selectedDesignView().baselineRevisionId): SVGSVGElement {
   const displayedSelection = livePreviewSelection ?? selectedObject;
   const available = levels(fullSnapshot);
   const chosen = available.find(item => item.id === activeLevelId) ?? available.find(item => item.elevation === 0) ?? available[0];
   const snapshot = chosen ? levelView(fullSnapshot, chosen.id) : fullSnapshot;
-  const oldLevel = fullReference && chosen ? levels(fullReference).find(item => item.id === chosen.id) : null;
-  const reference = !fullReference ? null : oldLevel ? levelView(fullReference, oldLevel.id)
-    : !chosen || chosen.elevation === 0 && levels(fullReference).length <= 1 ? fullReference
-    : { units: 'm', entities: [], relationships: [] } satisfies ModelGraph;
   const interactive = identifier === 'selected';
   const editable = interactive && !liveChatPreview && Boolean(layout) && !spaces(snapshot).length;
-  const svg = svgNode('svg', { viewBox: '0 0 600 400', role: interactive ? 'group' : 'img', 'aria-labelledby': `${identifier}-title ${identifier}-desc` });
-  if (chosen) svg.dataset.levelId = chosen.id;
-  const door = entry(snapshot);
-  svg.append(svgNode('title', { id: `${identifier}-title` }, label));
-  svg.append(svgNode('desc', { id: `${identifier}-desc` }, `Top-down room plan. ${door ? `Entry door width ${millimetres(door.width)} millimetres.` : 'Entry door absent.'} ${reference ? 'Dashed grey outlines show the comparison revision. Teal shows the selected revision.' : 'The original room is preserved.'}`));
-  const definitions = svgNode('defs');
-  const minorGrid = svgNode('pattern', { id: `${identifier}-grid`, width: 15, height: 15, patternUnits: 'userSpaceOnUse' });
-  minorGrid.append(svgNode('path', { d: 'M 15 0 L 0 0 0 15', fill: 'none', stroke: '#eaf0ed', 'stroke-width': .65 }));
-  const majorGrid = svgNode('pattern', { id: `${identifier}-major`, width: 75, height: 75, patternUnits: 'userSpaceOnUse' });
-  majorGrid.append(svgNode('rect', { width: 75, height: 75, fill: `url(#${identifier}-grid)` }));
-  majorGrid.append(svgNode('path', { d: 'M 75 0 L 0 0 0 75', fill: 'none', stroke: '#dbe5e0', 'stroke-width': .8 }));
-  definitions.append(minorGrid, majorGrid);
-  svg.append(definitions, svgNode('rect', { width: 600, height: 400, fill: `url(#${identifier}-major)` }));
-
-  const walls = snapshot.entities.filter(isWall);
-  const allWalls = [...walls, ...(reference ? reference.entities.filter(isWall) : [])];
-  const coordinates = allWalls.flatMap((wall) => [wall.start, wall.end]);
-  if (!coordinates.length) return svg;
-  const focused = identifier === 'selected' ? spaces(snapshot).find((room) => room.id === focusedRoomId) : null;
-  const camera = editable && gesture ? gesture.camera : focused ? focused.bounds : {
-    minX: Math.min(...coordinates.map(([x]) => x)), maxX: Math.max(...coordinates.map(([x]) => x)),
-    minY: Math.min(...coordinates.map(([, y]) => y)), maxY: Math.max(...coordinates.map(([, y]) => y)),
-  };
-  const { minX, maxX, minY, maxY } = camera;
-  const scale = Math.min((editable ? 350 : 430) / Math.max(maxX - minX, 1), (editable ? 190 : 245) / Math.max(maxY - minY, 1));
-  planCameras.set(svg, { ...camera, scale });
-  const transform = ([x, y]: Point): Point => [300 + (x - (minX + maxX) / 2) * scale, 193 - (y - (minY + maxY) / 2) * scale];
-  const points = (items: Point[]): string => items.map((point) => transform(point).join(',')).join(' ');
+  const host = identifier === 'review' ? ui['review-drawing'] : identifier === 'floor-overview' ? generic('floor-overview-plan') : identifier === 'root' ? ui['original-drawing'] : ui['proposal-drawing'];
+  const width = Math.max(240, Math.floor(host.clientWidth || ui['proposal-drawing'].clientWidth || 600));
+  const height = Math.max(280, Math.floor(host.clientHeight || 600));
+  const key = `${requireRepository().projectId}:${identifier}:${revisionId}:${chosen?.id ?? ''}`;
+  const source = planSource(fullSnapshot, revisionId);
+  const comparison = fullReference && modelChanges(fullReference, fullSnapshot).length ? fullReference : null;
+  const bounds = gesture?.camera.bounds ?? planBounds.get(key);
+  const plan = createModelPlan({ source, comparison: comparison ? planSource(comparison, referenceId) : null,
+    levelId: chosen?.id ?? null, viewport: { width, height, ...(bounds ? { bounds } : {}) },
+    selectedTargets: [...new Set([...(displayedSelection ? [displayedSelection] : []), ...(interactive ? currentTaskHighlights() : [])])].map(entityId => ({ kind: 'native', projectId: source.projectId, target: source.target, revisionId: source.revisionId, entityId })), tokens: spatialTokens });
+  const svg = renderModelPlan(document, plan);
+  svg.setAttribute('aria-label', `${label}. ${plan.notices.join(' ')}`);
+  svg.dataset.planKey = key;
+  modelPlans.set(svg, plan); planCameras.set(svg, plan.projection); if (comparison) planComparisons.set(svg, comparison);
+  const scale = plan.projection.pixelsPerMetre;
+  const transform = (point: Point): Point => { const p = plan.projection.project([point[0], point[1], plan.projection.elevation]); return [p[0], p[1]]; };
   const line = (start: Point, end: Point, attributes: SvgAttributes = {}): SVGLineElement => {
     const [x1, y1] = transform(start); const [x2, y2] = transform(end);
     return svgNode('line', { x1, y1, x2, y2, ...attributes });
   };
-
-  for (const room of spaces(snapshot)) {
-    const b = room.bounds;
-    const [x, y] = transform([b.minX, b.maxY]);
-    svg.append(svgNode('rect', { x, y, width: (b.maxX - b.minX) * scale, height: (b.maxY - b.minY) * scale,
-      fill: room.id === focusedRoomId ? '#d8eee6' : '#f5f3eb', 'data-object': room.id,
-      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${room.name}`,
-      class: interactive ? 'edit-target' : '' }));
+  for (const node of svg.querySelectorAll<SVGElement>('[data-entity-id]')) {
+    const hit = plan.hitShapes.find(shape => shape.hit.ref.entityId === node.dataset.entityId && shape.hit.revisionRole === node.dataset.revisionRole)?.hit;
+    if (!hit) continue;
+    node.setAttribute('tabindex', '0'); node.setAttribute('role', 'button');
+    node.setAttribute('aria-label', `${hit.revisionRole === 'existing' ? 'Inspect existing' : 'Select'} ${hit.name}`);
+    if (hit.revisionRole === 'current') node.dataset.object = hit.ref.entityId;
   }
-  for (const wall of walls) {
-    const dx = wall.end[0] - wall.start[0]; const dy = wall.end[1] - wall.start[1];
-    const length = Math.hypot(dx, dy);
-    const px = -dy / length * wall.thickness / 2; const py = dx / length * wall.thickness / 2;
-    const outline: Point[] = [[wall.start[0] + px, wall.start[1] + py], [wall.end[0] + px, wall.end[1] + py],
-      [wall.end[0] - px, wall.end[1] - py], [wall.start[0] - px, wall.start[1] - py]];
-    svg.append(svgNode('polygon', { points: points(outline), fill: reference ? '#e2ede8' : '#e5eae8', stroke: reference ? '#4f7e72' : '#516873', 'stroke-width': 1.2 }));
-  }
-  if (reference) for (const wall of reference.entities.filter(isWall)) {
-    svg.append(line(wall.start, wall.end, { stroke: '#87979b', 'stroke-width': 1.3, 'stroke-dasharray': '5 4', class: 'selection-outline' }));
-  }
-
-  function drawDoors(room: ModelGraph, ghost = false): void {
-    for (const item of room.entities.filter(isDoor)) {
-      const host = hostFor(room, item);
-      if (!host) continue;
-      const { wall, link } = host;
-      const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
-      const ux = (wall.end[0] - wall.start[0]) / length; const uy = (wall.end[1] - wall.start[1]) / length;
-      const hinge: Point = [wall.start[0] + ux * link.offset, wall.start[1] + uy * link.offset];
-      const jamb: Point = [hinge[0] + ux * item.width, hinge[1] + uy * item.width];
-      const leaf: Point = [hinge[0] - uy * item.width, hinge[1] + ux * item.width];
-      const color = ghost ? '#87979b' : reference ? '#167d78' : '#516873';
-      const style = { stroke: color, 'stroke-width': ghost ? 1.3 : 1.8, ...(ghost ? { 'stroke-dasharray': '5 4' } : {}) };
-      if (!ghost) {
-        svg.append(line(hinge, jamb, { stroke: '#fff', 'stroke-width': wall.thickness * scale + 2 }));
-        const hingeEdge: Point = [hinge[0] - uy * wall.thickness / 2, hinge[1] + ux * wall.thickness / 2];
-        const jambEdge: Point = [jamb[0] - uy * wall.thickness / 2, jamb[1] + ux * wall.thickness / 2];
-        svg.append(line(hinge, hingeEdge, style));
-        svg.append(line(jamb, jambEdge, style));
-      }
-      if (!ghost && interactive && spaces(snapshot).length) svg.append(line(hinge, jamb, {
-        stroke: item.id === displayedSelection ? '#e1a12e' : 'transparent', 'stroke-width': Math.max(12, wall.thickness * scale + 3),
-        'data-object': item.id, role: 'button', tabindex: 0, 'aria-label': `Select ${item.name}`, class: 'edit-target',
-      }));
-      svg.append(line(hinge, leaf, style));
-      const arc: Point[] = Array.from({ length: 25 }, (_, index): Point => {
-        const angle = index * Math.PI / 48;
-        return [hinge[0] + item.width * (ux * Math.cos(angle) - uy * Math.sin(angle)),
-          hinge[1] + item.width * (uy * Math.cos(angle) + ux * Math.sin(angle))];
-      });
-      svg.append(svgNode('polyline', { points: points(arc), fill: 'none', ...style }));
-      if (!ghost && item.id === 'door-entry') {
-        const offset = .58;
-        const a: Point = [hinge[0] + uy * offset, hinge[1] - ux * offset];
-        const b: Point = [jamb[0] + uy * offset, jamb[1] - ux * offset];
-        svg.append(line(a, b, { stroke: color, 'stroke-width': .9 }));
-        for (const point of [a, b]) {
-          const tickStart: Point = [point[0] - uy * .07, point[1] + ux * .07];
-          const tickEnd: Point = [point[0] + uy * .07, point[1] - ux * .07];
-          svg.append(line(tickStart, tickEnd, { stroke: color, 'stroke-width': 1 }));
-        }
-        const [tx, ty] = transform([(a[0] + b[0]) / 2 + uy * .18, (a[1] + b[1]) / 2 - ux * .18]);
-        svg.append(svgNode('text', { x: tx, y: ty, fill: color, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-size': 11, 'font-weight': 600, 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 4 }, `${millimetres(item.width)} mm`));
-      }
-    }
-  }
-  drawDoors(snapshot);
-  if (reference) drawDoors(reference, true);
-
-  for (const opening of snapshot.entities.filter(isWindow)) {
-    const host = hostFor(snapshot, opening);
-    if (!host) continue;
-    const dx = host.wall.end[0] - host.wall.start[0]; const dy = host.wall.end[1] - host.wall.start[1];
-    const length = Math.hypot(dx, dy); const ux = dx / length; const uy = dy / length;
-    const start: Point = [host.wall.start[0] + ux * host.link.offset, host.wall.start[1] + uy * host.link.offset];
-    const end: Point = [start[0] + ux * opening.width, start[1] + uy * opening.width];
-    svg.append(line(start, end, {
-      stroke: opening.id === displayedSelection ? '#e1a12e' : '#318aa0', 'stroke-width': Math.max(5, host.wall.thickness * scale),
-      class: interactive ? 'edit-target' : '', 'data-object': opening.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${opening.name}`, 'aria-pressed': String(opening.id === displayedSelection),
-    }));
-  }
-  for (const equipment of snapshot.entities.filter(isEquipment)) {
-    const [x, y] = transform(equipment.position);
-    const selected = equipment.id === displayedSelection;
-    svg.append(svgNode('rect', {
-      x: x - equipment.width * scale / 2, y: y - equipment.depth * scale / 2,
-      width: equipment.width * scale, height: Math.max(equipment.depth * scale, 8), rx: 3,
-      fill: equipment.category === 'electrical' ? '#d6a44b' : '#69a99b', stroke: selected ? '#e1a12e' : '#365f5a',
-      'stroke-width': selected ? 4 : 1.2, class: interactive ? 'edit-target' : '', 'data-object': equipment.id,
-      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${equipment.name}`,
-      'aria-pressed': String(selected),
-    }));
-  }
-
-  const ownCoordinates = (walls.length ? walls : allWalls).flatMap((wall) => [wall.start, wall.end]);
-  const ownMinX = Math.min(...ownCoordinates.map(([x]) => x)); const ownMaxX = Math.max(...ownCoordinates.map(([x]) => x));
-  const ownMinY = Math.min(...ownCoordinates.map(([, y]) => y)); const ownMaxY = Math.max(...ownCoordinates.map(([, y]) => y));
-  const [left, top] = transform([ownMinX, ownMaxY]);
-  const [right, bottom] = transform([ownMaxX, ownMinY]);
-  svg.append(svgNode('line', { x1: left, y1: top - 30, x2: right, y2: top - 30, stroke: '#a6b8af', 'stroke-width': .8 }));
-  for (const x of [left, right]) svg.append(svgNode('line', { x1: x, y1: top - 35, x2: x, y2: top - 25, stroke: '#a6b8af', 'stroke-width': .8 }));
-  svg.append(svgNode('text', { x: (left + right) / 2, y: top - 38, 'text-anchor': 'middle', fill: '#6b8075', 'font-size': 10 }, `${number.format(ownMaxX - ownMinX)} m`));
-  svg.append(svgNode('text', { x: left - 30, y: (top + bottom) / 2, 'text-anchor': 'middle', fill: '#6b8075', 'font-size': 10, transform: `rotate(-90 ${left - 30} ${(top + bottom) / 2})` }, `${number.format(ownMaxY - ownMinY)} m`));
-  for (const item of snapshot.entities.filter((entity) => entity.type === 'Furniture').sort((a, b) => Number(a.supportId !== null) - Number(b.supportId !== null))) {
-    const footprint = furnitureFootprint(item);
-    const [x, y] = transform([footprint.minX, footprint.maxY]);
-    const selected = item.id === displayedSelection;
-    const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
-    group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
-      rx: item.kind === 'plant' ? 12 : 2, fill: item.kind === 'plant' ? '#74a46c' : item.supportId ? '#71b0c1' : item.kind === 'chair' ? '#688e99' : '#d6b58c',
-      stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
-    const [cx, cy] = transform(item.position);
-    group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': item.supportId ? 6 : 8, 'pointer-events': 'none' }, item.kind));
-    svg.append(group);
-  }
-  for (const item of snapshot.entities.filter(entity => entity.type === 'AssetInstance')) {
-    const geometry = assetGeometry(snapshot, item);
-    const footprint = geometry.footprint;
-    const [x, y] = transform([footprint.minX, footprint.maxY]);
-    const selected = item.id === displayedSelection;
-    const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
-    group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
-      rx: 3, fill: '#a8c1b4', stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
-    const [cx, cy] = transform(item.position);
-    group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': 7, 'pointer-events': 'none' }, item.name));
-    group.append(svgNode('title', {}, `${geometry.family.name} · ${number.format(geometry.dimensions.height)} m tall · dimensional proxy`));
-    svg.append(group);
-  }
-  for (const room of spaces(snapshot)) {
-    const b = room.bounds; const [x, y] = transform([(b.minX + b.maxX) / 2, b.maxY - .4]);
-    svg.append(svgNode('text', { x, y, fill: '#31564f', 'font-size': 10, 'text-anchor': 'middle',
-      'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3, 'pointer-events': 'none' },
-      room.name));
-    svg.append(svgNode('text', { x, y: y + 11, fill: '#536f66', 'font-size': 8, 'text-anchor': 'middle',
-      'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3, 'pointer-events': 'none' },
-      `${number.format((b.maxX - b.minX) * (b.maxY - b.minY))} m²`));
-  }
-  for (const stair of snapshot.entities.filter(item => item.type === 'Stair')) {
-    const b = stairFootprint(stair); const [x, y] = transform([b.minX, b.maxY]);
-    const group = svgNode('g', { 'data-object': stair.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${stair.name}`, class: interactive ? 'edit-target' : '' });
-    group.append(svgNode('rect', { x, y, width: (b.maxX - b.minX) * scale, height: (b.maxY - b.minY) * scale,
-      fill: '#e2efec', stroke: stair.id === displayedSelection ? '#e1a12e' : '#487e75', 'stroke-width': 1.5 }));
-    const horizontal = stair.start[0] !== stair.end[0];
-    for (let step = 1; step < stair.steps; step++) {
-      const t = step / stair.steps;
-      const at = horizontal ? stair.start[0] + (stair.end[0] - stair.start[0]) * t : stair.start[1] + (stair.end[1] - stair.start[1]) * t;
-      group.append(line(horizontal ? [at, b.minY] : [b.minX, at], horizontal ? [at, b.maxY] : [b.maxX, at], { stroke: '#8aa9a1', 'stroke-width': .65 }));
-    }
-    const targetId = chosen?.id === stair.toLevelId ? stair.fromLevelId : stair.toLevelId;
-    const target = levels(fullSnapshot).find(item => item.id === targetId);
-    const [tx, ty] = transform([(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2]);
-    group.append(svgNode('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 8, fill: '#24594f', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 2 },
-      `${chosen?.id === stair.toLevelId ? '↓' : '↑'} ${target?.name ?? 'Stairs'}`));
-    svg.append(group);
-  }
-  if (roofVisible) for (const roof of snapshot.entities.filter(item => item.type === 'Roof')) {
-    const b = roof.bounds;
-    const outline: Point[] = [[b.minX, b.minY], [b.maxX, b.minY], [b.maxX, b.maxY], [b.minX, b.maxY], [b.minX, b.minY]];
-    svg.append(svgNode('polyline', { points: points(outline), fill: 'none', stroke: '#8b6970', 'stroke-width': 1.2, 'stroke-dasharray': '5 4', 'data-object': roof.id,
-      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${roof.name}` }));
-    if (roof.profile.kind === 'gable') svg.append(line(roof.profile.ridgeAxis === 'x' ? [b.minX, (b.minY + b.maxY) / 2] : [(b.minX + b.maxX) / 2, b.minY],
-      roof.profile.ridgeAxis === 'x' ? [b.maxX, (b.minY + b.maxY) / 2] : [(b.minX + b.maxX) / 2, b.maxY], { stroke: '#8b6970', 'stroke-width': 1, 'stroke-dasharray': '6 3' }));
-  }
-  svg.append(svgNode('path', { d: 'M552 350 V325 M548 333 L552 325 L556 333', stroke: '#8ba096', 'stroke-width': 1, fill: 'none' }));
-  svg.append(svgNode('text', { x: 552, y: 365, 'text-anchor': 'middle', fill: '#83968c', 'font-size': 8 }, 'Y'));
   if (interactive) {
-    const cssScale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
-    const targetWidth = 44 * cssScale;
-    for (const wall of walls) {
-      if (wall.id === displayedSelection) svg.append(line(wall.start, wall.end, { stroke: '#e1a12e', 'stroke-width': 5, class: 'selection-outline' }));
-      svg.append(line(wall.start, wall.end, { stroke: 'transparent', 'stroke-width': targetWidth, class: 'edit-target',
-        'data-object': wall.id, role: 'button', tabindex: 0, 'aria-label': `Select ${wall.name}`, 'aria-pressed': String(wall.id === displayedSelection) }));
-    }
+    const cssScale = 1;
+    const targetWidth = 44;
+    const door = entry(snapshot);
     if (spaces(snapshot).length) { drawVisualOverlay(svg, snapshot, transform); return svg; }
     const doorHost = hostFor(snapshot, door);
     if (!door || !doorHost) return svg;
@@ -2767,16 +2700,16 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     const hinge: Point = [wall.start[0] + unit[0] * link.offset, wall.start[1] + unit[1] * link.offset];
     const jamb: Point = [hinge[0] + unit[0] * door.width, hinge[1] + unit[1] * door.width];
     const centre: Point = [hinge[0] + unit[0] * door.width / 2, hinge[1] + unit[1] * door.width / 2];
-    svg.append(line(hinge, jamb, { stroke: displayedSelection === door.id ? '#e1a12e' : 'transparent', 'stroke-opacity': .25, 'stroke-width': targetWidth,
+    svg.append(line(hinge, jamb, { stroke: displayedSelection === door.id ? spatialTokens.color.selection : 'transparent', 'stroke-opacity': .25, 'stroke-width': targetWidth,
       class: 'edit-target', 'data-object': door.id, role: 'button', tabindex: 0, 'aria-label': 'Select Entry door', 'aria-pressed': String(displayedSelection === door.id) }));
     if (!editable) return svg;
     const selected = snapshot.entities.find((item) => item.id === displayedSelection);
     const handle = (location: Point, operation: GestureOperation, caption: string, square = false): void => {
       const [x, y] = transform(location);
       const group = svgNode('g', { class: 'edit-handle', 'data-handle': operation, 'data-object': displayedSelection, 'aria-label': caption, role: 'button', tabindex: 0 });
-      group.append(svgNode('circle', { cx: x, cy: y, r: targetWidth / 2, fill: '#167d78', 'fill-opacity': .06 }));
-      group.append(square ? svgNode('rect', { x: x - 6, y: y - 6, width: 12, height: 12, rx: 2, fill: '#167d78', stroke: 'white', 'stroke-width': 2 })
-        : svgNode('circle', { cx: x, cy: y, r: 7, fill: '#167d78', stroke: 'white', 'stroke-width': 2 }));
+      group.append(svgNode('circle', { cx: x, cy: y, r: targetWidth / 2, fill: spatialTokens.color.primary, 'fill-opacity': .06 }));
+      group.append(square ? svgNode('rect', { x: x - 6, y: y - 6, width: 12, height: 12, rx: 2, fill: spatialTokens.color.primary, stroke: spatialTokens.color.paper, 'stroke-width': 2 })
+        : svgNode('circle', { cx: x, cy: y, r: 7, fill: spatialTokens.color.primary, stroke: spatialTokens.color.paper, 'stroke-width': 2 }));
       svg.append(group);
     };
     if (!selected) return svg;
@@ -2787,12 +2720,12 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     else if (selected.type === 'Door') {
       const arrowPoint: Point = [wall.start[0] + unit[0] * .5, wall.start[1] + unit[1] * .5];
       const origin = transform(wall.start); const arrow = transform(arrowPoint);
-      svg.append(svgNode('line', { x1: origin[0], y1: origin[1], x2: arrow[0], y2: arrow[1], stroke: '#c27d1a', 'stroke-width': 3 }));
+      svg.append(svgNode('line', { x1: origin[0], y1: origin[1], x2: arrow[0], y2: arrow[1], stroke: spatialTokens.color.proposed, 'stroke-width': 3 }));
       const tangent: Point = [unit[0], -unit[1]];
       const head: Point[] = [[arrow[0], arrow[1]], [arrow[0] - tangent[0] * 8 - tangent[1] * 4, arrow[1] - tangent[1] * 8 + tangent[0] * 4],
         [arrow[0] - tangent[0] * 8 + tangent[1] * 4, arrow[1] - tangent[1] * 8 - tangent[0] * 4]];
-      svg.append(svgNode('polygon', { points: head.map((p) => p.join(',')).join(' '), fill: '#c27d1a' }));
-      svg.append(svgNode('text', { x: origin[0], y: origin[1] + 25, fill: '#986312', 'font-size': 10 }, 'HOST START'));
+      svg.append(svgNode('polygon', { points: head.map((p) => p.join(',')).join(' '), fill: spatialTokens.color.proposed }));
+      svg.append(svgNode('text', { x: origin[0], y: origin[1] + 25, fill: spatialTokens.color.proposed, 'font-size': 10 }, 'HOST START'));
       // Separate move and resize targets from the opening so small doors remain usable on phones.
       const normal: Point = [-unit[1], unit[0]];
       const moveHandle: Point = [centre[0] + normal[0] * 36 * cssScale / scale, centre[1] + normal[1] * 36 * cssScale / scale];
@@ -2805,12 +2738,80 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
   return svg;
 }
 
+function inspectPlanHit(root: SVGSVGElement, event: PointerEvent | MouseEvent | KeyboardEvent, node: Element): boolean {
+  const plan = modelPlans.get(root); if (!plan) return false;
+  const refNode = node.closest<SVGElement>('[data-entity-id]');
+  const matrix = root.getScreenCTM();
+  const candidates = event instanceof KeyboardEvent ? plan.hitShapes.map(shape => shape.hit) : matrix ? (() => {
+    const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse()); return hitTestModelPlan(plan, [p.x, p.y]);
+  })() : [];
+  const hit = candidates.find(hit => hit.ref.entityId === refNode?.dataset.entityId && hit.revisionRole === refNode?.dataset.revisionRole) ?? candidates[0];
+  if (!hit) return false;
+  event.preventDefault(); event.stopImmediatePropagation();
+  if (hit.revisionRole === 'current') chooseObject(hit.ref.entityId);
+  else {
+    const snapshot = planComparisons.get(root);
+    if (!snapshot) return true;
+    inspectedComparison = { id: hit.ref.entityId, graph: snapshot };
+    renderElementProperties(generic('element-properties'), snapshot, hit.ref.entityId, `Existing revision ${hit.ref.revisionId.slice(0, 10)}`); workspace.showInspector();
+  }
+  return true;
+}
+const planComparisons = new WeakMap<SVGSVGElement, ModelSnapshot>();
+let planPan: { id: number; key: string; plan: ModelPlan; origin: Point; host: HTMLElement } | null = null;
+function endPlanPan(): void {
+  const active = planPan; planPan = null;
+  if (active?.host.hasPointerCapture(active.id)) active.host.releasePointerCapture(active.id);
+}
+for (const host of [ui['proposal-drawing'], ui['review-drawing']]) {
+  host.addEventListener('pointerdown', event => {
+    if (!(event.target instanceof Element) || gesture || visualGesture || busy) return;
+    const root = event.target.closest('svg'); if (!(root instanceof SVGSVGElement)) return;
+    const plan = modelPlans.get(root); if (!plan || !root.dataset.planKey) return;
+    if (event.button === 1 || event.button === 0 && event.shiftKey) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      planPan = { id: event.pointerId, key: root.dataset.planKey, plan, origin: [event.clientX, event.clientY], host };
+      host.setPointerCapture(event.pointerId); return;
+    }
+    if (event.button === 0 && !event.target.closest('[data-handle], [data-visual-handle]')) inspectPlanHit(root, event, event.target);
+  }, true);
+  host.addEventListener('keydown', event => {
+    if (!['Enter', ' '].includes(event.key) || !(event.target instanceof Element)) return;
+    const root = event.target.closest('svg');
+    if (root instanceof SVGSVGElement && event.target.closest('[data-entity-id]')) inspectPlanHit(root, event, event.target);
+  }, true);
+  host.addEventListener('pointermove', event => {
+    if (!planPan || planPan.id !== event.pointerId) return;
+    const { plan, origin, key } = planPan; const b = plan.projection.bounds;
+    const dx = (event.clientX - origin[0]) / plan.projection.pixelsPerMetre; const dy = (event.clientY - origin[1]) / plan.projection.pixelsPerMetre;
+    planBounds.set(key, { minX: b.minX - dx, maxX: b.maxX - dx, minY: b.minY + dy, maxY: b.maxY + dy }); renderComparison();
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) host.addEventListener(type, event => {
+    if (!(event instanceof PointerEvent) || planPan?.id !== event.pointerId) return;
+    endPlanPan();
+  });
+  host.addEventListener('wheel', event => {
+    if (modelView !== 'plan' || gesture || visualGesture || planPan) return;
+    const root = host.querySelector('svg'); if (!(root instanceof SVGSVGElement) || !root.dataset.planKey) return;
+    const plan = modelPlans.get(root); const matrix = root.getScreenCTM(); if (!plan || !matrix) return;
+    event.preventDefault(); const screen = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    const [x, y] = plan.projection.inverse([screen.x, screen.y]).point;
+    const b = plan.projection.bounds; const factor = Math.exp(Math.max(-.3, Math.min(.3, event.deltaY * .001)));
+    if ((b.maxX - b.minX) * factor < .2 || (b.maxX - b.minX) * factor > 100000) return;
+    planBounds.set(root.dataset.planKey, { minX: x + (b.minX - x) * factor, maxX: x + (b.maxX - x) * factor,
+      minY: y + (b.minY - y) * factor, maxY: y + (b.maxY - y) * factor }); renderComparison();
+  }, { passive: false });
+}
+window.addEventListener('keydown', event => { if (event.key === 'Escape') endPlanPan(); });
+window.addEventListener('blur', endPlanPan);
+document.addEventListener('visibilitychange', () => { if (document.hidden) endPlanPan(); });
+
 function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamera): Point {
   const matrix = root.getScreenCTM();
   if (!matrix) throw new Error('The room plan is not currently visible.');
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-  return [(point.x - 300) / camera.scale + (camera.minX + camera.maxX) / 2,
-    (193 - point.y) / camera.scale + (camera.minY + camera.maxY) / 2];
+  const projected = camera.inverse([point.x, point.y]).point;
+  return [projected[0], projected[1]];
 }
 
 function renderVisualPanel(): void {
@@ -2889,8 +2890,10 @@ function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (p
   if (liveChatPreview) return;
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
   if (!selected || selectedDesignTarget.kind === 'baseline' || !serverAvailable || busy) return;
-  const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
-  const centre = project(objectAnchor(selected, snapshot));
+  const scale = 1;
+  const anchor = project(objectAnchor(selected, snapshot));
+  const centre: Point = [anchor[0], Math.max(30, anchor[1] - 46)];
+  svg.append(svgNode('line', { x1: anchor[0], y1: anchor[1], x2: centre[0], y2: centre[1], stroke: spatialTokens.color.primary, 'stroke-width': 1, 'pointer-events': 'none' }));
   const reference = visibleReference();
   if (reference) {
     const target = project(referencePoint(reference, snapshot));
@@ -2913,7 +2916,7 @@ function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference 
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
   const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
   const bounds = boundsMm(floorBounds(view));
-  const project = ([x, y]: Point): Point => [300 + (x - (plan.minX + plan.maxX) / 2) * plan.scale, 193 - (y - (plan.minY + plan.maxY) / 2) * plan.scale];
+  const project = ([x, y]: Point): Point => { const p = plan.project([x, y, plan.elevation]); return [p[0], p[1]]; };
   let best: { wallId: string; alongWallMm: number; distance: number } | null = null;
   for (const wall of view.entities.filter(isWall)) {
     const a = project(wall.start); const b = project(wall.end); const dx = b[0] - a[0]; const dy = b[1] - a[1];
@@ -2921,7 +2924,7 @@ function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference 
     const distance = Math.hypot(point.x - a[0] - dx * t, point.y - a[1] - dy * t);
     if (!best || distance < best.distance) best = { wallId: wall.id, alongWallMm: Math.round(t * Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000), distance };
   }
-  if (best && best.distance <= 18 * 600 / Math.max(ui['proposal-drawing'].clientWidth, 200)) return { kind: 'wall-point', wallId: best.wallId, alongWallMm: best.alongWallMm };
+  if (best && best.distance <= 18) return { kind: 'wall-point', wallId: best.wallId, alongWallMm: best.alongWallMm };
   const world = pointerPlan(event, root, plan);
   const positionMm: Point = [Math.round(world[0] * 1000), Math.round(world[1] * 1000)];
   if (positionMm[0] < bounds.minX || positionMm[0] > bounds.maxX || positionMm[1] < bounds.minY || positionMm[1] > bounds.maxY) return null;
@@ -3129,7 +3132,7 @@ async function selectRevision(branch: string, revisionId: string): Promise<void>
   selectedBranch = branch;
   selectedRevision = revisionId;
   activeReview = selectedReviewAt(project, revisionId)?.review ?? null;
-  activeTicketId = backlogItems.find((item) => item.request.requestId === activeReview?.requestId)?.id ?? null;
+  activeTicketId = tasks.projection.tickets.find((item) => item.request.requestId === activeReview?.requestId)?.id ?? null;
   resetEditor();
   renderComparison();
   renderReview();
@@ -3229,12 +3232,12 @@ function renderRoomNavigation(snapshot: ModelSnapshot): void {
   }
   const storeys = levels(snapshot);
   if (activeLevelId && !storeys.some(level => level.id === activeLevelId)) activeLevelId = null;
-  if (!activeLevelId && modelView === 'plan' && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
+  if (!activeLevelId && (modelView === 'plan' || workspaceView.kind === 'inside') && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
   const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
   const objects = view.entities.filter(item => item.type !== 'AssetFamily');
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
-  if (!snapshot.entities.some(item => item.id === selectedObject) && !(chatTicketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
-  if (chatTicketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
+  if (!snapshot.entities.some(item => item.id === selectedObject) && !(tasks.projection.ticketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
+  if (tasks.projection.ticketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
   ui['selected-object'].value = selectedObject; ui['show-roof'].checked = roofVisible;
   explorer.show({ graph: snapshot, projectId: requireRepository().projectId, name: requireRepository().name, selectedId: selectedObject });
 }
@@ -3269,6 +3272,36 @@ function navigateModel(node: ModelNode): void {
 }
 ui['show-roof'].addEventListener('change', () => { roofVisible = ui['show-roof'].checked; if (roofVisible) cutaway = false; if (repo) renderComparison(); });
 
+function insideEntry(snapshot: ModelSnapshot, motion: 'walk' | 'fly'): NavigationPoint | undefined {
+  const level = levels(snapshot).find(item => item.id === activeLevelId);
+  const floors = snapshot.entities.filter(item => item.type === 'Slab' && item.levelId === activeLevelId);
+  const context = { projectId: requireRepository().projectId, sourcePin: selectedRevision, levelId: activeLevelId, snapshot };
+  for (const floor of floors) {
+    if (floor.type !== 'Slab') continue;
+    const b = floor.bounds;
+    for (const row of [4, 5, 3, 6, 2, 7, 1, 8, 9]) for (const column of [3, 7, 2, 8, 4, 6, 1, 9, 5]) {
+      const x = b.minX + (b.maxX - b.minX) * column / 10; const y = b.minY + (b.maxY - b.minY) * row / 10;
+      const z = walkElevation(context, x, y);
+      if (z !== null) return [x, y, z];
+    }
+  }
+  if (motion === 'walk') return undefined;
+  const walls = snapshot.entities.filter(isWall); const points = walls.flatMap(wall => [wall.start, wall.end]);
+  if (!points.length) return [0, 0, (level?.elevation ?? 0) + 1.6];
+  return [(Math.min(...points.map(p => p[0])) + Math.max(...points.map(p => p[0]))) / 2,
+    (Math.min(...points.map(p => p[1])) + Math.max(...points.map(p => p[1]))) / 2, (level?.elevation ?? 0) + 1.6];
+}
+function updateViewChrome(): void {
+  const session = modelView === 'plan' ? { kind: 'plan' } satisfies ViewIntent : modelViewer?.navigationState;
+  generic('workspace-shell').dataset.spatialView = session?.kind ?? workspaceView.kind;
+  for (const prefix of ['', 'review-']) {
+    button(`${prefix}view-inside`).setAttribute('aria-pressed', String(session?.kind === 'inside'));
+    button(`${prefix}view-fly`).setAttribute('aria-pressed', String(session?.kind === 'inside' && session.motion === 'fly'));
+    button(`${prefix}mouse-look`).hidden = session?.kind !== 'inside';
+    generic(`${prefix}navigation-notice`).textContent = navigationNotice;
+  }
+}
+
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
   const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
@@ -3279,6 +3312,8 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       return;
     }
     modelViewer ??= new ModelViewer({
+      taskPick: hit => spatialWorkspace.pick(hit),
+      taskAnchors: (anchors, bounds) => spatialWorkspace.anchors(anchors, bounds),
       markup: attachMarkup,
       markupChat: () => { showRequestPane('details'); ui['request-text'].focus(); },
       linkedReference: selection => linkedPanel.select(selection),
@@ -3291,11 +3326,28 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
+    modelViewer.setTasks(requireRepository().projectId, spatialDescriptors());
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
-    modelViewer.show(host, { projectId: requireRepository().projectId, snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
+    modelViewer.show(host, { projectId: requireRepository().projectId, navigationTarget: designKey(selectedDesignTarget), navigationPin: `${designKey(selectedDesignTarget)}:${selectedRevision}:${JSON.stringify(snapshot)}`, snapshot, comparison, taskTargetIds: currentTaskHighlights(), selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
       interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null,
       markup: { binding: markupBinding(), editable: selectedDesignTarget.kind !== 'baseline' && !reviewRepository && !inspectedChatView,
         annotations: conversationMarkups(chatVisual), references: referenceMarkups() } });
+    if (modelViewer.poseRetentionNotice) { navigationNotice = modelViewer.poseRetentionNotice; workspaceView = { kind: 'overview' }; status(navigationNotice); }
+    const intent = inDeltaDialog ? { kind: 'overview' } satisfies ViewIntent : workspaceView.kind === 'plan' ? { kind: 'overview' } satisfies ViewIntent : workspaceView;
+    const session = modelViewer.navigationState;
+    if (session.kind !== intent.kind || intent.kind === 'inside' && session.kind === 'inside' && session.motion !== intent.motion) {
+      let result = modelViewer.changeView(intent);
+      if (result.kind === 'unsupported' && intent.kind === 'inside') {
+        const entry = insideEntry(snapshot, intent.motion);
+        if (entry) result = modelViewer.changeView({ ...intent, entry });
+        if (result.kind === 'unsupported') {
+          navigationNotice = result.reason; status(result.reason);
+          const flyEntry = insideEntry(snapshot, 'fly');
+          if (flyEntry) { insideMotion = 'fly'; workspaceView = { kind: 'inside', motion: 'fly' }; modelViewer.changeView({ ...workspaceView, entry: flyEntry }); }
+        }
+      }
+    }
+    updateViewChrome();
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
@@ -3319,7 +3371,7 @@ function renderComparison(): void {
   const chatProposal = currentPage === 'request' && Boolean(reviewRepository) && Boolean(activeChatProposalMessageId);
   generic('workspace-shell').dataset.chatModel = liveChatPreview ? 'live' : chatProposal ? 'proposal' : 'accepted';
   const paused = pausedChatPreviews.has(currentChatKey());
-  generic('chat-proposal-tools').hidden = currentPage !== 'request' || !liveChatPreview && !chatProposal && !(chatTicketId && paused);
+  generic('chat-proposal-tools').hidden = currentPage !== 'request' || !liveChatPreview && !chatProposal && !(tasks.projection.ticketId && paused);
   generic('chat-proposal-state').textContent = liveChatPreview ? 'Live draft · tentative' : chatProposal ? 'Proposal preview' : 'Showing request model';
   generic('chat-proposal-state').title = liveChatPreview ? 'Changes may still be discarded. Nothing is accepted while the agent works.' : 'Acceptance requires your explicit decision in chat.';
   const chatChanges = liveChatPreview || chatProposal ? modelChanges(comparison, selected) : [];
@@ -3330,10 +3382,11 @@ function renderComparison(): void {
   button('chat-proposal-delta').setAttribute('aria-pressed', String(reviewDelta));
   button('chat-proposal-delta').textContent = reviewDelta ? 'Hide changes' : 'Show changes';
   renderRoomNavigation(selected);
-  ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
+  ui['original-drawing'].replaceChildren(workspacePlan(original, null, 'root', 'Original room plan', originalId));
   if (modelView === 'plan' && !(ui['changes-dialog'].open && changesTab === '3d')) {
-    modelViewer?.hide();
-    const next = drawPlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`);
+    spatialWorkspace.clearAnchors();
+    modelViewer?.changeView({ kind: 'plan' }); modelViewer?.hide();
+    const next = workspacePlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`, selectedRevision, liveChatPreview?.baseRevisionId ?? reviewedRevision?.comparisonBaseRevisionId ?? originalId);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
     if (root && (gesture || visualGesture)) {
       // Keep the capture root stable throughout a geometry-request drag.
@@ -3343,23 +3396,28 @@ function renderComparison(): void {
       const camera = planCameras.get(next);
       if (!camera) throw new Error('The room plan camera was not created.');
       planCameras.set(root, camera);
+      const plan = modelPlans.get(next); if (plan) modelPlans.set(root, plan);
+      const comparison = planComparisons.get(next); if (comparison) planComparisons.set(root, comparison);
     } else ui['proposal-drawing'].replaceChildren(next);
   } else renderViewer(selected, comparison);
+  ensureDraftOrigin();
+  updateSpatialWorkspace();
   ui['proposal-drawing'].dataset.modelView = modelView;
   ui['view-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
-  ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
+  ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d' && modelViewer?.navigationState.kind === 'overview'));
   ui['model-3d-controls'].hidden = modelView !== '3d';
-  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES' : '3D · CAMERA ONLY';
+  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES · Native footprints · Linked IFC cuts unsupported' : modelViewer?.navigationState.kind === 'inside' ? 'INSIDE · WASD · Shift up / Ctrl down in Fly · Escape releases' : 'OVERVIEW · Orbit / pan / zoom';
+  updateViewChrome();
   ui['model-revision'].textContent = liveChatPreview ? `Live draft · update ${liveChatPreview.sequence} · base ${liveChatPreview.baseRevisionId.slice(0, 10)} · ${selected.entities.length} objects` : `Revision ${selectedRevision.slice(0, 10)} · ${selected.entities.length} objects`;
   ui['review-drawing'].dataset.modelView = modelView;
-  if (modelView === 'plan') ui['review-drawing'].replaceChildren(drawPlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`));
+  if (modelView === 'plan') ui['review-drawing'].replaceChildren(workspacePlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`, selectedRevision, reviewedRevision?.comparisonBaseRevisionId ?? originalId));
   generic('review-model-3d-controls').hidden = modelView !== '3d';
   for (const prefix of ['', 'review-', 'delta-']) {
     for (const mode of ['basic', 'realistic']) button(`${prefix}render-${mode}`).setAttribute('aria-pressed', String(renderingMode === mode));
     button(`${prefix}cutaway`).setAttribute('aria-pressed', String(cutaway));
   }
   ui['review-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
-  ui['review-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
+  ui['review-3d'].setAttribute('aria-pressed', String(modelView === '3d' && modelViewer?.navigationState.kind === 'overview'));
   generic('review-view-caption').textContent = modelView === '3d' ? '3D · CUTAWAY VIEW' : 'PLAN · METRES';
   button('review-delta').setAttribute('aria-pressed', String(reviewDelta));
   button('review-delta').disabled = !review;
@@ -3398,7 +3456,7 @@ function renderProjectOverview(): void {
   generic('overview-level-label').textContent = `${selectedLevel?.name ?? 'Floor'} · CONCEPT PLAN`;
   generic('floor-overview').hidden = !rooms.length;
   document.querySelector('.overview-grid')?.classList.toggle('has-floor', rooms.length > 0);
-  generic('floor-overview-plan').replaceChildren(...(rooms.length ? [drawPlan(revision.snapshot, null, 'floor-overview', `${selectedLevel?.name ?? 'Floor'} room overview`)] : []));
+  generic('floor-overview-plan').replaceChildren(...(rooms.length ? [workspacePlan(revision.snapshot, null, 'floor-overview', `${selectedLevel?.name ?? 'Floor'} room overview`, revision.id)] : []));
   const connections = rooms.length ? doorConnections(revision.snapshot) : [];
   generic('room-directory').replaceChildren(...visibleRooms.map((room) => {
     const card = element('button', undefined, 'room-card'); card.type = 'button'; card.dataset.room = room.id;

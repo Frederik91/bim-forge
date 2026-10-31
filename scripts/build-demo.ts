@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import postcss from 'postcss';
 import tailwindcss from '@tailwindcss/postcss';
+import { spatialTokenCss } from '../demo/ui/design-tokens.ts';
 
 const dependency = new URL('../node_modules/@babylonjs/core/', import.meta.url);
 const license = await fs.readFile(new URL('license.md', dependency), 'utf8');
@@ -23,7 +24,8 @@ const cssInput = new URL('../demo/canvas-studio.css', import.meta.url);
 const css = await postcss([tailwindcss()]).process(await fs.readFile(cssInput, 'utf8'), {
   from: fileURLToPath(cssInput), to: fileURLToPath(new URL('canvas-studio.css', output)),
 });
-await fs.writeFile(new URL('canvas-studio.css', output), css.css);
+const primitiveCss = await fs.readFile(new URL('../demo/ui/spatial-primitives.css', import.meta.url), 'utf8');
+await fs.writeFile(new URL('canvas-studio.css', output), spatialTokenCss() + css.css + primitiveCss);
 assets.push('canvas-studio.css');
 const files = await Promise.all([...assets, 'room-app.mjs'].map(async name => {
   const bytes = await fs.readFile(new URL(name, output));

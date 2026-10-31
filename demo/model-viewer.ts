@@ -1,9 +1,14 @@
+import { SpatialTaskLayer } from './spatial-task-layer.ts';
+import type { TaskAgentDescriptor, TaskAgentHit, TaskAgentAnchor } from './spatial-task-layer.ts';
+import { spatialTokens } from './ui/design-tokens.ts';
 import { Engine } from '@babylonjs/core/Engines/engine.js';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { FileToolsOptions } from '@babylonjs/core/Misc/fileTools.pure.js';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { entityLevel, levels } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
+import { ViewNavigation } from './view-navigation.ts';
+import type { InsidePose, ViewIntent, ViewSession, NavigationResult } from './view-navigation.ts';
 import { ModelScene } from './model-scene.ts';
 import { LinkedModelLayer } from './linked-model-render.ts';
 import type { LinkedDisplay } from './linked-model-render.ts';
@@ -16,9 +21,12 @@ import type { MarkupPoint, MarkupTool, SpatialMarkup } from '../src/spatial-mark
 
 export interface ViewerState {
   projectId?: ProjectId;
+  navigationPin?: string;
+  navigationTarget?: string;
   snapshot: ModelSnapshot;
   comparison: ModelSnapshot | null;
   selectedId: string;
+  taskTargetIds?: readonly string[];
   focusId: string | null;
   mode: RenderingMode;
   cutaway: boolean;
@@ -37,6 +45,8 @@ interface ViewerActions {
   keyboardReference: () => void;
   markup?: (annotations: readonly SpatialMarkup[], binding: string) => boolean;
   markupChat?: () => void;
+  taskPick?: (hit: Exclude<TaskAgentHit, { kind: 'none' }>) => void;
+  taskAnchors?: (anchors: readonly TaskAgentAnchor[], bounds: DOMRect) => void;
 }
 interface MarkerDrag { id: number; origin: Point; target: SpatialReference | null; moved: boolean }
 
@@ -85,6 +95,10 @@ export class ModelViewer {
   private readonly engine: Engine;
   private readonly model: ModelScene;
   private readonly linked: LinkedModelLayer;
+  private readonly tasks: SpatialTaskLayer;
+  private taskDescriptors: readonly TaskAgentDescriptor[] = [];
+  private readonly navigation: ViewNavigation;
+  private previousFrame = 0;
   private readonly markup: SpatialMarkupView | null;
   private linkedSelection: LinkedSelection | null = null;
   private readonly observer: ResizeObserver;
@@ -94,6 +108,8 @@ export class ModelViewer {
   private hoveredId: string | null = null;
   private frames = 2;
   private cameraSignature = '';
+  private poseNotice = '';
+  get poseRetentionNotice(): string { return this.poseNotice; }
   private active = false;
   private readonly actions: ViewerActions;
   private readonly embeddedImages = new Map<string, string>();
@@ -128,9 +144,15 @@ export class ModelViewer {
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
     this.linked = new LinkedModelLayer(this.model.scene);
-    this.markup = actions.markup ? new SpatialMarkupView({ scene: this.model.scene, camera: this.model.camera, canvas: this.canvas,
+    this.tasks = new SpatialTaskLayer({ scene: this.model.scene, tokens: spatialTokens.color,
+      isConstructionMesh: mesh => this.model.isConstructionMesh(mesh) || this.linked.pick(mesh) !== null,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches });
+    this.navigation = new ViewNavigation(this.model, this.canvas, () => {
+      this.endDrag(false); this.pointer.reset(); this.hover(null); this.markup?.hide(); this.frames = 3;
+    });
+    this.markup = actions.markup ? new SpatialMarkupView({ scene: this.model.scene, camera: () => this.model.activeCamera, canvas: this.canvas,
       surface: (x, y) => this.markupSurface(x, y), changed: (annotations, binding) => actions.markup?.(annotations, binding) ?? false,
-      begin: () => { this.endDrag(false); this.pointer.reset(); this.hover(null); }, render: () => { this.frames = 3; },
+      begin: () => { this.navigation.stop(); this.endDrag(false); this.pointer.reset(); this.hover(null); }, render: () => { this.frames = 3; },
       attach: () => actions.markupChat?.() }) : null;
     if (this.markup) this.root.append(this.markup.root);
     this.model.scene.skipPointerMovePicking = true;
@@ -144,8 +166,12 @@ export class ModelViewer {
       this.frames = 3;
     });
     this.canvas.addEventListener('pointerup', (event) => {
-      if (!this.pointer.up(event)) return;
-      const [x, y] = this.local(event); const linked = this.linked.objectAt(x, y);
+      if (!this.pointer.up(event) || this.navigation.gesturing) return;
+      const [x, y] = this.local(event);
+      const task = this.tasks.pick(this.model.scene.createPickingRay(x, y, Matrix.Identity(), this.model.activeCamera), this.markup?.root.dataset.tool && this.markup.root.dataset.tool !== 'select' ? 'markup' : 'idle');
+      this.root.dataset.taskHit = JSON.stringify(task);
+      if (task.kind !== 'none') { this.navigation.stop(); this.actions.taskPick?.(task); return; }
+      const linked = this.linked.objectAt(x, y);
       if (linked) { this.actions.linkedReference?.(linked); return; }
       const id = this.model.objectAt(x, y);
       if (id) this.select(id);
@@ -156,7 +182,7 @@ export class ModelViewer {
     });
     this.canvas.addEventListener('pointermove', event => {
       this.pointer.move(event);
-      if (event.buttons || !this.pointer.canHover || this.drag || !['mouse', 'pen'].includes(event.pointerType)) { this.hover(null); return; }
+      if (this.navigation.gesturing || event.buttons || !this.pointer.canHover || this.drag || !['mouse', 'pen'].includes(event.pointerType)) { this.hover(null); return; }
       const [x, y] = this.local(event); const linked = this.linked.objectAt(x, y);
       this.hover(linked ? null : this.model.objectAt(x, y)); this.linked.hover(linked);
       if (linked) { this.canvas.style.cursor = 'pointer'; this.frames = 2; }
@@ -168,8 +194,9 @@ export class ModelViewer {
       if (event.button !== 0 || !event.isPrimary || !this.state?.interactive) return;
       event.preventDefault(); event.stopPropagation();
       this.pointer.cancelClick(); this.hover(null);
+      this.navigation.stop();
       this.drag = { id: event.pointerId, origin: [event.clientX, event.clientY], target: null, moved: false };
-      this.model.camera.detachControl(); this.handle.setPointerCapture(event.pointerId);
+      this.model.activeCamera.detachControl(); this.handle.setPointerCapture(event.pointerId);
       this.root.dataset.marking = 'true';
     });
     this.handle.addEventListener('pointermove', (event) => {
@@ -198,7 +225,7 @@ export class ModelViewer {
   }
 
   private readonly visibility = (): void => {
-    if (document.hidden) { this.pointer.reset(); this.hover(null); this.endDrag(false); this.markup?.hide(); this.engine.stopRenderLoop(this.renderFrame); }
+    if (document.hidden) { this.navigation.stop(); this.pointer.reset(); this.hover(null); this.endDrag(false); this.markup?.hide(); this.engine.stopRenderLoop(this.renderFrame); }
     else if (this.active) { this.frames = 3; this.engine.runRenderLoop(this.renderFrame); }
   };
 
@@ -210,7 +237,7 @@ export class ModelViewer {
   private markupSurface(x: number, y: number): { position: MarkupPoint; normal: MarkupPoint } | null {
     const native = this.model.surfaceAt(x, y);
     const linked = this.model.scene.pick(x, y, mesh => this.linked.pick(mesh) !== null);
-    const ray = this.model.scene.createPickingRay(x, y, Matrix.Identity(), this.model.camera);
+    const ray = this.model.scene.createPickingRay(x, y, Matrix.Identity(), this.model.activeCamera);
     const picked = linked?.hit && linked.pickedPoint && (!native || linked.distance < Vector3.Distance(ray.origin, native.position))
       ? { position: linked.pickedPoint, normal: linked.getNormal(true) } : native;
     if (!picked?.normal) return null;
@@ -218,7 +245,7 @@ export class ModelViewer {
     return { position: [p.x, p.z, p.y], normal: [n.x, n.z, n.y] };
   }
 
-  startMarkup(tool: MarkupTool = 'rectangle'): void { this.markup?.start(tool); }
+  startMarkup(tool: MarkupTool = 'rectangle'): void { this.navigation.stop(); this.markup?.start(tool); }
 
   private hover(id: string | null): void {
     this.linked.hover(null);
@@ -233,7 +260,7 @@ export class ModelViewer {
     const drag = this.drag; if (!drag) return;
     this.drag = null; delete this.root.dataset.marking;
     if (this.handle.hasPointerCapture(drag.id)) this.handle.releasePointerCapture(drag.id);
-    this.model.camera.attachControl(this.canvas, false);
+    if (this.navigation.state.kind === 'overview') this.model.camera.attachControl(this.canvas, false);
     this.model.mark(this.state?.reference ?? null); this.frames = 2; this.updateCaption();
     if (commit && drag.moved && drag.target) this.actions.reference(drag.target);
   }
@@ -267,16 +294,21 @@ export class ModelViewer {
 
   private readonly renderFrame = (): void => {
     if (!this.active || this.root.clientWidth === 0 || this.root.clientHeight === 0) return;
-    const camera = this.model.camera; camera.update();
-    const signature = `${camera.alpha}:${camera.beta}:${camera.radius}:${camera.target.toString()}`;
+    const now = performance.now();
+    this.navigation.tick(this.previousFrame ? (now - this.previousFrame) / 1000 : 0); this.previousFrame = now;
+    const camera = this.model.activeCamera; camera.update();
+    const signature = `${camera.uniqueId}:${camera.getViewMatrix().toArray().join(':')}`;
     if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; this.hover(null); }
     this.markup?.flush();
+    if (this.taskDescriptors.some(task => task.state === 'working')) this.frames = Math.max(this.frames, 1);
     const ready = this.model.scene.isReady();
     // Async shaders/textures can become ready after the last budgeted frame.
     // Render that transition before publishing readiness or going idle.
     if (ready && this.root.dataset.sceneReady !== 'true') this.frames = Math.max(1, this.frames);
     if (this.frames <= 0 && ready) return;
+    this.tasks.renderFrame(now);
     this.model.scene.render(false); this.frames -= 1;
+    this.actions.taskAnchors?.(this.tasks.anchors(camera, this.canvas.clientWidth, this.canvas.clientHeight), this.canvas.getBoundingClientRect());
     this.root.dataset.sceneReady = String(this.model.scene.isReady());
     this.root.dataset.activeMeshes = String(this.model.scene.getActiveMeshes().length);
     const errors = this.model.scene.meshes.flatMap((mesh) => mesh.subMeshes?.map((part) => part.effect?.getCompilationError() ?? '') ?? []).filter(Boolean);
@@ -291,6 +323,9 @@ export class ModelViewer {
   show(host: HTMLElement, state: ViewerState): void {
     let next: ActiveViewerState = { ...state, levelId: state.levelId ?? null, roofVisible: state.roofVisible ?? true };
     const projectChanged = this.state?.projectId !== next.projectId;
+    const previousPose = this.captureInsidePose();
+    const retainedPose = !projectChanged && next.navigationTarget !== undefined && this.state?.navigationTarget === next.navigationTarget && this.state?.levelId === next.levelId ? previousPose : null;
+    this.poseNotice = '';
     if (this.drag && (projectChanged || !state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
     if (projectChanged || !state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
     next = { ...next, selectedId: this.comparisonSelection ?? state.selectedId };
@@ -302,7 +337,7 @@ export class ModelViewer {
     const objects = [...new Map([...(state.comparison?.entities ?? []), ...state.snapshot.entities].map((item) => [item.id, item])).values()]
       .filter((item) => item.type !== 'AssetFamily' && (inLevel(state.snapshot, item.id) || inLevel(state.comparison, item.id)));
     const changes = new Map((state.comparison ? modelChanges(state.comparison, state.snapshot) : []).map((item) => [item.id, item.status]));
-    if (!objects.some((item) => item.id === next.selectedId) || state.comparison && !this.comparisonSelection && !changes.has(next.selectedId)) {
+    if (next.selectedId !== '' && !objects.some((item) => item.id === next.selectedId) || state.comparison && !this.comparisonSelection && !changes.has(next.selectedId)) {
       next = { ...next, selectedId: objects.find((item) => changes.has(item.id))?.id ?? objects[0]?.id ?? '' };
     }
     const focusChanged = this.state?.focusId !== state.focusId;
@@ -310,7 +345,7 @@ export class ModelViewer {
     const viewChanged = !this.active || projectChanged || this.root.parentElement !== host || focusChanged || levelChanged
       || this.state?.mode !== next.mode || this.state?.cutaway !== next.cutaway || this.state?.roofVisible !== next.roofVisible
       || JSON.stringify([this.state?.snapshot, this.state?.comparison]) !== JSON.stringify([next.snapshot, next.comparison]);
-    if (viewChanged) { this.pointer.cancelClick(); this.hover(null); }
+    if (viewChanged) this.navigation.stop();
     this.state = next;
     const objectSignature = JSON.stringify(objects.map((item) => [item.id, item.name, changes.get(item.id)]));
     if (objectSignature !== this.objectSignature) {
@@ -320,8 +355,17 @@ export class ModelViewer {
     this.selection.value = next.selectedId;
     if (this.root.parentElement !== host) host.replaceChildren(this.root);
     this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison, state.projectId ?? null); this.model.select(this.linkedSelection ? '' : next.selectedId);
+    this.model.selectTaskTargets(next.taskTargetIds ?? []); this.root.dataset.taskTargetIds = JSON.stringify(next.taskTargetIds ?? []);
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
-    if (focusChanged || levelChanged) this.model.frame(state.focusId);
+    this.navigation.setContext({ projectId: state.projectId ?? null, sourcePin: state.navigationPin ?? JSON.stringify(state.snapshot),
+      levelId: next.levelId, snapshot: state.snapshot });
+    if (retainedPose) {
+      const retained = this.navigation.returnTo({ ...retainedPose, sourcePin: next.navigationPin ?? '' });
+      if (retained.kind === 'unsupported') this.poseNotice = retained.reason + ' Overview is shown; choose an explicit Inside or Fly entry.';
+    } else if (previousPose && !projectChanged && this.navigation.state.kind === 'overview') {
+      this.poseNotice = 'The source or level changed. Overview is shown; choose an explicit Inside or Fly entry.';
+    }
+    if (projectChanged) this.model.frame();
     this.model.setCutaway(state.cutaway);
     const floor = (next.levelId ? levels(state.snapshot).find(level => level.id === next.levelId) : entityLevel(state.snapshot, next.selectedId))
       ?? [...levels(state.snapshot)].sort((a, b) => a.elevation - b.elevation)[0];
@@ -333,7 +377,26 @@ export class ModelViewer {
     this.active = true; if (!document.hidden) this.engine.runRenderLoop(this.renderFrame);
   }
 
-  hide(): void { this.endDrag(false); this.markup?.hide(); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
+  setTasks(projectId: string | null, descriptors: readonly TaskAgentDescriptor[]): void {
+    this.taskDescriptors = descriptors; this.tasks.replace(projectId ?? 'none', descriptors); this.frames = 3;
+  }
+  frameTaskOrigin(point: readonly [number, number, number]): void {
+    this.changeView({ kind: 'overview' }); this.model.camera.setTarget(new Vector3(point[0], point[2], point[1]));
+    this.model.camera.radius = 4; this.frames = 3;
+  }
+
+  get navigationState(): ViewSession { return this.navigation.state; }
+  captureInsidePose(): InsidePose | null { return this.navigation.capture(); }
+  stopNavigation(): void { this.navigation.stop(); }
+  async activateMouseLook(): Promise<'locked' | 'drag' | 'unavailable'> { return this.navigation.activateMouseLook(); }
+  changeView(intent: ViewIntent): NavigationResult {
+    const result = this.navigation.change(intent); this.frames = 3; return result;
+  }
+  returnToPose(pose: InsidePose): NavigationResult {
+    const result = this.navigation.returnTo(pose); this.frames = 3; return result;
+  }
+
+  hide(): void { this.navigation.stop(); this.endDrag(false); this.markup?.hide(); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
   setLinkedModels(links: readonly LinkedDisplay[]): void {
     this.linked.setLinks(links); this.frames = 3;
     this.root.dataset.linkedModels = String(links.filter(link => link.visible).length);
@@ -346,6 +409,7 @@ export class ModelViewer {
     const meshes = this.model.scene.meshes.filter(mesh => mesh.isEnabled() && mesh.name.startsWith('ifc:')
       && (!selection || mesh.name === 'ifc:' + selection.occurrence.id + ':' + selection.source.globalId));
     if (!meshes.length) return;
+    this.changeView({ kind: 'overview' });
     const boxes = meshes.map(mesh => { mesh.computeWorldMatrix(true); return mesh.getBoundingInfo().boundingBox; });
     const minimum = new Vector3(Math.min(...boxes.map(box => box.minimumWorld.x)), Math.min(...boxes.map(box => box.minimumWorld.y)), Math.min(...boxes.map(box => box.minimumWorld.z)));
     const maximum = new Vector3(Math.max(...boxes.map(box => box.maximumWorld.x)), Math.max(...boxes.map(box => box.maximumWorld.y)), Math.max(...boxes.map(box => box.maximumWorld.z)));
@@ -355,10 +419,10 @@ export class ModelViewer {
     this.model.camera.lowerRadiusLimit = Math.max(.1, span * .02); this.model.camera.upperRadiusLimit = Math.max(20, span * 8);
     this.frames = 3;
   }
-  frame(): void { this.pointer.cancelClick(); this.hover(null); this.model.frame(); this.frames = 3; }
+  frame(): void { this.changeView({ kind: 'overview' }); this.pointer.cancelClick(); this.hover(null); this.model.frame(); this.frames = 3; }
   dispose(): void {
     this.hide(); this.observer.disconnect(); document.removeEventListener('visibilitychange', this.visibility);
-    this.markup?.dispose(); this.linked.dispose(); this.model.dispose(); this.engine.dispose();
+    this.navigation.dispose(); this.markup?.dispose(); this.tasks.dispose(); this.linked.dispose(); this.model.dispose(); this.engine.dispose();
     if (FileToolsOptions.PreprocessUrl === this.imageUrl) FileToolsOptions.PreprocessUrl = this.previousImageUrl;
     for (const url of this.embeddedImages.values()) URL.revokeObjectURL(url);
     this.embeddedImages.clear();

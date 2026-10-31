@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "added": [],
+    "removed": [],
+    "modified": [
+      {
+        "id": "level-ground-door-inner",
+        "before": {
+          "id": "level-ground-door-inner",
+          "type": "Door",
+          "name": "Ground floor connecting door",
+          "width": 0.9,
+          "height": 2.1
+        },
+        "after": {
+          "id": "level-ground-door-inner",
+          "type": "Door",
+          "name": "Ground floor connecting door",
+          "width": 1.1,
+          "height": 2.1
+        }
+      }
+    ]
+  },
+  "relationships": {
+    "added": [],
+    "removed": [],
+    "modified": [
+      {
+        "id": "host-level-ground-door-inner",
+        "before": {
+          "id": "host-level-ground-door-inner",
+          "type": "hosted-by",
+          "source": "level-ground-door-inner",
+          "target": "level-ground-wall-inner",
+          "offset": 3
+        },
+        "after": {
+          "id": "host-level-ground-door-inner",
+          "type": "hosted-by",
+          "source": "level-ground-door-inner",
+          "target": "level-ground-wall-inner",
+          "offset": 2.9
+        }
+      }
+    ]
+  }
+}

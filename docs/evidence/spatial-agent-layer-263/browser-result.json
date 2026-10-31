@@ -1,0 +1,49 @@
+{
+  "errors": [],
+  "viewports": [
+    "1440x1000",
+    "390x844",
+    "320x844"
+  ],
+  "narrowBounds": [
+    {
+      "viewport": 390,
+      "bounds": [
+        {
+          "text": "2 conversations · T-01 / T-02",
+          "left": 200.5390625,
+          "right": 381.9921875,
+          "width": 181.453125
+        },
+        {
+          "text": "Draft-03",
+          "left": 17.03125,
+          "right": 82.96875,
+          "width": 65.9375
+        }
+      ]
+    },
+    {
+      "viewport": 320,
+      "bounds": [
+        {
+          "text": "2 conversations · T-01 / T-02",
+          "left": 130.5390625,
+          "right": 311.9921875,
+          "width": 181.453125
+        },
+        {
+          "text": "Draft-03",
+          "left": 8,
+          "right": 73.9375,
+          "width": 65.9375
+        }
+      ]
+    }
+  ],
+  "actualBodyPick": true,
+  "samePlaceChooser": true,
+  "unplacedKeyboardAccess": true,
+  "occlusion": true,
+  "constructionModelDelta": 0
+}
