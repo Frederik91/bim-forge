@@ -580,7 +580,11 @@ export class ModelScene {
     return hit ? this.pickParts.get(hit.mesh.uniqueId)?.objectId ?? null : null;
   }
 
-  surfaceAt(x: number, y: number): { position: Vector3; normal: Vector3 } | null {
+  hasSurface(objectId: string): boolean {
+    return this.parts.some(part => part.objectId === objectId && !part.before);
+  }
+
+  surfaceAt(x: number, y: number): { objectId: string; position: Vector3; normal: Vector3 } | null {
     const hit = this.batches.pick(x, y, mesh => mesh.isPickable && this.pickParts.get(mesh.uniqueId)?.before === false);
     if (!hit) return null;
     const ray = this.scene.createPickingRay(x, y, Matrix.Identity(), this.camera);
@@ -588,7 +592,8 @@ export class ModelScene {
     if (!source.hit || !source.pickedPoint || Vector3.Distance(source.pickedPoint, hit.point) > .00001) return null;
     const normal = source.getNormal(true);
     if (!normal) return null;
-    return { position: hit.point, normal: normal.normalize() };
+    const objectId = this.pickParts.get(hit.mesh.uniqueId)?.objectId;
+    return objectId ? { objectId, position: hit.point, normal: normal.normalize() } : null;
   }
 
   referenceAt(x: number, y: number): SpatialReference | null {
