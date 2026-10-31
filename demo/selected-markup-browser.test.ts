@@ -84,6 +84,10 @@ async function draw(page: Page, point: { x: number; y: number }, count = 1) {
 
 test('selecting a wall then opening Markup uses that face, with an explicit persistent floor override', { timeout: 90_000 }, async t => {
   const f = await fixture(t, 'selected-wall'); const { page } = f;
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready') === 'true');
+  await page.locator('#project-overview:enabled').waitFor();
+  assert.ok(await page.getByRole('button', { name: '3D markup', exact: true }).isVisible(), 'Reopening a saved project must restore markup controls.');
   const point = await wallPoint(page); await page.mouse.click(point.x, point.y);
   assert.equal(await page.getByLabel('Select 3D object').inputValue(), point.id);
   await page.getByRole('button', { name: '3D markup', exact: true }).click();
@@ -142,6 +146,9 @@ test('a validated proposal preview permits markup and sends its exact proposal b
     && 'project' in ready.ticket.result && typeof ready.ticket.result.project === 'string');
   const proposal = await RoomRepository.restore(ready.ticket.result.project);
   const expected = proposal.reviews().find(review => review.decision.status === 'pending'); assert.ok(expected);
+  await page.getByRole('button', { name: 'Back to request model', exact: true }).click();
+  await page.getByRole('button', { name: 'Inspect proposal', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept into Main', exact: true }).waitFor();
   const markup = page.getByRole('button', { name: '3D markup', exact: true });
   assert.ok(await markup.isVisible(), 'The proposal must retain markup controls.');
   const point = await wallPoint(page); await page.mouse.click(point.x, point.y); await markup.click();
