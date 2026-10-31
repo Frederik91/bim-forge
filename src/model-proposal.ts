@@ -24,8 +24,7 @@ import { MAX_EVIDENCE_PINS, MAX_EVIDENCE_CONTEXT_ENTRIES, MAX_EVIDENCE_CONTEXT_B
   parseEvidencePin, parseEvidenceReadSet, parseEvidenceEntry, evidenceCanonical } from './model-evidence.ts';
 import type { EvidenceEntry, EvidencePin, EvidenceReadSet, EvidenceSubject, EvidenceUse } from './model-evidence.ts';
 import { GeometryEvidenceSession, geometryNativeInput, encodeGeometryEvidence } from './geometry-evidence.ts';
-import type { GeometryEvidenceSource, GeometryEvidence } from './geometry-evidence.ts';
-import type { GeometrySessionInput } from './geometry-session.ts';
+import type { GeometryEvidenceSource, GeometryCurrentContext, DraftContinuation } from './geometry-evidence.ts';
 import { spatialMarkupBounds, spatialMarkupDescription } from './spatial-markup.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
@@ -89,7 +88,8 @@ export interface ProposalEvidenceContext {
     | { kind: 'unknown-required'; message: string; entryId: string })[];
 }
 export interface ModelProposalOptions {
-  geometry?: { source: GeometryEvidenceSource; current?: () => Promise<GeometrySessionInput['native']>; inherited?: GeometryEvidence };
+  geometry?: { source: GeometryEvidenceSource; current?: () => Promise<GeometryCurrentContext>;
+    chatId?: string; continuation?: DraftContinuation };
   evidenceContext?: ProposalEvidenceContext;
   conversation?: RequestConversation;
   initialDraft?: ModelSnapshot;
@@ -273,6 +273,8 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     }
     freezeScopeData(evidenceContext);
   }
+  if (options.geometry?.continuation && options.initialDraft) fail('A geometry continuation owns its initial draft.');
+  const initialDraft = options.geometry?.continuation?.initialDraft ?? options.initialDraft;
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);
   if (options.signal?.aborted) forwardAbort();
@@ -314,7 +316,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       fields(argumentsValue, ['language', 'source']);
       if (argumentsValue.language !== 'javascript' && argumentsValue.language !== 'typescript') fail('Unsupported script language.');
       if (typeof argumentsValue.source !== 'string' || !argumentsValue.source.trim()) fail('A script source body is required.');
-      const result = await scripts.run({ base: bound.base.snapshot, ...(options.initialDraft ? { initialDraft: options.initialDraft } : {}), binding: bound, language: argumentsValue.language, source: argumentsValue.source,
+      const result = await scripts.run({ base: bound.base.snapshot, ...(initialDraft ? { initialDraft } : {}), binding: bound, language: argumentsValue.language, source: argumentsValue.source,
         ...(geometry ? { geometry } : {}),
         remainingHostCalls: MAX_SCRIPT_HOST_CALLS - hostCalls, signal, onActivity, onPreview: snapshot => {
           if (snapshot === null || (!signal.aborted && !finished && !fatal)) options.onPreview?.(snapshot);
@@ -361,7 +363,9 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
       geometry = await GeometryEvidenceSession.open({ source: options.geometry.source, projectId: repository.projectId,
         requestId: bound.requestId, native: geometryNativeInput({ snapshot: bound.base.snapshot, revisionId: bound.base.id,
           target: bound.target?.target ?? { kind: 'main' }, ...(bound.scope ? { scope: bound.scope } : {}) }), signal,
-        ...(options.geometry.inherited ? { inherited: options.geometry.inherited } : {}),
+        history: repository.geometryHistory(bound.target?.target ?? { kind: 'main' }, bound.base.id),
+        chatId: options.geometry.chatId ?? bound.requestId,
+        ...(options.geometry.continuation ? { continuation: options.geometry.continuation } : {}),
         ...(options.geometry.current ? { current: options.geometry.current } : {}) });
       await geometry.assertFresh();
     }
@@ -376,7 +380,7 @@ export async function prepareModelProposal(repository: RoomRepository, input: un
     await runWorker(worker, { instructions: `${instructions}\n\nRegistered script API declarations:\n${declarations}`,
       input: { ...(options.conversation ? { conversation: options.conversation } : {}),
         ...(evidenceContext ? { sourceEvidence: evidenceContext } : {}),
-        ...(options.initialDraft ? { priorProposalDraft: modelWorkingGraph(options.initialDraft, bound.scope) } : {}), request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
+        ...(initialDraft ? { priorProposalDraft: modelWorkingGraph(initialDraft, bound.scope) } : {}), request: { requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.base.id,
         ...(bound.target ? { target: bound.target } : {}),
         selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
         ...(visual ? { conversationVisual: visual } : {}), ...(markupContext?.shapes.length ? { markupContext } : {}),
