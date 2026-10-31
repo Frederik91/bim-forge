@@ -324,8 +324,8 @@ export class ModelViewer {
     let next: ActiveViewerState = { ...state, levelId: state.levelId ?? null, roofVisible: state.roofVisible ?? true };
     const projectChanged = this.state?.projectId !== next.projectId;
     const previousPose = this.captureInsidePose();
-    const retainedPose = !projectChanged && this.state?.navigationTarget === next.navigationTarget && this.state?.levelId === next.levelId ? previousPose : null;
-    this.poseNotice = previousPose && !retainedPose && !projectChanged ? 'The source or level changed. Overview is shown; choose an explicit Inside or Fly entry.' : '';
+    const retainedPose = !projectChanged && next.navigationTarget !== undefined && this.state?.navigationTarget === next.navigationTarget && this.state?.levelId === next.levelId ? previousPose : null;
+    this.poseNotice = '';
     if (this.drag && (projectChanged || !state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
     if (projectChanged || !state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
     next = { ...next, selectedId: this.comparisonSelection ?? state.selectedId };
@@ -362,6 +362,8 @@ export class ModelViewer {
     if (retainedPose) {
       const retained = this.navigation.returnTo({ ...retainedPose, sourcePin: next.navigationPin ?? '' });
       if (retained.kind === 'unsupported') this.poseNotice = retained.reason + ' Overview is shown; choose an explicit Inside or Fly entry.';
+    } else if (previousPose && !projectChanged && this.navigation.state.kind === 'overview') {
+      this.poseNotice = 'The source or level changed. Overview is shown; choose an explicit Inside or Fly entry.';
     }
     if (projectChanged) this.model.frame();
     this.model.setCutaway(state.cutaway);
