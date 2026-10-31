@@ -1,0 +1,37 @@
+
+> bim-forge@0.1.0 test:ifc-workspace
+> node --test --test-concurrency=1 demo/linked-workspace-browser.test.ts
+
+✔ shipped workspace links IFC into one viewer and adds only unsent source context (3442.8641ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4658.7895
+✔ actual converted IFC remains pickable through Inside and Overview with source-bound poses and one FXAA camera (1628.0151ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2115.9761
+
+> bim-forge@0.1.0 validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+
+
+> bim-forge@0.1.0 lint
+> node scripts/validate-typescript.ts
+
+Strict TypeScript valid. 378 source file(s) checked.
+
+> bim-forge@0.1.0 typecheck
+> tsc --noEmit
+
+Policy valid. 0 changed file(s) checked.
+Explicit policy validation: 9 changed files passed. git diff --check: passed.
