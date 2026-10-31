@@ -1,0 +1,81 @@
+# Live spatial workspace — #257
+
+## Change review
+
+The existing native model remains present while an engineer starts or reopens a spatial conversation. A real hovering 3D agent represents the durable task at its captured origin. Picking its body opens the existing conversation and highlights exact source-bound targets without moving the eye. Two tasks at one point open a chooser. The original chat/composer is mounted once as a short, expandable overlay; closing it does not cancel work. Tasks remain accessible from a compact list, including unplaced and offscreen conversations.
+
+Construction-model delta outside disposable fixtures: **zero**. This change adds no storage schema, worker queue, model-edit API, acceptance authority, provider call or deployment configuration. Human review controls readiness and merge.
+
+## Plan and owning files
+
+- `room-app.ts`: capture one pinned origin per stable existing draft, bind object/region targets separately, reconcile the confirmed ticket, retain drafts/attachments and source context, preserve exact existing proposal inspection/decision controls.
+- `spatial-tasks.ts`: parse placement and recovery DTOs through their schemas; expose server placement resolution beside existing readonly state. Preserve the existing sequence and causal response ordering.
+- `model-viewer.ts` / `model-scene.ts`: borrow the existing Scene/engine, route agent ray picks separately, project anchors in the existing render loop, exclude agents from construction membership, and retain compatible Inside poses.
+- `spatial-task-layer.ts`: add the actual torso projection beside the label anchor. No graphics, origin, worker or camera authority changes.
+- `spatial-workspace-presentation.ts` / `canvas-studio.css`: one floating chat mount, measured/clamped labels, same-place chooser, truthful task list, explicit Return and draft-context refresh.
+- `spatial-workspace-browser.test.ts`: shipped UI and real native worker journey, plus actual batched ModelScene construction/pick/frame/export qualification.
+
+Read-only native context includes Wall, Door, Window, Space, Slab, Stair, Roof, Furniture, Equipment, AssetInstance and Level. No task mesh becomes a native entity. Region-only requests now submit zero implicit native IDs; a browsing level is not an object target.
+
+## Behavior and provenance
+
+Inside captures a point in air in the current facing direction; selection supplies independent targets. Native Plan uses its qualified inverse at the visible plan centre. Overview without a trustworthy point remains unplaced. An existing origin never follows later selections or movement. Source changes under an unsent draft require explicit **Refresh draft context**, which retains the point, text and attachments.
+
+Native highlights require project, target and revision equality and a present entity. Original regions also require their exact saved source. Server current/stale/missing/unavailable resolution is read on open. A missing source does not become a nearby current object with the same bare ID. Linked references and their retained evidence remain under their existing owners; new linked-source browser qualification belongs to #258.
+
+Compatible native proposal/current snapshot changes retain the actual Inside eye, forward, up and motion. If a source/level or supported Walk position is incompatible, the workspace exposes an Overview fallback and explanation. **Return to task** is the explicit task action that navigates: local unsent creation pose when available, otherwise the saved point in Overview. Durable placement has no server-saved eye pose, so a restarted task does not claim one.
+
+Only server states are shown: queued, working, needs-input, ready, completed (Accepted), failed, rejected and cancelled. Connection freshness is separate. No voice, team presence, privacy audience or provider-cleanup state is invented.
+
+## Before / after evidence
+
+| Check | Observed result |
+| --- | --- |
+| Actual agent body | The browser clicks `bodyX/bodyY`, and asserts the viewer's actual ray result is `task`; opening preserves eye, forward, up, project, level and motion. A displayed proposal can truthfully change the source pin. |
+| Same point / separate histories | Two independent UI submissions retain identical original points and different ticket IDs. An actual body hit opens the two-ID chooser, then the first durable conversation. Selection does not move the camera. |
+| Actual proposal and explicit acceptance | #264 offline worker executes the real ScriptBox WASM host. Accepted 900 mm door remains unchanged until an explicit existing decision. The 1100 mm result is compared against the independent full-snapshot oracle: one Door width and its hosted-by offset change, preserving the centre. |
+| Revision and proposal review | Revise focuses the original retained composer without accepting. Existing Canvas Studio checks retain exact proposal controls, offline decision exclusion, Sources & checks and explicit acceptance. |
+| Reload and unplaced | Original placement/targets survive acceptance and reload. Server resolution reports historical pins. A legacy request without placement is list-accessible, creates no label/figure, and disables Return. |
+| Explicit Return | The saved task point opens in Overview only after the explicit action. |
+| Attachments, drafts and late results | Existing controller browser journey retains independent task/project drafts and attachments, identical uncertain-ack replay, continuation in one task and delayed-poll exclusion. |
+| Region context | Existing production markup journey passes through actual submission and saved replay, native attic elevation, no accidental door target, and immediate new-chat reference clearing. |
+| Real batched scene | An authored native fixture with 48 additional validated equipment objects activates the shipped batching path. Its actual wall occludes a task. Task meshes do not enter construction picks, framing bounds or scene serialization; a task far outside the building does not expand model framing. |
+| Responsive presentation | Desktop 1440×1000 and phone 390×900 / 320×900 captures inspected directly. No horizontal document overflow. Short conversation is 44% of the phone stage, expandable to 88%; model and composer remain available. Labels wrap/clamp inside an 8 px stage inset while body projections remain unchanged. |
+
+Screenshots: [Desktop](spatial-workspace-257/desktop.png), [390 px](spatial-workspace-257/narrow-390.png), [320 px](spatial-workspace-257/narrow-320.png).
+
+## Validation
+
+- `npm ci --ignore-scripts`: passed; 0 dependency vulnerabilities reported.
+- `npm run validate`: passed — `Strict TypeScript valid. 381 source file(s) checked.` Typecheck and policy passed.
+- `npm run build:demo`: passed.
+- Controller, task-layer, ModelScene, navigation and #264 fixture/queue source batch: **71 passed, 0 failed/skipped**.
+- Existing Canvas Studio (including offline and Revise subtests), controller, markup and Plan browser journeys passed. The combined run also passed the new native live journey; its later new batching proof initially rejected the oversized test fixture as recorded below.
+- Final `node --test --test-concurrency=1 demo/spatial-workspace-browser.test.ts demo/model-scene-batches.test.ts`: **10 passed, 0 failed/skipped**. This includes the expanded native body/chooser/accept/reload/Return/unplaced journey and the real batched occlusion/export proof.
+- `node --test demo/preview-build.test.ts`: **2 passed, 0 failed/skipped**; hashed browser release and runtime packaging remain valid.
+- Impeccable detector over changed UI targets: `[]`. No validator or acceptance assertion was disabled.
+
+Replay source batch:
+
+```powershell
+node --test demo/spatial-tasks.test.ts demo/spatial-task-layer.test.ts demo/model-scene.test.ts demo/view-navigation.test.ts demo/spatial-workspace-fixture.test.ts demo/spatial-workspace-journey.test.ts
+node --test --test-concurrency=1 demo/spatial-workspace-browser.test.ts demo/spatial-plan-integration-browser.test.ts demo/spatial-tasks-browser.test.ts demo/spatial-markup-browser.test.ts demo/canvas-studio-browser.test.ts
+```
+
+## Run ledger and corrections
+
+1. 2026-10-31: checked AGENTS, policy, live issue #257 (no pause label), STATE paused false, contracts, DESIGN.md and owning component evidence. Exclusive isolated branch from `a008d802`. Maintainer renewed execution with “Continue with as many attempts as you need”; failures remain visible here.
+2. Initial strict check rejected nullable project ID passed to the nonnullable graphics API. Corrected the empty-layer sentinel; validation/build then passed.
+3. Browser regression exposed compact-panel flex shrink, toolbar overlap, a Tasks button blocking markup, and working bob moving conversation controls. Fixed panel sizing, moved Tasks into the model header and held panel placement stable during input. Existing controller, markup and Canvas Studio assertions pass unchanged.
+4. Immediate projection observation exposed a transient cleared origin under an unchanged draft identity. The fixed-origin graphics guard correctly rejected it. Projection updates now coalesce after the synchronous draft transition; the origin guard remains intact.
+5. Initial browser fixture used a hidden legacy selection control; switched to the shipped visible 3D picker. A full-pose assertion also included the source pin while the real proposal changed the displayed source. The corrected assertion checks every camera-pose field independently of source provenance.
+6. Stronger same-place proof exposed that label anchors project above the head. Reopening a chat alone was insufficient evidence of a body pick. Added separate actual torso coordinates, required actual `task` ray results, and qualified the real two-task chooser. Preserve chooser identities across projection refreshes; collapse coincident labels into one chooser label.
+7. Direct phone inspection caught inherited high-specificity split-row rules still shrinking the model. Replaced the spatial shell layout with one stage, retained a bounded short conversation and inspected both widths. No overflow check was weakened.
+8. A final provenance refinement found the schema's unbranded target ID at the existing branded design-key boundary. Parsed it through the owning target parser; final strict validation passes.
+9. Added a real batching proof. The original small native fixture did not activate batching; additions of 128 and 64 equipment objects correctly failed the existing 100-entity model bound. A validated 48-object addition activates batching within the bound. All occlusion/picking/framing/serialization assertions pass without changing the validator.
+
+## Remaining #258 gates and local handoff
+
+This is deterministic native/offline-worker qualification. It does not establish connected-provider interpretation accuracy or the final linked-IFC source/occurrence journey. Human visual acceptance and the combined local-release qualification remain #258 work. The parent lane already records Linux-only PDF preparation/socket prerequisites; this change does not weaken those checks or change source preparation.
+
+The existing `createDemoServer` and demo build remain the local-server seams. Browser tests run that real server on an ephemeral local port with a disposable SQLite queue and `spatialFixtureWorker`. Production deployment, provider connection, ready flags, merges and issue closure were not performed here.

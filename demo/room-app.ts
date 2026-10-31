@@ -1,3 +1,7 @@
+import { SpatialWorkspacePresentation } from './spatial-workspace-presentation.ts';
+import type { TaskAgentDescriptor } from './spatial-task-layer.ts';
+import { parseTaskPlacement } from '../src/task-placement.ts';
+import type { TaskOrigin, TaskPlacement } from '../src/task-placement.ts';
 import { createResidentialProject } from '../src/residential-floor.ts';
 import { createMultiStoreyProject } from '../src/multi-storey-house.ts';
 import { syntheticResidentialFixture } from '../src/synthetic-residential-fixture.ts';
@@ -349,6 +353,10 @@ let modelView: ModelView = '3d';
 let workspaceView: ViewIntent = { kind: 'inside', motion: 'walk' };
 let insideMotion: 'walk' | 'fly' = 'walk';
 let navigationNotice = '';
+let draftOrigin: TaskOrigin | null = null;
+let draftCreationPose: InsidePose | null = null;
+let draftOriginKey = '';
+
 export function getWorkspaceViewIntent(): ViewIntent { return { ...workspaceView }; }
 let modelViewer: ModelViewer | null = null;
 let linkedDisplays: LinkedDisplay[] = [];
@@ -693,7 +701,10 @@ function referenceMarkups(): SpatialMarkup[] {
   const conversation = tasks.projection.conversation;
   if (!conversation || conversation.ticketId !== tasks.projection.ticketId) return [];
   const message = conversation.messages.findLast(item => item.kind === 'user');
-  return message?.kind === 'user' ? conversationMarkups(message.visual) : [];
+  const latest = message?.kind === 'user' ? conversationMarkups(message.visual) : [];
+  const placement = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId)?.taskPlacement;
+  const regions = placement?.kind === 'placed' ? placement.targets.regions.filter(region => region.snapshot.revisionId === selectedRevision && region.snapshot.projectId === repo?.projectId && JSON.stringify(region.snapshot.target) === JSON.stringify(selectedDesignTarget)).map(region => region.markup) : [];
+  return [...new Map([...regions, ...latest].map(markup => [JSON.stringify(markup), markup])).values()];
 }
 const FLOOR_DRAFT_KEY = 'bim-forge-floor-plan-draft-v1:';
 function rememberFloorDraft(): void {
@@ -736,8 +747,110 @@ function recoverFloorDraft(): boolean {
 function taskIdentity(): { projectId: string | undefined; ticketId: string | null; draftId: string } {
   return { projectId: repo?.projectId, ticketId: tasks.projection.ticketId, draftId: tasks.projection.draftId };
 }
+const spatialWorkspace = new SpatialWorkspacePresentation({
+  stage: generic('workspace-shell').querySelector<HTMLElement>('.workspace-stage') ?? generic('workspace-shell'),
+  panel: generic('workspace-context'),
+  open: identity => { void perform(async () => {
+    if (!repo || identity.projectId !== repo.projectId) return;
+    if (identity.kind === 'task') await openConversation(identity.ticketId);
+    else {
+      const draft = tasks.getDraft(`${identity.projectId}:${identity.draftId}`);
+      if (draft) { saveChatDraft(); sourcePicker.switchDraft(`${identity.projectId}:${identity.draftId}`); restoreChatDraft(draft); }
+      showPage('request'); showRequestPane('details');
+    }
+  }); },
+  returnToTask: () => {
+    const ticket = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId);
+    const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
+    if (!origin) { status('This task is unplaced. Its conversation is available in Tasks.'); return; }
+    if (!ticket && draftCreationPose && returnWorkspaceToPose(draftCreationPose)) return;
+    changeWorkspaceView({ kind: 'overview' }); modelViewer?.frameTaskOrigin(origin.point);
+    status('Showing the saved task point in Overview. A creation eye pose is unavailable; no Walk surface is inferred.');
+  },
+  rebind: () => {
+    if (!repo || tasks.projection.ticketId || !draftOrigin || selectedDesignTarget.kind === 'baseline') return;
+    draftOrigin = { ...draftOrigin, snapshot: { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision } };
+    saveChatDraft(); updateSpatialWorkspace(); status('Draft context refreshed explicitly. Its original point, message and attachments are retained.');
+  },
+});
+let spatialProjectionPending = false;
+tasks.observeWorkspace(() => {
+  if (spatialProjectionPending) return;
+  spatialProjectionPending = true;
+  queueMicrotask(() => { spatialProjectionPending = false; updateSpatialWorkspace(); });
+});
+function ensureDraftOrigin(): void {
+  if (!repo || tasks.projection.ticketId || selectedDesignTarget.kind === 'baseline' || reviewRepository || liveChatPreview) return;
+  if (draftOriginKey !== tasks.key) { draftOriginKey = tasks.key; draftOrigin = null; draftCreationPose = null; }
+  if (draftOrigin) return;
+  const snapshot: TaskOrigin['snapshot'] = { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision };
+  const pose = modelView === '3d' ? captureWorkspaceInsidePose() : null;
+  if (pose) {
+    draftCreationPose = pose;
+    draftOrigin = { snapshot, frame: 'project-engineering-metres', view: '3d', levelId: activeLevelId,
+      point: [pose.eye[0] + pose.forward[0] * 1.25, pose.eye[1] + pose.forward[1] * 1.25, pose.eye[2] - .55 + pose.forward[2] * 1.25] };
+  } else if (modelView === 'plan') {
+    const svg = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg'); const plan = svg ? getWorkspacePlanContext(svg) : null;
+    if (plan) { const point = plan.projection.inverse([plan.width / 2, plan.height / 2]).point;
+      draftOrigin = { snapshot, frame: 'project-engineering-metres', view: '2d', levelId: plan.levelId, point: [...point] }; }
+  }
+}
+function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlacement {
+  ensureDraftOrigin(); const origin = draftOrigin;
+  if (!origin) return { version: 1, kind: 'unplaced', reason: 'not-provided' };
+  if (!repo || origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget)) {
+    throw new Error('The draft source changed. Use Refresh draft context to retain its point and explicitly bind the new source before sending.');
+  }
+  return parseTaskPlacement({ version: 1, kind: 'placed', origin, targets: {
+    objects: selectedObjectIds.map(entityId => ({ kind: 'native', ...origin.snapshot, entityId })),
+    regions: conversationMarkups(chatVisual).map(markup => ({ snapshot: origin.snapshot, markup })),
+  } });
+}
+function currentTaskHighlights(): string[] {
+  const ticket = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId);
+  return ticket ? currentTaskObjectIds(ticket.taskPlacement) : [];
+}
+function currentTaskObjectIds(placement: TaskPlacement): string[] {
+  if (!repo || placement.kind !== 'placed') return [];
+  const repository = repo;
+  return placement.targets.objects.flatMap(ref => ref.kind === 'native' && ref.projectId === repository.projectId
+    && ref.revisionId === selectedRevision && JSON.stringify(ref.target) === JSON.stringify(selectedDesignTarget)
+    && repository.view(selectedRevision).snapshot.entities.some(entity => entity.id === ref.entityId) ? [ref.entityId] : []);
+}
+function spatialDescriptors(): TaskAgentDescriptor[] {
+  if (!repo) return [];
+  const projectId = repo.projectId;
+  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.map(ticket => ({
+    identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state,
+    placement: ticket.taskPlacement.kind === 'placed' ? { kind: 'placed', origin: ticket.taskPlacement.origin.point } : { kind: 'unplaced' },
+    selected: ticket.id === tasks.projection.ticketId, visible: true,
+  }));
+  for (const [key, draft] of tasks.projection.drafts) {
+    if (draft.projectId !== projectId || draft.ticketId || key === tasks.key) continue;
+    descriptors.push({ identity: { kind: 'draft', projectId, draftId: draft.draftId }, title: draft.text.trim().slice(0, 60) || 'New conversation', state: 'unsent',
+      placement: draft.spatial.origin ? { kind: 'placed', origin: draft.spatial.origin.point } : { kind: 'unplaced' }, selected: false, visible: true });
+  }
+  if (!tasks.projection.ticketId) descriptors.push({ identity: { kind: 'draft', projectId, draftId: tasks.projection.draftId }, title: 'New conversation', state: 'unsent',
+    placement: draftOrigin ? { kind: 'placed', origin: draftOrigin.point } : { kind: 'unplaced' }, selected: true, visible: true });
+  return descriptors;
+}
+function updateSpatialWorkspace(): void {
+  const ticket = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId);
+  const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
+  const staleDraft = !ticket && !!origin && (origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget));
+  const stale = ticket?.taskPlacement.kind === 'placed' && (ticket.taskPlacement.origin.snapshot.revisionId !== selectedRevision || ticket.taskPlacement.targets.objects.some(ref => ref.kind === 'ifc'));
+  const resolution = tasks.projection.placementResolution;
+  const unresolved = resolution?.kind === 'placed' ? [resolution.origin, ...resolution.objects, ...resolution.regions].filter(pin => pin.status !== 'current') : [];
+  const showingProposal = !!origin && serverAcceptedRepository?.designTargets().find(view => designKey(view.target) === designKey(parseDesignTarget(origin.snapshot.target)))?.revisionId === origin.snapshot.revisionId && selectedRevision !== origin.snapshot.revisionId;
+  const notice = tasks.projection.offline ? 'Connection unavailable. Showing the last server task state; decisions wait for reconnection.' : unresolved.length ? unresolved.map(pin => `${pin.status}: ${pin.detail}`).join(' ') : staleDraft ? 'Draft source changed. Refresh context explicitly before sending.' : showingProposal ? 'Task targets refer to the accepted model. Showing proposal geometry.' : stale ? 'Saved context is historical or needs source verification. Original targets are retained; inspect their evidence before refreshing context.'
+    : !origin ? 'Unplaced conversation. Open it from Tasks; no spatial point has been inferred.' : '';
+  const descriptors = spatialDescriptors();
+  spatialWorkspace.update(descriptors, notice, !!origin, staleDraft);
+  modelViewer?.setTasks(repo?.projectId ?? null, descriptors);
+}
+
 function captureChatDraft() {
-  return { ...taskIdentity(), text: ui['request-text'].value, name: ui['proposal-name'].value,
+  return { ...taskIdentity(), spatial: { origin: draftOrigin, pose: draftCreationPose, key: draftOriginKey }, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, designTarget: selectedDesignTarget, conversationTarget, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
     sources: sourcePicker.ready ? sourcePicker.sources : [], invalid: invalidInput, evidencePins: chatEvidencePins, evidenceEdited: chatEvidenceEdited,
@@ -759,6 +872,7 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   selectedObject = draft.selection; focusedRoomId = draft.room; activeLevelId = draft.level; modelView = draft.view;
   preview = draft.preview; layout = draft.layout; chatVisual = draft.visual; visualDraft = draft.marker; inspectedChatView = draft.inspection;
   invalidInput = draft.invalid;
+  draftOrigin = draft.spatial.origin; draftCreationPose = draft.spatial.pose; draftOriginKey = draft.spatial.key;
   if (draft.ticketId) tasks.selectTask(draft.ticketId); else tasks.startTask(draft.draftId);
   chatEvidencePins = draft.evidencePins; chatEvidenceEdited = draft.evidenceEdited;
   activeReview = draft.review; activeTicketId = draft.reviewTicketId; activeChatProposalMessageId = draft.proposalMessageId;
@@ -1604,6 +1718,7 @@ async function beginRequest(): Promise<boolean> {
   saveChatDraft();
   closeChat();
   tasks.startTask();
+  draftOrigin = null; draftCreationPose = null; draftOriginKey = tasks.key;
   sourcePicker.switchDraft(`${repo.projectId}:${tasks.projection.draftId}`);
   clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
   renderComparison();
@@ -1831,14 +1946,15 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: explicitTarget ? frozenTarget.revisionId : selectedRevision,
       ...(explicitTarget ? { target: frozenTarget } : {}),
       selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...implicitNativeSelection, ...(!hasMarkup && focusedRoomId ? [focusedRoomId] : []),
-        ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
+        ...(contextLevelId && !hasMarkup ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
       ...(chatEvidencePins.length ? { evidencePins: chatEvidencePins } : {}),
       ...(chatVisual ? { conversationVisual: checkedChatVisual() } : {}),
       ...(scope ? { scope } : {}),
       ...(ui['request-reconstruct'].checked ? { authoringScope: ui['reconstruction-scope'].value } : {}) } };
+    const taskPlacement = captureTaskPlacement(content.request.selectedObjectIds);
     saveChatDraft();
-    const acknowledgement = await tasks.submit(content);
+    const acknowledgement = await tasks.submit({ ...content, request: { ...content.request, taskPlacement } });
     void refreshSourceMentions(repo.projectId).catch(() => {});
     const submittedTicket = acknowledgement.ticket;
     const submittedName = submittedTicket.request.proposalName;
@@ -1866,6 +1982,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
 
 function closeChat(): void {
   conversationTarget = null;
+  draftOrigin = null; draftCreationPose = null; draftOriginKey = '';
   chatEvidencePins = []; chatEvidenceEdited = false;
   liveChatPreview = null; livePreviewSelection = null;
   tasks.selectTask(null); activeChatProposalMessageId = null; chatVisual = null; inspectedChatView = null;
@@ -2017,11 +2134,13 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   if (!repo) return;
   saveChatDraft();
   const projectId = repo.projectId;
+  const browsingLevel = activeLevelId; const browsingView = modelView;
   const value = await tasks.openTask(id);
   const generation = tasks.generation;
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing conversation.');
   const ticket = tasks.parseTicket(value.ticket);
   if (ticket.projectId !== projectId) throw new Error('This conversation belongs to another project.');
+  await tasks.readPlacement(id);
   const key = `${projectId}:${id}`; const draft = tasks.getDraft(key);
   if (!keepProposal) { const accepted = await projects.read(projectId); tasks.requireCurrent(generation); displayAccepted(accepted); }
   selectedDesignTarget = ticket.request.target?.target ?? { kind: 'main' };
@@ -2033,8 +2152,10 @@ async function openConversation(id: string, keepProposal = false): Promise<void>
   const visual = latestUser?.kind === 'user' ? latestUser.visual : null;
   const context = conversationSelection({ graph: requireRepository().view(selectedRevision).snapshot,
     selectedObjectIds: ticket.request.selectedObjectIds, ...(visual ? { visual } : {}), ...(ticket.scope ? { scope: ticket.scope } : {}) });
-  activeLevelId = context.levelId; focusedRoomId = context.roomId; selectedObject = context.selectedId ?? '';
-  if (context.view) modelView = context.view === '2d' ? 'plan' : '3d';
+  activeLevelId = browsingLevel; focusedRoomId = context.roomId; selectedObject = context.selectedId ?? '';
+  modelView = browsingView;
+  if (ticket.taskPlacement.kind === 'placed') selectedObject = currentTaskObjectIds(ticket.taskPlacement)[0] ?? '';
+  draftOrigin = null; draftCreationPose = null; draftOriginKey = '';
   resetEditor();
   if (!context.selectedId) {
     selectedObject = ''; ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', '', true, true)); syncInspector();
@@ -2550,7 +2671,7 @@ function workspacePlan(fullSnapshot: ModelSnapshot, fullReference: ModelSnapshot
   const bounds = gesture?.camera.bounds ?? planBounds.get(key);
   const plan = createModelPlan({ source, comparison: comparison ? planSource(comparison, referenceId) : null,
     levelId: chosen?.id ?? null, viewport: { width, height, ...(bounds ? { bounds } : {}) },
-    selectedTargets: [{ kind: 'native', projectId: source.projectId, target: source.target, revisionId: source.revisionId, entityId: displayedSelection }], tokens: spatialTokens });
+    selectedTargets: [...new Set([...(displayedSelection ? [displayedSelection] : []), ...(interactive ? currentTaskHighlights() : [])])].map(entityId => ({ kind: 'native', projectId: source.projectId, target: source.target, revisionId: source.revisionId, entityId })), tokens: spatialTokens });
   const svg = renderModelPlan(document, plan);
   svg.setAttribute('aria-label', `${label}. ${plan.notices.join(' ')}`);
   svg.dataset.planKey = key;
@@ -3193,6 +3314,8 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       return;
     }
     modelViewer ??= new ModelViewer({
+      taskPick: hit => spatialWorkspace.pick(hit),
+      taskAnchors: (anchors, bounds) => spatialWorkspace.anchors(anchors, bounds),
       markup: attachMarkup,
       markupChat: () => { showRequestPane('details'); ui['request-text'].focus(); },
       linkedReference: selection => linkedPanel.select(selection),
@@ -3205,11 +3328,13 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
+    modelViewer.setTasks(requireRepository().projectId, spatialDescriptors());
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
-    modelViewer.show(host, { projectId: requireRepository().projectId, navigationPin: `${designKey(selectedDesignTarget)}:${selectedRevision}:${JSON.stringify(snapshot)}`, snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
+    modelViewer.show(host, { projectId: requireRepository().projectId, navigationTarget: designKey(selectedDesignTarget), navigationPin: `${designKey(selectedDesignTarget)}:${selectedRevision}:${JSON.stringify(snapshot)}`, snapshot, comparison, taskTargetIds: currentTaskHighlights(), selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
       interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null,
       markup: { binding: markupBinding(), editable: selectedDesignTarget.kind !== 'baseline' && !reviewRepository && !inspectedChatView,
         annotations: conversationMarkups(chatVisual), references: referenceMarkups() } });
+    if (modelViewer.poseRetentionNotice) { navigationNotice = modelViewer.poseRetentionNotice; workspaceView = { kind: 'overview' }; status(navigationNotice); }
     const intent = inDeltaDialog ? { kind: 'overview' } satisfies ViewIntent : workspaceView.kind === 'plan' ? { kind: 'overview' } satisfies ViewIntent : workspaceView;
     const session = modelViewer.navigationState;
     if (session.kind !== intent.kind || intent.kind === 'inside' && session.kind === 'inside' && session.motion !== intent.motion) {
@@ -3261,6 +3386,7 @@ function renderComparison(): void {
   renderRoomNavigation(selected);
   ui['original-drawing'].replaceChildren(workspacePlan(original, null, 'root', 'Original room plan', originalId));
   if (modelView === 'plan' && !(ui['changes-dialog'].open && changesTab === '3d')) {
+    spatialWorkspace.clearAnchors();
     modelViewer?.changeView({ kind: 'plan' }); modelViewer?.hide();
     const next = workspacePlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`, selectedRevision, liveChatPreview?.baseRevisionId ?? reviewedRevision?.comparisonBaseRevisionId ?? originalId);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
@@ -3276,6 +3402,8 @@ function renderComparison(): void {
       const comparison = planComparisons.get(next); if (comparison) planComparisons.set(root, comparison);
     } else ui['proposal-drawing'].replaceChildren(next);
   } else renderViewer(selected, comparison);
+  ensureDraftOrigin();
+  updateSpatialWorkspace();
   ui['proposal-drawing'].dataset.modelView = modelView;
   ui['view-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
   ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d' && modelViewer?.navigationState.kind === 'overview'));
