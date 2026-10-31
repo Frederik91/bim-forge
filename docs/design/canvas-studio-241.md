@@ -7,7 +7,7 @@ Issue: https://github.com/Frederik91/bim-forge/issues/241
 - [x] Ground: trace workspace, viewer, request conversation, composer and review authority.
 - [x] Sketch: compare complete React shell ownership with incremental React mounts.
 - [x] Agree: implement the maintainer-selected Canvas Studio direction; all left rail tools open side panels. Model explorer is full height, resizable and independently scrollable.
-- [ ] Implement: React chrome/tray, assistant-ui transcript, Tailwind/shadcn controls and build integration.
+- [x] Implement: React chrome/tray, assistant-ui transcript, Tailwind/shadcn controls and build integration.
 - [ ] Verify: isolated coding VM validation/build, existing behavior tests and real desktop/narrow browser evidence.
 - [ ] Hand back: visible run summary, validator output and draft PR; human controls readiness and merge.
 
@@ -39,6 +39,36 @@ This change modifies presentation, not model schemas, geometry operations or acc
 | 1 | Strict TypeScript, policy validation and production build | Passed; production browser bundle built |
 | 1 | Real chat/workspace/shipped-app browser suites | Failed: grid placement overlaps model controls; explorer opening does not reserve width; phone history below required height; external runtime updates history after facade anchoring. Logs retained on coding VM. |
 | 2 | Strict validation/build and real browser suites | Validation/build and all 6 chat + 7 workspace checks passed. Shipped-app tests exposed a fixture calling scope-only parameter editing without a scope, and the existing acceptance helper matched both the new tray and chat buttons. The fixture now uses the supported single-room rectangle operation; existing chat acceptance is explicitly scoped, with tray acceptance covered independently. |
+| 3 | Strict validation/build and 17 real browser checks | Validation/build passed. 16 browser checks passed, including real attachment, single-canvas lifetime, zero accepted-model changes before review and explicit tray acceptance changing only `door-entry`. Existing guided-floor phone PDF attachment check timed out waiting for the file-ready status at `floor-plan-guide-browser.test.ts:156`. Stopped further implementation/reruns under AGENTS.md three-attempt rule. |
+
+## Remaining work before readiness
+
+- Complete phone PDF attachment qualification. The VM has no `/usr/bin/pdfinfo`, `/usr/bin/pdftoppm` or `/usr/bin/pdftotext`, which the existing source preparer requires. Preserve the complete guided-floor reconstruction, source retention, restart and alternative-target assertions; do not label a missing-prerequisite run as a passing PDF flow.
+- Parent conversation-offline state must gate both tray publication and tray actions. Currently a later controls refresh can republish a tray hidden by a conversation refresh failure while chat correctly remains offline.
+- Tray Revise must reopen the request/assistant context before focusing the composer after Sources & checks has opened review.
+- Full `npm test` remains unrun for this implementation. No IFC runtime, live provider, production image, deployment or real-device touch qualification is claimed.
+- Draft PR only; no merge or deployment. The side panel and chat changes are not ready for approval until these issues are resolved and the required checks pass.
+
+## Review evidence
+
+Runtime source tested: `5d267e6`. Later handback edits contain documentation and synthetic screenshots only.
+
+```text
+npm run validate
+Strict TypeScript valid. 331 source file(s) checked.
+tsc --noEmit: passed
+Policy valid. 0 changed file(s) checked.
+npm run build:demo: passed
+Browser checks: 17 total, 16 pass, 1 fail, 0 skipped
+```
+
+The new shipped-app check proves source upload, one surviving canvas, baseline preservation before review, and explicit tray acceptance with exactly one modified entity (`door-entry`) and no additions/removals. All six chat checks and seven workspace checks passed. The existing guided-floor check reached desktop reconstruction, source persistence, explicit Main acceptance, an alternative and restart recovery before failing at phone PDF file readiness. This does not establish PDF, IFC runtime, provider or production-image qualification.
+
+![Canvas Studio shipped desktop UI](canvas-studio-241/canvas-studio-desktop.png)
+
+![Custom chat cards and canvas proposal review](canvas-studio-241/canvas-studio-proposal.png)
+
+![Pending phone PDF attachment qualification](canvas-studio-241/last-ui-state.png)
 
 ## Sources
 
