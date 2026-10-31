@@ -32,3 +32,22 @@ Portable hashes prove internal consistency, not the historical identity of a com
 ## Acceptance evidence
 
 The initial server-container regression at 2d0ca24 passes strict validation and fails at the expected missing final endpoint after removing the second cube. The follow-up must prove deletion, retained-clearance failure, reintroduction, current duplicate calls, concurrent acceptance, unrelated reconciliation, scoped hidden accepted IDs, legacy recovery, portable restore, repeated turns and decision-time accepted history. Runtime/provider/browser evidence will be reported separately from source checks. No fix or deployment is qualified by this design document.
+
+## Qualified preview receipt, 31 October 2026
+
+Dedicated draft PR: https://github.com/Frederik91/bim-forge/pull/243, stacked on unmerged PR239. Qualified executable: `2f0a6e0d07f10c9c9451c73d157019ea8a3cf03a`. Image: `sha256:7cf6f5ec7630688b1f5bc7e7a98db274c81d371d377aec575616df182f329422`. The deployed browser manifest SHA-256 is `d109f664f4f3155fe8007fcc2d1b3dc26ab1adbc8bb73d3d467414fddfae367f`.
+
+| Evidence | Result |
+| --- | --- |
+| Source04 | Strict validation of 341 TypeScript files, explicit 15-path policy check and 13 portable preflight tests passed. Full suite: 1,022 passed, zero failed, two existing optional skips. |
+| Image01 | Exact image passed 35 lifecycle tests, one durable conversation test, API/markup restart and real four-worker admission checks. |
+| Actual old-image upgrade | The prior deployed image generated a genuine v1 two-cube proposal in a disposable database. The new image resumed it, retained all original observations, removed the trial cube and accepted into the alternative only. Main, As-is and original evidence stayed unchanged through restart and portable restore. |
+| Browser01 | Fifteen source-hosted Chromium checks passed in an isolated server container, covering markup, chat, desktop/phone layouts and guided review. This is distinct from the production-image and live-provider evidence. |
+| Publication | Matching static/runtime pair published to https://192.168.1.17:9443/. Stopped-state and post-start fingerprints matched; original preview data, source state and authentication were preserved. ChatGPT remained connected. No merge or policy change. |
+| Live-provider UI | Reopened the original failed synthetic chat and submitted its correction through the deployed UI. It reached Ready for review with exactly one cube and the summary “Keep Cube 1 and remove only proposed Cube 2.” No acceptance was performed. |
+
+Live evidence binds project `3bf7b9af-8ab3-4a0e-a6e0-e3bf75f84a71`, ticket `4c0a84ef-3637-413e-ace1-b998e391c4f4` and new request `6a187261-21e7-4dd1-ae9a-c8aa665dd357`. Comparing exact stored snapshots proves the only delta from the prior draft is removal of `line-cube-2`: the remaining cube, family, room and relationships are identical. Both raw measurements and all four original receipts are preserved, now bound by a v2 ancestor proof. The earlier ready draft and failed turn remain in history. Complete accepted-project bytes match the before-UI capture, SHA-256 `790f5754e8b3463869e15cb21fb188de9ac8298c3ea1a14af7293cdb591713ee`.
+
+The retained attempt ledger is under `/ssd1/bim-forge-qualification/issue240/`. Source01 is the expected red regression; source02 stopped on an exact-optional-property TypeScript error; source03 exceeded its five-minute harness deadline and exposed an index-based fixture placement collision. The fixture fix keeps poses stable by identity and changes no validator. Source04 used a bounded twenty-minute deadline with unchanged CPU, memory, network and filesystem restrictions. Its control connection dropped while the run continued; saved logs and the original container's zero exit status were recovered without another execution. Image01, browser01 and the first publication all passed. Cumulative root growth remained below the existing 2 GiB Docker budget.
+
+V2 evidence remains forward-only for the prior preview image: after new writes, an old image cannot read it. Publication retains paired pre-write rollback artifacts, not a model-data rewind. These results qualify this bounded conversation workflow and one real-provider recovery, not all future geometry edits, large-model capacity or an unrestricted authority to discard measurements. Earlier markup-matrix receipts remain immutable historical evidence.
