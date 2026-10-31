@@ -113,7 +113,10 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
       await page.locator('.request-chat-status[data-status="offline"]').waitFor({ state: 'visible' });
       await page.locator('#request-text').fill('Keep the unsent revision draft.');
       assert.equal(await tray.count(), 0, 'Unrelated controls refresh must not republish an offline tray.');
-      await retainedAccept.evaluate(button => button.click());
+      await retainedAccept.evaluate(button => {
+        if (!(button instanceof HTMLButtonElement)) throw new Error('Expected a proposal decision button.');
+        button.click();
+      });
       await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       assert.deepEqual(decisionRequests, [], 'Retained offline controls cannot send decisions.');
       assert.equal((await project()).head('main'), baseline);
