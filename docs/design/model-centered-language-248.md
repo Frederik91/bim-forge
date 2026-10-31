@@ -33,6 +33,12 @@ The next study follows one continuous work session, rather than separate dashboa
 
 ## Interaction decisions to test
 
+Navigation extension requested by the maintainer: retain grounded WASD walking and add explicit mouse-look plus Fly locomotion. Fly uses the facing direction, allows ascent and descent, and can leave the room bounds. Keep a clear cursor-release action and a route back to the room. Input fields, focus loss, and view changes must stop movement. Scope: study `app.ts`, its HTML/CSS controls/help, and the product/UX navigation notes. Model entities and validators are unchanged. Acceptance evidence includes flight leaving eye height/room bounds, returning to Walk, cursor release, retained pose across views, and typing without camera movement.
+
+The built navigation extension passed regular Chromium interaction checks: Shift and Space rose above the synthetic ceiling; Ctrl reduced elevation; a stable flight height survived Plan and Inside switches; switching Fly off restored 1.6 m walking height. Captured mouse-look engaged on the model, actual mouse movement changed the view, and Escape released capture. Real WASD keystrokes entered into the conversation did not move the camera. The in-app browser refused cursor capture and correctly displayed the drag-to-look fallback. The 390-pixel layout had no horizontal overflow or overlap between navigation and object controls. The initial startup check caught an SVG element used where an HTML container was required; correcting the container restored startup. This remains a local study, not production navigation qualification.
+
+Independent navigation review found that a held drag could survive canvas focus loss. A real browser reproduction moved the marker after focus had moved to a view control. The shared stop-navigation path now cancels held keys, active drag, pointer capture, and mouse lock. Repeating the sequence left the marker unchanged. The reviewer scored this fix resolved and returned SHIP for study feedback after inspecting recaptured desktop and narrow screens. This verdict covers the listed fix, not production navigation or final visual identity.
+
 - How much anchored conversation can be read while leaving the object and room legible? What happens when its anchor leaves the view?
 - How are overlapping markers grouped without hiding task status, ownership, or required decisions?
 - How does Inside navigation preserve orientation through a jump, plan switch, section cut, and return?

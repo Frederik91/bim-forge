@@ -15,3 +15,7 @@ Policy valid. 0 changed file(s) checked.
 
 Explicit changed-file policy check: passed for 12 files.
 Accepted-model delta: zero. No production integration or deployment.
+
+Navigation extension: npm run validate passed after the shared drag/focus cancellation fix (350 source files).
+Chromium interaction checks: flight ascent/descent, mouse capture/turning, Escape release, Walk return, pose continuity, typed input isolation, and drag cancellation passed.
+Independent reviewer: listed focus-loss fix resolved; SHIP for study feedback only.

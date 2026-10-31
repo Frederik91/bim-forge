@@ -28,6 +28,8 @@ Text and voice are intended ways to express intent. Future VR is a consideration
 
 Being inside the building is the primary intended spatial experience. Plan, section, elevation, and overview remain readily available and preserve location, selection, and task context across view changes. Direct navigation to places and tasks complements movement through the building.
 
+Desktop controls include WASD movement, mouse-facing control with explicit cursor capture and Escape release, and a separate free-roam flight mode with ascent and descent. Conversation fields never use their keystrokes to move the camera. The isolated study demonstrates these controls; production integration and other input devices remain separate work.
+
 Built-in human voice chat, text chat, and private conversations let participants communicate without finding contact details in an external calling application. The interface distinguishes human recipients from agent instructions. Voice transport, proximity audio, recording, transcription, and retention remain open design decisions.
 
 Future agent instructions should link spoken phrases, pointing, and progressive drawing on a shared timeline, so references such as "this one" and "this way" resolve to the object and gesture at that time. [Issue #250](https://github.com/Frederik91/bim-forge/issues/250) tracks this explicitly deferred capability. It is planning only, outside the current interaction study.

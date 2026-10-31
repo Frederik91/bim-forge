@@ -30,6 +30,8 @@ Plan, section, elevation, and overview views remain readily available. Switching
 
 People can navigate through the building or jump directly to a room, object, saved viewpoint, or permitted shared task. Routine work must not require walking through every intervening space. Navigation controls and transitions still need testing across desktop, touch, keyboard, and future VR.
 
+Desktop navigation includes familiar game-style controls. WASD moves relative to the facing direction, and mouse movement turns that direction in an explicitly enabled mouse-look mode. Escape restores the cursor for selection and conversation. A separate free-roam flight mode allows movement beyond eye height and through the building for inspection, with explicit ascent, descent, and faster travel controls. Walking and flying remain distinguishable, and a return-to-room action recovers a useful location. Navigation input stops while a person types, changes views, or leaves the model focus.
+
 ### People can talk within the shared building
 
 Built-in voice chat, text chat, and private conversations let people communicate with others they encounter through the model or a shared task. A person can identify a permitted participant or task owner and start a conversation without finding external contact details or switching to a separate calling application.

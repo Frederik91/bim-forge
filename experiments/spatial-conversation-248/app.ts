@@ -3,6 +3,7 @@ import type { Mesh, AbstractMesh } from '@babylonjs/core';
 
 type PlaceKey = 'door' | 'wall';
 type View = 'inside' | 'plan' | 'section' | 'overview';
+type Locomotion = 'walk' | 'fly';
 type Recipient = 'agent' | 'person';
 type Audience = 'personal' | 'discipline' | 'company';
 type Message = { who: string; text: string; own: boolean };
@@ -63,11 +64,13 @@ function start(): void {
   section.mode = Camera.ORTHOGRAPHIC_CAMERA;
   section.inputs.clear();
   let view: View = 'inside';
+  let locomotion: Locomotion = 'walk';
   let savedInside = { position: inside.position.clone(), rotation: inside.rotation.clone() };
   let active: PlaceKey | null = null;
   let previewAvailable = false;
   let showingPreview = false;
   const keys = new Set<string>();
+  let gesture: { x: number; y: number; lastX: number; lastY: number; dragged: boolean; id: number } | null = null;
   const picking = new Map<AbstractMesh, PlaceKey>();
   const originals = new Map<Mesh, StandardMaterial>();
   const sky = new HemisphericLight('sky', new Vector3(.3, 1, -.5), scene);
@@ -222,10 +225,45 @@ function start(): void {
     else canvas.focus({ preventScroll: true });
   }
   function closeList(): void { element('thread-list').hidden = true; element('list-toggle').setAttribute('aria-expanded', 'false'); }
+  function stopNavigation(): void {
+    keys.clear();
+    if (gesture && canvas.hasPointerCapture(gesture.id)) canvas.releasePointerCapture(gesture.id);
+    gesture = null;
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+  }
+  function navigationUI(): void {
+    const locked = document.pointerLockElement === canvas;
+    element('flight-toggle').setAttribute('aria-pressed', String(locomotion === 'fly'));
+    element('flight-toggle').textContent = locomotion === 'fly' ? 'Fly on' : 'Fly';
+    element('flight-toggle').title = locomotion === 'fly' ? 'Switch to grounded walking' : 'Free roam with flight';
+    element('mouse-look').setAttribute('aria-pressed', String(locked));
+    element('mouse-look').textContent = locked ? 'Mouse look · Esc' : 'Mouse look';
+    element('aim').hidden = !locked;
+    for (const id of ['flight-toggle', 'mouse-look']) {
+      if (view === 'inside') element(id).removeAttribute('disabled');
+      else element(id).setAttribute('disabled', '');
+    }
+    if (view === 'inside') element('view-hint').textContent = locked
+      ? 'Mouse to look · WASD to move · Esc releases the cursor'
+      : locomotion === 'fly'
+        ? 'Fly · WASD follows your gaze · Space up · Ctrl down · Shift faster'
+        : 'Walk · WASD / arrows · drag to look, or enable Mouse look';
+  }
+  function setLocomotion(next: Locomotion): void {
+    stopNavigation();
+    locomotion = next;
+    if (next === 'walk') {
+      inside.position.x = Math.max(-2.7, Math.min(2.7, inside.position.x));
+      inside.position.z = Math.max(-1.65, Math.min(1.65, inside.position.z));
+      inside.position.y = 1.6;
+    }
+    navigationUI();
+    canvas.focus({preventScroll:true});
+  }
   function switchView(next: View): void {
     if (view === 'inside' && next !== 'inside') savedInside = { position: inside.position.clone(), rotation: inside.rotation.clone() };
     if (next === 'inside' && view !== 'inside') { inside.position.copyFrom(savedInside.position); inside.rotation.copyFrom(savedInside.rotation); }
-    keys.clear(); orbit.detachControl(); view = next; scene.activeCamera = currentCamera();
+    stopNavigation(); orbit.detachControl(); view = next; scene.activeCamera = currentCamera();
     scene.clipPlane = next === 'plan' ? new Plane(0, 1, 0, -1.2) : next === 'section' ? new Plane(0, 0, 1, 0) : null;
     for (const mesh of planOnly) mesh.setEnabled(next === 'plan');
     syncPreview();
@@ -235,10 +273,12 @@ function start(): void {
     for (const key of views) { element(`view-${key}`).setAttribute('aria-pressed', String(key === next)); }
     element('view-hint').textContent = next === 'inside' ? 'Focus model · WASD / arrows to walk · Q/E to turn · drag to look' : next === 'overview' ? 'Drag to orbit · scroll to zoom' : next === 'plan' ? 'Orthographic plan · horizontal cut at 1.2 m' : 'Orthographic section · rear half clipped';
     const location = document.getElementById('location-label'); if (location) location.textContent = `${next === 'inside' ? 'Inside · eye height 1.6 m' : next[0]?.toUpperCase() + next.slice(1)} · Ground floor`;
+    navigationUI();
     positionUI();
   }
   function frameTask(key: PlaceKey): void {
     switchView('inside');
+    setLocomotion('walk');
     inside.position.set(key === 'door' ? .65 : -.8, 1.6, .5);
     inside.setTarget(places[key].anchor);
     savedInside = { position: inside.position.clone(), rotation: inside.rotation.clone() };
@@ -278,7 +318,23 @@ function start(): void {
   const views: View[] = ['inside', 'plan', 'section', 'overview'];
   for (const key of views) element(`view-${key}`).onclick = () => switchView(key);
   returnTask.onclick = () => { if (active) { frameTask(active); positionUI(); } };
-  element('frame').onclick = () => { if (active) frameTask(active); else { switchView('inside'); inside.position.set(0, 1.6, 1.15); inside.setTarget(new Vector3(0, 1.2, -2)); } };
+  element('frame').onclick = () => { if (active) frameTask(active); else { switchView('inside'); setLocomotion('walk'); inside.position.set(0, 1.6, 1.15); inside.setTarget(new Vector3(0, 1.2, -2)); } };
+  element('flight-toggle').onclick = () => { if (view === 'inside') setLocomotion(locomotion === 'walk' ? 'fly' : 'walk'); };
+  element('mouse-look').onclick = () => {
+    if (view !== 'inside') return;
+    if (document.pointerLockElement === canvas) { stopNavigation(); return; }
+    canvas.focus({preventScroll:true});
+    void canvas.requestPointerLock().catch(() => {
+      element('view-hint').textContent = 'Mouse look unavailable here. Drag on the model to look instead.';
+    });
+  };
+  document.addEventListener('pointerlockchange', () => { keys.clear(); navigationUI(); });
+  document.addEventListener('mousemove', event => {
+    if (document.pointerLockElement !== canvas || view !== 'inside') return;
+    inside.rotation.y += event.movementX * .003;
+    inside.rotation.x = Math.max(-1.35, Math.min(1.35, inside.rotation.x + event.movementY * .003));
+  });
+  compose.addEventListener('focusin', stopNavigation);
   element('close').onclick = closePlace;
   element('list-toggle').onclick = () => { const list = element('thread-list'); list.hidden = !list.hidden; element('list-toggle').setAttribute('aria-expanded', String(!list.hidden)); renderList(); };
   element('list-close').onclick = () => { closeList(); element('list-toggle').focus(); };
@@ -301,8 +357,7 @@ function start(): void {
   const helpToggle = document.getElementById('help-toggle'), helpPanel = document.getElementById('help-panel'), helpClose = document.getElementById('help-close');
   if (helpToggle && helpPanel) helpToggle.onclick = () => { helpPanel.hidden = !helpPanel.hidden; helpToggle.setAttribute('aria-expanded', String(!helpPanel.hidden)); };
   if (helpClose && helpPanel) helpClose.onclick = () => { helpPanel.hidden = true; helpToggle?.setAttribute('aria-expanded', 'false'); helpToggle?.focus(); };
-  let gesture: { x: number; y: number; lastX: number; lastY: number; dragged: boolean; id: number } | null = null;
-  canvas.addEventListener('pointerdown', event => { if (event.button !== 0) return; canvas.focus({ preventScroll: true }); gesture = { x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, dragged: false, id: event.pointerId }; canvas.setPointerCapture(event.pointerId); });
+  canvas.addEventListener('pointerdown', event => { if (event.button !== 0 || document.pointerLockElement === canvas) return; canvas.focus({ preventScroll: true }); gesture = { x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, dragged: false, id: event.pointerId }; canvas.setPointerCapture(event.pointerId); });
   canvas.addEventListener('pointermove', event => {
     if (!gesture || event.pointerId !== gesture.id) return;
     const dx = event.clientX - gesture.lastX, dy = event.clientY - gesture.lastY;
@@ -311,6 +366,12 @@ function start(): void {
     gesture.lastX = event.clientX; gesture.lastY = event.clientY;
   });
   canvas.addEventListener('pointerup', event => {
+    if (document.pointerLockElement === canvas && event.button === 0) {
+      const hit = scene.pick(canvas.clientWidth / 2, canvas.clientHeight / 2);
+      stopNavigation();
+      if (hit?.pickedMesh) { const key = picking.get(hit.pickedMesh); if (key) openPlace(key, true); }
+      return;
+    }
     const completed = gesture; gesture = null;
     if (!completed || event.pointerId !== completed.id) return;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -318,25 +379,28 @@ function start(): void {
     const rect = canvas.getBoundingClientRect(); const hit = scene.pick(event.clientX - rect.left, event.clientY - rect.top);
     if (hit?.pickedMesh) { const key = picking.get(hit.pickedMesh); if (key) openPlace(key); }
   });
-  canvas.addEventListener('pointercancel', () => { gesture = null; });
-  canvas.addEventListener('blur', () => keys.clear());
-  canvas.addEventListener('keydown', event => { if (document.activeElement !== canvas || view !== 'inside') return; if (['w', 'a', 's', 'd', 'q', 'e', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); keys.add(event.key); } });
-  window.addEventListener('keyup', event => keys.delete(event.key));
-  window.addEventListener('blur', () => { keys.clear(); gesture = null; });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') { closePlace(); closeList(); if (helpPanel) helpPanel.hidden = true; } });
+  canvas.addEventListener('pointercancel', stopNavigation);
+  canvas.addEventListener('blur', stopNavigation);
+  canvas.addEventListener('keydown', event => { if (document.activeElement !== canvas || view !== 'inside') return; const key = event.key.toLowerCase(); if (['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'control', 'shift'].includes(key)) { event.preventDefault(); keys.add(key); } });
+  window.addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
+  window.addEventListener('blur', () => { stopNavigation(); gesture = null; });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') { stopNavigation(); closePlace(); closeList(); if (helpPanel) helpPanel.hidden = true; } });
   scene.onBeforeRenderObservable.add(() => {
+    if (view === 'inside') element('location-label').textContent = `${locomotion === 'fly' ? 'Fly · free roam' : 'Inside · Walk'} · height ${inside.position.y.toFixed(1)} m`;
     if (view !== 'inside' || document.activeElement !== canvas || !keys.size) return;
     const turn = Number(keys.has('e')) - Number(keys.has('q'));
     inside.rotation.y += turn * Math.min(engine.getDeltaTime(), 50) * .002;
-    const forward = inside.getDirection(Axis.Z); forward.y = 0; forward.normalize();
+    const forward = inside.getDirection(Axis.Z); if (locomotion === 'walk') forward.y = 0; forward.normalize();
     const right = inside.getDirection(Axis.X); right.y = 0; right.normalize();
     const movement = Vector3.Zero();
-    if (keys.has('w') || keys.has('ArrowUp')) movement.addInPlace(forward);
-    if (keys.has('s') || keys.has('ArrowDown')) movement.subtractInPlace(forward);
-    if (keys.has('d') || keys.has('ArrowRight')) movement.addInPlace(right);
-    if (keys.has('a') || keys.has('ArrowLeft')) movement.subtractInPlace(right);
-    movement.normalize().scaleInPlace(Math.min(engine.getDeltaTime(), 50) * .0018);
-    inside.position.addInPlace(movement); inside.position.x = Math.max(-2.7, Math.min(2.7, inside.position.x)); inside.position.z = Math.max(-1.65, Math.min(1.65, inside.position.z)); inside.position.y = 1.6;
+    if (keys.has('w') || keys.has('arrowup')) movement.addInPlace(forward);
+    if (keys.has('s') || keys.has('arrowdown')) movement.subtractInPlace(forward);
+    if (keys.has('d') || keys.has('arrowright')) movement.addInPlace(right);
+    if (keys.has('a') || keys.has('arrowleft')) movement.subtractInPlace(right);
+    if (locomotion === 'fly') { if (keys.has(' ')) movement.y += 1; if (keys.has('control')) movement.y -= 1; }
+    movement.normalize().scaleInPlace(Math.min(engine.getDeltaTime(), 50) * .0018 * (keys.has('shift') ? 3 : 1));
+    inside.position.addInPlace(movement);
+    if (locomotion === 'walk') { inside.position.x = Math.max(-2.7, Math.min(2.7, inside.position.x)); inside.position.z = Math.max(-1.65, Math.min(1.65, inside.position.z)); inside.position.y = 1.6; }
   });
   window.addEventListener('resize', () => { engine.resize(); updateOrtho(); positionUI(); });
   switchView('inside'); renderState(); scene.onAfterRenderObservable.add(positionUI); engine.runRenderLoop(() => scene.render());
