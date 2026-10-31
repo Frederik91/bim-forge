@@ -8,8 +8,8 @@ Issue: https://github.com/Frederik91/bim-forge/issues/241
 - [x] Sketch: compare complete React shell ownership with incremental React mounts.
 - [x] Agree: implement the maintainer-selected Canvas Studio direction; all left rail tools open side panels. Model explorer is full height, resizable and independently scrollable.
 - [x] Implement: React chrome/tray, assistant-ui transcript, Tailwind/shadcn controls and build integration.
-- [ ] Verify: isolated coding VM validation/build, existing behavior tests and real desktop/narrow browser evidence.
-- [ ] Hand back: visible run summary, validator output and draft PR; human controls readiness and merge.
+- [x] Verify: isolated coding VM validation/build, full root suite and real desktop/narrow browser evidence.
+- [x] Hand back: visible run summary, validator output and draft PR; human controls readiness and merge.
 
 ## Existing flow and selected boundary
 
@@ -40,18 +40,29 @@ This change modifies presentation, not model schemas, geometry operations or acc
 | 1 | Real chat/workspace/shipped-app browser suites | Failed: grid placement overlaps model controls; explorer opening does not reserve width; phone history below required height; external runtime updates history after facade anchoring. Logs retained on coding VM. |
 | 2 | Strict validation/build and real browser suites | Validation/build and all 6 chat + 7 workspace checks passed. Shipped-app tests exposed a fixture calling scope-only parameter editing without a scope, and the existing acceptance helper matched both the new tray and chat buttons. The fixture now uses the supported single-room rectangle operation; existing chat acceptance is explicitly scoped, with tray acceptance covered independently. |
 | 3 | Strict validation/build and 17 real browser checks | Validation/build passed. 16 browser checks passed, including real attachment, single-canvas lifetime, zero accepted-model changes before review and explicit tray acceptance changing only `door-entry`. Existing guided-floor phone PDF attachment check timed out waiting for the file-ready status at `floor-plan-guide-browser.test.ts:156`. Stopped further implementation/reruns under AGENTS.md three-attempt rule. |
+| Maintainer continuation | Explicit instruction on 2026-10-31 | Maintainer overrode the attempt limit for this task, authorized missing tools and fixes, and required the full suite; draft PR only, no merge or deployment. AGENTS.md itself remains unchanged. |
+| Resume red | Two shipped-UI regressions before fixes | Reproduced offline tray republication after a controls refresh and a hidden composer after Revise from Sources & checks. Both assertions failed on the original implementation. |
+| Resume build | Regression control type narrowing | Typecheck rejected calling click on a possible SVG element. Narrowed the retained control to HTMLButtonElement. A prematurely started browser run was aborted and excluded; its log was retained separately. |
+| Resume browser | Parent state/dispatch fixes, Poppler 24.02.0 installed | Both regressions passed. Trace then isolated a fixture restart waiting on old HTTP connections; explicit fixture connection closure retained all restart/data assertions without increasing the timeout. The phone PDF workflow subsequently passed. |
+| Resume consolidated | Complete browser checks | 19/19 passed, including source upload, offline and stale actions, focused refinement, long-tree/side-panel behavior, desktop/phone layouts, PDF confirmation and restart recovery. |
+| Resume visual review | Phone toolbar bounds and touch targets | Added viewport/44px-target assertions; the original toolbar failed. Responsive grid layout passed all workspace checks without clipping the last control. |
+| Final browser run | Implementation `cd652f2`, compiled shipped assets | Strict validation/build and all 19 browser checks passed, with no skips. Browser timeout termination and protected-file owner rejection also passed independently. |
+| Full suite environment | Initial complete root run | Two immutable-tree tests failed under the VM's inherited umask 0002 because fixture files were group-writable. All other executed tests passed. A command-local umask 0022 made all four targeted deployment measurement checks pass; no validator or assertion changed. |
+| Full suite final | Implementation `cd652f2`, command-local umask 022 | `npm test` exited 0. All six stages passed; main stage 842 pass/2 conditional skips and assets 21/21. Both skipped cases also passed independently under their required environments. |
 
-## Remaining work before readiness
+## Maintainer follow-up
 
-- Complete phone PDF attachment qualification. The VM has no `/usr/bin/pdfinfo`, `/usr/bin/pdftoppm` or `/usr/bin/pdftotext`, which the existing source preparer requires. Preserve the complete guided-floor reconstruction, source retention, restart and alternative-target assertions; do not label a missing-prerequisite run as a passing PDF flow.
-- Parent conversation-offline state must gate both tray publication and tray actions. Currently a later controls refresh can republish a tray hidden by a conversation refresh failure while chat correctly remains offline.
-- Tray Revise must reopen the request/assistant context before focusing the composer after Sources & checks has opened review.
-- Full `npm test` remains unrun for this implementation. No IFC runtime, live provider, production image, deployment or real-device touch qualification is claimed.
-- Draft PR only; no merge or deployment. The side panel and chat changes are not ready for approval until these issues are resolved and the required checks pass.
+- Installed the existing PDF preparer's prerequisites (`pdfinfo`, `pdftoppm`, `pdftotext`, Poppler 24.02.0) on the isolated coding VM.
+- Parent-owned conversation connectivity now gates tray rendering and all tray callbacks across unrelated controls refreshes. A matching successful conversation refresh restores the controls; late failures from another project cannot change this conversation's state.
+- Chat and tray share one decision dispatcher. Revise reopens the request/assistant context and focuses the enabled composer without entering the asynchronous busy wrapper or losing unsent text. Accept/Reject still use the existing authoritative backend path.
+- The browser fixture explicitly closes old HTTP connections during restart instead of waiting indefinitely for a browser connection pool. Existing source, baseline, alternative and restart assertions remain intact.
+- Phone tools now use a wrapping grid with full touch targets. No rail control extends beyond the 320/390px viewport checks.
+- Full `npm test` passed with command-local `umask 022`; the default umask and machine configuration are not changed globally. The browser timeout and protected-file owner cases skipped by the default run passed separately.
+- No live provider, production-image, deployment or real-device touch qualification is claimed. Draft PR only; no merge or deployment.
 
 ## Review evidence
 
-Runtime source tested: `5d267e6`. Later handback edits contain documentation and synthetic screenshots only.
+Historical initial runtime source: `5d267e6`. Follow-up implementation source: `cd652f232a4dc03934dceb4d4573b55500b9646b`. The final handback adds documentation and captured screenshots only. Reproducible commands, environment and results are in [qualification.txt](canvas-studio-241/qualification.txt).
 
 ```text
 npm run validate
@@ -59,16 +70,24 @@ Strict TypeScript valid. 331 source file(s) checked.
 tsc --noEmit: passed
 Policy valid. 0 changed file(s) checked.
 npm run build:demo: passed
-Browser checks: 17 total, 16 pass, 1 fail, 0 skipped
+Follow-up browser checks: 19 total, 19 pass, 0 fail, 0 skipped
+npm test: exit 0; all six stages passed
+Main stage: 844 total, 842 pass, 0 fail, 2 conditional skips
+Assets: 21 total, 21 pass, 0 fail, 0 skipped
+Conditional browser timeout and file-owner checks: 1 pass each, 0 skipped
 ```
 
-The new shipped-app check proves source upload, one surviving canvas, baseline preservation before review, and explicit tray acceptance with exactly one modified entity (`door-entry`) and no additions/removals. All six chat checks and seven workspace checks passed. The existing guided-floor check reached desktop reconstruction, source persistence, explicit Main acceptance, an alternative and restart recovery before failing at phone PDF file readiness. This does not establish PDF, IFC runtime, provider or production-image qualification.
+The shipped-app check proves source upload, one surviving canvas, baseline preservation before review, and explicit tray acceptance with exactly one modified entity (`door-entry`) and no additions/removals. The guided-floor check now verifies PNG/PDF preparation, source-bound confirmation, unsent reload, explicit acceptance, As-is baseline, alternative-only partition delta, SQLite restart and revoking readiness when the confirmed source is removed. These are deterministic fixture outcomes, not live provider or production-image qualification.
 
 ![Canvas Studio shipped desktop UI](canvas-studio-241/canvas-studio-desktop.png)
 
 ![Custom chat cards and canvas proposal review](canvas-studio-241/canvas-studio-proposal.png)
 
-![Pending phone PDF attachment qualification](canvas-studio-241/last-ui-state.png)
+![Phone assistant with model and composer visible](canvas-studio-241/canvas-studio-phone.png)
+
+![Phone PDF source confirmed with bound dimensions](canvas-studio-241/phone-pdf-confirmed.png)
+
+The earlier failed phone screenshot remains retained as `canvas-studio-241/last-ui-state.png` alongside the historical run ledger.
 
 ## Sources
 
