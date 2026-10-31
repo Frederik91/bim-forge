@@ -16,13 +16,18 @@ import { ProjectEvidencePanel } from './project-evidence-ui.ts';
 import type { ProjectEvidenceContext } from './project-evidence-ui.ts';
 import { parseRequestSources } from '../src/request-sources.ts';
 import type { RequestSource } from '../src/request-sources.ts';
-import { levels, levelView, entityLevel, stairFootprint } from '../src/building-levels.ts';
+import { levels, levelView, entityLevel } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { spaces, floorBounds, boundsMm, entitySpace, doorConnections } from '../src/floor-plan.ts';
 import { modelChanges } from '../src/model-delta-view.ts';
 import { ACTIVITY_STAGES, parseRequestActivity } from '../src/request-activity.ts';
-import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots, furnitureFootprint } from '../src/room-model.ts';
+import { RoomRepository, rectangleLayout, previewRectangle, diffSnapshots } from '../src/room-model.ts';
 import { ModelViewer } from './model-viewer.ts';
+import { createModelPlan, renderModelPlan, hitTestModelPlan } from './model-plan.ts';
+import type { ModelPlan, PlanProjection, PlanSource } from './model-plan.ts';
+import { spatialTokens } from './ui/design-tokens.ts';
+import { walkElevation } from './view-navigation.ts';
+import type { ViewIntent, InsidePose, NavigationPoint } from './view-navigation.ts';
 import { LinkedModelPanel } from './linked-model-ui.ts';
 import { LinkedModelClient } from './linked-model-client.ts';
 import { linkedReferenceText, linkedSelectionKey } from '../src/linked-model.ts';
@@ -106,7 +111,7 @@ interface ActiveReview extends RequestSourceContext {
   validator: string | undefined;
   decision?: { status: 'pending' | 'accepted' | 'superseded' };
 }
-interface PlanCamera { minX: number; maxX: number; minY: number; maxY: number; scale: number }
+type PlanCamera = PlanProjection;
 interface GestureState {
   id: number;
   root: SVGSVGElement;
@@ -341,6 +346,10 @@ let inspectedChatView: ReturnType<typeof conversationInspection> | null = null;
 let housePilotFixture: HousePilotFixture | null = null;
 let currentPage: PageName = 'request';
 let modelView: ModelView = '3d';
+let workspaceView: ViewIntent = { kind: 'inside', motion: 'walk' };
+let insideMotion: 'walk' | 'fly' = 'walk';
+let navigationNotice = '';
+export function getWorkspaceViewIntent(): ViewIntent { return { ...workspaceView }; }
 let modelViewer: ModelViewer | null = null;
 let linkedDisplays: LinkedDisplay[] = [];
 let linkedSelection: LinkedSelection | null = null;
@@ -356,13 +365,15 @@ let viewerFailed = false;
 let visualDraft: VisualDraft | null = null;
 let visualGesture: VisualGesture | null = null;
 let drawingWidth = 0;
+let drawingHeight = 0;
 const drawingResizeObserver = new ResizeObserver((entries) => {
-  const width = entries[0]?.contentRect.width;
-  if (!width || Math.abs(width - drawingWidth) < .5 || !repo || busy || gesture || visualGesture) return;
-  drawingWidth = width;
+  const width = entries[0]?.contentRect.width; const height = entries[0]?.contentRect.height ?? 0;
+  if (!width || Math.abs(width - drawingWidth) < .5 && Math.abs(height - drawingHeight) < .5 || !repo || busy || gesture || visualGesture) return;
+  drawingWidth = width; drawingHeight = height;
   renderComparison();
 });
 drawingResizeObserver.observe(ui['proposal-drawing']);
+drawingResizeObserver.observe(ui['review-drawing']);
 let authBusy = false;
 let authSession: AuthSession = { status: 'disconnected', connected: false, account: null, models: [], selectedModel: null };
 let authPollTimer: number | null = null;
@@ -941,6 +952,7 @@ function reviewState(review: ActiveReview | null): ReviewState | null {
 }
 
 function showPage(name: PageName): void {
+  modelViewer?.stopNavigation(); endPlanPan();
   if (name !== 'request') { liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null; }
   if (name === 'review' && !activeReview) return;
   if ((name === 'project' || name === 'history') && !repo) return;
@@ -1589,11 +1601,13 @@ ui['open-room'].addEventListener('click', () => {
 async function beginRequest(): Promise<boolean> {
   if (!repo) return false;
   if (selectedDesignTarget.kind === 'baseline') throw new Error('Create an alternative from this baseline to request changes.');
-  const accepted = await projects.read(repo.projectId);
   saveChatDraft();
   closeChat();
   tasks.startTask();
   sourcePicker.switchDraft(`${repo.projectId}:${tasks.projection.draftId}`);
+  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
+  renderComparison();
+  const accepted = await projects.read(repo.projectId);
   displayAccepted(accepted);
   reviewRepository = null; activeTicketId = null; activeReview = null;
   selectedBranch = 'main'; selectedRevision = selectedDesignHead(repo);
@@ -1626,19 +1640,40 @@ ui['nav-review'].addEventListener('click', () => {
   if (ticketId) void perform(() => openTicket(ticketId)); else showPage('review');
 });
 ui['nav-history'].addEventListener('click', () => { showPage('history'); void loadServerHistory(); });
-function switchModelView(next: ModelView): void {
-  if (!repo || modelView === next) return;
+export function captureWorkspaceInsidePose(): InsidePose | null { return modelViewer?.captureInsidePose() ?? null; }
+export function returnWorkspaceToPose(pose: InsidePose): boolean {
+  if (!repo) return false;
+  insideMotion = pose.motion; modelView = '3d'; workspaceView = { kind: 'inside', motion: pose.motion }; renderComparison();
+  const result = modelViewer?.returnToPose(pose);
+  if (result?.kind === 'unsupported') status(result.reason);
+  updateViewChrome(); return result?.kind === 'changed';
+}
+export function changeWorkspaceView(intent: ViewIntent): void {
+  if (!repo) return;
+  if (intent.kind === 'section') { status('Section requires true source-derived cuts. Use native Plan or Overview.'); return; }
   if (gesture) endGesture(true);
   if (visualGesture) endVisualGesture(true);
-  modelView = next;
+  modelViewer?.stopNavigation(); endPlanPan();
+  if (intent.kind === 'inside') insideMotion = intent.motion;
+  navigationNotice = '';
+  workspaceView = intent; modelView = intent.kind === 'plan' ? 'plan' : '3d';
+  if (intent.kind === 'plan') modelViewer?.changeView(intent);
   renderComparison();
-  status(`${next === 'plan' ? 'Plan' : '3D'} view opened at revision ${selectedRevision.slice(0, 10)}. Selection remains ${selectedObject}.`);
+  status(navigationNotice || `${intent.kind === 'inside' ? 'Inside' : intent.kind === 'plan' ? 'Plan' : 'Overview'} opened. Selection and unsent task are retained.`);
+}
+function switchModelView(next: ModelView): void {
+  changeWorkspaceView(next === 'plan' ? { kind: 'plan' } : { kind: 'overview' });
 }
 ui['view-plan'].addEventListener('click', () => switchModelView('plan'));
 ui['view-3d'].addEventListener('click', () => switchModelView('3d'));
-button('show-linked-3d').addEventListener('click', () => { switchModelView('3d'); modelViewer?.frameLinkedModels(); });
 ui['review-plan'].addEventListener('click', () => switchModelView('plan'));
 ui['review-3d'].addEventListener('click', () => switchModelView('3d'));
+for (const prefix of ['', 'review-']) {
+  button(`${prefix}view-inside`).addEventListener('click', () => changeWorkspaceView({ kind: 'inside', motion: insideMotion }));
+  button(`${prefix}view-fly`).addEventListener('click', () => changeWorkspaceView({ kind: 'inside', motion: insideMotion === 'fly' ? 'walk' : 'fly' }));
+  button(`${prefix}mouse-look`).addEventListener('click', () => { void modelViewer?.activateMouseLook().then(mode => status(mode === 'locked' ? 'Mouse-look active. Escape releases movement.' : 'Drag to look. Escape releases movement.')); });
+}
+button('show-linked-3d').addEventListener('click', () => { switchModelView('3d'); modelViewer?.frameLinkedModels(); });
 ui['review-drawing'].addEventListener('click', (event) => {
   if (busy || !(event.target instanceof Element)) return;
   const id = event.target.closest<SVGElement>('[data-object]')?.dataset.object;
@@ -1651,7 +1686,7 @@ ui['review-drawing'].addEventListener('keydown', (event) => {
   if (id) { event.preventDefault(); chooseObject(id); }
 });
 for (const id of ['reset-3d', 'review-reset-3d', 'delta-reset-3d']) button(id).addEventListener('click', () => {
-  modelViewer?.frame();
+  workspaceView = { kind: 'overview' }; modelViewer?.frame(); updateViewChrome();
   status('3D camera framed. Model geometry and revision are unchanged.');
 });
 for (const prefix of ['', 'review-', 'delta-']) {
@@ -2492,226 +2527,51 @@ function svgNode<K extends keyof SVGElementTagNameMap>(tag: K, attributes: SvgAt
   return node;
 }
 
-function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, identifier: string, label: string): SVGSVGElement {
+const modelPlans = new WeakMap<SVGSVGElement, ModelPlan>();
+const planBounds = new Map<string, PlanProjection['bounds']>();
+export function getWorkspacePlanContext(root: SVGSVGElement): ModelPlan | null { return modelPlans.get(root) ?? null; }
+function planSource(snapshot: ModelGraph, revisionId: string): PlanSource {
+  return { snapshot, projectId: requireRepository().projectId, target: selectedDesignTarget, revisionId };
+}
+function workspacePlan(fullSnapshot: ModelSnapshot, fullReference: ModelSnapshot | null, identifier: string, label: string,
+  revisionId: string = selectedRevision, referenceId: string = selectedDesignView().baselineRevisionId): SVGSVGElement {
   const displayedSelection = livePreviewSelection ?? selectedObject;
   const available = levels(fullSnapshot);
   const chosen = available.find(item => item.id === activeLevelId) ?? available.find(item => item.elevation === 0) ?? available[0];
   const snapshot = chosen ? levelView(fullSnapshot, chosen.id) : fullSnapshot;
-  const oldLevel = fullReference && chosen ? levels(fullReference).find(item => item.id === chosen.id) : null;
-  const reference = !fullReference ? null : oldLevel ? levelView(fullReference, oldLevel.id)
-    : !chosen || chosen.elevation === 0 && levels(fullReference).length <= 1 ? fullReference
-    : { units: 'm', entities: [], relationships: [] } satisfies ModelGraph;
   const interactive = identifier === 'selected';
   const editable = interactive && !liveChatPreview && Boolean(layout) && !spaces(snapshot).length;
-  const svg = svgNode('svg', { viewBox: '0 0 600 400', role: interactive ? 'group' : 'img', 'aria-labelledby': `${identifier}-title ${identifier}-desc` });
-  if (chosen) svg.dataset.levelId = chosen.id;
-  const door = entry(snapshot);
-  svg.append(svgNode('title', { id: `${identifier}-title` }, label));
-  svg.append(svgNode('desc', { id: `${identifier}-desc` }, `Top-down room plan. ${door ? `Entry door width ${millimetres(door.width)} millimetres.` : 'Entry door absent.'} ${reference ? 'Dashed grey outlines show the comparison revision. Teal shows the selected revision.' : 'The original room is preserved.'}`));
-  const definitions = svgNode('defs');
-  const minorGrid = svgNode('pattern', { id: `${identifier}-grid`, width: 15, height: 15, patternUnits: 'userSpaceOnUse' });
-  minorGrid.append(svgNode('path', { d: 'M 15 0 L 0 0 0 15', fill: 'none', stroke: '#eaf0ed', 'stroke-width': .65 }));
-  const majorGrid = svgNode('pattern', { id: `${identifier}-major`, width: 75, height: 75, patternUnits: 'userSpaceOnUse' });
-  majorGrid.append(svgNode('rect', { width: 75, height: 75, fill: `url(#${identifier}-grid)` }));
-  majorGrid.append(svgNode('path', { d: 'M 75 0 L 0 0 0 75', fill: 'none', stroke: '#dbe5e0', 'stroke-width': .8 }));
-  definitions.append(minorGrid, majorGrid);
-  svg.append(definitions, svgNode('rect', { width: 600, height: 400, fill: `url(#${identifier}-major)` }));
-
-  const walls = snapshot.entities.filter(isWall);
-  const allWalls = [...walls, ...(reference ? reference.entities.filter(isWall) : [])];
-  const coordinates = allWalls.flatMap((wall) => [wall.start, wall.end]);
-  if (!coordinates.length) return svg;
-  const focused = identifier === 'selected' ? spaces(snapshot).find((room) => room.id === focusedRoomId) : null;
-  const camera = editable && gesture ? gesture.camera : focused ? focused.bounds : {
-    minX: Math.min(...coordinates.map(([x]) => x)), maxX: Math.max(...coordinates.map(([x]) => x)),
-    minY: Math.min(...coordinates.map(([, y]) => y)), maxY: Math.max(...coordinates.map(([, y]) => y)),
-  };
-  const { minX, maxX, minY, maxY } = camera;
-  const scale = Math.min((editable ? 350 : 430) / Math.max(maxX - minX, 1), (editable ? 190 : 245) / Math.max(maxY - minY, 1));
-  planCameras.set(svg, { ...camera, scale });
-  const transform = ([x, y]: Point): Point => [300 + (x - (minX + maxX) / 2) * scale, 193 - (y - (minY + maxY) / 2) * scale];
-  const points = (items: Point[]): string => items.map((point) => transform(point).join(',')).join(' ');
+  const host = identifier === 'review' ? ui['review-drawing'] : identifier === 'floor-overview' ? generic('floor-overview-plan') : identifier === 'root' ? ui['original-drawing'] : ui['proposal-drawing'];
+  const width = Math.max(240, Math.floor(host.clientWidth || ui['proposal-drawing'].clientWidth || 600));
+  const height = Math.max(280, Math.floor(host.clientHeight || 600));
+  const key = `${requireRepository().projectId}:${identifier}:${revisionId}:${chosen?.id ?? ''}`;
+  const source = planSource(fullSnapshot, revisionId);
+  const comparison = fullReference && modelChanges(fullReference, fullSnapshot).length ? fullReference : null;
+  const bounds = gesture?.camera.bounds ?? planBounds.get(key);
+  const plan = createModelPlan({ source, comparison: comparison ? planSource(comparison, referenceId) : null,
+    levelId: chosen?.id ?? null, viewport: { width, height, ...(bounds ? { bounds } : {}) },
+    selectedTargets: [{ kind: 'native', projectId: source.projectId, target: source.target, revisionId: source.revisionId, entityId: displayedSelection }], tokens: spatialTokens });
+  const svg = renderModelPlan(document, plan);
+  svg.setAttribute('aria-label', `${label}. ${plan.notices.join(' ')}`);
+  svg.dataset.planKey = key;
+  modelPlans.set(svg, plan); planCameras.set(svg, plan.projection); if (comparison) planComparisons.set(svg, comparison);
+  const scale = plan.projection.pixelsPerMetre;
+  const transform = (point: Point): Point => { const p = plan.projection.project([point[0], point[1], plan.projection.elevation]); return [p[0], p[1]]; };
   const line = (start: Point, end: Point, attributes: SvgAttributes = {}): SVGLineElement => {
     const [x1, y1] = transform(start); const [x2, y2] = transform(end);
     return svgNode('line', { x1, y1, x2, y2, ...attributes });
   };
-
-  for (const room of spaces(snapshot)) {
-    const b = room.bounds;
-    const [x, y] = transform([b.minX, b.maxY]);
-    svg.append(svgNode('rect', { x, y, width: (b.maxX - b.minX) * scale, height: (b.maxY - b.minY) * scale,
-      fill: room.id === focusedRoomId ? '#d8eee6' : '#f5f3eb', 'data-object': room.id,
-      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${room.name}`,
-      class: interactive ? 'edit-target' : '' }));
+  for (const node of svg.querySelectorAll<SVGElement>('[data-entity-id]')) {
+    const hit = plan.hitShapes.find(shape => shape.hit.ref.entityId === node.dataset.entityId && shape.hit.revisionRole === node.dataset.revisionRole)?.hit;
+    if (!hit) continue;
+    node.setAttribute('tabindex', '0'); node.setAttribute('role', 'button');
+    node.setAttribute('aria-label', `${hit.revisionRole === 'existing' ? 'Inspect existing' : 'Select'} ${hit.name}`);
+    if (hit.revisionRole === 'current') node.dataset.object = hit.ref.entityId;
   }
-  for (const wall of walls) {
-    const dx = wall.end[0] - wall.start[0]; const dy = wall.end[1] - wall.start[1];
-    const length = Math.hypot(dx, dy);
-    const px = -dy / length * wall.thickness / 2; const py = dx / length * wall.thickness / 2;
-    const outline: Point[] = [[wall.start[0] + px, wall.start[1] + py], [wall.end[0] + px, wall.end[1] + py],
-      [wall.end[0] - px, wall.end[1] - py], [wall.start[0] - px, wall.start[1] - py]];
-    svg.append(svgNode('polygon', { points: points(outline), fill: reference ? '#e2ede8' : '#e5eae8', stroke: reference ? '#4f7e72' : '#516873', 'stroke-width': 1.2 }));
-  }
-  if (reference) for (const wall of reference.entities.filter(isWall)) {
-    svg.append(line(wall.start, wall.end, { stroke: '#87979b', 'stroke-width': 1.3, 'stroke-dasharray': '5 4', class: 'selection-outline' }));
-  }
-
-  function drawDoors(room: ModelGraph, ghost = false): void {
-    for (const item of room.entities.filter(isDoor)) {
-      const host = hostFor(room, item);
-      if (!host) continue;
-      const { wall, link } = host;
-      const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);
-      const ux = (wall.end[0] - wall.start[0]) / length; const uy = (wall.end[1] - wall.start[1]) / length;
-      const hinge: Point = [wall.start[0] + ux * link.offset, wall.start[1] + uy * link.offset];
-      const jamb: Point = [hinge[0] + ux * item.width, hinge[1] + uy * item.width];
-      const leaf: Point = [hinge[0] - uy * item.width, hinge[1] + ux * item.width];
-      const color = ghost ? '#87979b' : reference ? '#167d78' : '#516873';
-      const style = { stroke: color, 'stroke-width': ghost ? 1.3 : 1.8, ...(ghost ? { 'stroke-dasharray': '5 4' } : {}) };
-      if (!ghost) {
-        svg.append(line(hinge, jamb, { stroke: '#fff', 'stroke-width': wall.thickness * scale + 2 }));
-        const hingeEdge: Point = [hinge[0] - uy * wall.thickness / 2, hinge[1] + ux * wall.thickness / 2];
-        const jambEdge: Point = [jamb[0] - uy * wall.thickness / 2, jamb[1] + ux * wall.thickness / 2];
-        svg.append(line(hinge, hingeEdge, style));
-        svg.append(line(jamb, jambEdge, style));
-      }
-      if (!ghost && interactive && spaces(snapshot).length) svg.append(line(hinge, jamb, {
-        stroke: item.id === displayedSelection ? '#e1a12e' : 'transparent', 'stroke-width': Math.max(12, wall.thickness * scale + 3),
-        'data-object': item.id, role: 'button', tabindex: 0, 'aria-label': `Select ${item.name}`, class: 'edit-target',
-      }));
-      svg.append(line(hinge, leaf, style));
-      const arc: Point[] = Array.from({ length: 25 }, (_, index): Point => {
-        const angle = index * Math.PI / 48;
-        return [hinge[0] + item.width * (ux * Math.cos(angle) - uy * Math.sin(angle)),
-          hinge[1] + item.width * (uy * Math.cos(angle) + ux * Math.sin(angle))];
-      });
-      svg.append(svgNode('polyline', { points: points(arc), fill: 'none', ...style }));
-      if (!ghost && item.id === 'door-entry') {
-        const offset = .58;
-        const a: Point = [hinge[0] + uy * offset, hinge[1] - ux * offset];
-        const b: Point = [jamb[0] + uy * offset, jamb[1] - ux * offset];
-        svg.append(line(a, b, { stroke: color, 'stroke-width': .9 }));
-        for (const point of [a, b]) {
-          const tickStart: Point = [point[0] - uy * .07, point[1] + ux * .07];
-          const tickEnd: Point = [point[0] + uy * .07, point[1] - ux * .07];
-          svg.append(line(tickStart, tickEnd, { stroke: color, 'stroke-width': 1 }));
-        }
-        const [tx, ty] = transform([(a[0] + b[0]) / 2 + uy * .18, (a[1] + b[1]) / 2 - ux * .18]);
-        svg.append(svgNode('text', { x: tx, y: ty, fill: color, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-size': 11, 'font-weight': 600, 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 4 }, `${millimetres(item.width)} mm`));
-      }
-    }
-  }
-  drawDoors(snapshot);
-  if (reference) drawDoors(reference, true);
-
-  for (const opening of snapshot.entities.filter(isWindow)) {
-    const host = hostFor(snapshot, opening);
-    if (!host) continue;
-    const dx = host.wall.end[0] - host.wall.start[0]; const dy = host.wall.end[1] - host.wall.start[1];
-    const length = Math.hypot(dx, dy); const ux = dx / length; const uy = dy / length;
-    const start: Point = [host.wall.start[0] + ux * host.link.offset, host.wall.start[1] + uy * host.link.offset];
-    const end: Point = [start[0] + ux * opening.width, start[1] + uy * opening.width];
-    svg.append(line(start, end, {
-      stroke: opening.id === displayedSelection ? '#e1a12e' : '#318aa0', 'stroke-width': Math.max(5, host.wall.thickness * scale),
-      class: interactive ? 'edit-target' : '', 'data-object': opening.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${opening.name}`, 'aria-pressed': String(opening.id === displayedSelection),
-    }));
-  }
-  for (const equipment of snapshot.entities.filter(isEquipment)) {
-    const [x, y] = transform(equipment.position);
-    const selected = equipment.id === displayedSelection;
-    svg.append(svgNode('rect', {
-      x: x - equipment.width * scale / 2, y: y - equipment.depth * scale / 2,
-      width: equipment.width * scale, height: Math.max(equipment.depth * scale, 8), rx: 3,
-      fill: equipment.category === 'electrical' ? '#d6a44b' : '#69a99b', stroke: selected ? '#e1a12e' : '#365f5a',
-      'stroke-width': selected ? 4 : 1.2, class: interactive ? 'edit-target' : '', 'data-object': equipment.id,
-      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${equipment.name}`,
-      'aria-pressed': String(selected),
-    }));
-  }
-
-  const ownCoordinates = (walls.length ? walls : allWalls).flatMap((wall) => [wall.start, wall.end]);
-  const ownMinX = Math.min(...ownCoordinates.map(([x]) => x)); const ownMaxX = Math.max(...ownCoordinates.map(([x]) => x));
-  const ownMinY = Math.min(...ownCoordinates.map(([, y]) => y)); const ownMaxY = Math.max(...ownCoordinates.map(([, y]) => y));
-  const [left, top] = transform([ownMinX, ownMaxY]);
-  const [right, bottom] = transform([ownMaxX, ownMinY]);
-  svg.append(svgNode('line', { x1: left, y1: top - 30, x2: right, y2: top - 30, stroke: '#a6b8af', 'stroke-width': .8 }));
-  for (const x of [left, right]) svg.append(svgNode('line', { x1: x, y1: top - 35, x2: x, y2: top - 25, stroke: '#a6b8af', 'stroke-width': .8 }));
-  svg.append(svgNode('text', { x: (left + right) / 2, y: top - 38, 'text-anchor': 'middle', fill: '#6b8075', 'font-size': 10 }, `${number.format(ownMaxX - ownMinX)} m`));
-  svg.append(svgNode('text', { x: left - 30, y: (top + bottom) / 2, 'text-anchor': 'middle', fill: '#6b8075', 'font-size': 10, transform: `rotate(-90 ${left - 30} ${(top + bottom) / 2})` }, `${number.format(ownMaxY - ownMinY)} m`));
-  for (const item of snapshot.entities.filter((entity) => entity.type === 'Furniture').sort((a, b) => Number(a.supportId !== null) - Number(b.supportId !== null))) {
-    const footprint = furnitureFootprint(item);
-    const [x, y] = transform([footprint.minX, footprint.maxY]);
-    const selected = item.id === displayedSelection;
-    const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
-    group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
-      rx: item.kind === 'plant' ? 12 : 2, fill: item.kind === 'plant' ? '#74a46c' : item.supportId ? '#71b0c1' : item.kind === 'chair' ? '#688e99' : '#d6b58c',
-      stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
-    const [cx, cy] = transform(item.position);
-    group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': item.supportId ? 6 : 8, 'pointer-events': 'none' }, item.kind));
-    svg.append(group);
-  }
-  for (const item of snapshot.entities.filter(entity => entity.type === 'AssetInstance')) {
-    const geometry = assetGeometry(snapshot, item);
-    const footprint = geometry.footprint;
-    const [x, y] = transform([footprint.minX, footprint.maxY]);
-    const selected = item.id === displayedSelection;
-    const group = svgNode('g', { 'data-object': item.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${item.name}`, 'aria-pressed': String(selected), class: interactive ? 'edit-target' : '' });
-    group.append(svgNode('rect', { x, y, width: (footprint.maxX - footprint.minX) * scale, height: (footprint.maxY - footprint.minY) * scale,
-      rx: 3, fill: '#a8c1b4', stroke: selected ? '#e1a12e' : '#42615d', 'stroke-width': selected ? 3 : 1.2 }));
-    const [cx, cy] = transform(item.position);
-    group.append(svgNode('text', { x: cx, y: cy + 3, 'text-anchor': 'middle', fill: '#183e42', 'font-size': 7, 'pointer-events': 'none' }, item.name));
-    group.append(svgNode('title', {}, `${geometry.family.name} · ${number.format(geometry.dimensions.height)} m tall · dimensional proxy`));
-    svg.append(group);
-  }
-  for (const room of spaces(snapshot)) {
-    const b = room.bounds; const [x, y] = transform([(b.minX + b.maxX) / 2, b.maxY - .4]);
-    svg.append(svgNode('text', { x, y, fill: '#31564f', 'font-size': 10, 'text-anchor': 'middle',
-      'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3, 'pointer-events': 'none' },
-      room.name));
-    svg.append(svgNode('text', { x, y: y + 11, fill: '#536f66', 'font-size': 8, 'text-anchor': 'middle',
-      'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 3, 'pointer-events': 'none' },
-      `${number.format((b.maxX - b.minX) * (b.maxY - b.minY))} m²`));
-  }
-  for (const stair of snapshot.entities.filter(item => item.type === 'Stair')) {
-    const b = stairFootprint(stair); const [x, y] = transform([b.minX, b.maxY]);
-    const group = svgNode('g', { 'data-object': stair.id, role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1,
-      'aria-label': `Select ${stair.name}`, class: interactive ? 'edit-target' : '' });
-    group.append(svgNode('rect', { x, y, width: (b.maxX - b.minX) * scale, height: (b.maxY - b.minY) * scale,
-      fill: '#e2efec', stroke: stair.id === displayedSelection ? '#e1a12e' : '#487e75', 'stroke-width': 1.5 }));
-    const horizontal = stair.start[0] !== stair.end[0];
-    for (let step = 1; step < stair.steps; step++) {
-      const t = step / stair.steps;
-      const at = horizontal ? stair.start[0] + (stair.end[0] - stair.start[0]) * t : stair.start[1] + (stair.end[1] - stair.start[1]) * t;
-      group.append(line(horizontal ? [at, b.minY] : [b.minX, at], horizontal ? [at, b.maxY] : [b.maxX, at], { stroke: '#8aa9a1', 'stroke-width': .65 }));
-    }
-    const targetId = chosen?.id === stair.toLevelId ? stair.fromLevelId : stair.toLevelId;
-    const target = levels(fullSnapshot).find(item => item.id === targetId);
-    const [tx, ty] = transform([(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2]);
-    group.append(svgNode('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 8, fill: '#24594f', 'paint-order': 'stroke', stroke: '#fff', 'stroke-width': 2 },
-      `${chosen?.id === stair.toLevelId ? '↓' : '↑'} ${target?.name ?? 'Stairs'}`));
-    svg.append(group);
-  }
-  if (roofVisible) for (const roof of snapshot.entities.filter(item => item.type === 'Roof')) {
-    const b = roof.bounds;
-    const outline: Point[] = [[b.minX, b.minY], [b.maxX, b.minY], [b.maxX, b.maxY], [b.minX, b.maxY], [b.minX, b.minY]];
-    svg.append(svgNode('polyline', { points: points(outline), fill: 'none', stroke: '#8b6970', 'stroke-width': 1.2, 'stroke-dasharray': '5 4', 'data-object': roof.id,
-      role: interactive ? 'button' : 'img', tabindex: interactive ? 0 : -1, 'aria-label': `Select ${roof.name}` }));
-    if (roof.profile.kind === 'gable') svg.append(line(roof.profile.ridgeAxis === 'x' ? [b.minX, (b.minY + b.maxY) / 2] : [(b.minX + b.maxX) / 2, b.minY],
-      roof.profile.ridgeAxis === 'x' ? [b.maxX, (b.minY + b.maxY) / 2] : [(b.minX + b.maxX) / 2, b.maxY], { stroke: '#8b6970', 'stroke-width': 1, 'stroke-dasharray': '6 3' }));
-  }
-  svg.append(svgNode('path', { d: 'M552 350 V325 M548 333 L552 325 L556 333', stroke: '#8ba096', 'stroke-width': 1, fill: 'none' }));
-  svg.append(svgNode('text', { x: 552, y: 365, 'text-anchor': 'middle', fill: '#83968c', 'font-size': 8 }, 'Y'));
   if (interactive) {
-    const cssScale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
-    const targetWidth = 44 * cssScale;
-    for (const wall of walls) {
-      if (wall.id === displayedSelection) svg.append(line(wall.start, wall.end, { stroke: '#e1a12e', 'stroke-width': 5, class: 'selection-outline' }));
-      svg.append(line(wall.start, wall.end, { stroke: 'transparent', 'stroke-width': targetWidth, class: 'edit-target',
-        'data-object': wall.id, role: 'button', tabindex: 0, 'aria-label': `Select ${wall.name}`, 'aria-pressed': String(wall.id === displayedSelection) }));
-    }
+    const cssScale = 1;
+    const targetWidth = 44;
+    const door = entry(snapshot);
     if (spaces(snapshot).length) { drawVisualOverlay(svg, snapshot, transform); return svg; }
     const doorHost = hostFor(snapshot, door);
     if (!door || !doorHost) return svg;
@@ -2721,16 +2581,16 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     const hinge: Point = [wall.start[0] + unit[0] * link.offset, wall.start[1] + unit[1] * link.offset];
     const jamb: Point = [hinge[0] + unit[0] * door.width, hinge[1] + unit[1] * door.width];
     const centre: Point = [hinge[0] + unit[0] * door.width / 2, hinge[1] + unit[1] * door.width / 2];
-    svg.append(line(hinge, jamb, { stroke: displayedSelection === door.id ? '#e1a12e' : 'transparent', 'stroke-opacity': .25, 'stroke-width': targetWidth,
+    svg.append(line(hinge, jamb, { stroke: displayedSelection === door.id ? spatialTokens.color.selection : 'transparent', 'stroke-opacity': .25, 'stroke-width': targetWidth,
       class: 'edit-target', 'data-object': door.id, role: 'button', tabindex: 0, 'aria-label': 'Select Entry door', 'aria-pressed': String(displayedSelection === door.id) }));
     if (!editable) return svg;
     const selected = snapshot.entities.find((item) => item.id === displayedSelection);
     const handle = (location: Point, operation: GestureOperation, caption: string, square = false): void => {
       const [x, y] = transform(location);
       const group = svgNode('g', { class: 'edit-handle', 'data-handle': operation, 'data-object': displayedSelection, 'aria-label': caption, role: 'button', tabindex: 0 });
-      group.append(svgNode('circle', { cx: x, cy: y, r: targetWidth / 2, fill: '#167d78', 'fill-opacity': .06 }));
-      group.append(square ? svgNode('rect', { x: x - 6, y: y - 6, width: 12, height: 12, rx: 2, fill: '#167d78', stroke: 'white', 'stroke-width': 2 })
-        : svgNode('circle', { cx: x, cy: y, r: 7, fill: '#167d78', stroke: 'white', 'stroke-width': 2 }));
+      group.append(svgNode('circle', { cx: x, cy: y, r: targetWidth / 2, fill: spatialTokens.color.primary, 'fill-opacity': .06 }));
+      group.append(square ? svgNode('rect', { x: x - 6, y: y - 6, width: 12, height: 12, rx: 2, fill: spatialTokens.color.primary, stroke: spatialTokens.color.paper, 'stroke-width': 2 })
+        : svgNode('circle', { cx: x, cy: y, r: 7, fill: spatialTokens.color.primary, stroke: spatialTokens.color.paper, 'stroke-width': 2 }));
       svg.append(group);
     };
     if (!selected) return svg;
@@ -2741,12 +2601,12 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
     else if (selected.type === 'Door') {
       const arrowPoint: Point = [wall.start[0] + unit[0] * .5, wall.start[1] + unit[1] * .5];
       const origin = transform(wall.start); const arrow = transform(arrowPoint);
-      svg.append(svgNode('line', { x1: origin[0], y1: origin[1], x2: arrow[0], y2: arrow[1], stroke: '#c27d1a', 'stroke-width': 3 }));
+      svg.append(svgNode('line', { x1: origin[0], y1: origin[1], x2: arrow[0], y2: arrow[1], stroke: spatialTokens.color.proposed, 'stroke-width': 3 }));
       const tangent: Point = [unit[0], -unit[1]];
       const head: Point[] = [[arrow[0], arrow[1]], [arrow[0] - tangent[0] * 8 - tangent[1] * 4, arrow[1] - tangent[1] * 8 + tangent[0] * 4],
         [arrow[0] - tangent[0] * 8 + tangent[1] * 4, arrow[1] - tangent[1] * 8 - tangent[0] * 4]];
-      svg.append(svgNode('polygon', { points: head.map((p) => p.join(',')).join(' '), fill: '#c27d1a' }));
-      svg.append(svgNode('text', { x: origin[0], y: origin[1] + 25, fill: '#986312', 'font-size': 10 }, 'HOST START'));
+      svg.append(svgNode('polygon', { points: head.map((p) => p.join(',')).join(' '), fill: spatialTokens.color.proposed }));
+      svg.append(svgNode('text', { x: origin[0], y: origin[1] + 25, fill: spatialTokens.color.proposed, 'font-size': 10 }, 'HOST START'));
       // Separate move and resize targets from the opening so small doors remain usable on phones.
       const normal: Point = [-unit[1], unit[0]];
       const moveHandle: Point = [centre[0] + normal[0] * 36 * cssScale / scale, centre[1] + normal[1] * 36 * cssScale / scale];
@@ -2759,12 +2619,80 @@ function drawPlan(fullSnapshot: ModelGraph, fullReference: ModelGraph | null, id
   return svg;
 }
 
+function inspectPlanHit(root: SVGSVGElement, event: PointerEvent | MouseEvent | KeyboardEvent, node: Element): boolean {
+  const plan = modelPlans.get(root); if (!plan) return false;
+  const refNode = node.closest<SVGElement>('[data-entity-id]');
+  const matrix = root.getScreenCTM();
+  const candidates = event instanceof KeyboardEvent ? plan.hitShapes.map(shape => shape.hit) : matrix ? (() => {
+    const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse()); return hitTestModelPlan(plan, [p.x, p.y]);
+  })() : [];
+  const hit = candidates.find(hit => hit.ref.entityId === refNode?.dataset.entityId && hit.revisionRole === refNode?.dataset.revisionRole) ?? candidates[0];
+  if (!hit) return false;
+  event.preventDefault(); event.stopImmediatePropagation();
+  if (hit.revisionRole === 'current') chooseObject(hit.ref.entityId);
+  else {
+    const snapshot = planComparisons.get(root);
+    if (!snapshot) return true;
+    inspectedComparison = { id: hit.ref.entityId, graph: snapshot };
+    renderElementProperties(generic('element-properties'), snapshot, hit.ref.entityId, `Existing revision ${hit.ref.revisionId.slice(0, 10)}`); workspace.showInspector();
+  }
+  return true;
+}
+const planComparisons = new WeakMap<SVGSVGElement, ModelSnapshot>();
+let planPan: { id: number; key: string; plan: ModelPlan; origin: Point; host: HTMLElement } | null = null;
+function endPlanPan(): void {
+  const active = planPan; planPan = null;
+  if (active?.host.hasPointerCapture(active.id)) active.host.releasePointerCapture(active.id);
+}
+for (const host of [ui['proposal-drawing'], ui['review-drawing']]) {
+  host.addEventListener('pointerdown', event => {
+    if (!(event.target instanceof Element) || gesture || visualGesture || busy) return;
+    const root = event.target.closest('svg'); if (!(root instanceof SVGSVGElement)) return;
+    const plan = modelPlans.get(root); if (!plan || !root.dataset.planKey) return;
+    if (event.button === 1 || event.button === 0 && event.shiftKey) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      planPan = { id: event.pointerId, key: root.dataset.planKey, plan, origin: [event.clientX, event.clientY], host };
+      host.setPointerCapture(event.pointerId); return;
+    }
+    if (event.button === 0 && !event.target.closest('[data-handle], [data-visual-handle]')) inspectPlanHit(root, event, event.target);
+  }, true);
+  host.addEventListener('keydown', event => {
+    if (!['Enter', ' '].includes(event.key) || !(event.target instanceof Element)) return;
+    const root = event.target.closest('svg');
+    if (root instanceof SVGSVGElement && event.target.closest('[data-entity-id]')) inspectPlanHit(root, event, event.target);
+  }, true);
+  host.addEventListener('pointermove', event => {
+    if (!planPan || planPan.id !== event.pointerId) return;
+    const { plan, origin, key } = planPan; const b = plan.projection.bounds;
+    const dx = (event.clientX - origin[0]) / plan.projection.pixelsPerMetre; const dy = (event.clientY - origin[1]) / plan.projection.pixelsPerMetre;
+    planBounds.set(key, { minX: b.minX - dx, maxX: b.maxX - dx, minY: b.minY + dy, maxY: b.maxY + dy }); renderComparison();
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) host.addEventListener(type, event => {
+    if (!(event instanceof PointerEvent) || planPan?.id !== event.pointerId) return;
+    endPlanPan();
+  });
+  host.addEventListener('wheel', event => {
+    if (modelView !== 'plan' || gesture || visualGesture || planPan) return;
+    const root = host.querySelector('svg'); if (!(root instanceof SVGSVGElement) || !root.dataset.planKey) return;
+    const plan = modelPlans.get(root); const matrix = root.getScreenCTM(); if (!plan || !matrix) return;
+    event.preventDefault(); const screen = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    const [x, y] = plan.projection.inverse([screen.x, screen.y]).point;
+    const b = plan.projection.bounds; const factor = Math.exp(Math.max(-.3, Math.min(.3, event.deltaY * .001)));
+    if ((b.maxX - b.minX) * factor < .2 || (b.maxX - b.minX) * factor > 100000) return;
+    planBounds.set(root.dataset.planKey, { minX: x + (b.minX - x) * factor, maxX: x + (b.maxX - x) * factor,
+      minY: y + (b.minY - y) * factor, maxY: y + (b.maxY - y) * factor }); renderComparison();
+  }, { passive: false });
+}
+window.addEventListener('keydown', event => { if (event.key === 'Escape') endPlanPan(); });
+window.addEventListener('blur', endPlanPan);
+document.addEventListener('visibilitychange', () => { if (document.hidden) endPlanPan(); });
+
 function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamera): Point {
   const matrix = root.getScreenCTM();
   if (!matrix) throw new Error('The room plan is not currently visible.');
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-  return [(point.x - 300) / camera.scale + (camera.minX + camera.maxX) / 2,
-    (193 - point.y) / camera.scale + (camera.minY + camera.maxY) / 2];
+  const projected = camera.inverse([point.x, point.y]).point;
+  return [projected[0], projected[1]];
 }
 
 function renderVisualPanel(): void {
@@ -2843,8 +2771,10 @@ function drawVisualOverlay(svg: SVGSVGElement, snapshot: ModelGraph, project: (p
   if (liveChatPreview) return;
   const selected = snapshot.entities.find((item) => item.id === selectedObject);
   if (!selected || selectedDesignTarget.kind === 'baseline' || !serverAvailable || busy) return;
-  const scale = 600 / Math.max(ui['proposal-drawing'].clientWidth, 200);
-  const centre = project(objectAnchor(selected, snapshot));
+  const scale = 1;
+  const anchor = project(objectAnchor(selected, snapshot));
+  const centre: Point = [anchor[0], Math.max(30, anchor[1] - 46)];
+  svg.append(svgNode('line', { x1: anchor[0], y1: anchor[1], x2: centre[0], y2: centre[1], stroke: spatialTokens.color.primary, 'stroke-width': 1, 'pointer-events': 'none' }));
   const reference = visibleReference();
   if (reference) {
     const target = project(referencePoint(reference, snapshot));
@@ -2867,7 +2797,7 @@ function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference 
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
   const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
   const bounds = boundsMm(floorBounds(view));
-  const project = ([x, y]: Point): Point => [300 + (x - (plan.minX + plan.maxX) / 2) * plan.scale, 193 - (y - (plan.minY + plan.maxY) / 2) * plan.scale];
+  const project = ([x, y]: Point): Point => { const p = plan.project([x, y, plan.elevation]); return [p[0], p[1]]; };
   let best: { wallId: string; alongWallMm: number; distance: number } | null = null;
   for (const wall of view.entities.filter(isWall)) {
     const a = project(wall.start); const b = project(wall.end); const dx = b[0] - a[0]; const dy = b[1] - a[1];
@@ -2875,7 +2805,7 @@ function visualDrop(event: PointerEvent, root: SVGSVGElement): SpatialReference 
     const distance = Math.hypot(point.x - a[0] - dx * t, point.y - a[1] - dy * t);
     if (!best || distance < best.distance) best = { wallId: wall.id, alongWallMm: Math.round(t * Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) * 1000), distance };
   }
-  if (best && best.distance <= 18 * 600 / Math.max(ui['proposal-drawing'].clientWidth, 200)) return { kind: 'wall-point', wallId: best.wallId, alongWallMm: best.alongWallMm };
+  if (best && best.distance <= 18) return { kind: 'wall-point', wallId: best.wallId, alongWallMm: best.alongWallMm };
   const world = pointerPlan(event, root, plan);
   const positionMm: Point = [Math.round(world[0] * 1000), Math.round(world[1] * 1000)];
   if (positionMm[0] < bounds.minX || positionMm[0] > bounds.maxX || positionMm[1] < bounds.minY || positionMm[1] > bounds.maxY) return null;
@@ -3183,7 +3113,7 @@ function renderRoomNavigation(snapshot: ModelSnapshot): void {
   }
   const storeys = levels(snapshot);
   if (activeLevelId && !storeys.some(level => level.id === activeLevelId)) activeLevelId = null;
-  if (!activeLevelId && modelView === 'plan' && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
+  if (!activeLevelId && (modelView === 'plan' || workspaceView.kind === 'inside') && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
   const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
   const objects = view.entities.filter(item => item.type !== 'AssetFamily');
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
@@ -3223,6 +3153,36 @@ function navigateModel(node: ModelNode): void {
 }
 ui['show-roof'].addEventListener('change', () => { roofVisible = ui['show-roof'].checked; if (roofVisible) cutaway = false; if (repo) renderComparison(); });
 
+function insideEntry(snapshot: ModelSnapshot, motion: 'walk' | 'fly'): NavigationPoint | undefined {
+  const level = levels(snapshot).find(item => item.id === activeLevelId);
+  const floors = snapshot.entities.filter(item => item.type === 'Slab' && item.levelId === activeLevelId);
+  const context = { projectId: requireRepository().projectId, sourcePin: selectedRevision, levelId: activeLevelId, snapshot };
+  for (const floor of floors) {
+    if (floor.type !== 'Slab') continue;
+    const b = floor.bounds;
+    for (const row of [4, 5, 3, 6, 2, 7, 1, 8, 9]) for (const column of [3, 7, 2, 8, 4, 6, 1, 9, 5]) {
+      const x = b.minX + (b.maxX - b.minX) * column / 10; const y = b.minY + (b.maxY - b.minY) * row / 10;
+      const z = walkElevation(context, x, y);
+      if (z !== null) return [x, y, z];
+    }
+  }
+  if (motion === 'walk') return undefined;
+  const walls = snapshot.entities.filter(isWall); const points = walls.flatMap(wall => [wall.start, wall.end]);
+  if (!points.length) return [0, 0, (level?.elevation ?? 0) + 1.6];
+  return [(Math.min(...points.map(p => p[0])) + Math.max(...points.map(p => p[0]))) / 2,
+    (Math.min(...points.map(p => p[1])) + Math.max(...points.map(p => p[1]))) / 2, (level?.elevation ?? 0) + 1.6];
+}
+function updateViewChrome(): void {
+  const session = modelView === 'plan' ? { kind: 'plan' } satisfies ViewIntent : modelViewer?.navigationState;
+  generic('workspace-shell').dataset.spatialView = session?.kind ?? workspaceView.kind;
+  for (const prefix of ['', 'review-']) {
+    button(`${prefix}view-inside`).setAttribute('aria-pressed', String(session?.kind === 'inside'));
+    button(`${prefix}view-fly`).setAttribute('aria-pressed', String(session?.kind === 'inside' && session.motion === 'fly'));
+    button(`${prefix}mouse-look`).hidden = session?.kind !== 'inside';
+    generic(`${prefix}navigation-notice`).textContent = navigationNotice;
+  }
+}
+
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
   const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
@@ -3246,10 +3206,25 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
-    modelViewer.show(host, { projectId: requireRepository().projectId, snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
+    modelViewer.show(host, { projectId: requireRepository().projectId, navigationPin: `${designKey(selectedDesignTarget)}:${selectedRevision}:${JSON.stringify(snapshot)}`, snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
       interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null,
       markup: { binding: markupBinding(), editable: selectedDesignTarget.kind !== 'baseline' && !reviewRepository && !inspectedChatView,
         annotations: conversationMarkups(chatVisual), references: referenceMarkups() } });
+    const intent = inDeltaDialog ? { kind: 'overview' } satisfies ViewIntent : workspaceView.kind === 'plan' ? { kind: 'overview' } satisfies ViewIntent : workspaceView;
+    const session = modelViewer.navigationState;
+    if (session.kind !== intent.kind || intent.kind === 'inside' && session.kind === 'inside' && session.motion !== intent.motion) {
+      let result = modelViewer.changeView(intent);
+      if (result.kind === 'unsupported' && intent.kind === 'inside') {
+        const entry = insideEntry(snapshot, intent.motion);
+        if (entry) result = modelViewer.changeView({ ...intent, entry });
+        if (result.kind === 'unsupported') {
+          navigationNotice = result.reason; status(result.reason);
+          const flyEntry = insideEntry(snapshot, 'fly');
+          if (flyEntry) { insideMotion = 'fly'; workspaceView = { kind: 'inside', motion: 'fly' }; modelViewer.changeView({ ...workspaceView, entry: flyEntry }); }
+        }
+      }
+    }
+    updateViewChrome();
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');
@@ -3284,10 +3259,10 @@ function renderComparison(): void {
   button('chat-proposal-delta').setAttribute('aria-pressed', String(reviewDelta));
   button('chat-proposal-delta').textContent = reviewDelta ? 'Hide changes' : 'Show changes';
   renderRoomNavigation(selected);
-  ui['original-drawing'].replaceChildren(drawPlan(original, null, 'root', 'Original room plan'));
+  ui['original-drawing'].replaceChildren(workspacePlan(original, null, 'root', 'Original room plan', originalId));
   if (modelView === 'plan' && !(ui['changes-dialog'].open && changesTab === '3d')) {
-    modelViewer?.hide();
-    const next = drawPlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`);
+    modelViewer?.changeView({ kind: 'plan' }); modelViewer?.hide();
+    const next = workspacePlan(selected, comparison, 'selected', `${selectedBranch} visual request plan`, selectedRevision, liveChatPreview?.baseRevisionId ?? reviewedRevision?.comparisonBaseRevisionId ?? originalId);
     const root = ui['proposal-drawing'].querySelector<SVGSVGElement>('svg');
     if (root && (gesture || visualGesture)) {
       // Keep the capture root stable throughout a geometry-request drag.
@@ -3297,23 +3272,26 @@ function renderComparison(): void {
       const camera = planCameras.get(next);
       if (!camera) throw new Error('The room plan camera was not created.');
       planCameras.set(root, camera);
+      const plan = modelPlans.get(next); if (plan) modelPlans.set(root, plan);
+      const comparison = planComparisons.get(next); if (comparison) planComparisons.set(root, comparison);
     } else ui['proposal-drawing'].replaceChildren(next);
   } else renderViewer(selected, comparison);
   ui['proposal-drawing'].dataset.modelView = modelView;
   ui['view-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
-  ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
+  ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d' && modelViewer?.navigationState.kind === 'overview'));
   ui['model-3d-controls'].hidden = modelView !== '3d';
-  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES' : '3D · CAMERA ONLY';
+  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES · Native footprints · Linked IFC cuts unsupported' : modelViewer?.navigationState.kind === 'inside' ? 'INSIDE · WASD · Shift up / Ctrl down in Fly · Escape releases' : 'OVERVIEW · Orbit / pan / zoom';
+  updateViewChrome();
   ui['model-revision'].textContent = liveChatPreview ? `Live draft · update ${liveChatPreview.sequence} · base ${liveChatPreview.baseRevisionId.slice(0, 10)} · ${selected.entities.length} objects` : `Revision ${selectedRevision.slice(0, 10)} · ${selected.entities.length} objects`;
   ui['review-drawing'].dataset.modelView = modelView;
-  if (modelView === 'plan') ui['review-drawing'].replaceChildren(drawPlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`));
+  if (modelView === 'plan') ui['review-drawing'].replaceChildren(workspacePlan(selected, comparison, 'review', `${selectedBranch} proposal review plan`, selectedRevision, reviewedRevision?.comparisonBaseRevisionId ?? originalId));
   generic('review-model-3d-controls').hidden = modelView !== '3d';
   for (const prefix of ['', 'review-', 'delta-']) {
     for (const mode of ['basic', 'realistic']) button(`${prefix}render-${mode}`).setAttribute('aria-pressed', String(renderingMode === mode));
     button(`${prefix}cutaway`).setAttribute('aria-pressed', String(cutaway));
   }
   ui['review-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
-  ui['review-3d'].setAttribute('aria-pressed', String(modelView === '3d'));
+  ui['review-3d'].setAttribute('aria-pressed', String(modelView === '3d' && modelViewer?.navigationState.kind === 'overview'));
   generic('review-view-caption').textContent = modelView === '3d' ? '3D · CUTAWAY VIEW' : 'PLAN · METRES';
   button('review-delta').setAttribute('aria-pressed', String(reviewDelta));
   button('review-delta').disabled = !review;
@@ -3352,7 +3330,7 @@ function renderProjectOverview(): void {
   generic('overview-level-label').textContent = `${selectedLevel?.name ?? 'Floor'} · CONCEPT PLAN`;
   generic('floor-overview').hidden = !rooms.length;
   document.querySelector('.overview-grid')?.classList.toggle('has-floor', rooms.length > 0);
-  generic('floor-overview-plan').replaceChildren(...(rooms.length ? [drawPlan(revision.snapshot, null, 'floor-overview', `${selectedLevel?.name ?? 'Floor'} room overview`)] : []));
+  generic('floor-overview-plan').replaceChildren(...(rooms.length ? [workspacePlan(revision.snapshot, null, 'floor-overview', `${selectedLevel?.name ?? 'Floor'} room overview`, revision.id)] : []));
   const connections = rooms.length ? doorConnections(revision.snapshot) : [];
   generic('room-directory').replaceChildren(...visibleRooms.map((room) => {
     const card = element('button', undefined, 'room-card'); card.type = 'button'; card.dataset.room = room.id;

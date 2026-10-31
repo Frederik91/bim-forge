@@ -334,7 +334,7 @@ export class ModelViewer {
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
     this.navigation.setContext({ projectId: state.projectId ?? null, sourcePin: state.navigationPin ?? JSON.stringify(state.snapshot),
       levelId: next.levelId, snapshot: state.snapshot });
-    if (focusChanged || levelChanged) this.model.frame(state.focusId);
+    if (projectChanged) this.model.frame();
     this.model.setCutaway(state.cutaway);
     const floor = (next.levelId ? levels(state.snapshot).find(level => level.id === next.levelId) : entityLevel(state.snapshot, next.selectedId))
       ?? [...levels(state.snapshot)].sort((a, b) => a.elevation - b.elevation)[0];
