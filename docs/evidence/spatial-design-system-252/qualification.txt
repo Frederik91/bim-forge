@@ -1,0 +1,27 @@
+Final successful qualification, issue #252, 2026-10-31
+
+npm run validate
+Strict TypeScript valid. 352 source file(s) checked.
+tsc --noEmit: passed
+Policy valid. 0 changed file(s) checked.
+
+npm run build:design-gallery
+Built fixture gallery: dist/design-system/index.html
+
+npm run build:demo
+dist/demo/room-app.mjs 3.4mb
+Done in 671ms
+
+node --test --test-concurrency=1 demo/design-system-browser.test.ts demo/preview-build.test.ts
+PASS shared text, action and drawing foregrounds retain readable contrast
+PASS the built gallery preserves draft, keyboard access, truthful fixture states and narrow layout
+PASS shared CSS ships in actual native Plan and the existing single viewer
+PASS the runtime package includes every local server dependency in the image and build context
+PASS the built preview is one complete hashed release with every referenced browser asset
+tests 5, pass 5, fail 0, cancelled 0, skipped 0
+duration_ms 4645.9762
+
+Impeccable detector changed UI targets: []
+git diff --check: passed
+
+Model delta: 0 entities, 0 relationships, 0 accepted revisions.
