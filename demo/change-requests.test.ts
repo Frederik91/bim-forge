@@ -1,7 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
 import { RoomRepository, rectangleLayout, previewFurnishings, previewRectangle, validateSnapshot } from '../src/room-model.ts';
@@ -9,6 +7,7 @@ import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
 import type { ModelScopeQuery } from '../src/model-scope-contract.ts';
 import type { ModelWorker, ModelWorkerSession } from '../src/model-proposal.ts';
 import { DatabaseSync } from 'node:sqlite';
+import { temporaryRequestResources } from './request-test-resources.ts';
 import { parseRequestActivity } from '../src/request-activity.ts';
 
 function request(repo: RoomRepository, id: string, name: string, width = 1200) {
@@ -103,11 +102,11 @@ async function waitFor(queue: ChangeRequests, id: string, states = ['ready', 'ne
 }
 
 test('saved scope submissions freeze once, survive restart and retain previous query revisions after saved-definition edits', async t => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-scope-backlog-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-scope-backlog-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
   const repo = await RoomRepository.createProject({ projectId: crypto.randomUUID(), name: 'Durable scopes', snapshot: multiStoreySnapshot() });
-  let queue = await ChangeRequests.open(file, () => null);
+  let queue = await resources.openQueue(file, () => null);
   await queue.importProject(repo.serialize());
   const query: ModelScopeQuery = { version: 1, allOf: [{ kind: 'furniture-kind', furnitureKind: 'plant' }], anyOf: [], excludeIds: [] };
   const saved = queue.saveModelScope({ projectId: repo.projectId, id: 'plants', name: 'All plants', query, expectedVersion: null });
@@ -119,7 +118,7 @@ test('saved scope submissions freeze once, survive restart and retain previous q
   queue.saveModelScope({ projectId: repo.projectId, id: saved.id, name: 'Attic only', query: narrower, expectedVersion: saved.version });
   await assert.rejects(() => queue.submit(repo.serialize(), { ...input, requestId: 'scope-saved-mismatch', proposalName: 'scope-saved-mismatch' }), /saved scope query changed/i);
   await queue.close();
-  queue = await ChangeRequests.open(file, () => scopedWorker); t.after(() => queue.close());
+  queue = await resources.openQueue(file, () => scopedWorker);
   await waitFor(queue, submitted.id);
   const ready = queue.get(submitted.id); assert.equal(ready.state, 'ready', ready.error ?? '');
   assert.deepEqual(ready.scope, frozen); assert.deepEqual(ready.request.scope?.query, query);
@@ -178,18 +177,18 @@ test('scope acceptance preserves an unrelated accepted edit on another level', a
 });
 
 test('submission is durable before acknowledgement, idempotent and independent of worker availability', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-backlog-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-backlog-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
   const repo = await RoomRepository.create('Queue test');
-  let queue = await ChangeRequests.open(file, () => null);
+  let queue = await resources.openQueue(file, () => null);
   const input = request(repo, 'durable', 'durable-entry');
   assert.equal((await queue.submit(repo.serialize(), input)).state, 'queued');
   assert.equal((await queue.submit(repo.serialize(), input)).id, 'durable');
   await assert.rejects(() => queue.submit(repo.serialize(), { ...input, instruction: 'Another outcome.' }), BacklogConflict);
   await queue.close();
-  queue = await ChangeRequests.open(file, () => worker);
-  t.after(() => queue.close());
+  queue = await resources.openQueue(file, () => worker);
+
   await waitFor(queue, 'durable');
   assert.equal(queue.get('durable').state, 'ready');
   assert.equal(queue.list(repo.projectId).length, 1);
@@ -278,10 +277,11 @@ for (const finishesLate of [false, true]) test(`two independent chair proposals 
     ` });
     assert.equal(output.ok, true);
   } };
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-independent-chairs-'));
+  const resources = temporaryRequestResources(t, 'bim-independent-chairs-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
-  const queue = await ChangeRequests.open(file, () => rotate);
-  t.after(async () => { await queue.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  const queue = await resources.openQueue(file, () => rotate);
+
   for (const [id, chair] of [['first-chair', 'chair-one'], ['second-chair', 'chair-two']] satisfies [string, string][]) {
     await queue.submit(repo.serialize(), { ...request(repo, id, id), selectedObjectIds: [chair], instruction: 'Rotate the selected chair 180 degrees in place.' });
   }
@@ -292,7 +292,7 @@ for (const finishesLate of [false, true]) test(`two independent chair proposals 
   await decide(queue, 'first-chair', { action: 'accept', decisionId: 'accept-first-chair' });
   if (finishesLate) { assert.ok(releaseSecond); releaseSecond(); await waitFor(queue, 'second-chair'); }
   assert.equal(queue.get('second-chair').state, 'ready', 'an unrelated accepted chair change must not require a request revision');
-  const staleDatabase = new DatabaseSync(file);
+  const staleDatabase = resources.openDatabase(file);
   const stale = { ...queue.get('second-chair'), state: 'needs-input', error: 'The accepted model changed. Revise this request against the current model before accepting.' };
   staleDatabase.prepare("UPDATE requests SET state=?, body=json_set(body, '$.state', ?, '$.error', ?) WHERE id=?").run(stale.state, stale.state, stale.error, stale.id);
   staleDatabase.close();
@@ -307,21 +307,21 @@ for (const finishesLate of [false, true]) test(`two independent chair proposals 
 });
 
 test('server restart recovers interrupted work without trusting a stale working marker', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-backlog-restart-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-backlog-restart-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
   let signal: AbortSignal | undefined;
   const stopped: ModelWorker = { identity: worker.identity, async run(session) {
     signal = session.signal; await pause(session.signal, () => {});
   } };
-  const queue = await ChangeRequests.open(file, () => stopped);
+  const queue = await resources.openQueue(file, () => stopped);
   const repo = await RoomRepository.create();
   await queue.submit(repo.serialize(), request(repo, 'interrupted', 'recovered-entry'));
   await waitFor(queue, 'interrupted', ['working']);
   for (let i = 0; !signal && i < 4000; i += 1) await new Promise<void>((resolve) => setTimeout(resolve, 5));
   await queue.close();
   assert.equal(signal?.aborted, true);
-  const resumed = await ChangeRequests.open(file, () => worker); t.after(() => resumed.close());
+  const resumed = await resources.openQueue(file, () => worker);
   await waitFor(resumed, 'interrupted');
   assert.equal(resumed.get('interrupted').state, 'ready');
   assert.equal(resumed.get('interrupted').attempts, 2);
@@ -374,8 +374,8 @@ test('concurrent delivery of the same submission, decision and revision converge
 });
 
 test('working requests expose real tool progress before completion, persist it, and ignore late activity after cancellation', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-activity-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-activity-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
   const releases: Array<() => void> = [];
   const slow: ModelWorker = { identity: worker.identity, async run(session) {
@@ -389,7 +389,7 @@ test('working requests expose real tool progress before completion, persist it, 
     await pause(session.signal, (resolve) => releases.push(resolve));
     await worker.run(session);
   } };
-  let queue = await ChangeRequests.open(file, () => slow);
+  let queue = await resources.openQueue(file, () => slow);
   const repo = await RoomRepository.create(); const input = request(repo, 'activity-live', 'activity-live');
   await queue.submit(repo.serialize(), input);
   for (let i = 0; releases.length < 1 && i < 4000; i += 1) await new Promise<void>((resolve) => setTimeout(resolve, 5));
@@ -403,22 +403,23 @@ test('working requests expose real tool progress before completion, persist it, 
   const cancelled = JSON.stringify(queue.get(input.requestId).activity);
   releases[0]?.(); await new Promise<void>((resolve) => setTimeout(resolve, 30));
   assert.equal(JSON.stringify(queue.get(input.requestId).activity), cancelled);
-  await queue.close(); queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  await queue.close(); queue = await resources.openQueue(file, () => null);
   assert.equal(JSON.stringify(queue.get(input.requestId).activity), cancelled);
   assert.equal(queue.project(repo.projectId), repo.serialize());
 });
 
 test('server recovery and revisions keep attempt activity bound to the correct request version', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-activity-restart-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-activity-restart-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite'); let release: (() => void) | undefined;
-  const queue = await ChangeRequests.open(file, () => ({ identity: worker.identity, async run(session) {
+  const queue = await resources.openQueue(file, () => ({ identity: worker.identity, async run(session) {
     await inspect(session); await pause(session.signal, (resolve) => { release = resolve; }); await worker.run(session);
   } }));
   const repo = await RoomRepository.create(); const first = request(repo, 'activity-recovery', 'activity-recovery');
   await queue.submit(repo.serialize(), first);
   for (let i = 0; !release && i < 4000; i += 1) await new Promise<void>((resolve) => setTimeout(resolve, 5));
   await queue.close();
-  const restored = await ChangeRequests.open(file, () => worker); t.after(() => restored.close()); release?.();
+  const restored = await resources.openQueue(file, () => worker);  release?.();
   await waitFor(restored, first.requestId); assert.equal(restored.get(first.requestId).state, 'ready');
   const events = restored.get(first.requestId).activity;
   assert.ok(events.some((event) => event.stage === 'recovered'));
@@ -433,33 +434,34 @@ test('server recovery and revisions keep attempt activity bound to the correct r
 });
 
 test('legacy tickets without activity remain readable; malformed or mixed-version activity fails closed', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-old-activity-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const file = path.join(directory, 'requests.sqlite'); const queue = await ChangeRequests.open(file, () => null);
+  const resources = temporaryRequestResources(t, 'bim-old-activity-');
+  const directory = resources.directory;
+  const file = path.join(directory, 'requests.sqlite'); const queue = await resources.openQueue(file, () => null);
   const repo = await RoomRepository.create(); await queue.submit(repo.serialize(), request(repo, 'old-ticket', 'old-ticket'));
   const { activity } = queue.get('old-ticket'); await queue.close();
-  const db = new DatabaseSync(file); const row = db.prepare('SELECT body FROM requests WHERE id=?').get('old-ticket'); assert.ok(row && typeof row.body === 'string'); const saved: unknown = JSON.parse(row.body); assert.ok(saved && typeof saved === 'object' && !Array.isArray(saved)); const old = Object.fromEntries(Object.entries(saved).filter(([key]) => key !== 'activity')); db.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify(old), 'old-ticket'); db.close();
-  const restored = await ChangeRequests.open(file, () => null); t.after(() => restored.close());
+  const db = resources.openDatabase(file); const row = db.prepare('SELECT body FROM requests WHERE id=?').get('old-ticket'); assert.ok(row && typeof row.body === 'string'); const saved: unknown = JSON.parse(row.body); assert.ok(saved && typeof saved === 'object' && !Array.isArray(saved)); const old = Object.fromEntries(Object.entries(saved).filter(([key]) => key !== 'activity')); db.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify(old), 'old-ticket'); db.close();
+  const restored = await resources.openQueue(file, () => null);
   assert.deepEqual(restored.get('old-ticket').activity, []);
   assert.deepEqual(restored.executions('old-ticket'), []);
   assert.throws(() => parseRequestActivity([{ ...activity[0], stage: 'private-reasoning' }]), /Invalid/);
   assert.throws(() => parseRequestActivity([activity[0], activity[0]]), /Invalid/);
   assert.throws(() => parseRequestActivity(Array.from({ length: 97 }, (_, i) => ({ ...activity[0], sequence: i + 1 }))), /Invalid/);
   assert.throws(() => parseRequestActivity([{ ...activity[0], message: 'x'.repeat(301) }]), /Invalid/);
-  const corrupt = new DatabaseSync(file); corrupt.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify({ ...old, activity: activity.map((event) => ({ ...event, requestId: 'another-request' })) }), 'old-ticket'); corrupt.close();
+  const corrupt = resources.openDatabase(file); corrupt.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify({ ...old, activity: activity.map((event) => ({ ...event, requestId: 'another-request' })) }), 'old-ticket'); corrupt.close();
   assert.throws(() => restored.get('old-ticket'), /another request revision/);
 });
 
 test('execution evidence survives provider failure, retries, revisions and reopening without overwriting earlier executions', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-execution-journal-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-execution-journal-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
   let failProvider = true;
-  let queue = await ChangeRequests.open(file, () => ({ identity: worker.identity, async run(session) {
+  let queue = await resources.openQueue(file, () => ({ identity: worker.identity, async run(session) {
     await inspect(session);
     if (failProvider) throw new Error('Provider stopped after inspection.');
     await worker.run(session);
   } }));
-  t.after(() => queue.close());
+
   const repo = await RoomRepository.create(); const first = request(repo, 'journal-first', 'journal-first');
   await queue.submit(repo.serialize(), first); await waitFor(queue, first.requestId);
   assert.equal(queue.get(first.requestId).state, 'failed');
@@ -482,17 +484,17 @@ test('execution evidence survives provider failure, retries, revisions and reope
   const revised = queue.executions(first.requestId);
   assert.deepEqual(revised.slice(0, retried.length), retried);
   assert.ok(revised.slice(retried.length).every((entry) => entry.requestId === revision.requestId && entry.attempt === 1));
-  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  await queue.close(); queue = await resources.openQueue(file, () => null);
   assert.deepEqual(queue.executions(first.requestId), revised);
   assert.equal(queue.project(repo.projectId), repo.serialize());
 });
 
 test('a failed execution journal write fails the attempt closed', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-execution-failure-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-execution-failure-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
-  const queue = await ChangeRequests.open(file, () => worker); t.after(() => queue.close());
-  const db = new DatabaseSync(file);
+  const queue = await resources.openQueue(file, () => worker);
+  const db = resources.openDatabase(file);
   db.exec("CREATE TRIGGER refuse_evidence BEFORE INSERT ON request_executions BEGIN SELECT RAISE(FAIL, 'execution journal unavailable'); END;");
   db.close();
   const repo = await RoomRepository.create();
@@ -531,126 +533,126 @@ function legacyCopy(sourceFile: string, legacyFile: string, project: string, tic
 }
 
 test('fresh project namespaces contain only IDs and register new projects after reopening', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-project-namespace-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-project-namespace-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
   const first = await RoomRepository.create('First namespace'); const second = await RoomRepository.create('Second namespace');
-  let queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  let queue = await resources.openQueue(file, () => null);
   await queue.importProject(first.serialize()); await queue.submit(first.serialize(), request(first, 'namespace-first', 'namespace-first'));
   await queue.close();
-  const initial = new DatabaseSync(file, { readOnly: true });
+  const initial = resources.openDatabase(file, { readOnly: true });
   assert.deepEqual(initial.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']);
   assert.deepEqual(initial.prepare('PRAGMA foreign_key_check').all(), []); initial.close();
-  queue = await ChangeRequests.open(file, () => null);
+  queue = await resources.openQueue(file, () => null);
   await queue.importProject(second.serialize()); await queue.submit(second.serialize(), request(second, 'namespace-second', 'namespace-second'));
-  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  await queue.close(); queue = await resources.openQueue(file, () => null);
   assert.equal(queue.project(first.projectId), first.serialize()); assert.equal(queue.project(second.projectId), second.serialize());
   assert.equal(queue.get('namespace-first').state, 'queued'); assert.equal(queue.get('namespace-second').state, 'queued');
 });
 
 test('normalized V1 sentinel cleanup is atomic, refuses unexpected bodies and supports registration after cleanup', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-normalized-namespace-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-normalized-namespace-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite'); const repo = await RoomRepository.create('Normalized namespace');
-  let queue = await ChangeRequests.open(file, () => null);
+  let queue = await resources.openQueue(file, () => null);
   await queue.submit(repo.serialize(), request(repo, 'normalized-ticket', 'normalized-ticket')); const ticket = queue.get('normalized-ticket');
   await queue.close();
-  const db = new DatabaseSync(file);
+  const db = resources.openDatabase(file);
   db.exec("ALTER TABLE projects ADD COLUMN body TEXT NOT NULL DEFAULT 'versioned'");
   const stored = db.prepare('SELECT body FROM requests WHERE id=?').get(ticket.id); assert.ok(stored && typeof stored.body === 'string');
   db.prepare("UPDATE requests SET state='working',body='invalid working ticket'").run();
   const head = db.prepare('SELECT document_id FROM versioned_projects WHERE project_id=?').get(repo.projectId)?.document_id;
   db.close();
   let workerChecks = 0;
-  await assert.rejects(() => ChangeRequests.open(file, () => { workerChecks++; return null; }), /JSON/);
+  await assert.rejects(() => resources.openQueue(file, () => { workerChecks++; return null; }), /JSON/);
   assert.equal(workerChecks, 0, 'Startup failure cannot start the pump.');
-  const rolledBack = new DatabaseSync(file);
+  const rolledBack = resources.openDatabase(file);
   assert.deepEqual(rolledBack.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id', 'body']);
   assert.equal(rolledBack.prepare('SELECT body FROM projects').get()?.body, 'versioned');
   assert.equal(rolledBack.prepare('SELECT document_id FROM versioned_projects WHERE project_id=?').get(repo.projectId)?.document_id, head);
   rolledBack.prepare("UPDATE requests SET state='queued',body=? WHERE id=?").run(stored.body, ticket.id); rolledBack.close();
   for (const body of [' versioned', repo.serialize()]) {
-    const unexpected = new DatabaseSync(file); unexpected.prepare('UPDATE projects SET body=?').run(body); unexpected.close();
-    await assert.rejects(() => ChangeRequests.open(file, () => { workerChecks++; return null; }), /Unexpected normalized project marker/);
-    const retained = new DatabaseSync(file, { readOnly: true });
+    const unexpected = resources.openDatabase(file); unexpected.prepare('UPDATE projects SET body=?').run(body); unexpected.close();
+    await assert.rejects(() => resources.openQueue(file, () => { workerChecks++; return null; }), /Unexpected normalized project marker/);
+    const retained = resources.openDatabase(file, { readOnly: true });
     assert.equal(retained.prepare('SELECT body FROM projects').get()?.body, body);
     assert.equal(retained.prepare('SELECT body FROM requests WHERE id=?').get(ticket.id)?.body, stored.body); retained.close();
     assert.equal(workerChecks, 0);
   }
-  const repaired = new DatabaseSync(file); repaired.exec("UPDATE projects SET body='versioned'"); repaired.close();
-  queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  const repaired = resources.openDatabase(file); repaired.exec("UPDATE projects SET body='versioned'"); repaired.close();
+  queue = await resources.openQueue(file, () => null);
   assert.deepEqual(queue.get(ticket.id), ticket); assert.equal(queue.project(repo.projectId), repo.serialize());
-  const cleaned = new DatabaseSync(file, { readOnly: true });
+  const cleaned = resources.openDatabase(file, { readOnly: true });
   assert.deepEqual(cleaned.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']);
   assert.deepEqual(cleaned.prepare('PRAGMA foreign_key_check').all(), []); cleaned.close();
   const next = await RoomRepository.create('After normalized cleanup');
   await queue.importProject(next.serialize()); await queue.submit(next.serialize(), request(next, 'after-cleanup', 'after-cleanup'));
-  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  await queue.close(); queue = await resources.openQueue(file, () => null);
   assert.equal(queue.project(next.projectId), next.serialize()); assert.equal(queue.get('after-cleanup').state, 'queued');
 });
 
 test('failure after dropping legacy project bodies restores original bytes and schema until migration can finish', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-namespace-rollback-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-namespace-rollback-');
+  const directory = resources.directory;
   const sourceFile = path.join(directory, 'source.sqlite'); const file = path.join(directory, 'legacy.sqlite');
   const repo = await RoomRepository.create('Legacy namespace rollback');
-  const source = await ChangeRequests.open(sourceFile, () => null);
+  const source = await resources.openQueue(sourceFile, () => null);
   await source.submit(repo.serialize(), request(repo, 'legacy-namespace', 'legacy-namespace')); const ticket = source.get('legacy-namespace');
   await source.close(); legacyCopy(sourceFile, file, repo.serialize(), [ticket]);
-  const db = new DatabaseSync(file);
+  const db = resources.openDatabase(file);
   db.exec("CREATE TABLE queue_storage_metadata (version INTEGER PRIMARY KEY CHECK(version=1)); CREATE TRIGGER refuse_migration_seal BEFORE INSERT ON queue_storage_metadata BEGIN SELECT RAISE(FAIL, 'migration seal unavailable'); END;"); db.close();
   let workerChecks = 0;
-  await assert.rejects(() => ChangeRequests.open(file, () => { workerChecks++; return null; }), /migration seal unavailable/);
+  await assert.rejects(() => resources.openQueue(file, () => { workerChecks++; return null; }), /migration seal unavailable/);
   assert.equal(workerChecks, 0);
-  const rolledBack = new DatabaseSync(file);
+  const rolledBack = resources.openDatabase(file);
   assert.deepEqual(rolledBack.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id', 'body']);
   assert.equal(rolledBack.prepare('SELECT body FROM projects').get()?.body, repo.serialize());
   assert.equal(rolledBack.prepare('SELECT body FROM requests WHERE id=?').get(ticket.id)?.body, JSON.stringify(ticket));
   assert.equal(rolledBack.prepare('SELECT COUNT(*) AS count FROM queue_storage_metadata').get()?.count, 0);
   assert.equal(rolledBack.prepare("SELECT name FROM sqlite_master WHERE name='versioned_projects'").get(), undefined);
   rolledBack.exec('DROP TRIGGER refuse_migration_seal'); rolledBack.close();
-  let queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  let queue = await resources.openQueue(file, () => null);
   assert.deepEqual(queue.get(ticket.id), ticket);
   const next = await RoomRepository.create('After legacy migration');
   await queue.importProject(next.serialize()); await queue.submit(next.serialize(), request(next, 'after-migration', 'after-migration'));
-  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  await queue.close(); queue = await resources.openQueue(file, () => null);
   assert.equal(queue.project(repo.projectId), repo.serialize()); assert.equal(queue.project(next.projectId), next.serialize());
-  const migrated = new DatabaseSync(file, { readOnly: true });
+  const migrated = resources.openDatabase(file, { readOnly: true });
   assert.deepEqual(migrated.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']);
   assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(), []); migrated.close();
 });
 
 test('a ticket publication failure rolls back accepted head, history and decision and can retry after reopening', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-publication-atomic-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-publication-atomic-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
-  let queue = await ChangeRequests.open(file, () => worker);
-  t.after(() => queue.close());
+  let queue = await resources.openQueue(file, () => worker);
+
   const repo = await RoomRepository.create(); const input = request(repo, 'atomic', 'atomic');
   await queue.submit(repo.serialize(), input); await waitFor(queue, input.requestId);
   const before = queue.project(repo.projectId); const ticket = queue.get(input.requestId); const executions = queue.executions(input.requestId);
   const history = queue.history({ projectId: repo.projectId, before: null, limit: 50 });
-  const db = new DatabaseSync(file);
+  const db = resources.openDatabase(file);
   db.exec("CREATE TRIGGER refuse_publication BEFORE UPDATE ON requests WHEN NEW.state='completed' BEGIN SELECT RAISE(FAIL, 'ticket receipt unavailable'); END;");
   db.close();
   await assert.rejects(() => decide(queue, input.requestId, { action: 'accept', decisionId: 'atomic-decision' }), /ticket receipt unavailable/);
   assert.equal(queue.project(repo.projectId), before); assert.deepEqual(queue.get(input.requestId), ticket);
   assert.deepEqual(queue.history({ projectId: repo.projectId, before: null, limit: 50 }), history);
   assert.deepEqual(queue.executions(input.requestId), executions);
-  await queue.close(); queue = await ChangeRequests.open(file, () => null);
+  await queue.close(); queue = await resources.openQueue(file, () => null);
   assert.equal(queue.project(repo.projectId), before); assert.deepEqual(queue.get(input.requestId), ticket);
-  const repair = new DatabaseSync(file); repair.exec('DROP TRIGGER refuse_publication'); repair.close();
+  const repair = resources.openDatabase(file); repair.exec('DROP TRIGGER refuse_publication'); repair.close();
   const accepted = await decide(queue, input.requestId, { action: 'accept', decisionId: 'atomic-decision' });
   assert.equal(accepted.ticket.state, 'completed'); assert.notEqual(accepted.project, before);
   assert.equal(queue.history({ projectId: repo.projectId, before: null, limit: 50 }).entries[0]?.requestId, input.requestId);
 });
 
 test('legacy projects, archived results, source bindings, replay and execution evidence migrate once and survive reopening', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-legacy-refs-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-legacy-refs-');
+  const directory = resources.directory;
   const file = path.join(directory, 'source.sqlite'); const legacy = path.join(directory, 'legacy.sqlite');
   const repo = await RoomRepository.create('Legacy reviewed project');
-  let queue = await ChangeRequests.open(file, () => worker);
+  let queue = await resources.openQueue(file, () => worker);
   const source = await queue.addSource({ projectId: repo.projectId, id: crypto.randomUUID(), name: 'requirements.txt', mediaType: 'text/plain',
     bytes: Buffer.from('Keep the original room shell.'), signal: new AbortController().signal });
   const first = { ...request(repo, 'legacy-first', 'legacy-first'), sources: [source] };
@@ -664,7 +666,7 @@ test('legacy projects, archived results, source bindings, replay and execution e
   for (const problem of ['source-bytes', 'execution', 'review', 'root']) {
     const invalidFile = path.join(directory, `${problem}.sqlite`);
     legacyCopy(file, invalidFile, accepted.project, [ticket]);
-    const damaged = new DatabaseSync(invalidFile);
+    const damaged = resources.openDatabase(invalidFile);
     if (problem === 'source-bytes') damaged.prepare('UPDATE request_source_blobs SET bytes=? WHERE id=?').run(Buffer.alloc(source.byteLength, 65), source.id);
     else if (problem === 'execution') damaged.exec('DELETE FROM request_executions');
     else if (problem === 'review') damaged.prepare("UPDATE requests SET body=json_set(body, '$.result.review.rationale', 'Forged review text')").run();
@@ -675,20 +677,20 @@ test('legacy projects, archived results, source bindings, replay and execution e
     }
     const originalProject = damaged.prepare('SELECT body FROM projects').get()?.body;
     const originalTicket = damaged.prepare('SELECT body FROM requests').get()?.body; damaged.close();
-    await assert.rejects(() => ChangeRequests.open(invalidFile, () => null), /legacy|Legacy|mismatch/);
-    const unchanged = new DatabaseSync(invalidFile, { readOnly: true });
+    await assert.rejects(() => resources.openQueue(invalidFile, () => null), /legacy|Legacy|mismatch/);
+    const unchanged = resources.openDatabase(invalidFile, { readOnly: true });
     assert.equal(unchanged.prepare('SELECT body FROM projects').get()?.body, originalProject);
     assert.equal(unchanged.prepare('SELECT body FROM requests').get()?.body, originalTicket);
     assert.equal(unchanged.prepare("SELECT name FROM sqlite_master WHERE name='queue_storage_metadata'").get(), undefined);
     unchanged.close();
   }
-  queue = await ChangeRequests.open(legacy, () => null); t.after(() => queue.close());
+  queue = await resources.openQueue(legacy, () => null);
   assert.equal(queue.project(repo.projectId), accepted.project); assert.deepEqual(queue.get(first.requestId), ticket);
   assert.deepEqual(queue.executions(first.requestId), executions);
   assert.equal(queue.source(repo.projectId, source.id).bytes.toString(), 'Keep the original room shell.');
   assert.equal((await queue.submit(repo.serialize(), first)).request.requestId, second.requestId);
   assert.deepEqual((await queue.decide(first.requestId, { action: 'accept', decisionId: 'legacy-accept', expectedRequestId: second.requestId })).ticket, ticket);
-  const db = new DatabaseSync(legacy, { readOnly: true });
+  const db = resources.openDatabase(legacy, { readOnly: true });
   const stored = db.prepare('SELECT body FROM requests').get(); assert.ok(stored && typeof stored.body === 'string');
   assert.equal(stored.body.includes('\\"revisions\\"'), false); assert.equal(stored.body.includes(repo.serialize()), false);
   const value: unknown = JSON.parse(stored.body); assert.ok(value && typeof value === 'object' && 'project' in value);
@@ -703,16 +705,16 @@ test('legacy projects, archived results, source bindings, replay and execution e
   assert.deepEqual(db.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id']); db.close();
   const history = queue.history({ projectId: repo.projectId, before: null, limit: 50 });
   assert.ok(history.entries.every((entry) => entry.origin === 'imported'));
-  await queue.close(); queue = await ChangeRequests.open(legacy, () => null);
+  await queue.close(); queue = await resources.openQueue(legacy, () => null);
   assert.deepEqual(queue.get(first.requestId), ticket); assert.deepEqual(queue.history({ projectId: repo.projectId, before: null, limit: 50 }), history);
   assert.equal(await queue.importProject(repo.serialize()), accepted.project, 'Browser state cannot rewind accepted work.');
 });
 
 test('invalid bytes in a legacy archive roll back every migration write and leave original bytes available', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-legacy-rollback-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-legacy-rollback-');
+  const directory = resources.directory;
   const file = path.join(directory, 'source.sqlite'); const legacy = path.join(directory, 'legacy.sqlite');
-  const repo = await RoomRepository.create(); const queue = await ChangeRequests.open(file, () => worker);
+  const repo = await RoomRepository.create(); const queue = await resources.openQueue(file, () => worker);
   const input = request(repo, 'legacy-invalid', 'legacy-invalid');
   await queue.submit(repo.serialize(), input); await waitFor(queue, input.requestId);
   await queue.revise(input.requestId, repo.serialize(), request(repo, 'legacy-revision', 'legacy-revision'));
@@ -720,14 +722,14 @@ test('invalid bytes in a legacy archive roll back every migration write and leav
   assert.ok(archive && typeof archive === 'object');
   const invalid = { ...ticket, history: [JSON.stringify({ ...archive, project: '{invalid model bytes' })] };
   await queue.close(); legacyCopy(file, legacy, repo.serialize(), [invalid]);
-  await assert.rejects(() => ChangeRequests.open(legacy, () => null), /not valid bounded JSON/);
-  const db = new DatabaseSync(legacy);
+  await assert.rejects(() => resources.openQueue(legacy, () => null), /not valid bounded JSON/);
+  const db = resources.openDatabase(legacy);
   assert.equal(db.prepare('SELECT body FROM projects').get()?.body, repo.serialize());
   assert.deepEqual(db.prepare('PRAGMA table_info(projects)').all().map((column) => column.name), ['id', 'body']);
   assert.equal(db.prepare('SELECT body FROM requests').get()?.body, JSON.stringify(invalid));
   assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='queue_storage_metadata'").get(), undefined);
   db.prepare('UPDATE requests SET body=? WHERE id=?').run(JSON.stringify(ticket), ticket.id); db.close();
-  const recovered = await ChangeRequests.open(legacy, () => null); t.after(() => recovered.close());
+  const recovered = await resources.openQueue(legacy, () => null);
   assert.equal(recovered.get(input.requestId).history.length, 1);
 });
 
@@ -749,15 +751,15 @@ test('a changed hosting constraint refuses acceptance and retains the original h
 });
 
 test('backlog summaries and compatible pending refresh do not hydrate archived project documents', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bim-summary-refs-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'bim-summary-refs-');
+  const directory = resources.directory;
   const file = path.join(directory, 'requests.sqlite');
-  const queue = await ChangeRequests.open(file, () => worker); t.after(() => queue.close());
+  const queue = await resources.openQueue(file, () => worker);
   const repo = await RoomRepository.create(); const first = request(repo, 'summary-first', 'summary-first');
   await queue.submit(repo.serialize(), first); await waitFor(queue, first.requestId);
   await queue.revise(first.requestId, repo.serialize(), request(repo, 'summary-second', 'summary-second', 1100));
   await waitFor(queue, first.requestId); const before = queue.list(repo.projectId);
-  const db = new DatabaseSync(file);
+  const db = resources.openDatabase(file);
   const row = db.prepare('SELECT body FROM requests WHERE id=?').get(first.requestId); assert.ok(row && typeof row.body === 'string');
   const ticket: unknown = JSON.parse(row.body);
   assert.ok(ticket && typeof ticket === 'object' && 'history' in ticket && Array.isArray(ticket.history));
