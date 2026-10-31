@@ -19,6 +19,7 @@ import type { RequestChatProposalReview } from './request-chat-status.ts';
 type SubmissionRequest = Pick<ReturnType<typeof validateModelProposalRequest>, 'proposalName' | 'baseRevisionId' | 'instruction' | 'target'>
   & { selectedObjectIds: readonly string[]; visualIntent: unknown; scope?: ScopedRequest; authoringScope?: string; sources?: readonly RequestSource[]; evidencePins?: readonly EvidencePin[]; conversationVisual?: ConversationReply['visual'] };
 export interface TaskSubmission { project: string; request: SubmissionRequest }
+export interface TaskAcknowledgement { readonly ticket: BacklogItem; readonly preserveDraft: boolean }
 export interface TaskGeneration { readonly project: number; readonly task: number }
 export interface TaskProjection<Draft> {
   readonly projectId: string | null;
@@ -170,12 +171,13 @@ export class SpatialTasks<Draft> {
     this.requireCurrent(generation);
     if (!preserveDraft) this.#drafts.delete(key);
     this.selectTask(ticket.id); this.updateTicket(ticket);
-    this.receiveTask(value.ticket); return { ...value, preserveDraft };
+    return { ...value, preserveDraft };
   }
-  async submit(content: TaskSubmission): Promise<Record<string, unknown>> {
+  async submit(content: TaskSubmission): Promise<TaskAcknowledgement> {
     const { baseRevisionId: _base, target: _target, ...intent } = content.request;
-    return this.#send(this.key, JSON.stringify(intent), () => ({ path: '/api/change-requests', sources: content.request.sources ?? [],
+    const value = await this.#send(this.key, JSON.stringify(intent), () => ({ path: '/api/change-requests', sources: content.request.sources ?? [],
       body: JSON.stringify({ ...content, request: { ...content.request, requestId: globalThis.crypto.randomUUID() } }) }));
+    return { ticket: this.parseTicket(value.ticket), preserveDraft: value.preserveDraft === true };
   }
   async append(content: Omit<ConversationReply, 'messageId' | 'sources' | 'evidencePins' | 'scope'> & { sources: readonly RequestSource[]; evidencePins?: readonly EvidencePin[] }): Promise<Record<string, unknown>> {
     const ticketId = this.#ticketId;

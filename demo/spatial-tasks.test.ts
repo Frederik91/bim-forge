@@ -43,6 +43,21 @@ test('lost acknowledgement replays the identical first submission and retained s
   assert.equal(tasks.projection.drafts.size, 0);
 });
 
+test('first submission acknowledges a ticket summary before a separate conversation read', async () => {
+  const { conversation: _conversation, ...summary } = ticket();
+  const tasks = new SpatialTasks<string>({ fetch: async (_path, init) => Response.json({ ticket: init ? summary : ticket() }) });
+  tasks.setProject('project-one'); tasks.startTask('first'); const key = tasks.key;
+  tasks.saveDraft(key, 'First sent text');
+  const acknowledgement = await tasks.submit(submission());
+  assert.equal(acknowledgement.preserveDraft, false);
+  assert.equal(tasks.getDraft(key), undefined);
+  assert.equal(tasks.projection.ticketId, summary.id);
+  const acknowledged = tasks.projection;
+  assert.equal(acknowledged.conversation, null);
+  await tasks.readTask(summary.id);
+  assert.equal(tasks.projection.conversation?.ticketId, summary.id);
+});
+
 test('follow-up replays identical message and sequence, then keeps draft on sequence conflict', async () => {
   const bodies: string[] = []; let conflict = false;
   const tasks = new SpatialTasks<{ text: string; sources: readonly RequestSource[] }>({ fetch: async (_path, init) => {

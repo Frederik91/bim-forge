@@ -1805,7 +1805,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     saveChatDraft();
     const acknowledgement = await tasks.submit(content);
     void refreshSourceMentions(repo.projectId).catch(() => {});
-    const submittedTicket = tasks.parseTicket(acknowledgement.ticket);
+    const submittedTicket = acknowledgement.ticket;
     const submittedName = submittedTicket.request.proposalName;
     tasks.selectTask(submittedTicket.id);
 
