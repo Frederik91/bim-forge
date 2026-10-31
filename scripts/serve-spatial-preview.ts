@@ -93,11 +93,12 @@ async function claimDirectory(config: SpatialPreviewConfig): Promise<{ directory
     throw new Error('Preview data must be separate from the existing AI account home. Choose a new dedicated directory.');
   }
   if (config.ifcSpool) {
-    const spool = await fs.realpath(config.ifcSpool);
-    if (!(await fs.stat(spool)).isDirectory() || contains(directory, spool) || contains(spool, directory)
+    const spool = await canonicalPath(config.ifcSpool);
+    if (contains(directory, spool) || contains(spool, directory)
         || contains(accountHome, spool) || contains(spool, accountHome)) {
       throw new Error('IFC spool must be an existing dedicated directory separate from preview data and the AI account home.');
     }
+    if (!(await fs.stat(spool)).isDirectory()) throw new Error('IFC spool must be an existing dedicated directory.');
   }
   await fs.mkdir(path.dirname(directory), { recursive: true });
   try {
