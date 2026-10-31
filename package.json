@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test:qualification-contracts": "node --test experiments/contracts/contract.test.ts",
     "test:spatial-acceptance": "node --test demo/spatial-workspace-fixture.test.ts demo/spatial-workspace-journey.test.ts",
-    "test:spatial-components": "node --test demo/model-plan.test.ts demo/view-navigation.test.ts demo/spatial-task-layer.test.ts scripts/serve-spatial-preview.test.ts",
+    "test:spatial-components": "npm run build:demo && node --test demo/model-plan.test.ts demo/view-navigation.test.ts demo/spatial-task-layer.test.ts scripts/serve-spatial-preview.test.ts",
     "test:spatial-workspace": "npm run build:demo && node --test --test-concurrency=1 demo/spatial-workspace-browser.test.ts demo/spatial-plan-integration-browser.test.ts demo/spatial-tasks-browser.test.ts demo/spatial-markup-browser.test.ts",
     "test:task-placement": "node --test demo/task-placement.test.ts",
     "build:demo": "node scripts/build-demo.ts",
