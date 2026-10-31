@@ -29,6 +29,8 @@ The broader baseline queue suites hit the known Windows `EPERM` teardown issue t
 
 An expanded source-request run passed 21 of 22 tests. Its PNG/PDF/text preparation case failed with `Source preparation tool is unavailable` on Windows. Existing source preparation launches Linux-path tools; this task does not change that subsystem. The source route, origin checks, immutable identity, and project membership case passed. No validator was weakened.
 
+Linux CI then exposed a feature packaging omission in `demo/preview-build.test.ts`: `Image omits server dependency demo/task-placement.ts`. Both reported CI runs reached 857 tests with 854 passing, one failing, and two optional skips. The new runtime module was imported by `ChangeRequests` but absent from the preview image's explicit source copy and build-context allowlist. Added that module to `deploy/preview/Dockerfile` and `.dockerignore`. Existing `src` rules already include `src/task-placement.ts`. This repair changes source packaging only. Ports, security, environment, cloud settings, and validators are unchanged. The focused packaging test passed both cases on the first repair attempt; validation and the production build also passed.
+
 Accepted construction-model delta: zero. Task metadata creates no native/IFC entities, geometry, or accepted revision. Actual proposal inspection and explicit server acceptance retain their existing authority.
 
 ## Integration handoff
@@ -49,3 +51,4 @@ Accepted construction-model delta: zero. Task metadata creates no native/IFC ent
 | 1 | Placement implementation and focused tests | Seven placement cases passed. Existing conversation/design/source-boundary tests also passed. |
 | 1 | Broader baseline qualification | Existing Windows cleanup and source-tool limits recorded above. No fixes to parent-owned suites or source preparation. |
 | 1 | Production bundle, final validation, changed-path policy, and diff review | Passed; final command output recorded in the draft change review. |
+| Packaging repair 1 | Add the new runtime module to both preview source lists; run `node --test demo/preview-build.test.ts` before broader checks | Passed, two tests with no skips. `npm run validate` and `npm run build:demo` also passed. Parent reported the precise Linux CI failure; no test assertion changed. |
