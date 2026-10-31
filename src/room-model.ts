@@ -1191,6 +1191,44 @@ function mergeSnapshots(base: ModelSnapshot, current: ModelSnapshot, proposed: M
   }
 }
 
+/** Complete native authority at a particular accepted target cut, never a guest projection. */
+export class GeometryNativeHistory {
+  readonly projectId: ProjectId;
+  readonly rootRevisionId: RevisionId;
+  readonly target: WritableDesignTarget;
+  readonly head: Revision;
+  readonly #path: readonly Revision[];
+  readonly #known: readonly Revision[];
+  constructor(key: symbol, input: { projectId: ProjectId; rootRevisionId: RevisionId;
+    target: WritableDesignTarget; path: Revision[]; known: Revision[] }) {
+    if (key !== token) fail('Use RoomRepository.geometryHistory.');
+    const head = input.path.at(-1);
+    if (!head) fail('Missing accepted geometry history.');
+    this.projectId = input.projectId; this.rootRevisionId = input.rootRevisionId;
+    this.target = freeze(input.target); this.head = head;
+    this.#path = freeze(input.path); this.#known = freeze(input.known); Object.freeze(this);
+  }
+  acceptedPath(fromRevisionId: string): readonly Revision[] {
+    const index = this.#path.findIndex(item => item.id === fromRevisionId);
+    if (index < 0) fail('Geometry origin is outside accepted target ancestry.');
+    return this.#path.slice(index);
+  }
+  validateSnapshots(values: readonly unknown[]): readonly ModelSnapshot[] {
+    if (values.length > 32) fail('Geometry history exceeds the native snapshot limit.');
+    const known = new Map<EntityId, string>();
+    for (const item of this.#known) registerFamilyIdentities(known, item.snapshot);
+    return values.map(value => {
+      if (size(canonical(value)) > MAX_BYTES) fail('Geometry snapshot exceeds the native byte limit.');
+      const snapshot = validateSnapshot(value); registerFamilyIdentities(known, snapshot); return snapshot;
+    });
+  }
+  reconcile(baseRevisionId: string, snapshot: ModelSnapshot): ModelSnapshot {
+    const base = this.acceptedPath(baseRevisionId)[0];
+    if (!base) fail('Missing accepted geometry origin.');
+    return mergeSnapshots(base.snapshot, this.head.snapshot, snapshot);
+  }
+}
+
 export class RoomRepository {
   #state: RepositoryState;
   #revisions: Map<RevisionId, Revision>;
@@ -1444,9 +1482,10 @@ export class RoomRepository {
       baselineRevisionId, delta: this.compare(baselineRevisionId, selected.revisionId) });
   }
 
-  #validateTargets(): void {
-    const targets = this.#targets();
-    if (!targets) return;
+  #validateTargets(): void { this.#acceptedTargetChains(); }
+
+  #acceptedTargetChains(): Map<string, Set<RevisionId>> {
+    const targets = this.#targets() ?? { baselines: [], alternatives: [], proposals: [] };
     const main: WritableDesignTarget = { kind: 'main' };
     const reviewTarget = (review: ProposalReview): WritableDesignTarget => review.target?.target ?? main;
     for (const binding of targets.proposals) {
@@ -1508,6 +1547,22 @@ export class RoomRepository {
     }
     const decisionIds = this.reviews().filter(item => item.decision.status !== 'pending').map(item => item.decision.decisionId);
     if (new Set(decisionIds).size !== decisionIds.length) fail('Duplicate human decision identity.');
+    return chains;
+  }
+
+  geometryHistory(target: WritableDesignTarget = { kind: 'main' }, through?: string): GeometryNativeHistory {
+    const selected = parseWritableDesignTarget(target);
+    const accepted = this.#acceptedTargetChains().get(selected.kind === 'main' ? 'main' : `alternative:${selected.id}`);
+    const cut = through === undefined ? this.#targetHead(selected) : revisionIdentifier(through);
+    if (!accepted?.has(cut)) fail('Geometry cut is outside accepted target ancestry.');
+    const path: Revision[] = []; let current = this.view(cut);
+    while (accepted.has(current.id)) {
+      path.unshift(current);
+      if (current.parentId === null || !accepted.has(current.parentId)) break;
+      current = this.view(current.parentId);
+    }
+    return new GeometryNativeHistory(token, { projectId: this.projectId, rootRevisionId: this.root(), target: selected,
+      path, known: this.#state.revisions });
   }
 
   root(): RevisionId {
