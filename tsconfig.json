@@ -10,12 +10,14 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "strict": true,
+    "jsx": "react-jsx",
+    "paths": { "@/*": ["./*"] },
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["demo/**/*.ts", "factory/**/*.ts", "scripts/**/*.ts", "src/**/*.ts", "experiments/**/*.ts", "benchmarks/**/*.ts"],
+  "include": ["demo/**/*.ts", "demo/**/*.tsx", "factory/**/*.ts", "scripts/**/*.ts", "src/**/*.ts", "experiments/**/*.ts", "benchmarks/**/*.ts"],
   "exclude": ["node_modules", "**/node_modules/**", "dist", "worktrees"]
 }

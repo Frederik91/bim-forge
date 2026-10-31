@@ -28,6 +28,8 @@ import type { LinkedSelection } from '../src/linked-model.ts';
 import type { GeometryRef } from '../src/geometry-contract.ts';
 import type { LinkedDisplay } from './linked-model-render.ts';
 import { WorkspaceShell } from './workspace-shell.ts';
+import { mountCanvasStudioChrome, mountProposalTray } from './workspace-react.tsx';
+import type { RequestChatProposalReview } from './request-chat-status.ts';
 import { ModelExplorer, renderElementProperties } from './model-explorer.ts';
 import type { ModelNode } from './model-explorer.ts';
 import { requestContext } from './request-context.ts';
@@ -184,6 +186,8 @@ const button = (id: string): HTMLButtonElement => requiredElement(id, HTMLButton
 const input = (id: string): HTMLInputElement => requiredElement(id, HTMLInputElement);
 const select = (id: string): HTMLSelectElement => requiredElement(id, HTMLSelectElement);
 const dialog = (id: string): HTMLDialogElement => requiredElement(id, HTMLDialogElement);
+
+mountCanvasStudioChrome(generic('workspace-chrome-mount'));
 
 const ui = {
   'project-form': requiredElement('project-form', HTMLFormElement),
@@ -388,6 +392,15 @@ const requestChat = new RequestChat(generic('request-chat-mount'), {
   decision: (action, messageId) => { void perform(() => decideChatProposal(action, messageId)); },
   delta: messageId => { assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
   inspect: visual => { void perform(() => inspectChatVisual(visual)); },
+});
+const proposalTray = mountProposalTray(generic('canvas-proposal-tray-mount'), {
+  inspect: messageId => { assertChatProposal(messageId); showPage('review'); },
+  delta: messageId => { assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
+  decision: (action, messageId) => {
+    const control = action === 'accept' ? ui['accept-proposal'] : action === 'reject' ? ui['reject-proposal'] : ui['request-revision'];
+    if (control.disabled || busy || !serverAvailable) return;
+    void perform(() => decideChatProposal(action, messageId));
+  },
 });
 const composer = new RequestComposer({ root: generic('request-composer'), form: ui['proposal-form'], input: ui['request-text'],
   add: button('composer-add'), menu: generic('composer-menu'), visual: generic('composer-model-context') }, {
@@ -910,7 +923,7 @@ function showPage(name: PageName): void {
   generic('activity-page').hidden = name !== 'activity';
   ui['project-page'].hidden = name !== 'project';
   ui.journey.hidden = false;
-  ui['editor-panel'].hidden = name !== 'request';
+  ui['editor-panel'].hidden = name === 'review';
   generic('workspace-review-canvas').hidden = name !== 'review';
   ui['request-page'].hidden = name === 'review';
   workspace.showContext(name);
@@ -1799,7 +1812,7 @@ function closeChat(): void {
   conversationTarget = null;
   chatEvidencePins = []; chatEvidenceEdited = false;
   liveChatPreview = null; livePreviewSelection = null;
-  chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); composer.setVisual(null);
+  chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); proposalTray.show(null); composer.setVisual(null);
 }
 
 function displayedChatSnapshot(): ConversationVisual['snapshot'] {
@@ -1881,14 +1894,19 @@ function assertChatProposal(messageId: string): void {
     || message.content.proposalRevisionId !== activeReview.proposalRevisionId) throw new Error('Inspect this exact proposal before deciding or comparing it.');
 }
 
+function setChatProposalReview(view: RequestChatProposalReview | null): void {
+  requestChat.setProposalReview(view);
+  proposalTray.show(view);
+}
+
 function updateChatProposalCard(): void {
-  if (liveChatPreview) { requestChat.setProposalReview(null); return; }
+  if (liveChatPreview) { setChatProposalReview(null); return; }
   const review = activeReview; const messageId = activeChatProposalMessageId;
-  if (!review?.proposalRevisionId || !messageId || chatTicketId !== activeTicketId) { requestChat.setProposalReview(null); return; }
+  if (!review?.proposalRevisionId || !messageId || chatTicketId !== activeTicketId) { setChatProposalReview(null); return; }
   const message = requestChat.conversation?.messages.find(item => item.id === messageId);
   if (message?.kind !== 'assistant' || message.content.kind !== 'proposal' || message.requestId !== review.requestId
-    || message.content.proposalRevisionId !== review.proposalRevisionId) { requestChat.setProposalReview(null); return; }
-  requestChat.setProposalReview({ messageId, requestId: review.requestId, proposalRevisionId: review.proposalRevisionId,
+    || message.content.proposalRevisionId !== review.proposalRevisionId) { setChatProposalReview(null); return; }
+  setChatProposalReview({ messageId, requestId: review.requestId, proposalRevisionId: review.proposalRevisionId,
     targetLabel: designLabel(),
     ...(review.target ? { target: review.target } : {}), ...(review.evidenceUses ? { evidenceUses: review.evidenceUses } : {}),
     summary: review.summary, rationale: review.rationale, constraints: review.constraints, uncertainty: review.uncertainty,
@@ -1967,7 +1985,7 @@ async function refreshConversation(): Promise<void> {
     showChatTicket(value.ticket);
     await refreshChatModel(value.ticket);
   } catch (error) {
-    if (chatTicketId === id) { requestChat.setOffline(true); status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`); }
+    if (chatTicketId === id) { requestChat.setOffline(true); proposalTray.show(null); status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`); }
   } finally { chatRefreshing = false; }
 }
 
@@ -2166,7 +2184,9 @@ function renderBacklog(): void {
   const groups = groupRequests(items);
   const ready = items.filter((item) => item.state === 'ready').length;
   const pending = items.filter((item) => item.state === 'queued' || item.state === 'working').length;
-  ui['nav-backlog'].replaceChildren(element('span', '2'), element('b', 'Backlog'), element('small', `${ready} ready for review`));
+  const backlogLabel = ui['nav-backlog'].querySelector('[data-rail-label]');
+  if (backlogLabel) backlogLabel.textContent = 'Requests';
+  ui['nav-backlog'].setAttribute('aria-label', `Requests · ${ready} ready for review`);
   ui['backlog-summary'].textContent = `${items.length} requests · ${groups.review.length} need your attention · ${pending} active or waiting`;
   let empty = '';
   for (const tab of requestTabs) {

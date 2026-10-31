@@ -20,6 +20,7 @@ const assets = new Map<string, readonly [string, string]>([
   ['/room-app.mjs', ['dist/demo/room-app.mjs', 'text/javascript; charset=utf-8']],
   ['/request-chat.css', ['demo/request-chat.css', 'text/css; charset=utf-8']],
   ['/room.css', ['demo/room.css', 'text/css; charset=utf-8']],
+  ['/canvas-studio.css', ['dist/demo/canvas-studio.css', 'text/css; charset=utf-8']],
 ]);
 const MAX_REQUEST_BYTES = 384 * 1024;
 const disconnected = Object.freeze({ status: 'disconnected', connected: false, account: null, models: Object.freeze([]), selectedModel: null });
