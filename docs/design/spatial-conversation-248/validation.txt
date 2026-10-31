@@ -1,0 +1,17 @@
+
+> bim-forge@0.1.0 validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+
+
+> bim-forge@0.1.0 lint
+> node scripts/validate-typescript.ts
+
+Strict TypeScript valid. 350 source file(s) checked.
+
+> bim-forge@0.1.0 typecheck
+> tsc --noEmit
+
+Policy valid. 0 changed file(s) checked.
+
+Explicit changed-file policy check: passed for 12 files.
+Accepted-model delta: zero. No production integration or deployment.
