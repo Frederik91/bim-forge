@@ -38,13 +38,15 @@ test('live native agent body opens the same saved task without moving the eye; e
   const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
   const created = page.waitForResponse(response => response.url() === `${base}/api/change-requests` && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Send message', exact: true }).click(); const acknowledgement = await created; assert.equal(acknowledgement.status(), 202, await acknowledgement.text());
+  const submitted: unknown = acknowledgement.request().postDataJSON(); assert.ok(submitted && typeof submitted === 'object' && 'request' in submitted && submitted.request && typeof submitted.request === 'object' && 'selectedObjectIds' in submitted.request);
+  assert.deepEqual(submitted.request.selectedObjectIds, [spatialFixtureManifest.doorId], 'Browsing floor and room context must not become implicit object targets');
   const value: unknown = await acknowledgement.json(); assert.ok(value && typeof value === 'object' && 'ticket' in value && value.ticket && typeof value.ticket === 'object' && 'id' in value.ticket && typeof value.ticket.id === 'string' && 'projectId' in value.ticket && typeof value.ticket.projectId === 'string');
   const id = value.ticket.id; const projectId = value.ticket.projectId;
   const project = async () => { const response: unknown = await (await page.request.get(`${base}/api/projects/${projectId}`)).json(); assert.ok(response && typeof response === 'object' && 'project' in response && typeof response.project === 'string'); return RoomRepository.restore(response.project); };
   const before = await project(); const baseline = before.head('main');
   const ticket = async () => { const response: unknown = await (await page.request.get(`${base}/api/change-requests/${id}`)).json(); assert.ok(response && typeof response === 'object' && 'ticket' in response && response.ticket && typeof response.ticket === 'object' && 'taskPlacement' in response.ticket); return response.ticket; };
   const placement = parseTaskPlacement((await ticket()).taskPlacement); assert.equal(placement.kind, 'placed'); if (placement.kind !== 'placed') return;
-  assert.ok(placement.targets.objects.some(ref => ref.kind === 'native' && ref.entityId === spatialFixtureManifest.doorId));
+  assert.deepEqual(placement.targets.objects.flatMap(ref => ref.kind === 'native' ? [ref.entityId] : []), [spatialFixtureManifest.doorId]);
   assert.notDeepEqual(placement.origin.point, spatialFixtureManifest.before.centre);
   const agent = page.locator(`.spatial-task-label[data-task-id="${id}"]`); await agent.waitFor();
   await page.locator('#workspace-context-close').click();
@@ -87,6 +89,34 @@ test('live native agent body opens the same saved task without moving the eye; e
   await tray.waitFor({ timeout: 30_000 });
   const inspectedPose = await capture(); assert.deepEqual(inspectedPose?.eye, poseBeforePick.eye, 'Proposal inspection retains the actual eye');
   assert.equal((await project()).head('main'), baseline);
+  await tray.getByRole('button', { name: 'Sources & checks', exact: true }).click();
+  await tray.getByRole('button', { name: 'Revise', exact: true }).click();
+  await page.locator('#request-chat .ticket-actions button').first().waitFor();
+  const layout = await page.evaluate(() => {
+    const content = document.getElementById('workspace-context-content'); const host = document.getElementById('request-chat-mount');
+    const toolbar = document.querySelector('.chat-toolbar'); if (!content || !host || !toolbar) throw new Error('Missing conversation scroll boundary');
+    const viewport = host.getBoundingClientRect(); const navigation = toolbar.getBoundingClientRect();
+    return { contentOverflow: content.scrollHeight - content.clientHeight, top: viewport.top, bottom: viewport.bottom, navigationBottom: navigation.bottom,
+      actions: [...host.querySelectorAll('.ticket-actions button')].map(node => ({ text: node.textContent, top: node.getBoundingClientRect().top, bottom: node.getBoundingClientRect().bottom })) };
+  });
+  assert.ok(layout.contentOverflow <= 1, 'The fixed conversation shell must not become an outer scrollport');
+  assert.ok(layout.top >= layout.navigationBottom - 1, 'Transcript starts below reserved navigation');
+  assert.ok(layout.actions.length >= 3);
+  const navigationBeforeScroll = await page.locator('.chat-toolbar').boundingBox();
+  const reviewActions = page.locator('#request-chat .ticket-actions button');
+  for (const action of await reviewActions.all()) {
+    await action.scrollIntoViewIfNeeded();
+    const hit = await action.evaluate(node => {
+      const host = document.getElementById('request-chat-mount'); const nav = document.querySelector('.chat-toolbar');
+      if (!host || !nav) throw new Error('Missing conversation bounds');
+      const box = node.getBoundingClientRect(); const viewport = host.getBoundingClientRect(); const navigation = nav.getBoundingClientRect();
+      const centre = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return { top: box.top, bottom: box.bottom, viewportTop: viewport.top, viewportBottom: viewport.bottom, navigationBottom: navigation.bottom, hit: centre !== null && (centre === node || node.contains(centre)) };
+    });
+    assert.ok(hit.top >= hit.viewportTop - 1 && hit.top >= hit.navigationBottom - 1 && hit.bottom <= hit.viewportBottom + 1, JSON.stringify(hit));
+    assert.equal(hit.hit, true, 'A deliberately scrolled proposal action must receive the actual pointer hit below fixed navigation');
+  }
+  assert.deepEqual(await page.locator('.chat-toolbar').boundingBox(), navigationBeforeScroll, 'Transcript scrolling cannot move or overlap its fixed navigation');
   await page.screenshot({ path: path.join(artifacts, 'desktop.png'), fullPage: true });
   await tray.getByRole('button', { name: 'Revise', exact: true }).click(); await page.locator('#request-text').fill('Keep this unsent revision independent.');
   assert.equal(await page.locator('#request-text').evaluate(node => document.activeElement === node), true);
@@ -94,6 +124,8 @@ test('live native agent body opens the same saved task without moving the eye; e
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 }); await page.locator('#open-chat').click(); await page.waitForTimeout(150);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    assert.equal(await page.locator('#workspace-context-toggle').isVisible(), false, 'The old bottom Assistant toggle is redundant in the phone rail');
+    assert.equal(await page.locator('#open-chat').isVisible(), true);
     const panel = await page.locator('#workspace-context').boundingBox(); assert.ok(panel && panel.width <= width - 16 && panel.height < 900 * .6);
     await page.screenshot({ path: path.join(artifacts, `narrow-${width}.png`), fullPage: true });
   }
