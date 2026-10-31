@@ -36,6 +36,8 @@ This change modifies presentation, not model schemas, geometry operations or acc
 | Attempt | Evidence | Result |
 | --- | --- | --- |
 | Preparation | Current main `8a7bb02`; isolated VM reachable; 70 GiB root free; Node 24.22.1; dependency install | Ready; no app checks yet |
+| 1 | Strict TypeScript, policy validation and production build | Passed; production browser bundle built |
+| 1 | Real chat/workspace/shipped-app browser suites | Failed: grid placement overlaps model controls; explorer opening does not reserve width; phone history below required height; external runtime updates history after facade anchoring. Logs retained on coding VM. |
 
 ## Sources
 
