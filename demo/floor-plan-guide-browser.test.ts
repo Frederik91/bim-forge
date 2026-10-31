@@ -144,7 +144,11 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
     alternative, reconstruction: diffSnapshots(before.view(root).snapshot, asIs.view(asIs.head('main')).snapshot), alternativeDelta: delta }, null, 2));
   await page.screenshot({ path: path.join(artifacts, 'desktop-alternative.png'), fullPage: true });
   await page.goto('about:blank');
-  await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers();
+  await new Promise<void>(resolve => {
+    server.close(() => resolve());
+    server.closeAllConnections();
+  });
+  await server.closeModelWorkers();
   server = await createDemoServer({ modelWorker: worker, backlogFile: path.join(directory, 'queue.sqlite') });
   await new Promise<void>(resolve => server.listen(address.port, '127.0.0.1', resolve));
   const recovered = await savedProject(page, base, ticket.projectId);
