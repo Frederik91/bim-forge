@@ -334,6 +334,7 @@ const pausedChatPreviews = new Set<string>();
 let chatVisual: ConversationVisual | null = null;
 let chatReply: { fingerprint: string; body: ConversationReply } | null = null;
 let chatRefreshing = false;
+let chatOffline = false;
 let newDraftId = 'new';
 let chatEvidencePins: readonly EvidencePin[] = [];
 let chatEvidenceEdited = false;
@@ -389,18 +390,14 @@ const scopeBuilder = new ModelScopeBuilder({ host: generic('model-scope-builder'
 const requestChat = new RequestChat(generic('request-chat-mount'), {
   answer: text => { ui['request-text'].value = text; ui['request-text'].focus(); composer.refresh(); updateControls(); },
   proposal: message => { void perform(() => openChatProposal(message)); },
-  decision: (action, messageId) => { void perform(() => decideChatProposal(action, messageId)); },
+  decision: dispatchChatProposalDecision,
   delta: messageId => { assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
   inspect: visual => { void perform(() => inspectChatVisual(visual)); },
 });
 const proposalTray = mountProposalTray(generic('canvas-proposal-tray-mount'), {
-  inspect: messageId => { assertChatProposal(messageId); showPage('review'); },
-  delta: messageId => { assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
-  decision: (action, messageId) => {
-    const control = action === 'accept' ? ui['accept-proposal'] : action === 'reject' ? ui['reject-proposal'] : ui['request-revision'];
-    if (control.disabled || busy || !serverAvailable) return;
-    void perform(() => decideChatProposal(action, messageId));
-  },
+  inspect: messageId => { if (chatOffline || busy || !serverAvailable) return; assertChatProposal(messageId); showPage('review'); },
+  delta: messageId => { if (chatOffline || busy || !serverAvailable) return; assertChatProposal(messageId); reviewDelta = !reviewDelta; renderComparison(); updateControls(); },
+  decision: dispatchChatProposalDecision,
 });
 const composer = new RequestComposer({ root: generic('request-composer'), form: ui['proposal-form'], input: ui['request-text'],
   add: button('composer-add'), menu: generic('composer-menu'), visual: generic('composer-model-context') }, {
@@ -1812,7 +1809,8 @@ function closeChat(): void {
   conversationTarget = null;
   chatEvidencePins = []; chatEvidenceEdited = false;
   liveChatPreview = null; livePreviewSelection = null;
-  chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null; requestChat.close(); proposalTray.show(null); composer.setVisual(null);
+  chatTicketId = null; activeChatProposalMessageId = null; chatVisual = null; chatReply = null; inspectedChatView = null;
+  requestChat.close(); setConversationOffline(false); proposalTray.show(null); composer.setVisual(null);
 }
 
 function displayedChatSnapshot(): ConversationVisual['snapshot'] {
@@ -1896,11 +1894,11 @@ function assertChatProposal(messageId: string): void {
 
 function setChatProposalReview(view: RequestChatProposalReview | null): void {
   requestChat.setProposalReview(view);
-  proposalTray.show(view);
+  proposalTray.show(chatOffline ? null : view);
 }
 
 function updateChatProposalCard(): void {
-  if (liveChatPreview) { setChatProposalReview(null); return; }
+  if (liveChatPreview || chatOffline) { setChatProposalReview(null); return; }
   const review = activeReview; const messageId = activeChatProposalMessageId;
   if (!review?.proposalRevisionId || !messageId || chatTicketId !== activeTicketId) { setChatProposalReview(null); return; }
   const message = requestChat.conversation?.messages.find(item => item.id === messageId);
@@ -1914,13 +1912,29 @@ function updateChatProposalCard(): void {
     canReject: !ui['reject-proposal'].disabled, canRevise: !ui['request-revision'].disabled, delta: reviewDelta });
 }
 
+function dispatchChatProposalDecision(action: 'accept' | 'reject' | 'revise', messageId: string): void {
+  const control = action === 'accept' ? ui['accept-proposal'] : action === 'reject' ? ui['reject-proposal'] : ui['request-revision'];
+  if (control.disabled || chatOffline || busy || gesture || visualGesture || !serverAvailable) return;
+  if (action === 'revise') { void decideChatProposal(action, messageId).catch(report); return; }
+  void perform(() => decideChatProposal(action, messageId));
+}
+
 async function decideChatProposal(action: 'accept' | 'reject' | 'revise', messageId: string): Promise<void> {
   assertChatProposal(messageId);
-  if (action === 'revise') { ui['request-text'].focus(); status('Describe the refinement here. Your reply continues this conversation.'); return; }
+  if (action === 'revise') {
+    showPage('request'); showRequestPane('details'); ui['request-text'].focus();
+    status('Describe the refinement here. Your reply continues this conversation.'); return;
+  }
   const ticket = backlogItems.find(item => item.id === activeTicketId);
   if (!ticket || !activeReview || ticket.request.requestId !== activeReview.requestId
     || (action === 'accept' ? ticket.state !== 'ready' || reviewState(activeReview) !== 'pending' : !['ready', 'needs-input', 'failed'].includes(ticket.state))) throw new Error('This proposal is no longer eligible for that decision.');
   await decideTicket(ticket.id, action, activeReview.requestId);
+}
+
+function setConversationOffline(offline: boolean): void {
+  chatOffline = offline;
+  requestChat.setOffline(offline);
+  if (offline) proposalTray.show(null);
 }
 
 function showChatTicket(value: unknown): void {
@@ -1932,7 +1946,7 @@ function showChatTicket(value: unknown): void {
     liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null;
     renderComparison(); syncInspector();
   }
-  chatTicketId = ticket.id; requestChat.setOffline(false);
+  chatTicketId = ticket.id; setConversationOffline(false);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
     title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
@@ -1984,8 +1998,11 @@ async function refreshConversation(): Promise<void> {
     if (!isRecord(value)) throw new Error('Missing conversation.');
     showChatTicket(value.ticket);
     await refreshChatModel(value.ticket);
+    updateControls();
   } catch (error) {
-    if (chatTicketId === id) { requestChat.setOffline(true); proposalTray.show(null); status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`); }
+    if (chatTicketId === id && repo?.projectId === projectId) {
+      setConversationOffline(true); status(`Conversation connection interrupted. Your message remains unsent. ${error instanceof Error ? error.message : ''}`);
+    }
   } finally { chatRefreshing = false; }
 }
 

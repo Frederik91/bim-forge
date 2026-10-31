@@ -100,6 +100,42 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
   assert.equal(await page.locator('[data-chat-framework="assistant-ui"]').count(), 1);
   assert.equal(await page.locator('#request-chat-mount').getByRole('link', { name: /door-requirement.txt/ }).count(), 1);
   await page.screenshot({ path: path.join(artifacts, 'canvas-studio-proposal.png'), fullPage: true });
+  await t.test('a controls refresh cannot restore offline proposal actions', async () => {
+    const retainedAccept = await tray.getByRole('button', { name: /^Accept into/ }).elementHandle();
+    assert.ok(retainedAccept);
+    const endpoint = `${base}/api/change-requests/${encodeURIComponent(ticketId)}`;
+    const decisionRequests: string[] = [];
+    page.on('request', request => {
+      if (request.method() === 'POST' && request.url().endsWith('/decision')) decisionRequests.push(request.url());
+    });
+    await page.route(endpoint, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture conversation disconnect' }) }));
+    try {
+      await page.locator('.request-chat-status[data-status="offline"]').waitFor({ state: 'visible' });
+      await page.locator('#request-text').fill('Keep the unsent revision draft.');
+      assert.equal(await tray.count(), 0, 'Unrelated controls refresh must not republish an offline tray.');
+      await retainedAccept.evaluate(button => button.click());
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      assert.deepEqual(decisionRequests, [], 'Retained offline controls cannot send decisions.');
+      assert.equal((await project()).head('main'), baseline);
+    } finally {
+      await page.unroute(endpoint);
+      await page.locator('.request-chat-status[data-status="offline"]').waitFor({ state: 'detached' });
+      await page.locator('#request-text').fill('');
+      await tray.waitFor({ state: 'visible' });
+    }
+  });
+  await t.test('Revise returns from Sources & checks to the focused composer', async () => {
+    await page.locator('#request-text').fill('Preserve this unsent refinement.');
+    await tray.getByRole('button', { name: 'Sources & checks', exact: true }).click();
+    assert.equal(await page.locator('#editor-panel').isHidden(), true);
+    await tray.getByRole('button', { name: 'Revise', exact: true }).click();
+    assert.equal(await page.locator('#editor-panel').isVisible(), true);
+    assert.equal(await page.locator('#request-text').isEnabled(), true);
+    assert.equal(await page.locator('#request-text').evaluate(element => element === document.activeElement), true);
+    assert.equal(await page.locator('#request-text').inputValue(), 'Preserve this unsent refinement.');
+    assert.equal((await project()).head('main'), baseline, 'Opening a refinement does not accept the proposal.');
+    await page.locator('#request-text').fill('');
+  });
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
   await tray.getByRole('button', { name: /^Accept into/ }).click();
   const accepted = await decision; assert.equal(accepted.status(), 200, await accepted.text());
