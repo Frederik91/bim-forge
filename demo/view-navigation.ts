@@ -77,7 +77,7 @@ export class ViewNavigation {
       if (['w', 'a', 's', 'd', 'shift', 'control'].includes(key)) { event.preventDefault(); this.keys.add(key); }
     }, options);
     document.addEventListener('keyup', event => { this.keys.delete(event.key.toLowerCase()); }, options);
-    window.addEventListener('blur', () => this.stop(), options);
+    window.addEventListener('blur', () => this.stop(), { signal: controller.signal });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.stop(); }, options);
     document.addEventListener('focusin', () => {
       if (document.activeElement !== canvas && (this.keys.size > 0 || this.looking !== 'off')) this.stop();

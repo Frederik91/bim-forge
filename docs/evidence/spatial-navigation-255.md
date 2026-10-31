@@ -2,7 +2,7 @@
 
 ## Status
 
-This draft is not ready to merge. Navigation checks pass, but the existing production markup browser test failed three attempts. Work stopped on that item under AGENTS.md. The parent requested a reviewable WIP commit and draft PR. No merge, readiness change, deployment, provider call or production model edit occurred.
+This draft remains for human review and combined integration. The production markup regression is repaired and all 40 targeted tests pass. The initial three-attempt stop below is historical. On 2026-10-31 the user explicitly renewed work with 'Continue with as many attempts as you need', superseding attempts-only stops for this epic. No merge, readiness change, deployment, provider call or production model edit occurred.
 
 ## Plan and implemented scope
 
@@ -47,7 +47,7 @@ Native Walk requires an explicit level and actual Slab solids from `slabPieces`.
 - Existing `demo/model-scene.test.ts` and `demo/model-scene-batches.test.ts`: all 36 tests passed. They cover comparison, linked-independent native framing, batching, selection, floor rays, cutaway and disposal.
 - `git diff --check`: passed.
 
-The new scene tests assert active-perspective native picks, preserved forward/up orientation, explicit return, mismatched source/project/level rejection, one scene/two retained cameras, unchanged meshes and unchanged model bytes. These passing tests do not establish that the blocked production markup flow works.
+The new scene tests assert active-perspective native picks, preserved forward/up orientation, explicit return, mismatched source/project/level rejection, one scene/two retained cameras, unchanged meshes and unchanged model bytes. The renewed unchanged production markup flow also passes, as recorded below.
 
 ## Markup attempt ledger and escalation
 
@@ -80,6 +80,40 @@ The latest directory retains `rectangle.png`, `browser-errors.json` and the disp
 
 The combined regression invocation also included `demo/linked-workspace-browser.test.ts`. It failed immediately at line 12 because `IFC_EXTERNAL_SPOOL` and `IFC_FIXTURE` were unset. The application/converter flow did not run. No retry or converter setup was attempted. Real linked-mesh picking and FXAA resource behavior across Inside transitions still need combined browser evidence; existing native scene tests cannot certify these.
 
+## Renewed root-cause diagnosis and repair
+
+The instrumented production run recorded three valid polyline points immediately before Finish. Moving focus from the Polyline button produced this stack before the Finish click could commit:
+
+```text
+ViewNavigation window blur listener
+  stop()
+    ModelViewer stopped callback
+      SpatialMarkupView.hide()
+        choose(null)
+          cancelGesture()  // polyline had three points
+```
+
+The window blur listener inherited `{ capture: true }` from the shared listener options. Capturing listeners on window receive descendant element blur events even though those events do not bubble. The trace's bundled location `room-app.mjs:14600:89637` maps to that exact window registration. This was a focus transfer within the toolbar, not a loss of browser-window focus.
+
+The repair registers window blur with the disposal signal and default non-capturing behavior. Actual window blur still uses the shared stop path. Capture remains enabled for the keyboard, pointer and focus listeners that require it. Public navigation methods did not change.
+
+A new real-browser assertion focuses Finish after collecting a polyline, requires the polyline tool to remain active, and commits it. It also verifies that a subsequent real window blur cancels an unfinished polyline. An intentional temporary restoration of the old captured window listener fails this assertion at `demo/view-navigation-browser.test.ts:134`: actual `select`, expected `polyline`. The fixed source was restored in a `finally` block. No test assertion or validator was weakened, and the existing production markup test is byte-for-byte unchanged.
+
+Renewed verification:
+
+```text
+npm run build:demo: passed
+node --test --test-concurrency=1 demo/spatial-markup-browser.test.ts demo/view-navigation-browser.test.ts demo/view-navigation.test.ts demo/model-scene.test.ts demo/model-scene-batches.test.ts
+40 tests; 40 passed; 0 failed; 0 skipped
+npm run validate: passed
+explicit policy check: 7 changed files passed
+git diff --check: passed
+```
+
+The unchanged production flow now draws Rectangle, Circle, Line and Polyline, supports Undo and Escape, queues the annotated request, and replays its saved chat. The renewed run's `browser-errors.json` is `[]`. This does not qualify linked IFC navigation.
+
+Local diagnosis files are under `C:/Users/Frederik Tegnander/AppData/Local/Temp/navigation-255-renewed-diagnosis`: `diagnosis.log`, `before-finish.json`, and `after-finish.json`. Temporary source logging and the diagnostic copy of the production test were removed. Passing production artifacts are under `C:/Users/Frederik Tegnander/AppData/Local/Temp/navigation-255-renewed-fixed`: `context.json`, `rectangle.png`, `saved-chat.png`, and `browser-errors.json`. The negative proof output is `C:/Users/Frederik Tegnander/AppData/Local/Temp/navigation-255-evidence/toolbar-negative-proof.txt`.
+
 ## Decision and next work
 
-Keep this PR in draft. A scoped renewed attempt must diagnose the polyline failure without changing the expected markup behavior. Then rerun the unchanged production markup suite and the navigation tests. Combined integration must provide actual IFC converter prerequisites and qualify linked picking, comparison, antialiasing, framing and shell/task transitions. Human review retains readiness and merge authority.
+Keep this PR in draft for human review. Combined integration must provide actual IFC converter prerequisites and qualify linked picking, comparison, antialiasing, framing and shell/task transitions. Human review retains readiness and merge authority.

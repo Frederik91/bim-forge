@@ -33,7 +33,7 @@ Object.assign(window, { navHarness: {
   resume: () => viewer.changeView({kind: 'inside', motion: 'fly'}),
   view: kind => viewer.changeView({ kind }), returnTo: pose => viewer.returnToPose(pose),
   stop: () => viewer.stopNavigation(), look: () => viewer.activateMouseLook(),
-  markup: () => viewer.startMarkup('rectangle'), hide: () => viewer.hide(), show,
+  markup: (tool = 'rectangle') => viewer.startMarkup(tool), hide: () => viewer.hide(), show,
   context: pin => { base.navigationPin = pin; show(); },
   dispose: () => viewer.dispose(), annotationCount: () => annotations.length,
 } });
@@ -123,6 +123,21 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   await page.mouse.move(rect.x + 380, rect.y + 280, { steps: 8 }); await page.mouse.up();
   assert.notDeepEqual((await pose()).forward, beforeDrag.forward);
   await page.keyboard.press('Escape');
+  await enter();
+  await page.evaluate('window.navHarness.markup("polyline")');
+  await page.mouse.click(rect.x + rect.width * .42, rect.y + rect.height * .75);
+  await page.mouse.click(rect.x + rect.width * .48, rect.y + rect.height * .72);
+  await page.mouse.click(rect.x + rect.width * .55, rect.y + rect.height * .75);
+  const finish = page.getByRole('button', { name: 'Finish polyline', exact: true });
+  assert.equal(await finish.isEnabled(), true);
+  await finish.focus();
+  assert.equal(await page.locator('.model-markup-controls').getAttribute('data-tool'), 'polyline', 'toolbar focus is not window blur');
+  await finish.click();
+  assert.equal(await page.evaluate<number>('window.navHarness.annotationCount()'), 1, 'toolbar commits the collected polyline');
+  await page.evaluate('window.navHarness.markup("polyline")');
+  await page.mouse.click(rect.x + rect.width * .42, rect.y + rect.height * .75);
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  assert.equal(await page.locator('.model-markup-controls').getAttribute('data-tool'), 'select', 'true window blur still cancels markup');
   await page.evaluate('window.navHarness.markup()');
   assert.equal(await page.locator('.model-markup-controls').getAttribute('data-tool'), 'rectangle');
   const beforeMarkup = await pose(); await hold('w'); assert.deepEqual((await pose()).eye, beforeMarkup.eye);
