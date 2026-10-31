@@ -185,7 +185,8 @@ function RequestChatView({ view, actions }: { view: ChatView; actions: RequestCh
   </ThreadPrimitive.Root></AssistantRuntimeProvider>;
 }
 
-/** Commit before the facade restores its stable host scroll, detail and focus anchors. */
+/** A durable sequence mounts atomically; runtime adapter effects must not defer new history past host anchoring. */
 export function renderRequestChat(root: Root, view: ChatView, actions: RequestChatRenderActions): void {
-  flushSync(() => root.render(<RequestChatView key={view.conversation ? `${view.projectId}:${view.conversation.ticketId}` : 'new'} view={view} actions={actions} />));
+  const snapshotKey = view.conversation ? `${view.projectId}:${view.conversation.ticketId}:${view.conversation.sequence}` : 'new';
+  flushSync(() => root.render(<RequestChatView key={snapshotKey} view={view} actions={actions} />));
 }
