@@ -45,6 +45,14 @@ Use the same door and adjoining-wall example throughout. Inspect an Inside view,
 
 ## Current evidence and remaining work
 
+### Deferred speech-and-gesture interaction
+
+[Planning issue #250](https://github.com/Frederik91/bim-forge/issues/250) records a future instruction that combines time-aligned speech, pointing, selection, and progressive drawing. The example is two objects and two arrows while the person says "this one this way, then this one this way." The agent should recover the correct object and gesture for each phrase, including when speech slightly precedes or follows a stroke.
+
+A later study must explore capture, replay and correction of those associations, camera changes, ambiguous references, and the intended mouse, touch, and VR inputs. Detailed timing, transcription, capture, storage, and privacy decisions remain open. The maintainer explicitly deferred implementation on 2026-10-31. Do not add it to this study's runtime or treat it as an acceptance requirement for the current review.
+
+### Current study
+
 - Confirmed product vision and design context are recorded. No privacy enforcement or multiplayer implementation is claimed.
 - The initial three static concepts were rendered on a local comparison page but are superseded by the maintainer's spatial direction.
 - The isolated study now uses typed source and generates its browser bundle under ignored `dist/`. The initial JavaScript source-check failure is retained as attempt history; no validator was changed.

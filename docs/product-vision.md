@@ -139,6 +139,18 @@ A change session groups related intentions and the resulting proposals. In VR, a
 
 The agent then uses bounded model tools to create a proposal. Reviewers see the semantic delta, rationale, constraints, validation evidence, assumptions, and uncertainty. They can approve the exact proposal or request another revision without losing earlier proposals or the original model state.
 
+### Speech and drawing form one time-linked instruction
+
+A planned capability connects what a person says with what they point at and draw at the relevant time. For example, the person says "move this one this way, then this one this way" while drawing two arrows at different objects. The agent must associate each reference and direction with the correct object and gesture.
+
+The instruction retains a shared timeline for spoken phrases, transcript timing, selection, pointer movement, and progressive strokes. The final transcript and finished drawing alone cannot express which gesture accompanied each phrase. Each relevant event also retains its model revision, spatial reference, and active view so camera movement does not detach the intent from its place.
+
+Speech may precede or follow a stroke. Interpretation uses the surrounding temporal and spatial context, not exact timestamp equality. People can inspect or replay the agent's object-and-direction interpretation and correct it. Ambiguous references require clarification, and "a bit further" does not become an unexplained precise distance.
+
+The intended inputs include mouse or pointer drawing on desktop, touch on a phone, and future hand or controller gestures in VR. They capture intent through the same proposal boundary. Human voice chat is not automatically recorded as an agent instruction; capture and retention remain subject to the conversation's visibility and later privacy design.
+
+This capability is explicitly deferred at the maintainer's request. [Planning issue #250](https://github.com/Frederik91/bim-forge/issues/250) records requirements, dependencies, and future evidence. It is not implemented or included in the current spatial interaction study.
+
 ## Property-centered model work
 
 Geometry is only one part of the product. Each entity also carries parameters, properties, requirements, classifications, relationships, and derived values.

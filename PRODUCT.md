@@ -30,6 +30,8 @@ Being inside the building is the primary intended spatial experience. Plan, sect
 
 Built-in human voice chat, text chat, and private conversations let participants communicate without finding contact details in an external calling application. The interface distinguishes human recipients from agent instructions. Voice transport, proximity audio, recording, transcription, and retention remain open design decisions.
 
+Future agent instructions should link spoken phrases, pointing, and progressive drawing on a shared timeline, so references such as "this one" and "this way" resolve to the object and gesture at that time. [Issue #250](https://github.com/Frederik91/bim-forge/issues/250) tracks this explicitly deferred capability. It is planning only, outside the current interaction study.
+
 Conversation visibility includes personal, discipline, and company audiences. Personal conversations reveal neither their content nor their existence to other participants. Detailed privacy rules remain open. Presence and agent coordination must respect the selected visibility scope.
 
 ## Capabilities and Constraints
