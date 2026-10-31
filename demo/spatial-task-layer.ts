@@ -45,7 +45,7 @@ export type TaskAgentAnchor = {
   readonly identity: TaskAgentIdentity;
   readonly candidates: readonly TaskAgentIdentity[];
 } & (
-  | { readonly kind: 'visible'; readonly x: number; readonly y: number }
+  | { readonly kind: 'visible'; readonly x: number; readonly y: number; readonly bodyX: number; readonly bodyY: number }
   | { readonly kind: 'hidden'; readonly reason: 'unplaced' | 'hidden' | 'offscreen' | 'occluded' }
 );
 
@@ -179,7 +179,8 @@ export class SpatialTaskLayer {
         return { ...base, kind: 'hidden', reason: 'offscreen' };
       }
       if (this.#occluded(camera.globalPosition, point)) return { ...base, kind: 'hidden', reason: 'occluded' };
-      return { ...base, kind: 'visible', x: projected.x, y: projected.y };
+      const body = Vector3.Project(root.position, Matrix.IdentityReadOnly, transform, viewport);
+      return { ...base, kind: 'visible', x: projected.x, y: projected.y, bodyX: body.x, bodyY: body.y };
     });
   }
 
