@@ -1,0 +1,17 @@
+{
+  "source": "895e6c26464ceff85acc8da7b7089c4dd44bc042",
+  "started": "2026-10-31T16:16:06.862Z",
+  "workerRequestLimit": 1,
+  "workerTimeoutMs": 180000,
+  "fixture": "new disposable house",
+  "instruction": "Widen this door from 900 mm to 1100 mm, preserving its centre and existing host. Keep every other object unchanged.",
+  "expected": {
+    "widthMetres": 1.1,
+    "offsetMetres": 2.9,
+    "centreMetres": [
+      4,
+      3.45,
+      0
+    ]
+  }
+}

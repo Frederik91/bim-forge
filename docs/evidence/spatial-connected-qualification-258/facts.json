@@ -1,0 +1,83 @@
+{
+  "before": {
+    "width": 0.9,
+    "offset": 3,
+    "hostId": "host-level-ground-door-inner",
+    "wallId": "level-ground-wall-inner",
+    "centre": [
+      4,
+      3.45,
+      0
+    ]
+  },
+  "proposed": {
+    "width": 1.1,
+    "offset": 2.9,
+    "hostId": "host-level-ground-door-inner",
+    "wallId": "level-ground-wall-inner",
+    "centre": [
+      4,
+      3.45,
+      0
+    ]
+  },
+  "accepted": {
+    "width": 1.1,
+    "offset": 2.9,
+    "hostId": "host-level-ground-door-inner",
+    "wallId": "level-ground-wall-inner",
+    "centre": [
+      4,
+      3.45,
+      0
+    ]
+  },
+  "placement": {
+    "version": 1,
+    "kind": "placed",
+    "origin": {
+      "snapshot": {
+        "projectId": "fbdc36ed-1f9a-4867-a4c3-3a0733485761",
+        "target": {
+          "kind": "main"
+        },
+        "revisionId": "a62b2bcad79c10766d3f9b53012875e809b90f067004d7d7e3cbe09665f8d37d"
+      },
+      "frame": "project-engineering-metres",
+      "view": "3d",
+      "levelId": "level-ground",
+      "point": [
+        3.25,
+        3.45,
+        1.05
+      ]
+    },
+    "targets": {
+      "objects": [
+        {
+          "kind": "native",
+          "projectId": "fbdc36ed-1f9a-4867-a4c3-3a0733485761",
+          "target": {
+            "kind": "main"
+          },
+          "revisionId": "a62b2bcad79c10766d3f9b53012875e809b90f067004d7d7e3cbe09665f8d37d",
+          "entityId": "level-ground-door-inner"
+        },
+        {
+          "kind": "native",
+          "projectId": "fbdc36ed-1f9a-4867-a4c3-3a0733485761",
+          "target": {
+            "kind": "main"
+          },
+          "revisionId": "a62b2bcad79c10766d3f9b53012875e809b90f067004d7d7e3cbe09665f8d37d",
+          "entityId": "level-ground"
+        }
+      ],
+      "regions": []
+    }
+  },
+  "scriptValidations": [
+    "not-run",
+    "passed"
+  ]
+}
