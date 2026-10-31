@@ -37,11 +37,11 @@ try {
   $baseTag = "bim-forge-linux-browser-base:258-$run"
   & docker tag $baseId $baseTag
   if ($LASTEXITCODE) { throw 'Cannot give the verified local base image its owned build tag.' }
-  $archive = Join-Path $OutputRoot 'source.tar'
-  & git archive --format=tar "--output=$archive" $source
+  $archive = Join-Path $OutputRoot 'source.zip'
+  & git archive --format=zip "--output=$archive" $source
   if ($LASTEXITCODE) { throw 'Pinned source archive failed.' }
-  & tar -xf $archive -C $context
-  if ($LASTEXITCODE -or (Test-Path -LiteralPath "$context/.git")) { throw 'Source extraction failed or included Git metadata.' }
+  Expand-Archive -LiteralPath $archive -DestinationPath $context
+  if (Test-Path -LiteralPath "$context/.git") { throw 'Source extraction included Git metadata.' }
   foreach ($test in $Tests) {
     if (-not (Test-Path -LiteralPath (Join-Path $context $test) -PathType Leaf)) { throw "Pinned source omits $test" }
   }
