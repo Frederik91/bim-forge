@@ -1100,6 +1100,7 @@ function scheduleAuthPoll(): void {
 }
 
 function updateControls() {
+  modelViewer?.setMarkupEnabled(canDrawMarkup());
   renderSelectionContext();
   renderEvidenceContext();
   const dragging = Boolean(gesture || visualGesture);
@@ -3474,7 +3475,6 @@ async function initialize() {
     report(error);
   } finally {
     busy = false;
-    if (repo) renderComparison();
     updateControls();
     if (needsStart) {
       ui['start-close'].hidden = true;

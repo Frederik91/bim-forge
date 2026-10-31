@@ -252,6 +252,13 @@ export class ModelViewer {
 
   startMarkup(tool: MarkupTool = 'rectangle'): void { this.markup?.start(tool); }
 
+  setMarkupEnabled(enabled: boolean): void {
+    const state = this.state;
+    if (!state?.markup || state.markup.editable === enabled) return;
+    this.state = { ...state, markup: { ...state.markup, editable: enabled } };
+    this.updateMarkup(); this.frames = 3;
+  }
+
   private hover(id: string | null): void {
     this.linked.hover(null);
     this.model.hover(id);
