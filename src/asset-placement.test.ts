@@ -109,7 +109,7 @@ test('shell and furnishing edits preserve assets or fail atomically with explici
 
 test('budgets bound families, parts and combined furnishings without changing graph limits', async () => {
   const before = await singleRoom(); const family = personFamily();
-  assert.throws(() => previewAssets(before, { families: Array.from({ length: 9 }, (_, i) => ({ ...family, id: 'family-' + i })), instances: [], removeInstanceIds: [] }), /exact bounded/);
+  assert.throws(() => previewAssets(before, { families: Array.from({ length: 33 }, (_, i) => ({ ...family, id: 'family-' + i })), instances: [], removeInstanceIds: [] }), /exact bounded/);
   const instances = Array.from({ length: 32 }, (_, i) => ({ ...personInstance('person-' + i, .02), position: [.2 + i * .1, 2], size: { width: .05, depth: .05, height: .02 } }));
   const full = previewAssets(before, { families: [family], instances, removeInstanceIds: [] });
   assert.equal(full.entities.filter((item) => item.type === 'AssetInstance').length, 32);

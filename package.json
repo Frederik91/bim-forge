@@ -23,7 +23,7 @@
     "test:geometry": "node --test src/geometry-query.test.ts src/geometry-session.test.ts",
     "test:linked-revisions": "node --test demo/linked-model-revisions.test.ts",
     "test:geometry-evidence": "node --test --test-concurrency=1 src/geometry-evidence.test.ts src/geometry-native-history.test.ts src/geometry-candidate-lineage.test.ts src/geometry-draft-lineage.test.ts src/geometry-evidence-lineage.test.ts src/model-script-geometry.test.ts demo/geometry-evidence-queue.test.ts demo/geometry-draft-conversation.test.ts demo/geometry-source.test.ts",
-    "test:assets": "node --test src/asset-family.test.ts src/asset-history.test.ts src/asset-placement.test.ts src/asset-schema.test.ts src/asset-agent.test.ts",
+    "test:assets": "node --test src/asset-mounting.test.ts src/asset-family.test.ts src/asset-history.test.ts src/asset-placement.test.ts src/asset-schema.test.ts src/asset-agent.test.ts",
     "factory": "node factory/cli.ts",
     "factory:plan": "node factory/live.ts",
     "factory:publish": "node factory/publish.ts",

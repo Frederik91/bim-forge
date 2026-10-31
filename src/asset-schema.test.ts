@@ -14,8 +14,9 @@ test('real ScriptBox declarations accept native family arrays, primitive variant
   const session = runtime.createSession({ context: null, capabilities: ['assets.count'] }); t.after(() => session.dispose());
   const edit = assetFixtureEdit();
   const roomBound = { ...edit, instances: edit.instances.map((item) => ({ ...item, placement: { kind: 'room', roomId: 'office' } })) };
+  const mounted = { ...edit, instances: edit.instances.map((item, i) => ({ ...item, mounting: i === 0 ? { kind: 'wall', wallId: 'wall-north', elevation: 1.4 } : i === 1 ? { kind: 'ceiling', clearance: .1 } : { kind: 'free-floating', elevation: 1 } })) };
   const result = await session.execute({ language: 'typescript', source:
-    `return [await assets.count(${JSON.stringify(edit)}), await assets.count(${JSON.stringify(roomBound)})];` });
+    `return [await assets.count(${JSON.stringify(edit)}), await assets.count(${JSON.stringify(roomBound)}), await assets.count(${JSON.stringify(mounted)})];` });
   assert.equal(result.status, 'completed', JSON.stringify(result));
-  if (result.status === 'completed') assert.deepEqual(result.value, [3, 3]);
+  if (result.status === 'completed') assert.deepEqual(result.value, [3, 3, 3]);
 });

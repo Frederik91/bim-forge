@@ -1,3 +1,5 @@
+import { entityLevel, levelView, roofHeightAt } from './building-levels.ts';
+import { overlapsBounds } from './floor-plan.ts';
 import { Type } from 'typebox';
 import type { Static } from 'typebox';
 import { Check } from 'typebox/value';
@@ -16,17 +18,25 @@ const part = Type.Object({ id, kind: Type.Union([Type.Literal('box'), Type.Liter
 export const AssetFamilySchema = Type.Object({ id, type: Type.Literal('AssetFamily'), name, parameters: Type.Optional(ModelParametersSchema),
   description: Type.String({ minLength: 1, maxLength: 600 }), parts: Type.Array(part, { minItems: 1, maxItems: 16 }),
 }, { additionalProperties: false, title: 'AssetFamily' });
+const elevation = Type.Number({ minimum: 0, maximum: 100 });
+export const AssetMountingSchema = Type.Union([
+  Type.Object({ kind: Type.Literal('floor') }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal('wall'), wallId: id, elevation }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal('ceiling'), clearance: elevation }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal('free-floating'), elevation }, { additionalProperties: false }),
+], { title: 'AssetMounting' });
 export const AssetInstanceSchema = Type.Object({ id, type: Type.Literal('AssetInstance'), name, familyId: id, parameters: Type.Optional(ModelParametersSchema),
   position: Type.Array(Type.Number({ minimum: -1000, maximum: 1000 }), { minItems: 2, maxItems: 2 }),
   rotationDeg: Type.Union([Type.Literal(0), Type.Literal(90), Type.Literal(180), Type.Literal(270)], { title: 'AssetRotation' }),
   size: Type.Object({ width: Type.Number({ minimum: .05, maximum: 5 }), depth: Type.Number({ minimum: .05, maximum: 5 }),
     height: Type.Number({ minimum: .02, maximum: 5 }) }, { additionalProperties: false }),
+  mounting: Type.Optional(AssetMountingSchema),
   placement: Type.Union([
     Type.Object({ kind: Type.Literal('single-room') }, { additionalProperties: false }),
     Type.Object({ kind: Type.Literal('room'), roomId: id }, { additionalProperties: false }),
   ], { title: 'AssetPlacement' }),
 }, { additionalProperties: false, title: 'AssetInstance' });
-export const AssetEditSchema = Type.Object({ families: Type.Array(AssetFamilySchema, { maxItems: 8 }),
+export const AssetEditSchema = Type.Object({ families: Type.Array(AssetFamilySchema, { maxItems: 32 }),
   instances: Type.Array(AssetInstanceSchema, { maxItems: 32 }), removeInstanceIds: Type.Array(id, { maxItems: 32 }),
 }, { additionalProperties: false, title: 'AssetEdit' });
 
@@ -94,6 +104,8 @@ export function parseAssetInstance(input: unknown): AssetInstance {
   if (!Check(AssetInstanceSchema, value)) throw new Error('Asset instance requires exact fields, a bound placement and bounded dimensions.');
   const [x, y] = value.position;
   if (x === undefined || y === undefined) throw new Error('Asset position requires two coordinates.');
+  if (value.mounting && 'elevation' in value.mounting) millimetres(value.mounting.elevation);
+  if (value.mounting?.kind === 'ceiling') millimetres(value.mounting.clearance);
   return { ...value, ...(value.parameters === undefined ? {} : { parameters: parseCustomModelParameters(value.parameters) }), id: identifier(value.id), name: readable(value.name), familyId: identifier(value.familyId), position: [millimetres(x), millimetres(y)],
     size: { width: millimetres(value.size.width), depth: millimetres(value.size.depth), height: millimetres(value.size.height) },
     placement: value.placement.kind === 'single-room' ? { kind: 'single-room' } : { kind: 'room', roomId: identifier(value.placement.roomId) } };
@@ -117,16 +129,45 @@ export function assetFootprint(graph: ModelGraph, instance: AssetInstance): Boun
     minY: instance.position[1] - depth / 2, maxY: instance.position[1] + depth / 2 };
 }
 
+/** Local ceiling envelope, shared by placement validation and ceiling suspension. */
+export function assetCeiling(graph: ModelGraph, instance: AssetInstance): number {
+  const owner = entityLevel(graph, instance);
+  const view = owner ? levelView(graph, owner.id) : graph;
+  const footprint = assetFootprint(graph, instance);
+  let ceiling = Math.min(...view.entities.filter(item => item.type === 'Wall').map(wall => wall.height));
+  if (owner) {
+    for (const point of [[footprint.minX, footprint.minY], [footprint.minX, footprint.maxY],
+      [footprint.maxX, footprint.minY], [footprint.maxX, footprint.maxY]] satisfies Point[]) {
+      ceiling = Math.min(ceiling, roofHeightAt(view, owner.id, point));
+    }
+    for (const slab of graph.entities) {
+      if (slab.type !== 'Slab' || !overlapsBounds(footprint, slab.bounds)) continue;
+      const level = entityLevel(graph, slab);
+      if (level && level.elevation > owner.elevation) ceiling = Math.min(ceiling, level.elevation - owner.elevation - slab.thickness);
+    }
+  }
+  return ceiling;
+}
+
+/** Height of the instance bottom relative to its owning floor. */
+export function assetElevation(graph: ModelGraph, instance: AssetInstance): number {
+  const mounting = instance.mounting;
+  if (!mounting || mounting.kind === 'floor') return 0;
+  if (mounting.kind === 'ceiling') return assetCeiling(graph, instance) - mounting.clearance - instance.size.height;
+  return mounting.elevation;
+}
+
 /** Fixed tessellation includes cardinal extrema and ellipsoid poles/equator. Z is local floor height. */
 export function assetGeometry(graph: ModelGraph, instance: AssetInstance): AssetGeometry {
   const family = graph.entities.find((entity): entity is AssetFamily => entity.type === 'AssetFamily' && entity.id === instance.familyId);
   if (!family) throw new Error('Asset instance requires an existing family definition.');
+  const bottom = assetElevation(graph, instance);
   const faces: AssetGeometry['faces'] = [];
   const transform = ([nx, ny, nz]: AssetPoint): AssetPoint => {
     const x = (nx - .5) * instance.size.width; const y = (ny - .5) * instance.size.depth;
     const rotated: Point = instance.rotationDeg === 0 ? [x, y] : instance.rotationDeg === 90 ? [-y, x]
       : instance.rotationDeg === 180 ? [-x, -y] : [y, -x];
-    return [instance.position[0] + rotated[0], instance.position[1] + rotated[1], nz * instance.size.height];
+    return [instance.position[0] + rotated[0], instance.position[1] + rotated[1], bottom + nz * instance.size.height];
   };
   const face = (points: AssetPoint[], fill: string): void => { faces.push({ points: points.map(transform), fill }); };
   for (const part of family.parts) {
@@ -162,7 +203,7 @@ export function assetGeometry(graph: ModelGraph, instance: AssetInstance): Asset
     }
   }
   const footprint = assetFootprint(graph, instance);
-  return { faces, bounds: { ...footprint, minZ: 0, maxZ: instance.size.height }, footprint, dimensions: { ...instance.size }, family };
+  return { faces, bounds: { ...footprint, minZ: bottom, maxZ: bottom + instance.size.height }, footprint, dimensions: { ...instance.size }, family };
 }
 
 /** Register a fresh immutable recipe and rebind only explicitly selected occurrences. */

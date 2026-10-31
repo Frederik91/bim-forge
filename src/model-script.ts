@@ -16,7 +16,7 @@ import { previewFloor } from './floor-layout.ts';
 import { previewBuilding } from './building-layout.ts';
 import { FloorLayoutSchema, BuildingLayoutSchema } from './building-schema.ts';
 import { levels, entityLevel, entityElevation, levelView } from './building-levels.ts';
-import { AssetFamilySchema, AssetInstanceSchema, AssetEditSchema } from './asset-family.ts';
+import { assetElevation, AssetFamilySchema, AssetInstanceSchema, AssetEditSchema } from './asset-family.ts';
 import type { AuthoringScope } from './request-sources.ts';
 import { ModelParametersSchema, ModelParameterSchema } from './model-scope-contract.ts';
 import { parseClarification } from './request-conversation.ts';
@@ -127,7 +127,7 @@ const inspection = Type.Object({
     levels: Type.Array(Type.Object({ id: identifier, type: Type.Literal('Level'), name, elevation: Type.Number() })),
     selectedLevelId: Type.Union([identifier, Type.Null()]),
     entities: Type.Array(Type.Object({ entityId: identifier, levelId: Type.Union([identifier, Type.Null()]), elevation: Type.Number() })),
-    assetFamilies: Type.Array(Type.Object({ familyId: identifier, instanceIds: Type.Array(identifier, { maxItems: 32 }) }), { maxItems: 8 }),
+    assetFamilies: Type.Array(Type.Object({ familyId: identifier, instanceIds: Type.Array(identifier, { maxItems: 32 }) }), { maxItems: 32 }),
     assetInstances: Type.Array(Type.Object({ entityId: identifier, familyId: identifier,
       roomId: Type.Union([identifier, Type.Null()]), levelId: Type.Union([identifier, Type.Null()]), elevation: Type.Number() }), { maxItems: 32 }),
     layout: Type.Union([layout, Type.Null()]), floorBounds: Type.Union([bounds, Type.Null()]),
@@ -403,7 +403,7 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
           assetFamilies: current.entities.filter((item) => item.type === 'AssetFamily').map((family) => ({ familyId: family.id,
             instanceIds: current.entities.filter((item) => item.type === 'AssetInstance' && item.familyId === family.id).map((item) => item.id) })),
           assetInstances: current.entities.filter((item) => item.type === 'AssetInstance').map((item) => ({ entityId: item.id, familyId: item.familyId,
-            roomId: entitySpace(current, item)?.id ?? null, levelId: entityLevel(current, item)?.id ?? null, elevation: entityElevation(current, item) })),
+            roomId: entitySpace(current, item)?.id ?? null, levelId: entityLevel(current, item)?.id ?? null, elevation: entityElevation(current, item) + assetElevation(current, item) })),
           layout: draft.binding.scope || spaces(current).length || current.version === 2 ? null : rectangleLayout(current),
           floorBounds: !draft.binding.scope && boundPlan.entities.some(item => item.type === 'Wall') ? floorBounds(boundPlan) : null,
           rooms: plans.flatMap((plan) => spaces(plan).map((room) => ({ ...room, clearBounds: clearSpaceBounds(plan, room),
@@ -422,8 +422,8 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
     description: 'Metres on a 1 mm grid. Retain unrelated items, identities and existing levels. Furnishing DTOs omit the stored levelId; the host preserves ownership by identity. New or transferred building furnishings require levelAssignments:[{entityId,levelId}]. Supported devices require a desk/table supportId on the same level. Use only for explicit whole-model or cross-room work.',
     effect: 'draft-write', params: { input: furnishingSet }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context,
       () => previewFurnishings(call.context.snapshot, input), () => call.throwIfRevoked()) }),
-  previewAssets: api.method({ summary: 'Author reusable primitive asset families and upsert or remove their floor-standing instances in this private draft.',
-    description: 'Available for ordinary requests, without shell reconstruction scope. Supply families, instances and removeInstanceIds. Family IDs are immutable; identical registration is idempotent and a changed recipe needs a new ID. Parts are normalized box/ellipsoid/vertical-cylinder geometry, not code. Instance size is metres on a 1 mm grid; placement is single-room or room with roomId, deriving its level. Unmentioned assets and all unrelated objects are retained. Disclose proxy fidelity in review.',
+  previewAssets: api.method({ summary: 'Author reusable primitive asset families and upsert or remove their floor, wall, ceiling or free-floating instances in this private draft.',
+    description: 'Available for ordinary requests, without shell reconstruction scope. Supply families, instances and removeInstanceIds. Family IDs are immutable; identical registration is idempotent and a changed recipe needs a new ID. Parts are normalized box/ellipsoid/vertical-cylinder geometry, not code. Instance size is metres on a 1 mm grid; placement is single-room or room with roomId, deriving its level. Optional mounting supports floor (default), wall with wallId and bottom elevation, ceiling with top clearance, or free-floating with bottom elevation. Read /guides/assets.md. Unmentioned assets and all unrelated objects are retained. Disclose proxy fidelity in review.',
     effect: 'draft-write', params: { input: AssetEditSchema }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context,
       () => previewAssets(call.context.snapshot, input), () => call.throwIfRevoked()) }),
   previewFloor: api.method({ summary: 'Compile a rectangular multi-room floor shell from rooms and hosted openings, in whole millimetres.',
@@ -461,7 +461,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base or the supplied prior proposal draft for a conversation continuation. ' +
   'placement.levels lists stable levels and world elevations; placement.selectedLevelId binds a selected Level, spatial reference or unambiguous selected-object owner. ' +
   'placement.entities supplies entityId, levelId and world floor-base elevation. placement.rooms supplies levelId and entityIds computed within that level. ' +
-  'placement.assetFamilies maps reusable family IDs to instance IDs; placement.assetInstances resolves their room, level and floor elevation. Complete recipes and placements remain in model.entities. Family definitions are nonspatial read dependencies. ' +
+  'placement.assetFamilies maps reusable family IDs to instance IDs; placement.assetInstances resolves their room, level and world bottom elevation. Complete recipes and placements remain in model.entities. Family definitions are nonspatial read dependencies. ' +
   'Coincident XY coordinates on different levels never imply shared room membership. A null selectedLevelId means the context does not identify one level. ' +
   'previewRectangle uses millimetres; furnishing positions and sizes use metres on a 1 mm grid. ' +
   'For a requested object outside Furniture.kind, author a new normalized primitive recipe with previewAssets; read /guides/assets.md. It needs no catalog entry, shell scope or snapshot upgrade. ' +
@@ -493,7 +493,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
     'Inspect the bound model first. Design a compact primitive recipe for the requested object, rather than looking for a preconfigured catalog category. The host has no built-in person family.',
     'Call model.previewAssets({families,instances,removeInstanceIds}). These are atomic upserts/removals, not replacements of every asset. Preserve unrelated entities and identities. Ordinary requests can use this capability; it grants no shell reconstruction, network, filesystem or approval authority.',
     'An AssetFamily has id,type:AssetFamily,name,description,parts. Each part has id,kind:box|ellipsoid|cylinder,min:[x,y,z],size:[width,depth,height],color:#rrggbb. Use bounded arrays of three numbers, not executable expressions. Coordinates are normalized to 0..1; every positive part stays inside the unit box and the combined analytic extrema must reach all six bounds. Cylinders are vertical and ellipsoid sizes are full diameters.',
-    'An AssetInstance has id,type:AssetInstance,name,familyId,position:[x,y],rotationDeg:0|90|180|270,size:{width,depth,height},placement. World size is metres on the millimetre grid; height 1.87 means exactly 1870 mm. Position is the footprint centre; local floor Z starts at zero. Use placement:{kind:single-room} only for an existing unlevelled single-room shell, or placement:{kind:room,roomId} for a named room. Room placement derives the level; never supply a competing levelId or infer it from overlapping XY.',
+    'An AssetInstance has id,type:AssetInstance,name,familyId,position:[x,y],rotationDeg:0|90|180|270,size:{width,depth,height},placement. World size is metres on the millimetre grid; height 1.87 means exactly 1870 mm. Position is the footprint centre. Optional mounting is {kind:"floor"} (default), {kind:"wall",wallId,elevation}, {kind:"ceiling",clearance}, or {kind:"free-floating",elevation}. Elevation is the bottom above the owning floor in metres; ceiling clearance is from the ceiling underside to the asset top. Wall mounting requires contact with the named wall face. Reuse a family across instances; up to 32 families and 32 combined furnishings are supported. Use placement:{kind:single-room} only for an existing unlevelled single-room shell, or placement:{kind:room,roomId} for a named room. Room placement derives the level; never supply a competing levelId or infer it from overlapping XY.',
     'Authoring example: the following display stand recipe is written in a script, not registered in a product catalog. Design different parts for other requested shapes.',
     '```typescript',
     'await model.previewAssets({',
