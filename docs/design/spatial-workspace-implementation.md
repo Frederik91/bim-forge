@@ -1,6 +1,6 @@
 # Inside-first spatial workspace implementation plan
 
-Planning issue: [#251](https://github.com/Frederik91/bim-forge/issues/251).
+Epic: [#251](https://github.com/Frederik91/bim-forge/issues/251). Draft planning review: [#260](https://github.com/Frederik91/bim-forge/pull/260).
 
 ## Decision and scope
 
@@ -133,19 +133,58 @@ Adopt the approved baseline into a token-bearing `DESIGN.md` and machine-readabl
 
 ## Delivery sequence
 
-Runtime implementation has not started. Each row is a separate coherent issue and draft PR, with files and evidence below. Work may run in isolated worktrees where dependencies permit; integration still verifies the combined artifact.
+Runtime implementation has not started. On 2026-10-31 the maintainer requested an epic with parallel subtasks. The numbered outcomes below are deliverables, not a serial implementation schedule. The parallel schedule and exclusive ownership rules below supersede the original step dependencies. Each issue gets a separate worktree and coherent draft PR; this organization does not launch implementation.
 
 | Step | Outcome | Dependencies | Review class |
 | --- | --- | --- | --- |
 | [1 · #252](https://github.com/Frederik91/bim-forge/issues/252) | Approved visual system and shared primitives | Study reference retained; no automatic merge of #249 | Presentation |
-| [2 · #253](https://github.com/Frederik91/bim-forge/issues/253) | One real task controller and request path | Grounded existing behavior | Refactor with regression evidence |
-| [3 · #254](https://github.com/Frederik91/bim-forge/issues/254) | Durable conversation origin and target binding | Step 2 | Schema/storage, human review |
-| [4 · #255](https://github.com/Frederik91/bim-forge/issues/255) | Inside/Walk/Fly navigation and view continuity | Steps 1–2 | Viewer behavior, human review |
-| [5 · #256](https://github.com/Frederik91/bim-forge/issues/256) | Production native Plan with approved detail | Steps 1 and 4 | Derived geometry presentation |
-| [6 · #257](https://github.com/Frederik91/bim-forge/issues/257) | 3D task agents, anchored real chat and in-place review | Steps 2–5 | Workflow integration, human review |
-| [7 · #258](https://github.com/Frederik91/bim-forge/issues/258) | Qualify the first end-to-end milestone | Steps 1–6 | Evidence and maintainer release decision |
+| [2 · #253](https://github.com/Frederik91/bim-forge/issues/253) | One real task controller and request path | #261 contracts | Refactor with regression evidence |
+| [3 · #254](https://github.com/Frederik91/bim-forge/issues/254) | Backend conversation origin and target binding | #261 contracts; frontend wiring in #257 | Schema/storage, human review |
+| [4 · #255](https://github.com/Frederik91/bim-forge/issues/255) | Inside/Walk/Fly navigation and view continuity | #261 contracts; shell wiring in #256/#257 | Viewer behavior, human review |
+| [5 · #256](https://github.com/Frederik91/bim-forge/issues/256) | Production native Plan integration | #252, #253, #255, #262 | Derived geometry presentation |
+| [6 · #257](https://github.com/Frederik91/bim-forge/issues/257) | 3D task agents, anchored real chat and in-place review | #254, #256, #263 (other foundations transitively) | Workflow integration, human review |
+| [7 · #258](https://github.com/Frederik91/bim-forge/issues/258) | Qualify the first end-to-end milestone | #257, #264 | Evidence and maintainer release decision |
 
-Steps 1 and 2 can be prepared independently. Navigation can develop alongside placement once contracts are agreed. Do not combine unrelated storage, full shell replacement and rendering changes in one PR.
+### Parallel schedule and file ownership
+
+Start [#261](https://github.com/Frederik91/bim-forge/issues/261), a small contract baseline, alongside visual foundation #252 and privacy design #259. Agree coordinate/source units and pins, origin/targets, stable task identity, readonly task projection, camera/view-session intent, graphics picking/disposal and token inputs. This is an interface handoff, not another architecture tournament. Each owning implementation still reviews its concrete schemas and behavior.
+
+Once those contracts are reviewed, six construction streams can run side by side; #252 and #259 may continue independently. The standalone drawing and graphics tasks accept injected tokens and fixture inputs so they do not wait for every integrated dependency.
+
+| Stream | Exclusive ownership | Handoff and exclusions |
+| --- | --- | --- |
+| #252 Visual foundation | DESIGN.md, shared token definitions, primitives/gallery and styling | Publish shared tokens; no request orchestration, camera or schema edits. Coordinate shared presentation files with #253. |
+| #253 Task controller | spatial-tasks.ts, room-app request extraction, transport/status adapters | Preserve current server payloads; remove old writers. No backend placement, camera, drafting or global styling. Finish before later room-app integration. |
+| #254 Saved placement | Conversation schema, ChangeRequests, required server contracts and persistence tests | Consume #261; hand placed/unplaced source-bound data to #257. No frontend controller/room-app/viewer edits; no dependency on #253's extraction. |
+| #255 Navigation | view-navigation.ts, ModelViewer/ModelScene camera lifecycle, markup/FXAA/input consumers | Consume #261; expose intent/session state for later wiring. No room-app, task transport, Plan or agent-layer edits. One engine/canvas. |
+| [#262 Plan core](https://github.com/Frederik91/bim-forge/issues/262) | Proposed model-plan.ts and drawing/projection/hit-mapping tests | Consume #261; provide real native-model rendering to #256. No room-app, viewer lifecycle or global tokens. Old live Plan stays until #256 switches callers and deletes moved code. |
+| [#263 Agent graphics](https://github.com/Frederik91/bim-forge/issues/263) | Proposed spatial-task-layer.ts and graphics/picking/disposal tests | Consume #261; provide readonly figures/hit identities to #257. No viewer lifecycle, schemas, transport or room-app. Test hosts are not a second production owner. |
+| [#264 Acceptance preparation](https://github.com/Frederik91/bim-forge/issues/264) | Proposed tests/fixtures/spatial-workspace and dedicated harness helpers | Consume #261; publish stable fixture identities/expected deltas for lane consumers and #258. No runtime or validator changes. One fixture owner. |
+| #259 Privacy design | Participant/access/publication design contract | Independent future-facing design; no runtime permission changes. Shared release waits for enforcement and qualification. |
+
+```mermaid
+flowchart TD
+  C["261 Shared contracts"] --> T["253 Task controller"]
+  C --> P["254 Saved origins"]
+  C --> N["255 Inside/Fly"]
+  C --> D["262 Plan core"]
+  C --> A["263 Agent graphics"]
+  C --> F["264 Fixtures"]
+  S["252 Design system"] --> I["256 Plan integration"]
+  T --> I
+  N --> I
+  D --> I
+  I --> J["257 Spatial task integration"]
+  P --> J
+  A --> J
+  J --> Q["258 Combined qualification"]
+  F --> Q
+  R["259 Privacy design"] -.-> M["Future team communication/presence"]
+```
+
+Integration has three named gates. #256 wires Plan and view-session callers after #252/#253/#255/#262. #257 then wires saved placement, graphics, anchored chat/list and exact review after #254/#256/#263. #258 executes the combined qualification after #257/#264. Preparing fixtures early does not claim integrated acceptance; a graphics test host does not claim real worker behavior.
+
+Use a named reviewed dependency baseline for each branch; do not share worktrees or copy unfinished lane state. The owning task changes shared contracts and notifies affected consumers before integration. Revalidate dependent branches after rebasing onto reviewed dependency commits. Only one task owns room-app integration at a time: #253 extraction, then #256 Plan cutover, then #257 spatial-task wiring. #255 alone changes the camera lifecycle during parallel construction; #257 makes the later task-picking adapter changes. Do not combine unrelated storage, full shell replacement and rendering changes in one PR. Human approval controls readiness, merge and release.
 
 ### Step 1: design system foundation
 
@@ -161,25 +200,25 @@ Evidence: current submit/reopen/append/revise/cancel/retry/inspect/decide behavi
 
 ### Step 3: persisted spatial placement
 
-Files: `src/request-conversation.ts`, `demo/change-requests.ts`, server request/read contracts and the controller; storage/source schemas as determined by the reviewed contract. Add validated project-frame placement, source pins and target references using the authoritative ticket transaction. Preserve first origin through messages, retries, navigation and restart.
+Files: `src/request-conversation.ts`, `demo/change-requests.ts`, server request/read contracts and persistence tests; storage/source schemas as determined by the reviewed contract. Add validated project-frame placement, source pins and target references using the authoritative ticket transaction. Preserve first origin through messages, retries, navigation and restart. Frontend controller binding belongs to #257 so backend work can proceed alongside #253 without shared writers.
 
 Evidence: two independent tickets at one door; objects plus regions; region-only with zero selected IDs; restart; uncertain-submit replay; nonfinite/wrong-frame/stale-source rejection; missing targets; legacy unplaced tasks and explicit recovery placement without rewriting the historical origin. Review migration and rollback before merge. Accepted construction model delta remains zero.
 
 ### Step 4: navigation and view session
 
-Files: proposed navigation module; `model-viewer.ts`, `model-scene.ts`, markup camera consumers, workspace controls and viewer/browser tests. Introduce an active-camera seam before adding Inside and Fly. Preserve picking, antialiasing, comparison, linked meshes and one engine while reusing the current project/level context.
+Files: proposed navigation module; `model-viewer.ts`, `model-scene.ts`, markup camera consumers and focused viewer tests. Introduce an active-camera seam before adding Inside and Fly. Preserve picking, antialiasing, comparison, linked meshes and one engine while reusing the current project/level context. Expose view-session/navigation intent; #256/#257 own live shell wiring after #253 finishes extraction.
 
 Evidence: WASD relative to facing, mouse capture/fallback and Escape, Shift-up/Ctrl-down, input isolation while typing, drag cancellation on focus loss, safe framing/return, project/level changes, saved Inside pose across Plan/Overview and source transforms. Test repeated shell/task/view switches without camera or canvas recreation. Initially qualify grounded Walk only on known native floor/level cases; unsupported entry uses an explicit alternative rather than an invented walkable surface. Collision and stair behavior need separate evidence.
 
 ### Step 5: native Plan integration
 
-Files: proposed native Plan module, extracted `drawPlan`/projection/inverse-picking code, shared drafting tokens, model fixtures and browser tests. Derive walls, hosted openings/swings, rooms, furniture representations, dimensions and orientation from the actual model and selected revision. Distinguish footprint proxies from exact cuts.
+Split delivery between #262 (standalone native drawing/projection/hit-mapping module and tests) and #256 (live room-app/view-session/token integration and browser evidence). #256 switches callers and deletes superseded `drawPlan`/projection writers in the same change. Derive walls, hosted openings/swings, rooms, furniture representations, dimensions and orientation from the actual model and selected revision. Distinguish footprint proxies from exact cuts.
 
 Evidence: a real multi-room fixture, changed door/wall comparison, dimension and scale agreement, source-bound selection/hit mapping, same task through view changes, level changes and narrow legibility. Existing linked IFC does not render in current Plan; expose that limitation and qualify a source-aware linked cut path separately. Do not silently substitute a bounding box for a wall section or import the study's fixed floor plan.
 
 ### Step 6: spatial task journey
 
-Files: proposed task graphics layer; viewer picking; controller projection; `RequestChat`/React anchored presentation; task list; exact review controls. Create the draft agent at the captured origin and reconcile it to the confirmed ticket. Reopening a visible agent highlights its bound targets without moving the camera. Return to task explicitly navigates. Unplaced tasks remain list-accessible.
+Split delivery between #263 (standalone task graphics layer and tests) and #257 (production viewer picking/lifecycle, controller projection, `RequestChat`/React anchored presentation, task list and exact review controls). Create the draft agent at the captured origin and reconcile it to the confirmed ticket. Reopening a visible agent highlights its bound targets without moving the camera. Return to task explicitly navigates. Unplaced tasks remain list-accessible.
 
 Evidence: actual saved task and worker result, not canned replies; agent body picking; associated item/region highlights; unchanged origin after later selection; same-place chooser and accessible list; server-reported queued/working/needs-input/failed/ready/completed/cancelled states; switching with unsent drafts; in-context proposed/existing geometry; revision request and exact explicit acceptance. Cancellation does not expose provider-cleanup progress today. Do not infer cleanup completion or show a separate draining indicator unless authoritative telemetry is added through the existing queue owner and qualified. Accepting changes only the validated proposal delta, not whatever the user currently happens to select.
 
@@ -187,7 +226,7 @@ Keep task-agent meshes out of construction entities, exports, geometry queries a
 
 ### Step 7: first-milestone qualification
 
-Reuse existing viewer, shell, conversation, queue, source-retention and accepted-head tests. Add the combined spatial journey over disposable fixtures and a copy of a real project. Run strict validation plus relevant behavior/browser suites and attach output, before/after captures and accepted-model delta. Exercise restart, concurrency limits, cancellation cleanup, late results, stale proposal rejection, linked-reference picking and recovery.
+Prepare stable shared acceptance fixtures and deterministic harness helpers early in #264 while features develop. #258 reuses those plus existing viewer, shell, conversation, queue, source-retention and accepted-head tests for the final combined journey over disposable fixtures and a copy of a real project. Run strict validation plus relevant behavior/browser suites and attach output, before/after captures and accepted-model delta. Exercise restart, concurrency limits, cancellation cleanup, late results, stale proposal rejection, linked-reference picking and recovery.
 
 Deterministic worker qualification comes first. A separately scoped, budgeted connected-provider attempt is required before claiming that the complete AI journey is qualified. It needs explicit execution authorization; this plan does not authorize provider calls or production data changes. Preserve the three-failed-attempt stop rule and existing validators. A maintainer decides release and deployment after evidence; no automatic rollout is included.
 

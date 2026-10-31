@@ -31,3 +31,25 @@ cleanup/draining-state assumption. No cross-family judge ran.
 
 Construction model delta: zero. No deployment, migration, provider execution,
 production data mutation, merge or readiness change.
+
+Epic/parallel planning update — 2026-10-31
+
+User requested an epic with subtasks and parallel development lanes.
+Issue #251 now has 12 native subtasks, including new #261–#264 for the shared
+contract baseline, standalone Plan core, standalone agent graphics and early
+acceptance fixtures. Existing issues define exclusive owners and adapter handoffs.
+The first shared workspace extraction, Plan cutover and final task wiring remain
+ordered so concurrent lanes do not compete over room-app or camera lifecycle.
+
+npm run validate: exit 0; strict TypeScript checked 347 files, typecheck passed,
+policy passed. Changed-path policy: 2 documentation files checked, passed.
+git diff --check: exit 0.
+
+Read back GitHub native relationships after writes: exactly 12 expected children
+of #251; every child's blocker list matches the published acyclic schedule.
+Six independent construction streams depend only on #261. #252 and #259 have
+no blockers. #256 waits for #252/#253/#255/#262; #257 waits for #254/#256/#263;
+#258 waits for #257/#264. Empty blocker lists were checked too.
+
+Application implementation has not started. No provider or application/browser
+execution was added by this planning update. Construction-model delta remains zero.
