@@ -89,6 +89,7 @@ test('workspace panels preserve the model through desktop resizing, collapse and
     try {
       assert.equal(await page.locator('#workspace-navigation').isHidden(), true, 'The model starts with the full canvas');
       const fullCanvas = await box(page, '.workspace-stage');
+      await page.locator('#view-3d').click();
       await page.locator('#workspace-navigation-toggle').click();
       const modelPanel = await box(page, '#workspace-navigation');
       const modelStage = await box(page, '.workspace-stage');
