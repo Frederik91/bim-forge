@@ -54,3 +54,79 @@ demo/design-system-browser.test.ts: 3/3 passed, exit 0; source SHA-256 e82188d3d
 demo/preview-build.test.ts: 2/2 passed, exit 0; source SHA-256 7e018e08d855470ebad9d604c45df4ae77e295038d9447d78b71a0d2496f47b9
 Linux strict validation: passed; 379 TypeScript source files. Original .dockerignore integrity and actual container isolation assertions: passed.
 Final host validation: passed; explicit policy checks passed for all 13 coordinated qualification paths; PowerShell syntax and git diff --check passed.
+
+FINAL release candidate: df0e094d6a79fa1659de91bb1735c48cd86c3edc
+Real IFC conversion and shipped native/agent/linked pointer composition: passed; accepted native serialization unchanged; source hash and pointer-picked GlobalId retained; actual task body and native wall picked separately; original canvas retained.
+Real converted IFC Inside/Overview/Fly/FXAA/source-pin/disposal seam: passed. Owned converter stopped.
+
+FINAL PASS qualification f9062c46a876d9fc3fc763989d6b0829fa8e5619; runtime8268247336ced9e738a57e88628421a0aac01a0c unchanged.
+
+> bim-forge@0.1.0 validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+
+
+> bim-forge@0.1.0 lint
+> node scripts/validate-typescript.ts
+
+Strict TypeScript valid. 385 source file(s) checked.
+
+> bim-forge@0.1.0 typecheck
+> tsc --noEmit
+
+Policy valid. 0 changed file(s) checked.
+validate: PASS
+START demo/floor-plan-guide-browser.test.ts
+PASS demo/floor-plan-guide-browser.test.ts: {"tests":1,"pass":1,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/request-draft.test.ts
+PASS demo/request-draft.test.ts: {"tests":8,"pass":8,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/canvas-studio-browser.test.ts
+PASS demo/canvas-studio-browser.test.ts: {"tests":3,"pass":3,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/request-chat.test.ts
+PASS demo/request-chat.test.ts: {"tests":7,"pass":7,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/workspace-shell.test.ts
+PASS demo/workspace-shell.test.ts: {"tests":8,"pass":8,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/spatial-plan-integration-browser.test.ts
+PASS demo/spatial-plan-integration-browser.test.ts: {"tests":1,"pass":1,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/spatial-tasks-browser.test.ts
+PASS demo/spatial-tasks-browser.test.ts: {"tests":1,"pass":1,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/spatial-tasks.test.ts
+PASS demo/spatial-tasks.test.ts: {"tests":22,"pass":22,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/spatial-markup-browser.test.ts
+PASS demo/spatial-markup-browser.test.ts: {"tests":1,"pass":1,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/view-navigation-browser.test.ts
+PASS demo/view-navigation-browser.test.ts: {"tests":1,"pass":1,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/model-plan-browser.test.ts
+PASS demo/model-plan-browser.test.ts: {"tests":1,"pass":1,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/spatial-task-layer-browser.test.ts
+PASS demo/spatial-task-layer-browser.test.ts: {"tests":1,"pass":1,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/design-system-browser.test.ts
+PASS demo/design-system-browser.test.ts: {"tests":3,"pass":3,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/preview-build.test.ts
+PASS demo/preview-build.test.ts: {"tests":2,"pass":2,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START demo/spatial-workspace-browser.test.ts
+PASS demo/spatial-workspace-browser.test.ts: {"tests":2,"pass":2,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+START scripts/serve-spatial-preview.test.ts
+PASS scripts/serve-spatial-preview.test.ts: {"tests":10,"pass":10,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+{"tests":72,"pass":72,"fail":0,"cancelled":0,"skipped":0,"todo":0}
+
+> bim-forge@0.1.0 test:ifc-workspace
+> node --test --test-concurrency=1 demo/linked-workspace-browser.test.ts
+
+✔ shipped workspace keeps real IFC, native construction and task pointer identities separate without changing accepted data (9835.1498ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10539.5264
+✔ actual converted IFC remains pickable through Inside and Overview with source-bound poses and one FXAA camera (1874.7365ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2434.6244
