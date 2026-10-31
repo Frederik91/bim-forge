@@ -434,7 +434,7 @@ export class GeometryEvidenceSession {
   }
   async #current(): Promise<{ native: GeometrySessionInput['native']; history?: GeometryNativeHistory }> {
     const context = this.#input.current ? await this.#input.current()
-      : { native: this.#input.native, history: this.#input.history };
+      : { native: this.#input.native, ...(this.#input.history ? { history: this.#input.history } : {}) };
     assertNativeHistory(this.#input.projectId, context.native, context.history);
     if (this.#lineage && !context.history) throw new GeometryEvidenceConflict('Current geometry history is unavailable.');
     if (this.#input.history && context.history?.rootRevisionId !== this.#input.history.rootRevisionId) {
