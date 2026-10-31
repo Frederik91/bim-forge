@@ -252,3 +252,15 @@ body.canvas-studio {
   .canvas-studio .workspace-shell, .canvas-studio .workspace-navigation, .canvas-studio .workspace-context, .canvas-studio .workspace-navigation[hidden] { transition: none; animation: none; }
 }
 @keyframes studio-sheet-in { from { transform: translateY(16px); } to { transform: translateY(0); } }
+
+/* Native Plan and Inside share the mounted model stage. */
+.canvas-studio .workspace-stage .model-card-heading { flex-wrap: wrap; }
+.canvas-studio .workspace-stage .model-card-heading .view-switch { flex-wrap: wrap; max-width: 100%; }
+.canvas-studio .workspace-stage .view-switch button { min-height: 44px; }
+.canvas-studio .workspace-stage .drawing-surface svg { max-width: 100%; }
+.canvas-studio .workspace-stage .drawing-surface[data-model-view="plan"] { overflow: hidden; touch-action: none; }
+.canvas-studio .workspace-stage .view-switch button:disabled { color: var(--spatial-color-disabled-ink); background: var(--spatial-color-disabled-fill); cursor: not-allowed; }
+
+@media (max-width: 900px) {
+  .canvas-studio .workspace-shell[data-spatial-view="plan"][data-context-open="true"] { grid-template-rows: minmax(400px, 1fr) minmax(220px, 1fr); }
+}
