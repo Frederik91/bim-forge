@@ -139,6 +139,7 @@ export function nativeGeometryRecords(projectId: string, input: NativeGeometryIn
     if (level && level.id !== entity.id) relate('level', level.id);
     if (entity.type === 'Furniture' && entity.supportId) relate('supported-by', entity.supportId);
     if (entity.type === 'AssetInstance' && entity.placement.kind === 'room') relate('space', entity.placement.roomId);
+    if (entity.type === 'AssetInstance' && entity.mounting?.kind === 'wall') relate('hosted-by', entity.mounting.wallId);
     for (const host of snapshot.relationships) if (host.source === entity.id) relate('hosted-by', host.target);
     let derived: ReturnType<typeof nativeShape>;
     try { derived = nativeShape(snapshot, entity, work); }

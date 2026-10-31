@@ -211,3 +211,22 @@ test('ordinary asset requests keep typed execution evidence through queued proce
   await queue.close(); queue = await ChangeRequests.open(database, () => null);
   assert.equal(queue.project(repository.projectId), accepted.project); assert.equal(queue.get(input.requestId).state, 'completed');
 });
+
+test('ordinary assistant scripts can author elevated assets and inspect their actual bottom elevation', async () => {
+  const repository = await RoomRepository.create();
+  const edit = { families: [personFamily()], instances: [
+    { ...person('floating-person', .3), mounting: { kind: 'free-floating', elevation: 1.4 } },
+    { ...person('ceiling-person', .2, 2.7), mounting: { kind: 'ceiling', clearance: .1 } },
+  ], removeInstanceIds: [] };
+  const result = await prepareModelProposal(repository, request(repository, 'mounted-assets'), worker(async session => {
+    const output = await session.executeTool('run_model_script', { language: 'typescript', source: `
+      await model.previewAssets(${JSON.stringify(edit)});
+      const view = await model.inspect();
+      const placed = view.placement.assetInstances.find(item => item.entityId === 'floating-person');
+      if (placed?.elevation !== 1.4) throw new Error('Inspection lost mounting elevation.');
+      ${propose}
+    ` });
+    assert.equal(output.ok, true, JSON.stringify(output));
+  }));
+  assert.equal(result.status, 'ready');
+});

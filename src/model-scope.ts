@@ -76,7 +76,7 @@ export function parseModelScopeIndex(input: unknown): ModelScopeIndex {
       if (relationshipIds.has(edge.id) || edge.relation !== 'hosted-by') throw new Error('Invalid scope index relationship identity.');
       relationshipIds.add(edge.id);
     }
-    if ((edge.relation === 'hosted-by' && (edge.id === null || !['Door', 'Window'].includes(entities.get(edge.source)?.type ?? '') || entities.get(edge.target)?.type !== 'Wall'))
+    if ((edge.relation === 'hosted-by' && (entities.get(edge.target)?.type !== 'Wall' || (entities.get(edge.source)?.type === 'AssetInstance' ? edge.id !== null : edge.id === null || !['Door', 'Window'].includes(entities.get(edge.source)?.type ?? ''))))
       || (edge.relation === 'supported-by' && (entities.get(edge.source)?.type !== 'Furniture' || entities.get(edge.target)?.type !== 'Furniture'))
       || (edge.relation === 'instance-of' && (entities.get(edge.source)?.type !== 'AssetInstance' || entities.get(edge.source)?.familyId !== edge.target))
       || (edge.relation === 'contained-in' && !['Space', 'Level'].includes(entities.get(edge.target)?.type ?? ''))) throw new Error('Invalid scope index relation endpoints.');
@@ -177,6 +177,7 @@ export function createModelScopeIndex(graph: ModelGraph): ModelScopeIndex {
   for (const record of entities) {
     const source = graph.entities.find((entity) => entity.id === record.id);
     if (source?.type === 'Furniture' && source.supportId) edges.push({ id: null, relation: 'supported-by', source: record.id, target: source.supportId });
+    if (source?.type === 'AssetInstance' && source.mounting?.kind === 'wall') edges.push({ id: null, relation: 'hosted-by', source: record.id, target: source.mounting.wallId });
     if (record.familyId) edges.push({ id: null, relation: 'instance-of', source: record.id, target: record.familyId });
     for (const target of ordered([...record.spaceIds, ...record.levelIds])) {
       if (target !== record.id) edges.push({ id: null, relation: 'contained-in', source: record.id, target });
