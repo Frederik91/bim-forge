@@ -6,7 +6,7 @@ Epic: [#251](https://github.com/Frederik91/bim-forge/issues/251). Draft planning
 
 The maintainer accepted the Inside-first study direction on 2026-10-31 and requested an implementation plan. The reference is [draft PR #249](https://github.com/Frederik91/bim-forge/pull/249), commit `9f5802d3f3d428fd91d367fba71477a787b26ad1`. Production source was inspected at `bc7fbd392f036a6fda055599854f29670a27f279`; that is still main at planning time. The study is not merged or deployed, and accepting its direction is not merge authorization.
 
-This plan proposes implementation work. It does not authorize application changes, migrations, provider calls, deployment, or merging a pull request. Each implementation issue needs its own isolated attempt, acceptance evidence, validation, and draft change review. Geometry, coordination, persistence and permission changes retain their human review requirements.
+This plan originally proposed implementation work. The maintainer subsequently authorized orchestrated implementation with subagents through a verified local deployment on 2026-10-31. The single-engineer milestone is confirmed. Each issue retains its isolated worktree, acceptance evidence, validation and draft change review. Geometry, coordination, persistence and permission changes retain human merge review; no main-branch merge or production-data mutation is authorized by the local deployment goal. Current execution evidence is recorded in [epic #251](https://github.com/Frederik91/bim-forge/issues/251).
 
 The accepted experience keeps the model present, supports Inside, Plan, Section and Overview, and uses WASD and explicit mouse-look with Escape release. Fly uses Shift to ascend and Ctrl to descend. Conversations retain a fixed starting location, represented by a hovering 3D task agent, separately from their associated model objects or region. Selecting that agent opens the conversation and highlights its targets. Plan follows the approved drawing language using actual model geometry. A secondary task list provides retrieval.
 
@@ -18,7 +18,7 @@ Use multiple independent conversations at the same door and a region-only task a
 
 The maintainer confirmed single-engineer spatial workflow first on 2026-10-31. Team identity, personal/discipline/company authorization, shared presence and human communication follow separate gates; privacy design may proceed in parallel. Do not expose audience selectors as if they enforce privacy before the server supports them. Upstream deployed authentication has not been qualified by this planning exercise.
 
-Team collaboration is outside the first implementation milestone. Adding it requires a separately reviewed scope change and the identity/authorization gates before shared release. This scope confirmation does not launch implementation or authorize merge, provider calls or deployment.
+Team collaboration is outside the first implementation milestone. Adding it requires a separately reviewed scope change and the identity/authorization gates before shared release. Execution and local deployment were separately authorized as described above; the scope confirmation did not authorize a main merge or production-data changes.
 
 Time-linked speech, pointing and drawing remains explicitly deferred in [#250](https://github.com/Frederik91/bim-forge/issues/250). It is not required to ship this milestone.
 
@@ -133,7 +133,7 @@ Adopt the approved baseline into a token-bearing `DESIGN.md` and machine-readabl
 
 ## Delivery sequence
 
-Runtime implementation has not started. On 2026-10-31 the maintainer requested an epic with parallel subtasks. The numbered outcomes below are deliverables, not a serial implementation schedule. The parallel schedule and exclusive ownership rules below supersede the original step dependencies. Each issue gets a separate worktree and coherent draft PR; this organization does not launch implementation.
+Implementation is underway under the maintainer's explicit orchestration goal. On 2026-10-31 the maintainer requested an epic with parallel subtasks. The numbered outcomes below are deliverables, not a serial implementation schedule. The parallel schedule and exclusive ownership rules supersede the original step dependencies. Each issue gets a separate worktree and coherent draft PR. Named combined branches provide reviewed dependency baselines without merging main.
 
 | Step | Outcome | Dependencies | Review class |
 | --- | --- | --- | --- |
@@ -161,6 +161,8 @@ Once those contracts are reviewed, six construction streams can run side by side
 | [#263 Agent graphics](https://github.com/Frederik91/bim-forge/issues/263) | Proposed spatial-task-layer.ts and graphics/picking/disposal tests | Consume #261; provide readonly figures/hit identities to #257. No viewer lifecycle, schemas, transport or room-app. Test hosts are not a second production owner. |
 | [#264 Acceptance preparation](https://github.com/Frederik91/bim-forge/issues/264) | Proposed tests/fixtures/spatial-workspace and dedicated harness helpers | Consume #261; publish stable fixture identities/expected deltas for lane consumers and #258. No runtime or validator changes. One fixture owner. |
 | #259 Privacy design | Participant/access/publication design contract | Independent future-facing design; no runtime permission changes. Shared release waits for enforcement and qualification. |
+
+Three grounded supporting tasks complete the delivery contract: [#265](https://github.com/Frederik91/bim-forge/issues/265) repairs pre-existing Windows test resource cleanup without changing assertions; [#270](https://github.com/Frederik91/bim-forge/issues/270) supplies the bounded centred-door operation required by #264's actual worker; and [#279](https://github.com/Frederik91/bim-forge/issues/279) provides an isolated local launcher that separates preview model storage from the existing AI connection. #264 consumes #254's placement contract and #270's real operation. These tasks add no team, voice or synchronized-drawing scope.
 
 ```mermaid
 flowchart TD
@@ -228,7 +230,7 @@ Keep task-agent meshes out of construction entities, exports, geometry queries a
 
 Prepare stable shared acceptance fixtures and deterministic harness helpers early in #264 while features develop. #258 reuses those plus existing viewer, shell, conversation, queue, source-retention and accepted-head tests for the final combined journey over disposable fixtures and a copy of a real project. Run strict validation plus relevant behavior/browser suites and attach output, before/after captures and accepted-model delta. Exercise restart, concurrency limits, cancellation cleanup, late results, stale proposal rejection, linked-reference picking and recovery.
 
-Deterministic worker qualification comes first. A separately scoped, budgeted connected-provider attempt is required before claiming that the complete AI journey is qualified. It needs explicit execution authorization; this plan does not authorize provider calls or production data changes. Preserve the three-failed-attempt stop rule and existing validators. A maintainer decides release and deployment after evidence; no automatic rollout is included.
+Deterministic worker qualification comes first. A separately scoped, bounded connected-provider attempt is required before claiming that the complete AI journey is qualified; its fixture, call budget and evidence must be recorded before execution. The general repair-attempt renewal is not an unbounded provider budget. The maintainer explicitly permitted as many repair attempts as needed for this epic on 2026-10-31; retain attempt evidence and every existing validator. This session override does not change factory policy or authorize production-data mutation. Local deployment follows verified evidence under the explicit goal; main merge and any production rollout remain human decisions.
 
 The first release proof uses a disposable native project with a hosted 900 mm door. Start a task, navigate elsewhere, reopen it after restart, and inspect a real 1100 mm proposal. Before acceptance, the accepted door must remain 900 mm. After explicit acceptance, independent assertions check the proposed width, preserved opening centre, hosting relationship and complete expected delta, including any required offset change. The task origin stays fixed. Add a second task at the same door and a region-only task, plus cancellation, a late result and an incompatible concurrent proposal. Each must retain its own identity and existing acceptance guards. A deterministic run proves the integration; it does not replace the later connected-provider gate.
 
