@@ -2,6 +2,8 @@ import { Scene } from '@babylonjs/core/scene.js';
 import { RegisterFileTools } from '@babylonjs/core/Misc/fileTools.pure.js';
 import { RegisterRay } from '@babylonjs/core/Culling/ray.pure.js';
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine.js';
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera.js';
+import type { Camera } from '@babylonjs/core/Cameras/camera.js';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera.js';
 import { Vector3, Matrix } from '@babylonjs/core/Maths/math.vector.js';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color.js';
@@ -124,6 +126,18 @@ function woodTexture(scene: Scene): RawTexture {
 export class ModelScene {
   readonly scene: Scene;
   readonly camera: ArcRotateCamera;
+  readonly insideCamera: FreeCamera;
+  private antialiasing: FxaaPostProcess | null = null;
+  get activeCamera(): Camera { return this.scene.activeCamera ?? this.camera; }
+
+  useCamera(camera: Camera): void {
+    if (camera === this.activeCamera) return;
+    this.activeCamera.detachControl();
+    this.antialiasing?.dispose();
+    this.scene.activeCamera = camera;
+    this.antialiasing = this.scene.getEngine().getRenderingCanvas() ? new FxaaPostProcess('model-antialiasing', 1, camera) : null;
+    this.updateCutaway();
+  }
   private readonly sun: DirectionalLight;
   private readonly ambient: HemisphericLight;
   private readonly shadow: ShadowGenerator;
@@ -162,7 +176,10 @@ export class ModelScene {
     this.scene.imageProcessingConfiguration.toneMappingType = 1;
     this.scene.imageProcessingConfiguration.exposure = 1.15;
     this.camera = new ArcRotateCamera('room-camera', -Math.PI / 2.4, .86, 10, new Vector3(3, .5, 2), this.scene);
-    if (engine.getRenderingCanvas()) new FxaaPostProcess('model-antialiasing', 1, this.camera);
+    this.insideCamera = new FreeCamera('inside-camera', new Vector3(0, 1.6, 0), this.scene);
+    this.insideCamera.inputs.clear(); this.insideCamera.minZ = .05; this.insideCamera.maxZ = 500;
+    this.scene.activeCamera = this.camera;
+    if (engine.getRenderingCanvas()) this.antialiasing = new FxaaPostProcess('model-antialiasing', 1, this.camera);
     this.camera.minZ = .05; this.camera.maxZ = 500;
     this.camera.lowerBetaLimit = .08; this.camera.upperBetaLimit = Math.PI / 2 - .02;
     this.camera.lowerRadiusLimit = 1; this.camera.upperRadiusLimit = 150;
@@ -550,10 +567,10 @@ export class ModelScene {
       const wall = part.wallId ? this.walls.get(part.wallId) : null;
       let visible = (this.levelId === null || part.levelIds.includes(this.levelId)) && (this.roofVisible || part.surface !== 'roof');
       const changedWallPart = this.comparison && part.objectId && this.changes.has(part.objectId);
-      if (visible && this.cutaway && wall && !part.before && !changedWallPart) {
+      if (visible && this.cutaway && this.activeCamera === this.camera && wall && !part.before && !changedWallPart) {
         const midpoint = modelPoint((wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2);
         const outward = wall.start[1] === wall.end[1] ? new Vector3(0, 0, midpoint.z - centre.z) : new Vector3(midpoint.x - centre.x, 0, 0);
-        visible = Vector3.Dot(outward, this.camera.position.subtract(midpoint)) <= 0;
+        visible = Vector3.Dot(outward, this.activeCamera.position.subtract(midpoint)) <= 0;
       }
       part.mesh.setEnabled(visible);
     }
@@ -583,7 +600,7 @@ export class ModelScene {
   surfaceAt(x: number, y: number): { position: Vector3; normal: Vector3 } | null {
     const hit = this.batches.pick(x, y, mesh => mesh.isPickable && this.pickParts.get(mesh.uniqueId)?.before === false);
     if (!hit) return null;
-    const ray = this.scene.createPickingRay(x, y, Matrix.Identity(), this.camera);
+    const ray = this.scene.createPickingRay(x, y, Matrix.Identity(), this.activeCamera);
     const source = ray.intersectsMesh(hit.mesh, false);
     if (!source.hit || !source.pickedPoint || Vector3.Distance(source.pickedPoint, hit.point) > .00001) return null;
     const normal = source.getNormal(true);
@@ -633,7 +650,7 @@ export class ModelScene {
     if (!item || !source || item.type === 'AssetFamily' || this.levelId !== null && entityLevel(source, item)?.id !== this.levelId
       && !(item.type === 'Stair' && item.toLevelId === this.levelId) || !this.roofVisible && item.type === 'Roof') return null;
     const engine = this.scene.getEngine();
-    const projected = Vector3.Project(entityAnchor(item, source), Matrix.IdentityReadOnly, this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
+    const projected = Vector3.Project(entityAnchor(item, source), Matrix.IdentityReadOnly, this.scene.getTransformMatrix(), this.activeCamera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
     if (projected.z < 0 || projected.z > 1) return null;
     return [projected.x / engine.getRenderWidth() * width, projected.y / engine.getRenderHeight() * height];
   }
