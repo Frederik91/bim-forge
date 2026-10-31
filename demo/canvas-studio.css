@@ -271,7 +271,7 @@ body.canvas-studio {
 .canvas-studio :is(.spatial-conversation-tools button, .spatial-task-label) { font-size: 12px; }
 .canvas-studio :is(.spatial-conversation-tools button, .spatial-task-list button, .spatial-task-launcher, .spatial-task-label):hover { background: var(--studio-soft); }
 .canvas-studio .spatial-conversation-tools button:disabled { color: var(--spatial-color-disabled-ink); background: var(--spatial-color-disabled-fill); }
-.canvas-studio .spatial-conversation .workspace-context-content { overflow: auto; overscroll-behavior: contain; }
+.canvas-studio .spatial-conversation .workspace-context-content { flex: 1 1 0; min-height: 0; overflow: hidden; }
 .canvas-studio .spatial-conversation .chat-workspace { min-height: 0; }
 .canvas-studio .spatial-placement-notice { flex: 0 0 auto; padding: 8px 12px; margin: 0; font-size: 12px; color: var(--muted); }
 .canvas-studio .spatial-task-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 7; }
@@ -288,14 +288,16 @@ body.canvas-studio {
   .canvas-studio .spatial-conversation[data-expanded="true"] { max-height: 88%; }
   .canvas-studio .spatial-task-list { top: 200px; }
 }
-.canvas-studio .spatial-conversation .workspace-context-content { flex: 1 1 auto; }
-.canvas-studio .spatial-conversation .chat-workspace.request-pane { flex: 0 0 auto; min-height: min-content; overflow: visible; }
-.canvas-studio .spatial-conversation #request-chat-mount { flex: 0 0 auto; max-height: 220px; overflow: auto; }
+.canvas-studio .spatial-conversation .chat-workspace.request-pane { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.canvas-studio .spatial-conversation #request-chat-mount { flex: 1 1 0; min-height: 0; max-height: none; overflow: auto; overscroll-behavior: contain; }
+.canvas-studio .spatial-conversation .chat-toolbar { flex: 0 0 auto; }
+.canvas-studio .spatial-conversation .chat-composer-form { flex: 0 0 auto; max-height: 55%; min-height: 76px; overflow: auto; overscroll-behavior: contain; }
 .canvas-studio .spatial-conversation-tools { flex: 0 0 auto; }
 @media (max-width: 900px) {
   .canvas-studio .workspace-stage .model-card-heading > div:first-child { flex: 1 0 100%; }
   .canvas-studio .workspace-stage .model-card-heading .view-switch { flex: 1 1 auto; }
   .canvas-studio .spatial-task-list { top: 120px; bottom: auto; }
+  .canvas-studio #workspace-context-toggle { display: none; }
   .canvas-studio .spatial-conversation .workspace-panel-heading { min-height: 44px; }
   .canvas-studio .spatial-conversation .spatial-placement-notice { max-height: 60px; overflow: auto; }
 }
