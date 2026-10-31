@@ -7,7 +7,8 @@ param(
     'demo/canvas-studio-browser.test.ts', 'demo/request-chat.test.ts', 'demo/workspace-shell.test.ts',
     'demo/spatial-plan-integration-browser.test.ts', 'demo/spatial-tasks-browser.test.ts', 'demo/spatial-tasks.test.ts',
     'demo/spatial-markup-browser.test.ts', 'demo/view-navigation-browser.test.ts', 'demo/model-plan-browser.test.ts',
-    'demo/spatial-task-layer-browser.test.ts', 'demo/design-system-browser.test.ts', 'demo/preview-build.test.ts'
+    'demo/spatial-task-layer-browser.test.ts', 'demo/design-system-browser.test.ts', 'demo/preview-build.test.ts',
+    'demo/spatial-workspace-browser.test.ts', 'scripts/serve-spatial-preview.test.ts'
   )
 )
 $ErrorActionPreference = 'Stop'
@@ -18,7 +19,7 @@ $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 if (Test-Path -LiteralPath $OutputRoot) { throw 'OutputRoot must be a fresh disposable directory.' }
 if ($Tests.Count -lt 1) { throw 'Select at least one complete test file.' }
 foreach ($test in $Tests) {
-  if ($test -notmatch '^demo/[a-z0-9-]+\.test\.ts$') { throw "Invalid test path: $test" }
+  if ($test -notmatch '^(demo|scripts)/[a-z0-9-]+\.test\.ts$') { throw "Invalid test path: $test" }
 }
 New-Item -ItemType Directory -Path $OutputRoot | Out-Null
 $context = Join-Path $OutputRoot 'context'
@@ -96,7 +97,7 @@ for (const file of source.tests) {
   const name = path.basename(file, '.test.ts'); const directory = '/artifacts/'+name;
   fs.mkdirSync(directory,{recursive:true});
   const env = {...process.env, QUAL_ARTIFACTS:directory, PLAN_INTEGRATION_ARTIFACTS:directory,
-    MARKUP_BROWSER_EVIDENCE:directory, TASK_AGENT_EVIDENCE:directory};
+    MARKUP_BROWSER_EVIDENCE:directory, TASK_AGENT_EVIDENCE:directory, SPATIAL_WORKSPACE_ARTIFACTS:directory};
   if (file === 'demo/view-navigation-browser.test.ts') env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = chromium.executablePath();
   console.log(`START ${file}`);
   const {result,log} = run('node',['--test','--test-concurrency=1','--test-reporter=tap',file],directory+'/test.tap',env);
