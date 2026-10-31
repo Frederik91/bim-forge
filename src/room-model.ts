@@ -1281,9 +1281,21 @@ export class RoomRepository {
     }
     const repository = RoomRepository.#restoreState(value);
     for (const review of repository.reviews()) if (review.geometryEvidence !== undefined) {
-      await assertGeometryEvidenceBound(readGeometryEvidence(review.geometryEvidence), repository.view(review.proposalRevisionId).snapshot);
+      await repository.#assertGeometryReview(review);
     }
     return repository;
+  }
+
+  async #assertGeometryReview(review: ProposalReview): Promise<void> {
+    if (review.geometryEvidence === undefined) return;
+    const snapshot = this.view(review.proposalRevisionId).snapshot;
+    const applied = review.decision.status === 'pending' ? undefined
+      : this.view(review.decision.appliedRevisionId ?? review.proposalRevisionId);
+    const cut = applied?.parentId ?? review.baseRevisionId;
+    await assertGeometryEvidenceBound(readGeometryEvidence(review.geometryEvidence), snapshot, {
+      history: this.geometryHistory(review.target?.target ?? { kind: 'main' }, cut), projectId: this.projectId,
+      requestId: review.requestId, baseRevisionId: review.baseRevisionId, snapshot,
+    });
   }
 
   /** Storage has already verified revision hashes; synchronously check native authority. */
@@ -1776,7 +1788,7 @@ export class RoomRepository {
       ...(hasGeometryEvidence ? { geometryEvidence: details.geometryEvidence } : {}),
       decision: { status: 'pending', decisionId: null, actor: null },
     }, next.#revisions, branchMap(next.#state.branches), this.projectId);
-    if (record.geometryEvidence !== undefined) await assertGeometryEvidenceBound(readGeometryEvidence(record.geometryEvidence), next.view(record.proposalRevisionId).snapshot);
+    if (record.geometryEvidence !== undefined) await next.#assertGeometryReview(record);
     const reviews = [...next.reviews(), record];
     if (reviews.some((item, index) => reviews.findIndex((other) => other.requestId === item.requestId || other.proposalName === item.proposalName) !== index)) {
       fail('Duplicate proposal review identity.');

@@ -395,7 +395,9 @@ test('a review-only continuation inherits authenticated geometry dependencies an
       const proposed = await RoomRepository.restore(child.result?.project); const review = proposed.review(child.request.proposalName);
       const inherited = readGeometryEvidence(review.geometryEvidence);
       assert.equal(inherited.requestId, 'geometry-child'); assert.equal(inherited.measurements.length, 1);
-      assert.equal(inherited.inheritedFrom?.[0]?.requestId, 'geometry-parent');
+      assert.equal(inherited.version, 2);
+      assert.ok(inherited.version === 2);
+      assert.equal(inherited.lineage.ancestors[0]?.requestId, 'geometry-parent');
       assert.ok(inherited.receipts.some(receipt => receipt.reads.some(read => read.kind === 'query' && read.members.some(ref => ref.kind === 'ifc' && ref.revision === 'v1'))));
       assert.deepEqual(review.scriptExecutions?.flatMap(execution => execution.calls.filter(call => call.method.startsWith('geometry.'))), []);
       assert.notEqual(review.geometryEvidence, originalEvidence);

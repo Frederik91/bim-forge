@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomRepository, previewAssets, diffSnapshots } from './room-model.ts';
-import { GeometryEvidenceSession } from './geometry-evidence.ts';
+import { GeometryEvidenceSession, DraftContinuation } from './geometry-evidence.ts';
 import { FixtureGeometrySource, cubeMeasurement } from './geometry-evidence.fixture.ts';
 
 test('a conversation can remove a previously proposed cube while retaining the other cube and its clearance', async t => {
@@ -11,8 +11,9 @@ test('a conversation can remove a previously proposed cube while retaining the o
   const base = repository.view(baseRevisionId).snapshot;
   const native = { snapshot: base, revisionId: baseRevisionId, target: { kind: 'main' } } satisfies Parameters<typeof GeometryEvidenceSession.open>[0]['native'];
   const source = new FixtureGeometrySource();
+  const history = repository.geometryHistory();
   const first = await GeometryEvidenceSession.open({ source, projectId: repository.projectId, requestId: 'draft-generation-one', native,
-    signal: new AbortController().signal });
+    history, chatId: 'draft-chat', signal: new AbortController().signal });
   t.after(() => first.close());
   const draft = previewAssets(base, {
     families: [{ id: 'evidence-cube', type: 'AssetFamily', name: 'Cube', description: 'Synthetic closed cube',
@@ -31,7 +32,8 @@ test('a conversation can remove a previously proposed cube while retaining the o
   assert.deepEqual(diffSnapshots(draft, remaining).entities.removed.map(entity => entity.id), ['trial-cube']);
   assert.equal(base.entities.some(entity => entity.id === 'trial-cube'), false);
   const next = await GeometryEvidenceSession.open({ source, projectId: repository.projectId, requestId: 'draft-generation-two', native,
-    inherited, signal: new AbortController().signal });
+    history, chatId: 'draft-chat', continuation: await DraftContinuation.fromPrior({ chatId: 'draft-chat', history,
+      predecessor: { evidence: inherited, snapshot: draft } }), signal: new AbortController().signal });
   t.after(() => next.close());
   assert.ok(await next.seal(remaining));
   assert.equal(repository.serialize(), acceptedBytes);
