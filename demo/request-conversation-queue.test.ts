@@ -198,3 +198,21 @@ test('continuation rebases a private draft over unrelated acceptance and fails e
     }
   });
 });
+
+test('region-only replies deliberately clear the previous native selection and survive storage restart', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'request-markup-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'queue.sqlite'); const repo = await RoomRepository.create();
+  let queue = await ChangeRequests.open(file, () => null);
+  await queue.submit(repo.serialize(), initial(repo, 'old-selection'));
+  const visual = { snapshot: { kind: 'accepted', revisionId: repo.head('main') }, view: '3d', levelId: null,
+    selectedObjectIds: [], annotations: [{ kind: 'rectangle', corners: [[1,1,0],[2,1,0],[2,3,0],[1,3,0]], label: 'Area' }] };
+  await queue.appendMessage('old-selection', { ...reply(queue, 'old-selection', 'new-region', 'Add a kitchen here.', repo.head('main')), visual });
+  assert.deepEqual(queue.get('old-selection').request.selectedObjectIds, []);
+  assert.equal(queue.project(repo.projectId), repo.serialize());
+  await queue.close(); queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  const messages = queue.get('old-selection').conversation?.messages;
+  const last = messages?.findLast(item => item.kind === 'user');
+  assert.ok(last?.kind === 'user'); assert.deepEqual(last.visual, visual);
+  assert.deepEqual(queue.get('old-selection').request.selectedObjectIds, []);
+});

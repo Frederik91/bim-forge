@@ -4,6 +4,7 @@ import { Check } from 'typebox/value';
 import { plainScopeData } from './model-scope-contract.ts';
 import { parseRequestSources } from './request-sources.ts';
 import { EvidencePinSchema, MAX_EVIDENCE_PINS, parseEvidencePin } from './model-evidence.ts';
+import { SpatialMarkupSchema, parseSpatialMarkup } from './spatial-markup.ts';
 
 export const CONVERSATION_LIMITS = Object.freeze({ messages: 48, userTurns: 20, textCharacters: 1000, sourceFiles: 4, sourceBytes: 12 * 1024 * 1024 });
 const exact = { additionalProperties: false };
@@ -19,9 +20,13 @@ export const ConversationVisualSchema = Type.Object({
   annotations: Type.Array(Type.Union([
     Type.Object({ kind: Type.Literal('pin'), position: point, label: Type.String({ maxLength: 120 }) }, exact),
     Type.Object({ kind: Type.Literal('arrow'), from: point, to: point, label: Type.String({ maxLength: 120 }) }, exact),
+    SpatialMarkupSchema,
   ]), { maxItems: 16 }),
 }, exact);
 export type ConversationVisual = Static<typeof ConversationVisualSchema>;
+function validateAnnotations(visual: ConversationVisual): void {
+  for (const annotation of visual.annotations) if (annotation.kind !== 'pin' && annotation.kind !== 'arrow') parseSpatialMarkup(annotation);
+}
 export const ConversationReplySchema = Type.Object({ messageId: id, expectedSequence: Type.Integer({ minimum: 0 }), baseRevisionId: revision,
   text, sources: Type.Array(source, { maxItems: 4 }), visual: Type.Union([ConversationVisualSchema, Type.Null()]),
   evidencePins: Type.Optional(Type.Array(EvidencePinSchema, { maxItems: MAX_EVIDENCE_PINS })) }, exact);
@@ -53,6 +58,7 @@ export function parseConversationReply(input: unknown): ConversationReply {
   if (!Check(ConversationReplySchema, value)) throw new Error('Invalid conversation reply. Send text, immutable source references and snapshot-bound visual evidence.');
   if (value.sources.length) parseRequestSources(value.sources);
   evidencePins(value.evidencePins);
+  if (value.visual) validateAnnotations(value.visual);
   return value;
 }
 export function parseConversationMessage(input: unknown): ConversationMessage {
@@ -60,6 +66,7 @@ export function parseConversationMessage(input: unknown): ConversationMessage {
   if (!Check(ConversationMessageSchema, value)) throw new Error('Invalid stored conversation message.');
   if (value.kind === 'user' && value.sources.length) parseRequestSources(value.sources);
   if (value.kind === 'user') evidencePins(value.evidencePins);
+  if (value.kind === 'user' && value.visual) validateAnnotations(value.visual);
   return value;
 }
 export function parseRequestConversation(input: unknown): RequestConversation {
@@ -78,5 +85,6 @@ export function parseClarification(input: unknown): Clarification {
 export function parseConversationVisual(input: unknown): ConversationVisual {
   const value = plainScopeData(input);
   if (!Check(ConversationVisualSchema, value)) throw new Error('Invalid snapshot-bound visual evidence.');
+  validateAnnotations(value);
   return value;
 }

@@ -943,7 +943,7 @@ export class ChangeRequests {
     }
     const sources = [...new Map([...conversation.messages.flatMap(message => message.kind === 'user' ? message.sources : []), ...reply.sources].map(source => [source.id, source])).values()];
     if (sources.length) parseRequestSources(sources);
-    const selected = reply.visual?.snapshot.kind === 'accepted' && reply.visual.selectedObjectIds.length ? reply.visual.selectedObjectIds : ticket.request.selectedObjectIds;
+    const selected = reply.visual?.snapshot.kind === 'accepted' ? reply.visual.selectedObjectIds : ticket.request.selectedObjectIds;
     const bound = validateModelProposalRequest(repository, { requestId: reply.messageId, baseRevisionId: reply.baseRevisionId,
       ...(target ? { target } : {}),
       ...((reply.evidencePins ?? ticket.request.evidencePins) ? { evidencePins: reply.evidencePins ?? ticket.request.evidencePins } : {}),

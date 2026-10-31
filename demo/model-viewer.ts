@@ -1,8 +1,8 @@
 import { Engine } from '@babylonjs/core/Engines/engine.js';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
+import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { FileToolsOptions } from '@babylonjs/core/Misc/fileTools.pure.js';
 import { modelChanges } from '../src/model-delta-view.ts';
-import { entityLevel } from '../src/building-levels.ts';
+import { entityLevel, levels } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { ModelScene } from './model-scene.ts';
 import { LinkedModelLayer } from './linked-model-render.ts';
@@ -11,6 +11,8 @@ import type { LinkedSelection } from '../src/linked-model.ts';
 import type { RenderingMode } from './model-scene.ts';
 import type { ModelSnapshot, Point, ProjectId } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
+import { SpatialMarkupView } from './spatial-markup-view.ts';
+import type { MarkupPoint, MarkupTool, SpatialMarkup } from '../src/spatial-markup.ts';
 
 export interface ViewerState {
   projectId?: ProjectId;
@@ -24,6 +26,7 @@ export interface ViewerState {
   reference: SpatialReference | null;
   levelId?: string | null;
   roofVisible?: boolean;
+  markup?: { binding: string; editable: boolean; annotations: readonly SpatialMarkup[]; references: readonly SpatialMarkup[] };
 }
 type ActiveViewerState = ViewerState & { levelId: string | null; roofVisible: boolean };
 interface ViewerActions {
@@ -32,6 +35,8 @@ interface ViewerActions {
   inspect: (id: string, snapshot: ModelSnapshot) => void;
   reference: (reference: SpatialReference) => void;
   keyboardReference: () => void;
+  markup?: (annotations: readonly SpatialMarkup[], binding: string) => boolean;
+  markupChat?: () => void;
 }
 interface MarkerDrag { id: number; origin: Point; target: SpatialReference | null; moved: boolean }
 
@@ -80,6 +85,7 @@ export class ModelViewer {
   private readonly engine: Engine;
   private readonly model: ModelScene;
   private readonly linked: LinkedModelLayer;
+  private readonly markup: SpatialMarkupView | null;
   private linkedSelection: LinkedSelection | null = null;
   private readonly observer: ResizeObserver;
   private state: ActiveViewerState | null = null;
@@ -122,6 +128,11 @@ export class ModelViewer {
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
     this.linked = new LinkedModelLayer(this.model.scene);
+    this.markup = actions.markup ? new SpatialMarkupView({ scene: this.model.scene, camera: this.model.camera, canvas: this.canvas,
+      surface: (x, y) => this.markupSurface(x, y), changed: (annotations, binding) => actions.markup?.(annotations, binding) ?? false,
+      begin: () => { this.endDrag(false); this.pointer.reset(); this.hover(null); }, render: () => { this.frames = 3; },
+      attach: () => actions.markupChat?.() }) : null;
+    if (this.markup) this.root.append(this.markup.root);
     this.model.scene.skipPointerMovePicking = true;
     this.model.camera.attachControl(this.canvas, false);
     this.model.scene.executeWhenReady(() => { this.frames = 3; });
@@ -187,7 +198,7 @@ export class ModelViewer {
   }
 
   private readonly visibility = (): void => {
-    if (document.hidden) { this.pointer.reset(); this.hover(null); this.endDrag(false); this.engine.stopRenderLoop(this.renderFrame); }
+    if (document.hidden) { this.pointer.reset(); this.hover(null); this.endDrag(false); this.markup?.hide(); this.engine.stopRenderLoop(this.renderFrame); }
     else if (this.active) { this.frames = 3; this.engine.runRenderLoop(this.renderFrame); }
   };
 
@@ -195,6 +206,19 @@ export class ModelViewer {
     const rect = this.canvas.getBoundingClientRect();
     return [event.clientX - rect.left, event.clientY - rect.top];
   }
+
+  private markupSurface(x: number, y: number): { position: MarkupPoint; normal: MarkupPoint } | null {
+    const native = this.model.surfaceAt(x, y);
+    const linked = this.model.scene.pick(x, y, mesh => this.linked.pick(mesh) !== null);
+    const ray = this.model.scene.createPickingRay(x, y, Matrix.Identity(), this.model.camera);
+    const picked = linked?.hit && linked.pickedPoint && (!native || linked.distance < Vector3.Distance(ray.origin, native.position))
+      ? { position: linked.pickedPoint, normal: linked.getNormal(true) } : native;
+    if (!picked?.normal) return null;
+    const p = picked.position; const n = picked.normal;
+    return { position: [p.x, p.z, p.y], normal: [n.x, n.z, n.y] };
+  }
+
+  startMarkup(tool: MarkupTool = 'rectangle'): void { this.markup?.start(tool); }
 
   private hover(id: string | null): void {
     this.linked.hover(null);
@@ -246,6 +270,7 @@ export class ModelViewer {
     const camera = this.model.camera; camera.update();
     const signature = `${camera.alpha}:${camera.beta}:${camera.radius}:${camera.target.toString()}`;
     if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; this.hover(null); }
+    this.markup?.flush();
     const ready = this.model.scene.isReady();
     // Async shaders/textures can become ready after the last budgeted frame.
     // Render that transition before publishing readiness or going idle.
@@ -298,12 +323,17 @@ export class ModelViewer {
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
     if (focusChanged || levelChanged) this.model.frame(state.focusId);
     this.model.setCutaway(state.cutaway);
+    const floor = (next.levelId ? levels(state.snapshot).find(level => level.id === next.levelId) : entityLevel(state.snapshot, next.selectedId))
+      ?? [...levels(state.snapshot)].sort((a, b) => a.elevation - b.elevation)[0];
+    this.markup?.update({ binding: state.markup?.binding ?? '', enabled: !!state.markup?.editable && state.interactive,
+      annotations: state.markup?.annotations ?? [], references: state.markup?.references ?? [],
+      floor: { elevation: floor?.elevation ?? 0, name: floor?.name ?? 'Model floor' } });
     if (!this.drag) this.model.mark(state.reference);
     this.updateCaption(); this.frames = 3; this.engine.resize();
     this.active = true; if (!document.hidden) this.engine.runRenderLoop(this.renderFrame);
   }
 
-  hide(): void { this.endDrag(false); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
+  hide(): void { this.endDrag(false); this.markup?.hide(); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
   setLinkedModels(links: readonly LinkedDisplay[]): void {
     this.linked.setLinks(links); this.frames = 3;
     this.root.dataset.linkedModels = String(links.filter(link => link.visible).length);
@@ -328,7 +358,7 @@ export class ModelViewer {
   frame(): void { this.pointer.cancelClick(); this.hover(null); this.model.frame(); this.frames = 3; }
   dispose(): void {
     this.hide(); this.observer.disconnect(); document.removeEventListener('visibilitychange', this.visibility);
-    this.linked.dispose(); this.model.dispose(); this.engine.dispose();
+    this.markup?.dispose(); this.linked.dispose(); this.model.dispose(); this.engine.dispose();
     if (FileToolsOptions.PreprocessUrl === this.imageUrl) FileToolsOptions.PreprocessUrl = this.previousImageUrl;
     for (const url of this.embeddedImages.values()) URL.revokeObjectURL(url);
     this.embeddedImages.clear();

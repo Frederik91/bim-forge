@@ -16,6 +16,8 @@ const floor = { level: { id: 'reference-level', name: 'Reference level' }, wallT
   openings: [{ id: 'entry', name: 'Entry', type: 'Door', roomId: 'living', side: 'south', offsetMm: 600, widthMm: 900, heightMm: 2100 },
     { id: 'connection', name: 'Internal door', type: 'Door', roomId: 'living', side: 'east', offsetMm: 850, widthMm: 900, heightMm: 2100 }] };
 const summary = 'Reconstruct the referenced two-room floor.';
+let firstPreviewGate: Promise<void> = Promise.resolve();
+let releaseFirstPreview: () => void = () => {};
 const review = { summary, rationale: 'Confirmed drawing dimension: 6000 mm between wall centrelines.',
   constraints: 'Retain unrelated contents and wait for explicit acceptance.',
   uncertainty: 'The 4000 mm depth, 150 mm walls and 2700 mm height come from drawing labels, not a site survey. Other proportions are inferred; no construction accuracy.',
@@ -37,6 +39,7 @@ const worker: ModelWorker = { identity: { provider: 'test', model: 'guided-floor
     : `await model.inspect();await model.previewFloor(${JSON.stringify(floor)});return {kind:'propose',review:${JSON.stringify(review)}};`;
   const result = await session.executeTool('run_model_script', { language: 'typescript', source });
   assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.done, true);
+  if (!edit) await firstPreviewGate;
 } };
 
 async function savedProject(page: Page, base: string, id: string): Promise<RoomRepository> {
@@ -66,6 +69,8 @@ async function inspectAndAccept(page: Page, label: string): Promise<void> {
 }
 
 test('guided floor reconstruction through shipped desktop/phone UI preserves source, review and target authority', { timeout: 150_000 }, async t => {
+  firstPreviewGate = new Promise<void>(resolve => { releaseFirstPreview = resolve; });
+  t.after(() => releaseFirstPreview());
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'guided-floor-'));
   const artifacts = process.env.QUAL_ARTIFACTS ?? directory; await fs.mkdir(artifacts, { recursive: true });
   let server = await createDemoServer({ modelWorker: worker, backlogFile: path.join(directory, 'queue.sqlite') });
@@ -84,7 +89,8 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   });
   await context.tracing.start({ screenshots: true, snapshots: true });
   page.setDefaultTimeout(15_000);
-  page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => { void dialog.accept(); });
+  page.on('pageerror', error => { errors.push(error.message); void fs.appendFile(path.join(artifacts, 'page-errors.jsonl'), JSON.stringify({ message: error.message, stack: error.stack }) + '\n'); });
+  page.on('dialog', dialog => { void dialog.accept(); });
   await page.goto(base); await page.locator('#project-template').selectOption('room');
   await page.locator('#project-name').fill('Guided synthetic floor'); await page.locator('#create-project').click();
   await page.locator('#open-chat').click();
@@ -107,6 +113,10 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   const ticket = await send(page);
   const before = await savedProject(page, base, ticket.projectId);
   const root = before.head('main');
+  await page.locator('#workspace-shell[data-chat-model="live"]').waitFor();
+  assert.equal(await page.locator('#visual-panel').isVisible(), false, 'Accepted-model location tools cannot use a tentative replacement floor.');
+  assert.equal((await savedProject(page, base, ticket.projectId)).head('main'), root);
+  releaseFirstPreview();
   for (let attempt = 0; attempt < 100; attempt++) {
     const state: unknown = await (await page.request.get(`${base}/api/change-requests/${ticket.id}`)).json();
     assert.ok(state && typeof state === 'object' && 'ticket' in state && state.ticket && typeof state.ticket === 'object' && 'state' in state.ticket);

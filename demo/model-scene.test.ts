@@ -453,6 +453,9 @@ test('real picked IDs drive distinct purple hover and blue selection without mut
     const materialCount = viewer.scene.materials.length;
     const screen = Vector3.Project(modelPoint(3.5, 3, .751), Matrix.IdentityReadOnly, viewer.scene.getTransformMatrix(), viewer.camera.viewport.toGlobal(800, 600));
     const id = viewer.objectAt(screen.x, screen.y); assert.equal(id, 'desk-test'); assert.ok(id);
+      const pickedSurface = viewer.surfaceAt(screen.x, screen.y); assert.ok(pickedSurface, 'Actual source triangles provide the drawing plane, including batched mode.');
+      assert.ok(Math.abs(pickedSurface.position.y - .75) < .002);
+      assert.ok(Math.abs(Math.abs(pickedSurface.normal.y) - 1) < .00001);
     viewer.select('table-test'); viewer.hover(id); viewer.scene.render();
     const desk = meshes.filter(mesh => mesh.name.startsWith('desk-test')); const table = meshes.filter(mesh => mesh.name.startsWith('table-test'));
     assert.ok(desk.length && table.length);

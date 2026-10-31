@@ -47,20 +47,88 @@ function inputEnvelope(value: unknown): void {
   visit(value, 0);
   if (bytes > 16 * 1024 * 1024) throw new Error('Geometry worker input exceeds the byte envelope.');
 }
+type Admission = { signal?: AbortSignal; deadline: number; aborted: GeometrySessionError; expired: GeometrySessionError };
+type Waiter = { admit: () => void };
+type ManagedWorker = { instance: Worker; stop: () => Promise<void> };
 let activeWorkers = 0;
-function worker(data: unknown): Worker {
-  if (activeWorkers >= 4) throw new GeometrySessionError('worker-failed', 'Geometry worker concurrency limit reached.');
+// Two persistent proposal sessions normally leave two slots for validation. Direct callers
+// must still close their sessions: queued admissions never borrow a live worker's slot.
+const maxWaitingWorkers = 16;
+const waitingWorkers: Waiter[] = [];
+function admissionFailure(admission: Admission): GeometrySessionError | null {
+  if (admission.signal?.aborted) return admission.aborted;
+  return performance.now() >= admission.deadline ? admission.expired : null;
+}
+function reserveWorker(admission: Admission): Promise<() => void> {
+  return new Promise((resolve, reject) => {
+    const failure = admissionFailure(admission);
+    if (failure) { reject(failure); return; }
+    if (activeWorkers >= 4 && waitingWorkers.length >= maxWaitingWorkers) {
+      reject(new GeometrySessionError('worker-failed', 'Geometry worker admission queue is full.')); return;
+    }
+    let settled = false;
+    const cleanup = (): void => {
+      clearTimeout(timer); admission.signal?.removeEventListener('abort', abort);
+      const index = waitingWorkers.indexOf(waiter);
+      if (index !== -1) waitingWorkers.splice(index, 1);
+    };
+    const fail = (error: GeometrySessionError): void => {
+      if (settled) return;
+      settled = true; cleanup(); reject(error);
+    };
+    const abort = (): void => fail(admission.aborted);
+    const waiter: Waiter = { admit: () => {
+      if (settled) return;
+      const error = admissionFailure(admission);
+      if (error) { fail(error); return; }
+      settled = true; cleanup(); activeWorkers++;
+      let released = false;
+      resolve(() => {
+        if (released) return;
+        released = true; activeWorkers--;
+        while (activeWorkers < 4 && waitingWorkers.length) waitingWorkers[0]?.admit();
+      });
+    } };
+    const timer = setTimeout(() => fail(admission.expired), Math.max(0, admission.deadline - performance.now()));
+    admission.signal?.addEventListener('abort', abort, { once: true });
+    if (admission.signal?.aborted) { abort(); return; }
+    if (activeWorkers < 4 && waitingWorkers.length === 0) waiter.admit();
+    else waitingWorkers.push(waiter);
+  });
+}
+async function worker(data: unknown, admission: Admission): Promise<ManagedWorker> {
+  const initialFailure = admissionFailure(admission);
+  if (initialFailure) throw initialFailure;
   inputEnvelope(data);
-  const instance = new Worker(new URL('./geometry-worker.ts', import.meta.url), { workerData: data,
-    resourceLimits: { maxOldGenerationSizeMb: 192, maxYoungGenerationSizeMb: 32, stackSizeMb: 4 } });
-  activeWorkers++; instance.once('exit', () => { activeWorkers--; });
-  return instance;
+  const release = await reserveWorker(admission);
+  try {
+    const failure = admissionFailure(admission);
+    if (failure) throw failure;
+    // A caller may have changed the plain input while waiting for capacity.
+    inputEnvelope(data);
+    const afterEnvelope = admissionFailure(admission);
+    if (afterEnvelope) throw afterEnvelope;
+    const instance = new Worker(new URL('./geometry-worker.ts', import.meta.url), { workerData: data,
+      resourceLimits: { maxOldGenerationSizeMb: 192, maxYoungGenerationSizeMb: 32, stackSizeMb: 4 } });
+    const exited = new Promise<void>(resolve => instance.once('exit', () => { release(); resolve(); }));
+    let stopping: Promise<void> | null = null;
+    return { instance, stop: () => {
+      stopping ??= (async () => {
+        // Keep the reservation until exit, including when terminate rejects.
+        try { await instance.terminate(); } finally { await exited; }
+      })();
+      return stopping;
+    } };
+  } catch (error) { release(); throw error; }
 }
 
 /** Product host boundary: one immutable context stays in a private, resource-bounded worker for one request. */
 export class GeometrySession {
-  readonly #worker: Worker;
+  #worker: ManagedWorker | null = null;
+  readonly #startup: Promise<void>;
+  readonly #admission = new AbortController();
   readonly #projectId: string;
+  readonly #constructionDeadline: number;
   readonly #operationTimeout: number;
   readonly #receipts: GeometryReceipt[] = [];
   readonly #lifetime: ReturnType<typeof setTimeout>;
@@ -73,33 +141,51 @@ export class GeometrySession {
   #failure: GeometrySessionError | null = null;
   readonly ready: Promise<void>;
   constructor(input: GeometrySessionInput, options: GeometrySessionOptions = {}) {
+    const started = performance.now();
     const construction = boundedTime(options.constructionTimeoutMs, 3000, 5000);
+    this.#constructionDeadline = started + construction;
     this.#operationTimeout = boundedTime(options.operationTimeoutMs, 1500, 5000);
     const lifetime = boundedTime(options.lifetimeMs, 180000, 900000);
     this.#projectId = input.projectId; this.#signal = options.signal;
-    this.#worker = worker({ kind: 'session', input });
     this.#abort = () => this.#fail(new GeometrySessionError('aborted', 'Geometry request was aborted.'));
     this.#lifetime = setTimeout(() => this.#fail(new GeometrySessionError('deadline', 'Geometry session lifetime expired.')), lifetime);
     this.ready = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => this.#fail(new GeometrySessionError('deadline', 'Geometry worker construction exceeded its hard deadline.')), construction);
       this.#pending = { id: 0, method: 'ready', digest: '', resolve: () => resolve(), reject, timer };
     });
-    this.#worker.on('message', (message: unknown) => this.#message(message));
-    this.#worker.on('error', () => this.#fail(new GeometrySessionError('worker-failed', 'Geometry worker failed.')));
-    this.#worker.on('exit', () => { if (!this.#failure) this.#fail(new GeometrySessionError('worker-failed', 'Geometry worker exited unexpectedly.')); });
     this.#signal?.addEventListener('abort', this.#abort, { once: true });
     if (this.#signal?.aborted) this.#abort();
+    this.#startup = this.#start(input, this.#constructionDeadline);
+  }
+  async #start(input: GeometrySessionInput, deadline: number): Promise<void> {
+    try {
+      const managed = await worker({ kind: 'session', input }, { signal: this.#admission.signal, deadline,
+        aborted: new GeometrySessionError('aborted', 'Geometry request was aborted.'),
+        expired: new GeometrySessionError('deadline', 'Geometry worker construction exceeded its hard deadline.') });
+      this.#worker = managed;
+      managed.instance.on('message', (message: unknown) => this.#message(message));
+      managed.instance.on('error', () => this.#fail(new GeometrySessionError('worker-failed', 'Geometry worker failed.')));
+      managed.instance.on('exit', () => { if (!this.#failure) this.#fail(new GeometrySessionError('worker-failed', 'Geometry worker exited unexpectedly.')); });
+      if (this.#failure) await managed.stop();
+      else if (performance.now() >= deadline) this.#fail(new GeometrySessionError('deadline', 'Geometry worker construction exceeded its hard deadline.'));
+    } catch (error) {
+      this.#fail(error instanceof GeometrySessionError ? error : new GeometrySessionError('worker-failed', 'Geometry worker startup failed.'));
+    }
   }
   #fail(error: GeometrySessionError): void {
     if (this.#failure) return;
     this.#failure = error; clearTimeout(this.#lifetime); this.#signal?.removeEventListener('abort', this.#abort);
+    this.#admission.abort();
     if (this.#pending) { clearTimeout(this.#pending.timer); this.#pending.reject(error); this.#pending = null; }
     // A Worker has a separate JS event loop; this terminates even a synchronous mesh/BVH/parse loop.
-    void this.#worker.terminate();
+    void this.#worker?.stop().catch(() => {});
   }
   #message(message: unknown): void {
     const pending = this.#pending;
     if (!pending || this.#failure) return;
+    if (pending.id === 0 && performance.now() >= this.#constructionDeadline) {
+      this.#fail(new GeometrySessionError('deadline', 'Geometry worker construction exceeded its hard deadline.')); return;
+    }
     if (typeof message !== 'object' || message === null || !('id' in message) || message.id !== pending.id || !('kind' in message)) {
       this.#fail(new GeometrySessionError('invalid-reply', 'Geometry worker reply is not bound to the pending operation.')); return;
     }
@@ -115,11 +201,13 @@ export class GeometrySession {
     const result = this.#chain.then(async () => {
       await this.ready;
       if (this.#failure) throw this.#failure;
+      const managed = this.#worker;
+      if (!managed) throw new GeometrySessionError('worker-failed', 'Geometry worker is unavailable.');
       const value = geometryPlainData(input); const digest = geometryDigest({ method, input: value }); const id = ++this.#next;
       const reply = await new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => this.#fail(new GeometrySessionError('deadline', 'Geometry operation exceeded its hard worker deadline.')), this.#operationTimeout);
         this.#pending = { id, method, digest, resolve, reject, timer };
-        this.#worker.postMessage({ id, method, input: value });
+        managed.instance.postMessage({ id, method, input: value });
       });
       if (!isResult(reply) || !geometryReplyMatchesReceipt(reply, { projectId: this.#projectId, operationDigest: digest })) {
         this.#fail(new GeometrySessionError('invalid-reply', 'Geometry result/receipt does not match the dispatched operation.')); throw this.#failure;
@@ -138,33 +226,50 @@ export class GeometrySession {
     if (this.#pending || this.#calls !== this.#receipts.length) throw new GeometrySessionError('closed', 'Geometry results are still pending or a call failed; evidence cannot be published.');
     return structuredClone(this.#receipts);
   }
-  async close(): Promise<void> { this.#fail(new GeometrySessionError('closed', 'Geometry session is closed.')); await this.#worker.terminate(); }
+  async close(): Promise<void> {
+    this.#fail(new GeometrySessionError('closed', 'Geometry session is closed.'));
+    await this.#startup; await this.#worker?.stop();
+  }
 }
 export async function createGeometrySession(input: GeometrySessionInput, options: GeometrySessionOptions = {}): Promise<GeometrySession> {
   const session = new GeometrySession(input, options);
-  await session.ready; return session;
+  try { await session.ready; return session; }
+  catch (error) {
+    // close still waits for actual exit if terminate rejects; preserve the startup cause.
+    try { await session.close(); } catch {}
+    throw error;
+  }
 }
 
 export type GeometryCorrespondence = { historical: Extract<GeometryRef, { kind: 'ifc' }>; current: Extract<GeometryRef, { kind: 'ifc' }> };
 export type GeometryRevalidationInput = { current: GeometrySessionInput; candidate?: GeometrySessionInput; receipts: GeometryReceipt[];
   correspondences?: GeometryCorrespondence[] };
 export async function validateGeometryReceiptsInWorker(input: GeometryRevalidationInput, options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<GeometryFreshness> {
+  const started = performance.now();
   const timeout = boundedTime(options.timeoutMs, 4000, 10000);
-  if (options.signal?.aborted) throw new GeometrySessionError('aborted', 'Geometry revalidation was aborted.');
-  const instance = worker({ kind: 'revalidate', input });
-  return new Promise((resolve, reject) => {
+  const deadline = started + timeout;
+  const aborted = new GeometrySessionError('aborted', 'Geometry revalidation was aborted.');
+  const expired = new GeometrySessionError('deadline', 'Geometry revalidation exceeded its hard worker deadline.');
+  const managed = await worker({ kind: 'revalidate', input }, { ...(options.signal ? { signal: options.signal } : {}), deadline, aborted, expired });
+  const instance = managed.instance;
+  let failed = false;
+  try { return await new Promise<GeometryFreshness>((resolve, reject) => {
     let finished = false;
     const finish = (value: GeometryFreshness | Error): void => {
-      if (finished) return; finished = true; clearTimeout(timer); options.signal?.removeEventListener('abort', abort); void instance.terminate();
+      if (finished) return; finished = true; clearTimeout(timer); options.signal?.removeEventListener('abort', abort);
       if (value instanceof Error) reject(value); else resolve(value);
     };
-    const abort = (): void => finish(new GeometrySessionError('aborted', 'Geometry revalidation was aborted.'));
-    const timer = setTimeout(() => finish(new GeometrySessionError('deadline', 'Geometry revalidation exceeded its hard worker deadline.')), timeout);
+    const abort = (): void => finish(aborted);
+    const timer = setTimeout(() => finish(expired), Math.max(0, deadline - performance.now()));
     options.signal?.addEventListener('abort', abort, { once: true });
     if (options.signal?.aborted) abort();
+    else if (performance.now() >= deadline) finish(expired);
     instance.on('error', () => finish(new GeometrySessionError('worker-failed', 'Geometry revalidation worker failed.')));
     instance.on('exit', () => { if (!finished) finish(new GeometrySessionError('worker-failed', 'Geometry revalidation worker exited.')); });
     instance.on('message', (message: unknown) => {
+      if (finished) return;
+      if (options.signal?.aborted) { abort(); return; }
+      if (performance.now() >= deadline) { finish(expired); return; }
       if (typeof message !== 'object' || message === null || !('kind' in message)) { finish(new GeometrySessionError('invalid-reply', 'Invalid geometry freshness reply.')); return; }
       if (message.kind === 'fresh') { finish({ kind: 'fresh' }); return; }
       if ((message.kind === 'stale' || message.kind === 'unavailable') && 'reason' in message && typeof message.reason === 'string' && message.reason.length <= 4096) {
@@ -172,5 +277,9 @@ export async function validateGeometryReceiptsInWorker(input: GeometryRevalidati
       }
       finish(new GeometrySessionError('invalid-reply', 'Invalid geometry freshness reply.'));
     });
-  });
+  }); } catch (error) { failed = true; throw error; }
+  finally {
+    try { await managed.stop(); }
+    catch { if (!failed) throw new GeometrySessionError('worker-failed', 'Geometry revalidation worker termination failed.'); }
+  }
 }
