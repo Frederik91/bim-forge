@@ -8,11 +8,13 @@ import { ModelScene } from './model-scene.ts';
 import { LinkedModelLayer } from './linked-model-render.ts';
 import type { LinkedDisplay } from './linked-model-render.ts';
 import type { LinkedSelection } from '../src/linked-model.ts';
+import { linkedSelectionKey } from '../src/linked-model.ts';
 import type { RenderingMode } from './model-scene.ts';
 import type { ModelSnapshot, Point, ProjectId } from '../src/room-model.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 import { SpatialMarkupView } from './spatial-markup-view.ts';
-import type { MarkupPoint, MarkupTool, SpatialMarkup } from '../src/spatial-markup.ts';
+import type { MarkupSurface, MarkupSelection } from './spatial-markup-view.ts';
+import type { MarkupTool, SpatialMarkup } from '../src/spatial-markup.ts';
 
 export interface ViewerState {
   projectId?: ProjectId;
@@ -87,6 +89,10 @@ export class ModelViewer {
   private readonly linked: LinkedModelLayer;
   private readonly markup: SpatialMarkupView | null;
   private linkedSelection: LinkedSelection | null = null;
+  private markupObjectKey: string | null = null;
+  private pickedMarkupSurface: MarkupSurface | null = null;
+  private markupEpoch = 0;
+  private linkedMarkupSignature = '';
   private readonly observer: ResizeObserver;
   private state: ActiveViewerState | null = null;
   private drag: MarkerDrag | null = null;
@@ -146,9 +152,13 @@ export class ModelViewer {
     this.canvas.addEventListener('pointerup', (event) => {
       if (!this.pointer.up(event)) return;
       const [x, y] = this.local(event); const linked = this.linked.objectAt(x, y);
-      if (linked) { this.actions.linkedReference?.(linked); return; }
+      const surface = this.markupSurface(x, y);
+      if (linked) {
+        this.captureMarkupSurface('ifc:' + linkedSelectionKey(linked), surface);
+        this.actions.linkedReference?.(linked); return;
+      }
       const id = this.model.objectAt(x, y);
-      if (id) this.select(id);
+      if (id) this.select(id, surface);
     });
     for (const type of ['pointercancel', 'pointerleave', 'lostpointercapture']) this.canvas.addEventListener(type, event => {
       if (event instanceof PointerEvent) this.pointer.cancel(event.pointerId);
@@ -207,15 +217,37 @@ export class ModelViewer {
     return [event.clientX - rect.left, event.clientY - rect.top];
   }
 
-  private markupSurface(x: number, y: number): { position: MarkupPoint; normal: MarkupPoint } | null {
+  private markupSurface(x: number, y: number): MarkupSurface | null {
     const native = this.model.surfaceAt(x, y);
     const linked = this.model.scene.pick(x, y, mesh => this.linked.pick(mesh) !== null);
     const ray = this.model.scene.createPickingRay(x, y, Matrix.Identity(), this.model.camera);
-    const picked = linked?.hit && linked.pickedPoint && (!native || linked.distance < Vector3.Distance(ray.origin, native.position))
-      ? { position: linked.pickedPoint, normal: linked.getNormal(true) } : native;
+    const reference = linked?.pickedMesh ? this.linked.pick(linked.pickedMesh) : null;
+    const picked = linked?.hit && linked.pickedPoint && reference && (!native || linked.distance < Vector3.Distance(ray.origin, native.position))
+      ? { position: linked.pickedPoint, normal: linked.getNormal(true), key: 'ifc:' + linkedSelectionKey(reference), name: reference.source.globalId }
+      : native ? { ...native, key: 'native:' + native.objectId,
+        name: this.state?.snapshot.entities.find(item => item.id === native.objectId)?.name ?? native.objectId } : null;
     if (!picked?.normal) return null;
     const p = picked.position; const n = picked.normal;
-    return { position: [p.x, p.z, p.y], normal: [n.x, n.z, n.y] };
+    return { key: picked.key, name: picked.name, position: [p.x, p.z, p.y], normal: [n.x, n.z, n.y] };
+  }
+
+  private captureMarkupSurface(key: string, surface: MarkupSurface | null): void {
+    this.markupObjectKey = key; this.pickedMarkupSurface = surface?.key === key ? surface : null; this.markupEpoch += 1;
+  }
+
+  private updateMarkup(): void {
+    const state = this.state; if (!state) return;
+    const item = state.snapshot.entities.find(item => item.id === state.selectedId);
+    const objectKey = this.linkedSelection ? 'ifc:' + linkedSelectionKey(this.linkedSelection) : 'native:' + state.selectedId;
+    const selection: MarkupSelection | null = this.markupObjectKey === objectKey ? {
+      key: `${this.markupEpoch}:${objectKey}`, objectKey, name: this.linkedSelection?.source.globalId ?? item?.name ?? state.selectedId,
+      surface: this.pickedMarkupSurface,
+    } : null;
+    const floor = (state.levelId ? levels(state.snapshot).find(level => level.id === state.levelId) : entityLevel(state.snapshot, state.selectedId))
+      ?? [...levels(state.snapshot)].sort((a, b) => a.elevation - b.elevation)[0];
+    this.markup?.update({ binding: state.markup?.binding ?? '', enabled: !!state.markup?.editable,
+      annotations: state.markup?.annotations ?? [], references: state.markup?.references ?? [], selection,
+      floor: { elevation: floor?.elevation ?? 0, name: floor?.name ?? 'Model floor' } });
   }
 
   startMarkup(tool: MarkupTool = 'rectangle'): void { this.markup?.start(tool); }
@@ -238,12 +270,13 @@ export class ModelViewer {
     if (commit && drag.moved && drag.target) this.actions.reference(drag.target);
   }
 
-  private select(id: string): void {
+  private select(id: string, surface: MarkupSurface | null = null): void {
     this.actions.linkedReference?.(null);
+    this.captureMarkupSurface('native:' + id, surface);
     if (!this.state?.comparison) { this.actions.select(id); return; }
     this.comparisonSelection = id;
     this.state = { ...this.state, selectedId: id };
-    this.selection.value = id; this.model.select(id); this.updateCaption(); this.frames = 3;
+    this.selection.value = id; this.model.select(id); this.updateCaption(); this.updateMarkup(); this.frames = 3;
     const source = this.state.snapshot.entities.some(item => item.id === id) ? this.state.snapshot : this.state.comparison;
     if (source) this.actions.inspect(id, source);
   }
@@ -310,7 +343,10 @@ export class ModelViewer {
     const viewChanged = !this.active || projectChanged || this.root.parentElement !== host || focusChanged || levelChanged
       || this.state?.mode !== next.mode || this.state?.cutaway !== next.cutaway || this.state?.roofVisible !== next.roofVisible
       || JSON.stringify([this.state?.snapshot, this.state?.comparison]) !== JSON.stringify([next.snapshot, next.comparison]);
-    if (viewChanged) { this.pointer.cancelClick(); this.hover(null); }
+    if (viewChanged) { this.pointer.cancelClick(); this.hover(null); this.pickedMarkupSurface = null; this.markupEpoch += 1; }
+    if (this.state && next.selectedId !== this.state.selectedId && this.markupObjectKey !== 'native:' + next.selectedId) {
+      this.captureMarkupSurface('native:' + next.selectedId, null);
+    }
     this.state = next;
     const objectSignature = JSON.stringify(objects.map((item) => [item.id, item.name, changes.get(item.id)]));
     if (objectSignature !== this.objectSignature) {
@@ -323,11 +359,7 @@ export class ModelViewer {
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
     if (focusChanged || levelChanged) this.model.frame(state.focusId);
     this.model.setCutaway(state.cutaway);
-    const floor = (next.levelId ? levels(state.snapshot).find(level => level.id === next.levelId) : entityLevel(state.snapshot, next.selectedId))
-      ?? [...levels(state.snapshot)].sort((a, b) => a.elevation - b.elevation)[0];
-    this.markup?.update({ binding: state.markup?.binding ?? '', enabled: !!state.markup?.editable && state.interactive,
-      annotations: state.markup?.annotations ?? [], references: state.markup?.references ?? [],
-      floor: { elevation: floor?.elevation ?? 0, name: floor?.name ?? 'Model floor' } });
+    this.updateMarkup();
     if (!this.drag) this.model.mark(state.reference);
     this.updateCaption(); this.frames = 3; this.engine.resize();
     this.active = true; if (!document.hidden) this.engine.runRenderLoop(this.renderFrame);
@@ -335,12 +367,17 @@ export class ModelViewer {
 
   hide(): void { this.endDrag(false); this.markup?.hide(); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
   setLinkedModels(links: readonly LinkedDisplay[]): void {
+    const signature = JSON.stringify(links.map(link => [link.id, link.visible, link.prepared.manifest.source, link.prepared.manifest.occurrence]));
+    if (signature !== this.linkedMarkupSignature) {
+      this.linkedMarkupSignature = signature; this.pickedMarkupSurface = null; this.markupEpoch += 1; this.updateMarkup();
+    }
     this.linked.setLinks(links); this.frames = 3;
     this.root.dataset.linkedModels = String(links.filter(link => link.visible).length);
   }
   selectLinkedReference(selection: LinkedSelection | null): void {
+    if (selection && this.markupObjectKey !== 'ifc:' + linkedSelectionKey(selection)) this.captureMarkupSurface('ifc:' + linkedSelectionKey(selection), null);
     this.linkedSelection = selection; this.linked.select(selection);
-    this.model.select(selection ? '' : this.state?.selectedId ?? ''); this.updateCaption(); this.frames = 3;
+    this.model.select(selection ? '' : this.state?.selectedId ?? ''); this.updateCaption(); this.updateMarkup(); this.frames = 3;
   }
   frameLinkedModels(selection: LinkedSelection | null = null): void {
     const meshes = this.model.scene.meshes.filter(mesh => mesh.isEnabled() && mesh.name.startsWith('ifc:')

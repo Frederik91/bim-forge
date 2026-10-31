@@ -407,7 +407,7 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
     if (action === 'evidence') { showPage('evidence'); return true; }
     if (action === 'files') return sourcePicker.chooseFiles();
     if (action === 'markup') {
-      if (!repo || busy || !serverAvailable || selectedDesignTarget.kind === 'baseline' || liveChatPreview || reviewRepository) return false;
+      if (!canDrawMarkup()) return false;
       modelView = '3d'; renderComparison(); modelViewer?.startMarkup(); return true;
     }
     if (action === 'view') return attachChatContext(selectedObject ? [selectedObject] : []);
@@ -655,10 +655,15 @@ function requestDirty(): boolean {
 function currentChatKey(): string { return `${repo?.projectId ?? 'none'}:${chatTicketId ?? newDraftId}`; }
 
 function markupBinding(): string { return `${currentChatKey()}:${selectedRevision}:${selectedBranch}`; }
+function canDrawMarkup(): boolean {
+  const proposal = !!reviewRepository && !!chatTicketId && chatTicketId === activeTicketId
+    && !!activeChatProposalMessageId && activeReview?.proposalRevisionId === selectedRevision;
+  return !!repo && !!preview && !busy && serverAvailable && currentPage === 'request'
+    && selectedDesignTarget.kind !== 'baseline' && !liveChatPreview && !inspectedChatView && (!reviewRepository || proposal);
+}
 function attachMarkup(markups: readonly SpatialMarkup[], binding: string): boolean {
   try {
-    if (binding !== markupBinding() || busy || !serverAvailable || currentPage !== 'request'
-        || selectedDesignTarget.kind === 'baseline' || liveChatPreview || reviewRepository || !preview) throw new Error('Return to this chat’s accepted model before drawing markup.');
+    if (binding !== markupBinding() || !canDrawMarkup() || !preview) throw new Error('Open this chat’s saved model or validated proposal before drawing markup.');
     if (chatVisual) requireCurrentVisual(chatVisual, displayedChatSnapshot());
     if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved model before attaching markup.');
     const visual = captureConversationVisual({ graph: preview, snapshot: displayedChatSnapshot(), view: '3d', levelId: activeLevelId,
@@ -3256,8 +3261,8 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
     });
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
     modelViewer.show(host, { projectId: requireRepository().projectId, snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
-      interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null,
-      markup: { binding: markupBinding(), editable: selectedDesignTarget.kind !== 'baseline' && !reviewRepository && !inspectedChatView,
+      interactive: !liveChatPreview && !reviewRepository && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null,
+      markup: { binding: markupBinding(), editable: canDrawMarkup(),
         annotations: conversationMarkups(chatVisual), references: referenceMarkups() } });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;

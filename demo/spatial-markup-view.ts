@@ -9,13 +9,16 @@ import type { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera.js
 import { createMarkupPlane, createSpatialMarkup, parseSpatialMarkup, spatialMarkupDescription, spatialMarkupVertices, MARKUP_LIMITS } from '../src/spatial-markup.ts';
 import type { MarkupPlane, MarkupPoint, MarkupTool, SpatialMarkup } from '../src/spatial-markup.ts';
 
+export interface MarkupSurface { key: string; name: string; position: MarkupPoint; normal: MarkupPoint }
+export interface MarkupSelection { key: string; objectKey: string; name: string; surface: MarkupSurface | null }
 interface MarkupState {
   binding: string; enabled: boolean; floor: { elevation: number; name: string };
   annotations: readonly SpatialMarkup[]; references: readonly SpatialMarkup[];
+  selection: MarkupSelection | null;
 }
 interface MarkupActions {
   scene: Scene; camera: ArcRotateCamera; canvas: HTMLCanvasElement;
-  surface: (x: number, y: number) => { position: MarkupPoint; normal: MarkupPoint } | null;
+  surface: (x: number, y: number) => MarkupSurface | null;
   changed: (annotations: readonly SpatialMarkup[], binding: string) => boolean;
   begin: () => void; render: () => void; attach: () => void;
 }
@@ -49,6 +52,10 @@ export class SpatialMarkupView {
   private readonly material: StandardMaterial;
   private readonly ghost: StandardMaterial;
   private previewDirty = false;
+  private selectionPlane: MarkupPlane | null = null;
+  private surfacePreview: Mesh | null = null;
+  private surfaceSignature = '';
+  private readonly surfaceMaterial: StandardMaterial;
 
   constructor(actions: MarkupActions) {
     this.actions = actions; this.root.className = 'model-markup-controls';
@@ -59,6 +66,7 @@ export class SpatialMarkupView {
     this.toggle.addEventListener('click', () => {
       this.panel.hidden = !this.panel.hidden; this.toggle.setAttribute('aria-expanded', String(!this.panel.hidden));
       if (this.panel.hidden) this.choose(null);
+      else { this.refresh(); this.actions.render(); }
     });
     const button = (name: string, action: () => void): HTMLButtonElement => {
       const item = document.createElement('button'); item.type = 'button'; item.textContent = name; item.setAttribute('aria-label', name);
@@ -69,7 +77,8 @@ export class SpatialMarkupView {
     for (const tool of toolList) {
       this.tools.set(tool, button(toolNames[tool], () => this.choose(tool)));
     }
-    this.planeChoice.setAttribute('aria-label', 'Markup drawing plane'); this.planeChoice.append(new Option('Floor', 'floor'), new Option('Pick surface', 'surface'));
+    this.planeChoice.setAttribute('aria-label', 'Markup drawing plane'); this.planeChoice.append(new Option('Floor', 'floor'),
+      new Option('Pick surface', 'surface'), new Option('Selected surface', 'selection'));
     this.planeChoice.addEventListener('change', () => { this.cancelGesture(); this.refresh(); }); this.panel.append(this.planeChoice);
     this.finish = button('Finish polyline', () => this.finishPolyline());
     this.undo = button('Undo markup', () => {
@@ -84,6 +93,9 @@ export class SpatialMarkupView {
     this.material.emissiveColor = Color3.FromHexString('#ff6800'); this.material.diffuseColor = Color3.FromHexString('#ff6800'); this.material.disableLighting = true;
     this.ghost = new StandardMaterial('request-markup-reference', actions.scene);
     this.ghost.emissiveColor = Color3.FromHexString('#a95b17'); this.ghost.disableLighting = true; this.ghost.alpha = .55;
+    this.surfaceMaterial = new StandardMaterial('markup-drawing-surface', actions.scene);
+    this.surfaceMaterial.emissiveColor = Color3.FromHexString('#00b6bd'); this.surfaceMaterial.disableLighting = true;
+    this.surfaceMaterial.alpha = .22; this.surfaceMaterial.backFaceCulling = false; this.surfaceMaterial.disableDepthWrite = true;
     actions.canvas.addEventListener('pointerdown', this.down, true);
     actions.canvas.addEventListener('pointermove', this.move, true);
     actions.canvas.addEventListener('pointerup', this.up, true);
@@ -97,7 +109,13 @@ export class SpatialMarkupView {
     if (!state.annotations.length && state.references.length && (this.state?.annotations.length || !this.state?.references.length)) {
       this.panel.hidden = true; this.toggle.setAttribute('aria-expanded', 'false');
     }
-    if (this.state && (state.binding !== this.state.binding || !state.enabled || state.floor.elevation !== this.state.floor.elevation)) this.choose(null);
+    const selectionChanged = state.selection?.key !== this.state?.selection?.key;
+    const bindingChanged = state.binding !== this.state?.binding;
+    if (this.state && (bindingChanged || selectionChanged || !state.enabled || state.floor.elevation !== this.state.floor.elevation)) this.choose(null);
+    if (bindingChanged || selectionChanged) {
+      this.selectionPlane = state.selection?.surface ? createMarkupPlane(state.selection.surface) : null;
+      this.planeChoice.value = state.selection ? 'selection' : 'floor';
+    }
     this.state = state;
     const signature = JSON.stringify([state.annotations, state.references]);
     if (signature !== this.committedSignature) {
@@ -107,6 +125,8 @@ export class SpatialMarkupView {
     }
     this.root.hidden = !state.enabled && !state.annotations.length && !state.references.length;
     const floorOption = this.planeChoice.options[0]; if (floorOption) floorOption.text = `Floor · ${state.floor.name}`;
+    const selectedOption = this.planeChoice.options[2];
+    if (selectedOption) { selectedOption.text = `Selected surface${state.selection ? ' · ' + state.selection.name : ''}`; selectedOption.disabled = !state.selection; }
     this.root.dataset.markupCount = String(state.annotations.length);
     this.root.dataset.referenceMarkupCount = String(state.references.length);
     this.refresh();
@@ -136,11 +156,27 @@ export class SpatialMarkupView {
     this.clear.disabled = !enabled || !this.state?.annotations.length;
     this.attach.disabled = !enabled || !this.state?.annotations.length;
     const last = this.state?.annotations.at(-1);
-    this.message.textContent = this.candidate ? `${spatialMarkupDescription(this.candidate)} · approximate`
+    const target = this.planeChoice.value === 'selection' ? this.selectionPlane
+      ? `Drawing on selected surface · ${this.state?.selection?.name}` : `Pick the selected surface · ${this.state?.selection?.name}`
+      : this.planeChoice.value === 'floor' ? `Drawing on ${this.state?.floor.name ?? 'floor'}` : 'Pick a visible surface to draw';
+    this.message.textContent = this.candidate ? `${spatialMarkupDescription(this.candidate)} · approximate · ${target}`
       : this.tool === 'polyline' ? 'Click points · Enter or Finish · Escape cancels'
-      : this.tool ? 'Drag to draw · Escape cancels · approximate metres'
+      : this.tool ? `${target} · Drag to draw · Escape cancels · approximate metres`
       : last ? `${spatialMarkupDescription(last)} · attached to chat`
-      : this.state?.references.length ? 'Saved markup · inspect its bound chat snapshot' : '';
+      : this.state?.references.length ? 'Saved markup · inspect its bound chat snapshot' : this.panel.hidden ? '' : target;
+    this.surfaceFeedback();
+  }
+
+  private surfaceFeedback(): void {
+    const plane = !this.panel.hidden && this.state?.enabled && this.planeChoice.value === 'selection' ? this.selectionPlane : null;
+    const signature = JSON.stringify(plane);
+    if (signature === this.surfaceSignature) return;
+    this.surfaceSignature = signature; this.surfacePreview?.dispose(); this.surfacePreview = null;
+    if (!plane) return;
+    const patch = MeshBuilder.CreatePlane('markup-surface-not-model', { size: 1.2, sideOrientation: Mesh.DOUBLESIDE }, this.actions.scene);
+    patch.position.copyFrom(world(plane.origin)); patch.lookAt(patch.position.add(world(plane.normal)));
+    patch.position.addInPlace(world(plane.normal).scale(.008)); patch.isPickable = false;
+    patch.material = this.surfaceMaterial; this.surfacePreview = patch;
   }
 
   private location(event: PointerEvent): { x: number; y: number; inside: boolean } {
@@ -153,6 +189,11 @@ export class SpatialMarkupView {
     if (!this.state) return null;
     if (this.planeChoice.value === 'floor') return createMarkupPlane({ origin: [0, 0, this.state.floor.elevation], normal: [0, 0, 1] });
     const { x, y } = this.location(event); const hit = this.actions.surface(x, y);
+    if (this.planeChoice.value === 'selection') {
+      if (this.selectionPlane) return this.selectionPlane;
+      if (!hit || hit.key !== this.state.selection?.objectKey) return null;
+      this.selectionPlane = createMarkupPlane(hit); this.refresh(); return this.selectionPlane;
+    }
     return hit ? createMarkupPlane({ origin: hit.position, normal: hit.normal }) : null;
   }
 
@@ -171,7 +212,9 @@ export class SpatialMarkupView {
     if (!event.isPrimary || event.button !== 0 || this.gesture) { this.choose(null); return; }
     const plane = this.polyline?.plane ?? this.planeAt(event);
     const start = plane ? this.point(event, plane) : null;
-    if (!plane || !start) { this.message.textContent = 'Choose a visible surface, or use the Floor plane.'; return; }
+    if (!plane || !start) { this.message.textContent = this.planeChoice.value === 'selection'
+      ? 'Pick a visible face of the selected element. Floor is available as an explicit override.'
+      : 'Choose a visible surface, or explicitly choose the Floor plane.'; return; }
     this.gesture = { id: event.pointerId, plane, start };
     this.actions.canvas.setPointerCapture(event.pointerId);
   };
@@ -261,9 +304,10 @@ export class SpatialMarkupView {
   }
 
   private disposeMeshes(meshes: Mesh[]): void { for (const mesh of meshes) mesh.dispose(); meshes.length = 0; }
-  hide(): void { this.choose(null); }
+  hide(): void { this.panel.hidden = true; this.toggle.setAttribute('aria-expanded', 'false'); this.choose(null); }
   dispose(): void {
-    this.hide(); this.disposeMeshes(this.committed); this.disposeMeshes(this.previewMeshes); this.material.dispose(); this.ghost.dispose(); this.root.remove();
+    this.hide(); this.surfacePreview?.dispose(); this.disposeMeshes(this.committed); this.disposeMeshes(this.previewMeshes);
+    this.material.dispose(); this.ghost.dispose(); this.surfaceMaterial.dispose(); this.root.remove();
     const canvas = this.actions.canvas;
     canvas.removeEventListener('pointerdown', this.down, true); canvas.removeEventListener('pointermove', this.move, true);
     canvas.removeEventListener('pointerup', this.up, true); canvas.removeEventListener('pointercancel', this.cancelPointer, true);
