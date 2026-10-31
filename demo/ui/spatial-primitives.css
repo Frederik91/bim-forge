@@ -1,0 +1,24 @@
+.spatial-panel { padding: var(--spatial-space-lg); background: var(--spatial-color-paper); border-radius: var(--spatial-radius-panel); box-shadow: var(--spatial-elevation-panel); min-width: 0; }
+.spatial-panel h2 { margin: 0 0 var(--spatial-space-lg); font-size: var(--spatial-type-heading); font-weight: 650; line-height: 1.3; }
+.spatial-task-identity { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--spatial-space-sm); min-width: 0; overflow-wrap: anywhere; }
+.spatial-task-identity strong { font-variant-numeric: tabular-nums; }
+.spatial-state-label { display: inline-flex; align-items: center; gap: var(--spatial-space-xs); border: 1px solid currentColor; padding: 2px 7px; border-radius: var(--spatial-radius-control); font-size: var(--spatial-type-caption); color: var(--spatial-color-muted); background: var(--spatial-color-soft); }
+[data-tone="active"] { --notice-ink: var(--spatial-color-primary); --notice-fill: var(--spatial-color-selection-fill); }
+[data-tone="waiting"], [data-tone="stale"] { --notice-ink: var(--spatial-color-warning); --notice-fill: var(--spatial-color-warning-fill); }
+[data-tone="error"] { --notice-ink: var(--spatial-color-error); --notice-fill: var(--spatial-color-error-fill); }
+[data-tone="ready"] { --notice-ink: var(--spatial-color-proposed-text); --notice-fill: var(--spatial-color-proposed-fill); }
+[data-tone="settled"] { --notice-ink: var(--spatial-color-success); --notice-fill: var(--spatial-color-success-fill); }
+.spatial-state-label[data-tone], .spatial-notice[data-tone] { color: var(--notice-ink, var(--spatial-color-muted)); background: var(--notice-fill, var(--spatial-color-soft)); }
+.spatial-notice { padding: var(--spatial-space-md); border-radius: var(--spatial-radius-control); }
+.spatial-notice strong { font-size: var(--spatial-type-small); }
+.spatial-notice p { margin: var(--spatial-space-xs) 0 0; font-size: var(--spatial-type-small); }
+
+/* Native controls retain their semantics; every spatial action has a 44 px target. */
+.spatial-ui :is(button, input, select, textarea) { font: inherit; }
+.spatial-ui [data-slot="button"] { min-height: var(--spatial-control-target); min-width: var(--spatial-control-target); border-radius: var(--spatial-radius-control); }
+.spatial-ui :focus-visible { outline: var(--spatial-control-focus-width) solid var(--spatial-color-focus); outline-offset: var(--spatial-control-focus-offset); }
+.spatial-ui :is(button, input, select, textarea):disabled { opacity: 1; color: var(--spatial-color-disabled-ink); background: var(--spatial-color-disabled-fill); cursor: default; }
+.spatial-ui ::selection { color: var(--spatial-color-ink); background: var(--spatial-color-selection-fill); }
+.spatial-ui textarea { caret-color: var(--spatial-color-primary); }
+.spatial-ui { scrollbar-color: var(--spatial-color-muted) var(--spatial-color-soft); }
+@media (prefers-reduced-motion: reduce) { .spatial-ui * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }

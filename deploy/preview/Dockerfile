@@ -10,7 +10,7 @@ RUN apt-get update \
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
-COPY --chown=65032:33 demo/server.ts demo/geometry-source.ts demo/change-requests.ts demo/request-source-store.ts demo/project-evidence-store.ts demo/versioned-project-store.ts demo/versioned-project-contract.ts demo/model-scope-store.ts demo/linked-model-store.ts demo/linked-model-routes.ts ./demo/
+COPY --chown=65032:33 demo/server.ts demo/geometry-source.ts demo/change-requests.ts demo/task-placement.ts demo/request-source-store.ts demo/project-evidence-store.ts demo/versioned-project-store.ts demo/versioned-project-contract.ts demo/model-scope-store.ts demo/linked-model-store.ts demo/linked-model-routes.ts ./demo/
 COPY --chown=65032:33 src ./src
 COPY --chown=65032:33 scripts/container-healthcheck.ts ./scripts/
 

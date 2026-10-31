@@ -1,0 +1,250 @@
+{
+  "workerIsolation": {
+    "init": true,
+    "capDrop": [
+      "ALL"
+    ],
+    "pids": 64,
+    "memory": 2415919104,
+    "securityOpt": [
+      "no-new-privileges:true"
+    ],
+    "mountDestinations": [
+      "/spool"
+    ],
+    "user": "65032:33",
+    "memorySwap": 2415919104,
+    "tmpfs": {
+      "/tmp": "rw,noexec,nosuid,nodev,size=32m,mode=1777"
+    },
+    "readOnlyRoot": true,
+    "network": "none",
+    "nanoCpus": 500000000
+  },
+  "run": {
+    "originalSha256": "a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5",
+    "root": "C:\\Users\\Frederik Tegnander\\AppData\\Local\\Temp\\bim-forge-ifc-258-prerequisite-run3",
+    "sourceCommit": "d6f078da7cf9967e3b38a84a94ee8ac6750118ae",
+    "worker": "bim-forge-ifc-258-906bbb39b7d54c95a2d78c02c40488f8",
+    "imageId": "sha256:22bdcf5dde735377529719094df7180b8f45884a46cd94f8ad8687945e6f59dd",
+    "fixture": "C:\\Users\\Frederik Tegnander\\AppData\\Local\\Temp\\bim-forge-ifc-258-prerequisite-run3\\generated\\tiny\\synthetic.ifc",
+    "fixtureBytes": 7593,
+    "workerId": "bd25a0bbf79af308db056d2b87321f0a8de983ac6afc3a1ada13d5dbb9101741",
+    "image": "bim-forge-ifc-qualification:258-906bbb39b7d54c95a2d78c02c40488f8"
+  },
+  "stoppedWorker": "exited",
+  "terminal": {
+    "kind": "complete"
+  },
+  "insideCameraSeam": {
+    "result": {
+      "kind": "unsupported",
+      "reason": "Saved eye pose belongs to a different project, source or level, or is invalid.",
+      "alternatives": [
+        "overview",
+        "fly"
+      ]
+    },
+    "selected": {
+      "kind": "ifc-reference",
+      "source": {
+        "globalId": "0cVGOOCaPLkO2uhmAeTWJ8",
+        "namespace": "385ee548-5883-4afc-a5de-fe7a556fbec2",
+        "originalSha256": "a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5",
+        "revision": "385ee548-5883-4afc-a5de-fe7a556fbec2"
+      },
+      "occurrence": {
+        "id": "385ee548-5883-4afc-a5de-fe7a556fbec2",
+        "sourceToProjectMetres": [
+          [
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ]
+        ]
+      }
+    },
+    "pose": {
+      "kind": "inside",
+      "projectId": null,
+      "sourcePin": "[{\"namespace\":\"385ee548-5883-4afc-a5de-fe7a556fbec2\",\"originalSha256\":\"a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5\",\"revision\":\"385ee548-5883-4afc-a5de-fe7a556fbec2\"},{\"id\":\"385ee548-5883-4afc-a5de-fe7a556fbec2\",\"sourceToProjectMetres\":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]}]",
+      "levelId": null,
+      "eye": [
+        12.564742878019983,
+        21.557735026918962,
+        3.6999999999999997
+      ],
+      "forward": [
+        -0.8660253998985324,
+        -0.5000000067305869,
+        0
+      ],
+      "up": [
+        0,
+        0,
+        1
+      ],
+      "motion": "fly"
+    },
+    "state": {
+      "kind": "inside",
+      "motion": "fly"
+    },
+    "engines": 1,
+    "sameScene": true,
+    "fxaa": 1,
+    "nativeUnchanged": true
+  },
+  "manifest": {
+    "artifacts": {
+      "geometry.json": {
+        "bytes": 8898,
+        "sha256": "64105edd3170b667ce114afc16a9e8b61125d8ef12723d8850495d57f5f4b714"
+      },
+      "index.json": {
+        "bytes": 22713,
+        "sha256": "2562e459e9f610411208c6179ee48a3dbc640ec099b32691ec3ab131a0962cc4"
+      },
+      "original.ifc": {
+        "bytes": 7593,
+        "sha256": "a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5"
+      }
+    },
+    "counts": {
+      "entities": 153,
+      "meshes": 4,
+      "objects": 9,
+      "products": 7,
+      "triangles": 64,
+      "vertices": 40
+    },
+    "diagnostics": [
+      {
+        "code": "GEOREFERENCE_UNAPPLIED",
+        "detail": "Source engineering frame only; no survey conversion",
+        "globalId": "01nsbYyUDPvOopW6jHkwXr",
+        "ifcClass": "IfcProject",
+        "sourceStep": 12
+      },
+      {
+        "code": "PROPERTY_NOT_MAPPED",
+        "detail": null,
+        "globalId": null,
+        "ifcClass": "IfcPropertyBoundedValue",
+        "sourceStep": 153
+      },
+      {
+        "code": "RELATIONSHIP_NOT_MAPPED",
+        "detail": null,
+        "globalId": "1T6fbAEN9LkvlV77AZoP2i",
+        "ifcClass": "IfcRelSpaceBoundary",
+        "sourceStep": 152
+      },
+      {
+        "code": "RELATIONSHIP_NOT_MAPPED",
+        "detail": null,
+        "globalId": "30c$qXuhzSaRpd745bCnVs",
+        "ifcClass": "IfcRelVoidsElement",
+        "sourceStep": 107
+      },
+      {
+        "code": "NO_REPRESENTATION",
+        "detail": null,
+        "globalId": "047VtDe6TQU9HlM33BsZj9",
+        "ifcClass": "IfcBuildingStorey",
+        "sourceStep": 30
+      },
+      {
+        "code": "NO_REPRESENTATION",
+        "detail": null,
+        "globalId": "2APFRo2pbUpQdEooxE5P7$",
+        "ifcClass": "IfcSite",
+        "sourceStep": 18
+      },
+      {
+        "code": "NO_REPRESENTATION",
+        "detail": null,
+        "globalId": "3bWyhtjCfGRPj3B1RQ0WWI",
+        "ifcClass": "IfcBuilding",
+        "sourceStep": 24
+      }
+    ],
+    "format": "bim-forge-ifc-link",
+    "limits": {
+      "entities": 2000,
+      "output_bytes": 8388608,
+      "products": 64,
+      "seconds": 30.0,
+      "source_bytes": 2097152,
+      "triangles": 100000,
+      "vertices": 50000
+    },
+    "losses": [
+      "Meshes tessellate source geometry; no parametric/native editing or roundtrip.",
+      "Index maps direct scalar/list properties, decomposition, containment and type references only.",
+      "Other relationships/properties remain source inventories, not interpreted native semantics.",
+      "Materials, styles, layers, quantities and non-object metadata are not fully indexed.",
+      "Georeferencing is retained but unapplied; source engineering frame is not survey qualification."
+    ],
+    "occurrence": {
+      "id": "385ee548-5883-4afc-a5de-fe7a556fbec2",
+      "sourceToProjectMetres": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "readOnly": true,
+    "schema": "IFC4",
+    "source": {
+      "namespace": "385ee548-5883-4afc-a5de-fe7a556fbec2",
+      "originalSha256": "a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5",
+      "revision": "385ee548-5883-4afc-a5de-fe7a556fbec2"
+    },
+    "state": "complete",
+    "tool": {
+      "ifcopenshell": "0.9.0.post1"
+    },
+    "version": 1
+  }
+}

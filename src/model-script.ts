@@ -24,6 +24,7 @@ import type { Clarification } from './request-conversation.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
 import { assertModelScopeFresh, assertModelScopeWrites } from './model-scope.ts';
 import { applyModelParameterEdits, modelParameters } from './model-parameters.ts';
+import { HostedDoorWidthRequestSchema, HostedDoorWidthImpactSchema, previewHostedDoorWidth } from './hosted-opening.ts';
 import { previewWallShift } from './wall-dependencies.ts';
 import type { WallShiftImpact } from './wall-dependencies.ts';
 import { previewRoomDimensionChange } from './room-dimension-preview.ts';
@@ -350,6 +351,20 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
       if (!scope) throw new Error('Parameter editing requires a frozen model scope.');
       return applyModelParameterEdits({ snapshot: call.context.snapshot, targetIds: scope.targetIds, edits: input.edits });
     }, () => call.throwIfRevoked()) }),
+  previewHostedDoorWidth: api.method({ summary: 'Stage one native hosted door width while retaining its physical centre and host.',
+    description: 'Supply doorId,widthMetres,anchor:"centre". Width and resulting host offset must remain on the 1 mm grid. Only the Door width and its existing hosted-by offset can change. Existing model, endpoint, overlap and clearance validators apply atomically. Frozen scope must already authorize every stored write and required host, sibling opening and collision dependency read; missing context requires fresh scope. No accepted model is changed.',
+    effect: 'draft-write', metadata: { units: 'm', acceptsOrPublishesModel: false },
+    params: { input: HostedDoorWidthRequestSchema }, result: Type.Object({ model: snapshot, changes, impact: HostedDoorWidthImpactSchema }),
+    handler: ({ input }, call) => {
+      let preview: ReturnType<typeof previewHostedDoorWidth> | undefined;
+      const result = stage(call.context, () => {
+        preview = previewHostedDoorWidth(call.context.snapshot, input, call.context.binding.scope
+          ? { readable: modelWorkingGraph(call.context.snapshot, call.context.binding.scope) } : {});
+        return preview.snapshot;
+      }, () => call.throwIfRevoked());
+      if (!preview) throw new Error('Hosted door preview did not complete.');
+      return { ...result, impact: preview.impact };
+    } }),
   previewWallShift: api.method({ summary: 'Stage a bounded shared-partition shift and report stored changes and evaluated dependencies.',
     description: 'Translate an existing complete interior axis-aligned partition, updating adjacent rectangular room bounds and supported wall junctions. Nonzero millimetre-grid offset, at most one metre; positive means global +X for vertical walls or +Y for horizontal walls. Existing contents and hosted openings are validated. Impacts describe evaluation, not write authority: a hosted door may move while changed is false. Frozen scope must authorize every stored write, including adjacent Spaces; readable context grants no writes. No model is accepted or published.',
     effect: 'draft-write', metadata: { units: 'm', acceptsOrPublishesModel: false },
@@ -456,6 +471,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   MODEL_REVIEW_TEXT_GUIDANCE + ' ' +
   'For scoped requests, await model.scope() returns {scope,graph}: immutable target/context/dependent/writable IDs and a live partial working graph. Context is never write authority. model.inspect and mutation results use this same context. It is not a standalone valid project. ' +
   'Call model.previewParameters({edits:[{definitionId,name,value}]}) to edit frozen targets with explicit typed units. All mutation tools enforce frozen write limits; query matches never expand during a proposal. Changed membership or dependencies require a fresh human review. ' +
+  'Call model.previewHostedDoorWidth({doorId,widthMetres,anchor:"centre"}) to change one existing native Door width and compensate its existing hosted-by offset, preserving the physical project-space centre and host identity. Width and resulting offset require a 1 mm grid; unsupported topology, end-of-host overflow, opening overlap or clearance conflicts reject atomically. The result has model, cumulative changes and impact:{doorId,hostWallId,relationshipId,anchor,before,after}; before/after contain widthMetres,offsetMetres,centreMetres:[x,y,z] at floor elevation. Frozen scope must already include all writes and dependency reads; missing context requires a fresh scope, never silent expansion. Selection and linked/IFC references grant no write authority. No shell reconstruction scope or accepted-model publication is involved. ' +
   'Call model.previewWallShift({wallId,offsetMetres}) for a bounded complete shared partition. Offsets are nonzero metres on a 1 mm grid, at most one metre; positive means global +X for vertical walls or +Y for horizontal walls. The existing helper updates adjacent rectangular Spaces and supported wall junctions, then validates contents and openings atomically. Frozen scope must authorize every stored write; adjacent Spaces in read-only context do not grant permission. The result contains model, cumulative stored changes from the execution base, and impacts for this operation. An impact with changed:false can still move in world geometry when its host moves. Impacts never expand write authority. Unsupported topology or invalid contents leave the draft unchanged. ' +
   'Call model.previewRoomDimensionChange({roomId,wallId,axis:"x"|"y",measurement,minimumClearSpans:[]}) to derive one bounded shared-partition move from a centreline room span. A confirmed measurement is {kind:"confirmed",metres,sourceRef}; sourceRef is opaque context and confirmed is an agent/user interpretation for human review, not new evidence authority. Require confirmed units/scale and distinguish centreline driving dimensions from minimumClearSpans:[{roomId,axis,metres}]. Clear spans preserve the existing conservative maximum boundary half-thickness inset on every side, not surveyed face-specific dimensions. Unknown scale, ambiguity or contradictions require {kind:"unresolved",reason:"unknown-scale"|"ambiguous-dimension"|"contradictory-evidence",sourceRefs:[...]}; the result is status:"unresolved" with no model/changes and no draft mutation or preview. A ready result has status:"ready",model,cumulative changes,impacts,offsetMetres,measurement,clearSpanChecks with beforeMetres/afterMetres, and sorted dependencies with before/after room bounds/spans or opening world endpoints, storedChanged and evaluatedChanged. Named references must be readable in frozen scope and evaluated dependencies use that same projection. Existing atomic validation, adjacent-room write scope, abort/preview fences, frozen target/evidence read sets and separate human acceptance remain required. Constraints are design inputs, not code compliance or evidence claims. ' +
   'Use await model.inspect() for the exact bound model and placement context. Every script starts from that base or the supplied prior proposal draft for a conversation continuation. ' +
@@ -549,7 +565,7 @@ export class ModelScripts {
         ...(input.geometry ? { geometry: input.geometry } : {}),
         onActivity: input.onActivity, ...(input.onPreview ? { onPreview: input.onPreview } : {}) };
       const session = runtime.createSession({ context: draft,
-        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewWallShift', 'model.previewRoomDimensionChange', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewHostedDoorWidth', 'model.previewWallShift', 'model.previewRoomDimensionChange', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
           ...(input.geometry ? GEOMETRY_SCRIPT_CAPABILITIES : []),
           ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
           ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],

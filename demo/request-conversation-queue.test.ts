@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { temporaryRequestResources } from './request-test-resources.ts';
 import { ChangeRequests, BacklogConflict } from './change-requests.ts';
 import { RoomRepository, rectangleLayout } from '../src/room-model.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
@@ -40,11 +38,11 @@ const chatWorker: ModelWorker = { identity: { provider: 'test', model: 'conversa
 } };
 
 test('structured ScriptBox clarification, reply replay/CAS, proposal and explicit decision survive restart', async t => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'request-chat-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'request-chat-');
+  const directory = resources.directory;
   const file = path.join(directory, 'queue.sqlite');
   const repo = await RoomRepository.create();
-  let queue = await ChangeRequests.open(file, () => chatWorker);
+  let queue = await resources.openQueue(file, () => chatWorker);
   await queue.submit(repo.serialize(), initial(repo, 'question'));
   await settled(queue, 'question');
   assert.equal(queue.get('question').state, 'needs-input', queue.get('question').error ?? '');
@@ -52,14 +50,14 @@ test('structured ScriptBox clarification, reply replay/CAS, proposal and explici
   assert.ok(question?.kind === 'assistant' && question.content.kind === 'clarification');
   assert.deepEqual(question.content.options, ['1100 mm', '1200 mm']);
   await queue.close();
-  queue = await ChangeRequests.open(file, () => null);
+  queue = await resources.openQueue(file, () => null);
   const input = reply(queue, 'question', 'answer', 'Use 1200 mm.', repo.head('main'));
   await queue.appendMessage('question', input);
   assert.equal((await queue.appendMessage('question', input)).conversation?.sequence, 3);
   await assert.rejects(() => queue.appendMessage('question', { ...input, messageId: 'stale' }), BacklogConflict);
   await assert.rejects(() => queue.appendMessage('question', { ...input, text: 'Different replay.' }), BacklogConflict);
   await queue.close();
-  queue = await ChangeRequests.open(file, () => chatWorker);
+  queue = await resources.openQueue(file, () => chatWorker);
   await settled(queue, 'question');
   const ready = queue.get('question');
   assert.equal(ready.state, 'ready', ready.error ?? '');
@@ -70,7 +68,7 @@ test('structured ScriptBox clarification, reply replay/CAS, proposal and explici
   assert.equal(rectangleLayout(accepted.view(accepted.head('main')).snapshot).door.widthMm, 1200);
   assert.equal(queue.get('question').conversation?.messages.at(-1)?.kind, 'decision');
   await queue.close();
-  queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  queue = await resources.openQueue(file, () => null);
   assert.equal(queue.get('question').conversation?.messages.length, 5);
   assert.equal(queue.get('question').state, 'completed');
 });
@@ -105,16 +103,16 @@ test('reply supersedes a working turn without a late response overwriting it; pe
 });
 
 test('legacy tickets seed transcript once without rewriting their review or model bytes', async t => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'legacy-chat-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'legacy-chat-');
+  const directory = resources.directory;
   const file = path.join(directory, 'queue.sqlite');
   const repo = await RoomRepository.create();
-  let queue = await ChangeRequests.open(file, () => chatWorker);
+  let queue = await resources.openQueue(file, () => chatWorker);
   await queue.submit(repo.serialize(), initial(repo, 'legacy-question')); await settled(queue, 'legacy-question');
   const original = queue.get('legacy-question');
   await queue.close();
-  const db = new DatabaseSync(file); db.exec('DELETE FROM request_messages'); db.close();
-  queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  const db = resources.openDatabase(file); db.exec('DELETE FROM request_messages'); db.close();
+  queue = await resources.openQueue(file, () => null);
   assert.equal(queue.get('legacy-question').conversation?.messages.length, 2);
   assert.deepEqual(queue.get('legacy-question').result, original.result);
   assert.equal(queue.project(repo.projectId), repo.serialize());
@@ -200,17 +198,17 @@ test('continuation rebases a private draft over unrelated acceptance and fails e
 });
 
 test('region-only replies deliberately clear the previous native selection and survive storage restart', async t => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'request-markup-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const resources = temporaryRequestResources(t, 'request-markup-');
+  const directory = resources.directory;
   const file = path.join(directory, 'queue.sqlite'); const repo = await RoomRepository.create();
-  let queue = await ChangeRequests.open(file, () => null);
+  let queue = await resources.openQueue(file, () => null);
   await queue.submit(repo.serialize(), initial(repo, 'old-selection'));
   const visual = { snapshot: { kind: 'accepted', revisionId: repo.head('main') }, view: '3d', levelId: null,
     selectedObjectIds: [], annotations: [{ kind: 'rectangle', corners: [[1,1,0],[2,1,0],[2,3,0],[1,3,0]], label: 'Area' }] };
   await queue.appendMessage('old-selection', { ...reply(queue, 'old-selection', 'new-region', 'Add a kitchen here.', repo.head('main')), visual });
   assert.deepEqual(queue.get('old-selection').request.selectedObjectIds, []);
   assert.equal(queue.project(repo.projectId), repo.serialize());
-  await queue.close(); queue = await ChangeRequests.open(file, () => null); t.after(() => queue.close());
+  await queue.close(); queue = await resources.openQueue(file, () => null);
   const messages = queue.get('old-selection').conversation?.messages;
   const last = messages?.findLast(item => item.kind === 'user');
   assert.ok(last?.kind === 'user'); assert.deepEqual(last.visual, visual);

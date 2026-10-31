@@ -37,6 +37,7 @@ test('shipped workspace links IFC into one viewer and adds only unsent source co
   assert.ok(created && typeof created === 'object' && 'project' in created && typeof created.project === 'string');
   const native = await RoomRepository.restore(created.project); const projectId = native.projectId;
   const acceptedBefore = native.serialize();
+  await page.locator('#workspace-navigation-toggle').click();
   await page.locator('#linked-model-references > summary').click();
   await page.getByLabel('Attach IFC reference', { exact: true }).setInputFiles({ name: 'Linked context fixture.ifc', mimeType: 'application/x-step', buffer: await fs.readFile(fixture) });
   const tree = page.getByRole('list', { name: 'Linked context fixture.ifc spatial hierarchy', exact: true });
