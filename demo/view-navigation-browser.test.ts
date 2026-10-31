@@ -99,8 +99,17 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   await page.locator('canvas').focus(); await hold('w', 700); const walking = await pose();
   assert.ok(walking.eye[1] > 3.5); assert.equal(walking.eye[2], 1.6);
   // Solid walls conservatively block Walk, including door crossings in this first scope.
-  await page.keyboard.down('w'); await page.waitForTimeout(1800); await page.keyboard.up('w');
-  const blocked = await pose(); assert.ok(blocked.eye[1] < 5.75 && blocked.eye[1] > 5.5);
+  let blocked: InsidePose | null = null;
+  await page.keyboard.down('w');
+  try {
+    await page.waitForFunction(() => window.navHarness.pose().eye[1] > 5.5, undefined, { timeout: 10_000, polling: 'raf' });
+    for (let frame = 0; frame < 20; frame++) {
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      blocked = await pose();
+      assert.ok(blocked.eye[1] < 5.75 && blocked.eye[1] > 5.5, 'Held Walk stays in the wall band through rendered frames.');
+    }
+  } finally { await page.keyboard.up('w'); }
+  assert.ok(blocked); assert.ok(blocked.eye[1] < 5.75 && blocked.eye[1] > 5.5);
   await hold('Shift'); assert.equal((await pose()).eye[2], 1.6);
   await enter();
   const saved = await pose();
