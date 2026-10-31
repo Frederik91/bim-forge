@@ -136,15 +136,24 @@ test('a validated proposal preview permits markup and sends its exact proposal b
   assert.ok(value && typeof value === 'object' && 'ticket' in value && value.ticket && typeof value.ticket === 'object' && 'id' in value.ticket && typeof value.ticket.id === 'string');
   const ticketId = value.ticket.id;
   await page.getByRole('button', { name: 'Accept into Main', exact: true }).waitFor({ timeout: 45_000 });
+  const ready: unknown = await (await page.request.get(`${f.base}/api/change-requests/${ticketId}`)).json();
+  assert.ok(ready && typeof ready === 'object' && 'ticket' in ready && ready.ticket && typeof ready.ticket === 'object'
+    && 'result' in ready.ticket && ready.ticket.result && typeof ready.ticket.result === 'object'
+    && 'project' in ready.ticket.result && typeof ready.ticket.result.project === 'string');
+  const proposal = await RoomRepository.restore(ready.ticket.result.project);
+  const expected = proposal.reviews().find(review => review.decision.status === 'pending'); assert.ok(expected);
   const markup = page.getByRole('button', { name: '3D markup', exact: true });
   assert.ok(await markup.isVisible(), 'The proposal must retain markup controls.');
   const point = await wallPoint(page); await page.mouse.click(point.x, point.y); await markup.click();
   await draw(page, point);
   await page.locator('#request-text').fill('Use this marked wall area for the revision.');
-  const reply = page.waitForRequest(request => request.url() === `${f.base}/api/change-requests/${ticketId}/messages` && request.method() === 'POST');
-  await page.locator('#save-proposal').click(); const payload: unknown = (await reply).postDataJSON();
+  const reply = page.waitForResponse(response => response.url() === `${f.base}/api/change-requests/${ticketId}/messages` && response.request().method() === 'POST');
+  await page.locator('#save-proposal').click(); const response = await reply;
+  assert.equal(response.status(), 202, await response.text());
+  const payload: unknown = response.request().postDataJSON();
   assert.ok(payload && typeof payload === 'object' && 'visual' in payload);
   const visual = parseConversationVisual(payload.visual); assert.equal(visual.snapshot.kind, 'proposal');
+  assert.deepEqual(visual.snapshot, { kind: 'proposal', revisionId: expected.proposalRevisionId, proposalName: expected.proposalName });
   const rectangle = visual.annotations[0]; assert.ok(rectangle?.kind === 'rectangle');
   assert.ok(Math.max(...rectangle.corners.map(p => p[2])) - Math.min(...rectangle.corners.map(p => p[2])) > .1);
   const accepted: unknown = await (await page.request.get(f.base + '/api/projects/' + f.projectId)).json();
