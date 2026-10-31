@@ -3474,6 +3474,7 @@ async function initialize() {
     report(error);
   } finally {
     busy = false;
+    if (repo) renderComparison();
     updateControls();
     if (needsStart) {
       ui['start-close'].hidden = true;
