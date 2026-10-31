@@ -24,7 +24,7 @@ test('draw spatial context through the real app, queue it and replay the saved c
       proxy.on('error', () => { response.writeHead(502); response.end(); }); request.pipe(proxy); return;
     }
     const filename = request.url === '/' ? 'index.html' : request.url?.slice(1);
-    if (!filename || !['index.html', 'room-app.mjs', 'room.css', 'request-chat.css'].includes(filename)) { response.writeHead(404); response.end(); return; }
+    if (!filename || !['index.html', 'room-app.mjs', 'room.css', 'request-chat.css', 'canvas-studio.css'].includes(filename)) { response.writeHead(404); response.end(); return; }
     response.setHeader('Content-Type', filename.endsWith('.mjs') ? 'text/javascript' : filename.endsWith('.css') ? 'text/css' : 'text/html');
     void fs.readFile(path.join(assets, filename)).then(bytes => response.end(bytes), () => { response.writeHead(404); response.end(); });
   });
@@ -41,6 +41,8 @@ test('draw spatial context through the real app, queue it and replay the saved c
   t.after(async () => { await page.screenshot({ path: path.join(output, 'final.png') }).catch(() => {});
     await fs.writeFile(path.join(output, 'browser-errors.json'), JSON.stringify(errors)); });
   await page.goto(base);
+  const stylesheet = await page.request.get(base + '/canvas-studio.css');
+  assert.equal(stylesheet.status(), 200, 'The markup browser fixture must serve the compiled workspace stylesheet.');
   await page.locator('#project-name').fill('Spatial markup test house');
   await page.locator('#project-template').selectOption('house');
   const created = page.waitForResponse(response => response.url() === base + '/api/projects' && response.request().method() === 'POST');

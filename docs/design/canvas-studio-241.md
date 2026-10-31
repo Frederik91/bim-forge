@@ -89,13 +89,15 @@ The shipped-app check proves source upload, one surviving canvas, baseline prese
 
 The earlier failed phone screenshot remains retained as `canvas-studio-241/last-ui-state.png` alongside the historical run ledger.
 
-## Sources
-
 ## Merge integration plan
 
 The maintainer authorized merging PR #242 on 2026-10-31. Integrate current main `005fdf5` before merging: retain the React chat facade, use main's `annotationDescription` in `request-chat-react.tsx`, and adapt `spatial-markup-browser.test.ts` to open Model navigation through the rail and verify saved rectangle/circle descriptions in the React transcript. Preserve the automatically merged draft-lineage, markup, source and acceptance contracts. No model entity or validator change is introduced by conflict resolution.
 
 Acceptance evidence: isolated-VM strict validation/build, full root tests, chat/workspace/Canvas Studio/guided-floor browser checks and the spatial-markup browser check. Prior receipts remain scoped to their original implementation commit. No deployment is authorized.
+
+Integration product source `2997cdd` passed validation/build and the full root suite: 1,022 passed, zero failed, two conditional skips. All 19 existing chat/workspace/guided-floor browser checks passed. The markup proxy omitted `canvas-studio.css`; a new 404 assertion reproduced that fixture defect before its asset allowlist was corrected. The uninstrumented high-DPI markup test then passed independently on the idle VM, including saved annotation descriptions and an unchanged accepted project. Screenshot timeouts observed during concurrent qualification remain recorded; no timeout, device scale or functional assertion was relaxed. [Integration receipt](canvas-studio-241/merge-qualification.txt).
+
+GitHub branch protection requires one approving code-owner review and enforces the rule for administrators. The PR author is also the only listed code owner; self-approval cannot satisfy that gate. The maintainer's merge request authorizes readiness and ordinary merge, but no protection change has been made.
 
 ## Sources
 
