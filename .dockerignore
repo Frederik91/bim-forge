@@ -5,6 +5,7 @@
 !demo/server.ts
 !demo/geometry-source.ts
 !demo/change-requests.ts
+!demo/task-placement.ts
 !demo/request-source-store.ts
 !demo/project-evidence-store.ts
 !demo/versioned-project-store.ts
