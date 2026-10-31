@@ -54,11 +54,11 @@ test('real 3D agent bodies choose same-place conversations, keep target highligh
     await page.getByRole('button', { name: /Draft-03 · Unsent wall question/ }).click();
     assert.match(await page.locator('#conversation').innerText(), /Unsent draft. No worker has started/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-    const bounds = await page.locator('.anchor').evaluateAll(elements => elements.map(element => {
+    const bounds = await page.evaluate(() => Array.from(document.querySelectorAll('.anchor'), element => {
       const box = element.getBoundingClientRect(); return { text: element.textContent, left: box.left, right: box.right, width: box.width };
     }));
     assert.equal(bounds.length, 2, 'both same-place and draft labels remain visible');
-    assert.ok(bounds.every(box => box.left >= 7.5 && box.right <= width - 7.5), `readable labels fit inside the ${width}px stage: ${JSON.stringify(bounds)}`);
+    assert.ok(bounds.every(box => box.width > 0 && box.left >= 7.5 && box.right <= width - 7.5), `readable labels fit inside the ${width}px stage: ${JSON.stringify(bounds)}`);
     narrowBounds.push({ viewport: width, bounds });
     // The true body point remains pickable even when its label is clamped at the edge.
     const bodyPoint = await marker.evaluate(element => ({ x: Number(element.dataset.anchorX), y: Number(element.dataset.anchorY) }));
