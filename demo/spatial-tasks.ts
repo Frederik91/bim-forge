@@ -44,6 +44,12 @@ export class SpatialTasks<Draft> {
   readonly #pending = new Map<string, { path: string; body: string; signature: string; sources: readonly RequestSource[] }>();
   readonly #observers = new Set<(projection: TaskProjection<Draft>) => void>();
   readonly #reading = new Set<string>();
+  readonly #responseOrders = new WeakMap<object, { project: number; order: number }>();
+  readonly #appliedOrders = new Map<string, number>();
+  readonly #summaryOrders = new Map<string, number>();
+  readonly #conversationBindings = new Map<string, { sequence: number; requestId: string }>();
+  #responseOrder = 0;
+  #projectSnapshot: { order: number; project: string | null } | null = null;
   #projectId: string | null = null;
   #ticketId: string | null = null;
   #draftId = 'new';
@@ -81,30 +87,73 @@ export class SpatialTasks<Draft> {
   setProject(projectId: string | null): void {
     if (projectId === this.#projectId) return;
     this.#projectId = projectId; this.#projectGeneration += 1; this.#taskGeneration += 1;
-    this.#ticketId = null; this.#draftId = 'new'; this.#tickets = []; this.#conversation = null; this.#inspection = null; this.#offline = false; this.#scopes.clear(); this.#emit();
+    this.#ticketId = null; this.#draftId = 'new'; this.#tickets = []; this.#conversation = null; this.#inspection = null; this.#offline = false;
+    this.#scopes.clear(); this.#appliedOrders.clear(); this.#summaryOrders.clear(); this.#conversationBindings.clear(); this.#projectSnapshot = null; this.#emit();
   }
-  selectTask(ticketId: string | null): void {
-    if (ticketId === this.#ticketId) return;
-    this.#ticketId = ticketId; this.#taskGeneration += 1; this.#conversation = null; this.#inspection = null; this.#offline = false; this.#emit();
+  #selectTask(ticketId: string | null): boolean {
+    if (ticketId === this.#ticketId) return false;
+    this.#ticketId = ticketId; this.#taskGeneration += 1; this.#conversation = null; this.#inspection = null; this.#offline = false; return true;
   }
+  selectTask(ticketId: string | null): void { if (this.#selectTask(ticketId)) this.#emit(); }
   startTask(draftId = `draft-${globalThis.crypto.randomUUID()}`): void {
     this.#draftId = draftId; this.#ticketId = null; this.#taskGeneration += 1; this.#conversation = null; this.#inspection = null; this.#offline = false; this.#emit();
   }
   saveDraft(key: string, draft: Draft): void { this.#drafts.set(key, draft); this.#emit(); }
   deleteDraft(key: string): void { this.#drafts.delete(key); this.#emit(); }
   getDraft(key: string): Draft | undefined { return this.#drafts.get(key); }
-  parseTicket(value: unknown): BacklogItem { return freezeData(parseBacklogItem(value, this.#scopes)); }
-  updateTicket(ticket: BacklogItem): void {
-    if (ticket.projectId !== this.#projectId) throw new Error('Task project mismatch.');
-    this.#tickets = [...this.#tickets.filter(item => item.id !== ticket.id), ticket]; this.#emit();
+  #stamp(value: object, order = ++this.#responseOrder): void {
+    this.#responseOrders.set(value, { project: this.#projectGeneration, order });
   }
+  #requireOrder(ticketId: string, order: number): void {
+    if (order < (this.#appliedOrders.get(ticketId) ?? 0)) throw new StaleTaskResponse();
+  }
+  parseTicket(value: unknown): BacklogItem {
+    const ticket = freezeData(parseBacklogItem(value, this.#scopes));
+    const source = isRecord(value) ? this.#responseOrders.get(value) : undefined;
+    if (source) this.#responseOrders.set(ticket, source);
+    return ticket;
+  }
+  #storeTicket(ticket: BacklogItem): void {
+    if (ticket.projectId !== this.#projectId) throw new Error('Task project mismatch.');
+    if (!this.#responseOrders.has(ticket)) this.#stamp(ticket);
+    const source = this.#responseOrders.get(ticket);
+    if (!source || source.project !== this.#projectGeneration) throw new StaleTaskResponse();
+    const known = this.#conversationBindings.get(ticket.id);
+    const current = this.#tickets.find(item => item.id === ticket.id);
+    if (!known && source && source.order < (this.#summaryOrders.get(ticket.id) ?? 0) && current?.request.requestId !== ticket.request.requestId) throw new StaleTaskResponse();
+    if (known && ticket.request.requestId !== known.requestId) throw new StaleTaskResponse();
+    this.#requireOrder(ticket.id, source.order); this.#appliedOrders.set(ticket.id, source.order);
+    this.#tickets = [...this.#tickets.filter(item => item.id !== ticket.id), ticket];
+  }
+  updateTicket(ticket: BacklogItem): void { this.#storeTicket(ticket); this.#emit(); }
   setOffline(offline: boolean): void { this.#offline = offline; this.#emit(); }
-  receiveTask(value: unknown): void {
+  #confirmDetail(value: unknown): { ticket: BacklogItem; conversation: RequestConversation } {
     const ticket = this.parseTicket(value); const conversation = conversationFromTicket(value);
     if (ticket.projectId !== this.#projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
-    this.selectTask(ticket.id); this.#conversation = freezeData(conversation); this.#offline = false;
-    this.updateTicket(ticket);
+    const source = this.#responseOrders.get(ticket);
+    if (source && source.project !== this.#projectGeneration) throw new StaleTaskResponse();
+    const known = this.#conversationBindings.get(ticket.id);
+    const current = this.#tickets.find(item => item.id === ticket.id);
+    if (!known && source && source.order < (this.#summaryOrders.get(ticket.id) ?? 0) && current?.request.requestId !== ticket.request.requestId) throw new StaleTaskResponse();
+    if (conversation.messages.findLast(message => message.kind === 'user')?.requestId !== ticket.request.requestId) throw new Error('Conversation turn differs from its request binding.');
+    if (known && (conversation.sequence < known.sequence || conversation.sequence === known.sequence && ticket.request.requestId !== known.requestId)) throw new StaleTaskResponse();
+    if (!source && isRecord(value)) { this.#stamp(value); this.#stamp(ticket, this.#responseOrder); }
+    // Transcript sequence proves a newer turn even when request dispatch order disagrees.
+    if (source && source.order < (this.#appliedOrders.get(ticket.id) ?? 0)) {
+      if (conversation.sequence <= (known?.sequence ?? 0)) throw new StaleTaskResponse();
+      if (isRecord(value)) this.#stamp(value);
+      this.#stamp(ticket, this.#responseOrder);
+    }
+    this.#conversationBindings.set(ticket.id, { sequence: conversation.sequence, requestId: ticket.request.requestId });
+    this.#storeTicket(ticket); return { ticket, conversation };
   }
+  #receiveTask(value: unknown): void {
+    const previous = this.#tickets.find(ticket => ticket.id === this.#ticketId);
+    const { ticket, conversation } = this.#confirmDetail(value);
+    if (previous?.id === ticket.id && lifecycleChanged(previous, ticket)) this.#inspection = null;
+    this.#selectTask(ticket.id); this.#conversation = freezeData(conversation); this.#offline = false;
+  }
+  receiveTask(value: unknown): void { this.#receiveTask(value); this.#emit(); }
   inspectProposal(view: RequestChatProposalReview | null): void {
     if (view) {
       const message = this.#conversation?.messages.find(item => item.id === view.messageId);
@@ -128,32 +177,53 @@ export class SpatialTasks<Draft> {
     return value;
   }
   async readTask(ticketId: string): Promise<Record<string, unknown>> {
-    const generation = this.generation;
+    const generation = this.generation; const order = ++this.#responseOrder;
     const value = this.#record(await this.#json(`/api/change-requests/${encodeURIComponent(ticketId)}`));
     this.requireCurrent(generation);
-    const ticket = this.parseTicket(value.ticket);
-    if (ticket.id !== ticketId || ticket.projectId !== this.#projectId) throw new Error('Task identity mismatch.');
-    this.updateTicket(ticket);
+    if (!isRecord(value.ticket) || value.ticket.id !== ticketId) throw new Error('Task identity mismatch.');
+    if (isRecord(value.ticket)) this.#stamp(value.ticket, order);
     if (this.#ticketId === ticketId) this.receiveTask(value.ticket);
+    else { this.#confirmDetail(value.ticket); this.#emit(); }
     return value;
   }
   async openTask(ticketId: string): Promise<Record<string, unknown>> { this.selectTask(ticketId); return this.readTask(ticketId); }
   async readDraft(ticketId: string) {
-    const generation = this.generation;
+    const generation = this.generation; const order = ++this.#responseOrder;
     const value = this.#record(await this.#json(`/api/change-requests/${encodeURIComponent(ticketId)}/draft`));
-    this.requireCurrent(generation);
+    this.requireCurrent(generation); this.#requireOrder(ticketId, order);
     if (!Object.hasOwn(value, 'draft')) throw new Error('Invalid live draft response.');
     return parseRequestDraft(value.draft);
   }
   async refresh(): Promise<{ tickets: readonly BacklogItem[]; project: string | null }> {
-    const generation = this.generation; const projectId = this.#projectId;
+    const generation = this.generation; const projectId = this.#projectId; const order = ++this.#responseOrder;
     if (!projectId) throw new Error('Open a project first.');
     const value = this.#record(await this.#json(`/api/projects/${encodeURIComponent(projectId)}/change-requests`));
     this.requireCurrent(generation, true);
     if (!Array.isArray(value.tickets) || (value.project !== null && typeof value.project !== 'string')) throw new Error('Invalid project backlog.');
-    const tickets = value.tickets.map(item => this.parseTicket(item));
+    const tickets = value.tickets.map(item => { if (isRecord(item)) this.#stamp(item, order); return this.parseTicket(item); });
     if (tickets.some(item => item.projectId !== projectId)) throw new Error('Backlog contains a different project.');
-    this.#tickets = tickets; this.#emit(); return { tickets, project: value.project };
+    // Summaries have no transcript sequence, so changed known tasks require a detail read.
+    for (const ticket of tickets) {
+      const current = this.#tickets.find(item => item.id === ticket.id);
+      if (current && this.#conversationBindings.has(ticket.id) && lifecycleChanged(current, ticket) && order >= (this.#appliedOrders.get(ticket.id) ?? 0)) {
+        try { await this.readTask(ticket.id); } catch (error) { if (!(error instanceof StaleTaskResponse)) throw error; }
+      }
+    }
+    this.requireCurrent(generation, true);
+    const remaining = new Map(this.#tickets.map(ticket => [ticket.id, ticket]));
+    const merged: BacklogItem[] = [];
+    for (const ticket of tickets) {
+      const current = remaining.get(ticket.id); remaining.delete(ticket.id);
+      if (Math.max(this.#appliedOrders.get(ticket.id) ?? 0, this.#summaryOrders.get(ticket.id) ?? 0) > order || current && this.#conversationBindings.has(ticket.id) && lifecycleChanged(current, ticket)) { if (current) merged.push(current); }
+      else { merged.push(ticket); this.#summaryOrders.set(ticket.id, order); }
+    }
+    for (const ticket of remaining.values()) {
+      if (Math.max(this.#appliedOrders.get(ticket.id) ?? 0, this.#summaryOrders.get(ticket.id) ?? 0) > order) merged.push(ticket);
+      else this.#summaryOrders.set(ticket.id, order);
+    }
+    this.#tickets = merged;
+    if (!this.#projectSnapshot || order >= this.#projectSnapshot.order) this.#projectSnapshot = { order, project: value.project };
+    this.#emit(); return { tickets: [...this.#tickets], project: this.#projectSnapshot.project };
   }
   async #send(key: string, signature: string, initial: () => { path: string; body: string; sources: readonly RequestSource[] }): Promise<Record<string, unknown>> {
     const generation = this.generation; const projectId = this.#projectId;
@@ -167,10 +237,13 @@ export class SpatialTasks<Draft> {
     const ticket = this.parseTicket(value.ticket);
     if (ticket.projectId !== projectId) throw new Error('Submission acknowledgement project mismatch.');
     const preserveDraft = envelope.signature !== signature;
-    this.#pending.delete(key);
     this.requireCurrent(generation);
-    if (!preserveDraft) this.#drafts.delete(key);
-    this.selectTask(ticket.id); this.updateTicket(ticket);
+    const order = ++this.#responseOrder;
+    if (isRecord(value.ticket)) this.#stamp(value.ticket, order);
+    this.#stamp(ticket, order);
+    if (isRecord(value.ticket) && Object.hasOwn(value.ticket, 'conversation')) this.#receiveTask(value.ticket);
+    else { this.#storeTicket(ticket); this.#selectTask(ticket.id); }
+    this.#pending.delete(key); if (!preserveDraft) this.#drafts.delete(key); this.#emit();
     return { ...value, preserveDraft };
   }
   async submit(content: TaskSubmission): Promise<TaskAcknowledgement> {
@@ -196,6 +269,17 @@ export class SpatialTasks<Draft> {
     }));
     this.requireCurrent(generation);
     if (typeof value.project !== 'string') throw new Error('Missing accepted server project.');
+    const order = ++this.#responseOrder;
+    if (isRecord(value.ticket)) {
+      this.#stamp(value.ticket, order);
+      if (Object.hasOwn(value.ticket, 'conversation')) {
+        if (this.#ticketId === input.ticketId) this.#receiveTask(value.ticket); else this.#confirmDetail(value.ticket);
+      }
+    }
+    this.#appliedOrders.set(input.ticketId, Math.max(order, this.#appliedOrders.get(input.ticketId) ?? 0));
+    this.#projectSnapshot = { order, project: value.project };
+    if (this.#ticketId === input.ticketId) this.#inspection = null;
+    this.#emit();
     return value;
   }
   async poll(kind: 'backlog' | 'conversation' | 'activity', update: () => Promise<void>): Promise<void> {
@@ -239,6 +323,10 @@ export interface BacklogItem {
   id: string; projectId: string; title: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
   request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; target?: FrozenDesignTarget; evidencePins?: readonly EvidencePin[]; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
+}
+function lifecycleChanged(previous: BacklogItem, next: BacklogItem): boolean {
+  return previous.request.requestId !== next.request.requestId || previous.state !== next.state
+    || previous.attempts !== next.attempts || previous.error !== next.error;
 }
 function parseBacklogItem(value: unknown, ticketScopes: Map<string, { projectId: string; scope: FrozenModelScope }>): BacklogItem {
   if (!isRecord(value) || !isRecord(value.request) || typeof value.id !== 'string' || typeof value.projectId !== 'string'

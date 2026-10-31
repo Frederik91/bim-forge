@@ -90,11 +90,25 @@ test('shipped task controller keeps independent attachments and drafts, appends 
   await page.locator('#chat-list button').filter({ hasText: 'First independent door task' }).click();
   await waitForDraft('');
   assert.equal(await page.locator('#request-text').inputValue(), '');
+  let releaseSameTask = () => {};
+  const sameTaskGate = new Promise<void>(resolve => { releaseSameTask = resolve; }); t.after(() => releaseSameTask());
+  let heldSameTask = () => {}; const sameTaskHeld = new Promise<void>(resolve => { heldSameTask = resolve; });
+  let deliveredSameTask = () => {}; const sameTaskDelivered = new Promise<void>(resolve => { deliveredSameTask = resolve; });
+  await page.route(`${base}/api/change-requests/${firstId}`, async route => {
+    const saved = await route.fetch(); heldSameTask(); await sameTaskGate;
+    await route.fulfill({ response: saved }); deliveredSameTask();
+  }, { times: 1 });
+  await sameTaskHeld;
   await page.locator('#request-text').fill('Retain first source and clarify this task');
   const appended = page.waitForResponse(reply => reply.url().endsWith(`/api/change-requests/${firstId}/messages`));
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   const reply = await appended; assert.equal(reply.status(), 202, await reply.text());
   await page.locator('#request-chat-mount').getByText('Retain first source and clarify this task', { exact: true }).waitFor();
+  releaseSameTask(); await sameTaskDelivered;
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  assert.equal(await page.locator('#request-chat-mount').getByText('Retain first source and clarify this task', { exact: true }).count(), 1);
+  assert.equal(await page.locator('.request-chat-status[data-status="offline"]').count(), 0);
+  assert.equal(await page.locator('#error').isVisible(), false);
 
   let hold = true; let release = () => {};
   const gate = new Promise<void>(resolve => { release = resolve; }); t.after(() => release());
