@@ -28,7 +28,7 @@ Text and voice are intended ways to express intent. Future VR is a consideration
 
 Being inside the building is the primary intended spatial experience. Plan, section, elevation, and overview remain readily available and preserve location, selection, and task context across view changes. Direct navigation to places and tasks complements movement through the building.
 
-Desktop controls include WASD movement, mouse-facing control with explicit cursor capture and Escape release, and a separate free-roam flight mode with ascent and descent. Conversation fields never use their keystrokes to move the camera. The isolated study demonstrates these controls; production integration and other input devices remain separate work.
+Desktop controls include WASD movement, mouse-facing control with explicit cursor capture and Escape release, and free-roam flight with Shift to ascend and Ctrl to descend. Conversation fields never use their keystrokes to move the camera. The isolated study demonstrates these controls; production integration and other input devices remain separate work.
 
 Built-in human voice chat, text chat, and private conversations let participants communicate without finding contact details in an external calling application. The interface distinguishes human recipients from agent instructions. Voice transport, proximity audio, recording, transcription, and retention remain open design decisions.
 
@@ -52,7 +52,7 @@ Current workspace reference: docs/design/canvas-studio-241.md and its desktop, p
 
 - Keep the model present through conversation and review.
 - Make the current visual and selection context shared and explicit.
-- Conversations belong to objects or spatial areas in the model. Selecting a place starts text or voice interaction there; persistent spatial markers make those conversations discoverable on return. A secondary list provides retrieval and takes users back to the relevant place.
+- Conversations retain their starting place and associated objects or region separately. In 3D, a hovering agent represents the conversation at its origin. Selecting that agent opens the task and highlights its associated items. Plan uses corresponding task references; a secondary list provides another route back.
 - Make proposed and accepted changes distinguishable.
 - Preserve human authority over consequential model changes.
 - Derive the design system from a tested workspace direction.

@@ -33,11 +33,21 @@ The next study follows one continuous work session, rather than separate dashboa
 
 ## Interaction decisions to test
 
+The maintainer selected Inside as the base and requested richer Shared studio drafting details in Plan, plus actual hovering 3D agents for conversations. Plan details must represent the same synthetic geometry, not import the reference's unrelated bedroom/kitchen layout. Dimensions, furniture outlines, door swings, labels, scale and orientation are in scope. A task agent stays at the conversation's original spatial location; selecting it opens the task and highlights its associated objects. Shift now ascends in flight, Ctrl descends, and the former Shift speed boost is removed. Validate plan/model alignment, agent picking and target highlights, fixed conversation origins across navigation, Inside/Plan continuity, ascent/descent, and typing isolation. No production geometry, model schema, or validator change is authorized by this study revision.
+
 Navigation extension requested by the maintainer: retain grounded WASD walking and add explicit mouse-look plus Fly locomotion. Fly uses the facing direction, allows ascent and descent, and can leave the room bounds. Keep a clear cursor-release action and a route back to the room. Input fields, focus loss, and view changes must stop movement. Scope: study `app.ts`, its HTML/CSS controls/help, and the product/UX navigation notes. Model entities and validators are unchanged. Acceptance evidence includes flight leaving eye height/room bounds, returning to Walk, cursor release, retained pose across views, and typing without camera movement.
 
-The built navigation extension passed regular Chromium interaction checks: Shift and Space rose above the synthetic ceiling; Ctrl reduced elevation; a stable flight height survived Plan and Inside switches; switching Fly off restored 1.6 m walking height. Captured mouse-look engaged on the model, actual mouse movement changed the view, and Escape released capture. Real WASD keystrokes entered into the conversation did not move the camera. The in-app browser refused cursor capture and correctly displayed the drag-to-look fallback. The 390-pixel layout had no horizontal overflow or overlap between navigation and object controls. The initial startup check caught an SVG element used where an HTML container was required; correcting the container restored startup. This remains a local study, not production navigation qualification.
+The earlier navigation revision passed regular Chromium checks with its former Space ascent and Shift boost mappings. Ctrl reduced elevation; flight pose survived Plan and Inside switches; switching Fly off restored 1.6 m walking height. Captured mouse-look engaged on the model, mouse movement changed the view, and Escape released capture. Typed WASD input did not move the camera. The in-app browser refused cursor capture and displayed the drag-to-look fallback. Those earlier ascent/boost mappings are superseded by the Shift-up revision below.
 
 Independent navigation review found that a held drag could survive canvas focus loss. A real browser reproduction moved the marker after focus had moved to a view control. The shared stop-navigation path now cancels held keys, active drag, pointer capture, and mouse lock. Repeating the sequence left the marker unchanged. The reviewer scored this fix resolved and returned SHIP for study feedback after inspecting recaptured desktop and narrow screens. This verdict covers the listed fix, not production navigation or final visual identity.
+
+### Selected Inside base, detailed Plan, and spatial task agents
+
+The current revision keeps Inside as the base. Plan borrows Shared studio's drawing language while showing the same synthetic room, bench, table, partition, and entrance opening. It adds 6000 by 4000 mm wall-axis dimensions, existing/proposed opening dimensions, door swings, a projected one-metre scale and +Z orientation. No bedroom or kitchen geometry from the unrelated reference is introduced. The SVG drawing uses the actual Plan camera transform; underlying model picking and task selection remain available.
+
+The door task now begins on first selection rather than existing as an item badge at startup. It creates a modeled hovering agent at a saved origin near that starting point. Mira's task has its own agent. Selecting the physical agent opens the task and highlights its associated door or wall; closing the conversation removes the target highlight while retaining the agent. 3D name labels accompany the figures, and Plan retains compact agent references. These are two local predefined task targets, not a live multi-agent system.
+
+Browser checks selected the modeled agent's body and opened the correct task; the selected capture shows the associated door highlighted. The first task changed the conversation count from one to two. Agent locations matched after Inside/Plan round trips. Plan exposed its dimensions and illustrative 1100 mm preview; the narrow Plan's two agent references did not overlap. Shift raised flight height from 1.6 to 2.2 m, Space left it unchanged, and Ctrl lowered it to 1.9 m. Shift typed in the conversation did not move the camera. Independent source/capture review returned SHIP for study feedback without material fixes. Final avatar art, dense scenes and real multi-agent behavior remain unqualified.
 
 - How much anchored conversation can be read while leaving the object and room legible? What happens when its anchor leaves the view?
 - How are overlapping markers grouped without hiding task status, ownership, or required decisions?
@@ -69,8 +79,8 @@ A later study must explore capture, replay and correction of those associations,
 
 ## Evidence
 
-- [Desktop Inside conversation](spatial-conversation-248/desktop.png)
-- [Narrow conversation and preview](spatial-conversation-248/mobile.png)
+- [3D task agent and highlighted door](spatial-conversation-248/desktop.png)
+- [Detailed Plan with compact task references](spatial-conversation-248/mobile.png)
 - [Validator output](spatial-conversation-248/validation.txt)
 
 Additional Plan, Section and offscreen captures were reviewed locally under `.impeccable/review/`. The interaction study runs separately using [its local build instructions](../../experiments/spatial-conversation-248/README.md).
@@ -79,15 +89,17 @@ Additional Plan, Section and offscreen captures were reviewed locally under `.im
 
 These values describe the study, not an adopted visual system. The source uses Segoe UI with Arial and sans-serif fallbacks, a 14-pixel base, and mostly 13-pixel labels. Deep-blue chrome uses `#172f41`; the mineral background uses `#e9eef0`; selection and primary controls use `#234eaa`; amber status uses `#86500b`. Controls generally have 44-pixel minimum height and 6-pixel corners. The desktop conversation is 358 pixels wide; the narrow version is bounded to 49 percent of the stage with scrolling. Focus, text selection, caret, and scrollbars use the same palette. Final `DESIGN.md` and token authority are deliberately deferred until the maintainer reviews the spatial interaction and visual language.
 
+Plan annotations use Arial/Helvetica at 12 to 14 pixels, ink `#253b49`, and paper `#eef0ed`. Task-agent bodies use blue `#325cc2` or teal `#217b78` with pale faces `#e1edf6`. These drawing and character values are study-specific and remain provisional.
+
 ## Direction contract
 
 THESIS: Conversation belongs to a place in the model; selection opens local interaction rather than a separate assistant workspace.
 
 OWN-WORLD: Provisional mineral canvas and deep-blue project chrome, high-contrast sans text, cobalt selection, amber proposed geometry and text-labeled work status. These are exploratory tokens, not an adopted design system.
 
-STORY: Select a door or wall, type an intent at its spatial anchor, see illustrative agent activity there, then return through the marker or secondary conversation list.
+STORY: Select a door or wall, begin an intent, and retain a hovering agent at that conversation's origin. Select the agent to reopen the task and highlight its associated objects. Plan and the secondary list provide corresponding routes back.
 
-FIRST VIEWPORT: Inside places the person at a synthetic room location at eye height. Compact controls expose Plan, Section, and Overview. A conversation appears at its selected object or region; a secondary list opens only on request. The built study and browser evidence now exercise this direction; it remains separate from production.
+FIRST VIEWPORT: Inside places the person at a synthetic room location at eye height. Compact controls expose Plan, Section, Overview, mouse look and flight. Conversations appear at their hovering task agents rather than following the currently focused object. Detailed Plan uses the same model context; the secondary list opens only on request. The study remains separate from production.
 
 FORM: Maintainer-pinned spatial conversation direction supersedes the initial seven-candidate exploration; initial seed:222a739c27ec2966 is historical, not authority over the correction.
 

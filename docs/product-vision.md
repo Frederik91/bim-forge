@@ -30,7 +30,7 @@ Plan, section, elevation, and overview views remain readily available. Switching
 
 People can navigate through the building or jump directly to a room, object, saved viewpoint, or permitted shared task. Routine work must not require walking through every intervening space. Navigation controls and transitions still need testing across desktop, touch, keyboard, and future VR.
 
-Desktop navigation includes familiar game-style controls. WASD moves relative to the facing direction, and mouse movement turns that direction in an explicitly enabled mouse-look mode. Escape restores the cursor for selection and conversation. A separate free-roam flight mode allows movement beyond eye height and through the building for inspection, with explicit ascent, descent, and faster travel controls. Walking and flying remain distinguishable, and a return-to-room action recovers a useful location. Navigation input stops while a person types, changes views, or leaves the model focus.
+Desktop navigation includes familiar game-style controls. WASD moves relative to the facing direction, and mouse movement turns that direction in an explicitly enabled mouse-look mode. Escape restores the cursor for selection and conversation. A separate free-roam flight mode allows movement beyond eye height and through the building for inspection. Shift ascends and Ctrl descends. Walking and flying remain distinguishable, and a return-to-room action recovers a useful location. Navigation input stops while a person types, changes views, or leaves the model focus.
 
 ### People can talk within the shared building
 
@@ -44,9 +44,9 @@ Conversation privacy still applies. Spatial proximity does not make personal con
 
 Starting a task conversation assigns an agent the instruction and its model context. The task retains its owner, source revision, relevant objects or region, and conversation. Several independent tasks can concern the same object or nearby places. An object does not have to share one conversation for every intention.
 
-People can continue navigating while agents work. Where visibility permits, spatial markers show conversations and distinguish active work, a question awaiting an answer, and a proposal awaiting review. Returning to the place reveals its conversations. A searchable task list provides another route back to the relevant location and view, without requiring people to hunt through the building.
+People can continue navigating while agents work. In 3D, a conversation is represented by a hovering task agent at the place where the conversation started. Its origin is separate from the objects the task concerns. Selecting the agent opens the conversation and highlights the associated objects or region. The agent does not follow the currently focused item. Where visibility permits, these representations distinguish active work, a question awaiting an answer, and a proposal awaiting review. Equivalent task references remain available in 2D. A searchable task list provides another route back to the relevant location and view.
 
-Another engineer can communicate with the task owner or join a shared discussion within its visibility scope. The precise form of presence remains open. Avatars, camera sharing, marker clustering, and notification behavior need interaction design rather than being implied requirements.
+Another engineer can communicate with the task owner or join a shared discussion within its visibility scope. The maintainer selected hovering 3D task agents as the conversation representation; their final art and dense-scene behavior need further design. Human avatars, camera sharing, clustering, and notification behavior remain open.
 
 ### Concurrent agents coordinate overlapping work
 
