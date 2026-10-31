@@ -32,11 +32,16 @@ import { GeometryEvidenceConflict, geometryNativeInput, readGeometryEvidence, va
   publishWithGeometryGuard, DraftContinuation } from '../src/geometry-evidence.ts';
 import type { GeometryEvidenceSource, GeometryEvidence } from '../src/geometry-evidence.ts';
 import { geometryDigest } from '../src/geometry-query.ts';
+import { parseTaskPlacement, parseTaskPlacementRecoveryCommand, parseTaskPlacementRecoveries } from '../src/task-placement.ts';
+import type { TaskPlacement, TaskPlacementRecovery } from '../src/task-placement.ts';
+import { assertTaskPlacementBinding, resolveTaskPlacement } from './task-placement.ts';
 
 export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'completed' | 'rejected' | 'cancelled' | 'failed';
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
-type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope' | 'conversationVisual' | 'target' | 'evidencePins'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
+type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope' | 'conversationVisual' | 'target' | 'evidencePins' | 'taskPlacement'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
 interface RequestTicket<Project> {
+  taskPlacement?: TaskPlacement;
+  placementRecoveries?: TaskPlacementRecovery[];
   evidence?: EvidenceReadSet;
   conversation?: RequestConversation;
   id: string;
@@ -142,9 +147,9 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
     throw new Error('The stored change request is invalid.');
   }
   // The payload is parsed by the model request boundary again before every run.
-  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation', 'evidence']);
+  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation', 'evidence', 'taskPlacement', 'placementRecoveries']);
   const r = value.request;
-  fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope', 'conversationVisual', 'target', 'evidencePins']);
+  fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope', 'conversationVisual', 'target', 'evidencePins', 'taskPlacement']);
   const target = Object.hasOwn(r, 'target') ? parseFrozenDesignTarget(r.target) : undefined;
   if (target && (target.projectId !== value.projectId || target.revisionId !== r.baseRevisionId)) throw new Error('Stored request design does not match its project and base.');
   const evidence = Object.hasOwn(value, 'evidence') ? parseEvidenceReadSet(value.evidence) : undefined;
@@ -193,6 +198,8 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
   const conversation = Object.hasOwn(value, 'conversation') ? parseRequestConversation(value.conversation) : undefined;
   if (conversation && conversation.ticketId !== value.id) throw new Error('Conversation belongs to another ticket.');
   return { ...(conversation ? { conversation } : {}), id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
+    ...(Object.hasOwn(value, 'taskPlacement') ? { taskPlacement: parseTaskPlacement(value.taskPlacement) } : {}),
+    ...(Object.hasOwn(value, 'placementRecoveries') ? { placementRecoveries: parseTaskPlacementRecoveries(value.placementRecoveries) } : {}),
     ...(evidence ? { evidence } : {}),
     ...(scope ? { scope } : {}),
     createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
@@ -201,6 +208,7 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
       ...(target ? { target } : {}),
       ...(evidencePins ? { evidencePins } : {}),
       ...(Object.hasOwn(r, 'conversationVisual') ? { conversationVisual: parseConversationVisual(r.conversationVisual) } : {}),
+      ...(Object.hasOwn(r, 'taskPlacement') ? { taskPlacement: parseTaskPlacement(r.taskPlacement) } : {}),
       selectedObjectIds: r.selectedObjectIds, instruction: r.instruction, visualIntent: storedVisual(visual),
       ...(Object.hasOwn(r, 'sources') ? { sources: parseRequestSources(r.sources) } : {}),
       ...(scopedRequest ? { scope: scopedRequest } : {}),
@@ -427,7 +435,16 @@ export class ChangeRequests {
     return rows.map((row) => { if (typeof row.body !== 'string') throw new Error('Unreadable request store.'); return parseTicket(row.body, reference); });
   }
   #put(ticket: Ticket): void {
-    const { conversation, ...stored } = ticket;
+    const { conversation, ...input } = ticket;
+    const row = this.#db.prepare('SELECT body FROM requests WHERE id=?').get(ticket.id);
+    const existingTicket = row && typeof row.body === 'string' ? parseTicket(row.body, value => value) : undefined;
+    if (existingTicket?.taskPlacement && !isDeepStrictEqual(existingTicket.taskPlacement, ticket.taskPlacement)) throw new Error('A task origin and initial targets cannot be rewritten.');
+    const existingRecoveries = existingTicket?.placementRecoveries ?? [];
+    const incomingRecoveries = ticket.placementRecoveries ?? [];
+    const shorter = incomingRecoveries.length < existingRecoveries.length ? incomingRecoveries : existingRecoveries;
+    const longer = incomingRecoveries.length < existingRecoveries.length ? existingRecoveries : incomingRecoveries;
+    if (!isDeepStrictEqual(shorter, longer.slice(0, shorter.length))) throw new Error('Placement recovery history is append-only.');
+    const stored = { ...input, ...(longer.length ? { placementRecoveries: longer } : {}) };
     if (conversation) {
       const existing = this.#messages(ticket.id);
       if (existing.length && !isDeepStrictEqual(existing, conversation.messages)) throw new Error('Imported conversation differs from the immutable journal.');
@@ -458,7 +475,7 @@ export class ChangeRequests {
   }
   #projection(ticket: Ticket, archived = false): TicketProjection {
     if (archived && ticket.history.length) throw new Error('Nested request archives are invalid.');
-    return { ...ticket, ...(!archived ? { conversation: this.#conversation(ticket.id) } : {}), project: this.#projects.read(ticket.project),
+    return { ...ticket, taskPlacement: ticket.taskPlacement ?? { version: 1, kind: 'unplaced', reason: 'legacy' }, placementRecoveries: ticket.placementRecoveries ?? [], ...(!archived ? { conversation: this.#conversation(ticket.id) } : {}), project: this.#projects.read(ticket.project),
       result: ticket.result ? { ...ticket.result, project: this.#projects.read(ticket.result.project) } : null,
       history: ticket.history.map((text) => JSON.stringify(this.#projection(parseTicket(text, reference), true))) };
   }
@@ -492,7 +509,8 @@ export class ChangeRequests {
     const ticket = this.#get(id);
     this.#seedConversation(ticket);
     const messages = this.#messages(id);
-    return { version: 1, ticketId: id, sequence: messages.length, messages };
+    return { version: 1, ticketId: id, sequence: messages.length, messages,
+      taskPlacement: ticket.taskPlacement ?? { version: 1, kind: 'unplaced', reason: 'legacy' }, placementRecoveries: ticket.placementRecoveries ?? [] };
   }
   #assistantMessage(ticket: Ticket, clarification?: { question: string; options: string[] }): void {
     if (!ticket.result) return;
@@ -814,14 +832,16 @@ export class ChangeRequests {
       if (typeof row.ticket_id !== 'string' || typeof row.title !== 'string') throw new Error('Invalid first conversation message.');
       titles.set(row.ticket_id, row.title.replace(/\s+/g, ' ').trim().slice(0, 80));
     }
-    return this.#all(projectId).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, conversation: _conversation, ...summary }) => ({ ...summary, title: titles.get(summary.id) ?? summary.request.instruction.slice(0, 80) }));
+    return this.#all(projectId).map(({ project: _project, fingerprint: _fingerprint, result: _result, decisionId: _id, decisionAction: _action, history: _history, activity: _activity, conversation: _conversation, ...summary }) => ({ ...summary,
+      taskPlacement: summary.taskPlacement ?? { version: 1, kind: 'unplaced', reason: 'legacy' }, placementRecoveries: summary.placementRecoveries ?? [],
+      title: titles.get(summary.id) ?? summary.request.instruction.slice(0, 80) }));
   }
   async submit(project: unknown, input: unknown): Promise<TicketSummary> {
     this.#assertOpen();
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    const request: RequestInput = { ...(bound.target ? { target: bound.target } : {}), ...(bound.evidencePins ? { evidencePins: bound.evidencePins } : {}), ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+    const request: RequestInput = { ...(bound.taskPlacement ? { taskPlacement: bound.taskPlacement } : {}), ...(bound.target ? { target: bound.target } : {}), ...(bound.evidencePins ? { evidencePins: bound.evidencePins } : {}), ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
       ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };
@@ -855,13 +875,17 @@ export class ChangeRequests {
     const pending = this.#db.prepare("SELECT COUNT(*) AS count FROM requests WHERE state IN ('queued','working')").get();
     if (pending && typeof pending.count === 'number' && pending.count >= 64) throw new Error('The pending request backlog is full. Finish or cancel existing work first.');
     const evidence = this.#freezeEvidence(current, request);
-    this.#transaction(() => {
+    const placement = bound.taskPlacement ?? { version: 1, kind: 'unplaced', reason: 'not-provided' } satisfies TaskPlacement;
+    if (placement.kind === 'placed' && (bound.baseRevisionId !== selectedHead || !isDeepStrictEqual(current.view(selectedHead).snapshot, bound.base.snapshot))) throw new BacklogConflict('Spatial tasks must use the authoritative current design snapshot.');
+    const placementGuard = await this.#placementGuard(placement, current, request);
+    placementGuard(() => this.#transaction(() => {
       if (this.#submission(request.requestId, fingerprint)) return;
       const latest = this.project(repository.projectId);
       if (latest !== currentText && latest !== body) throw new BacklogConflict('The accepted server model changed during submission. Refresh before submitting.');
       if (!latest) this.#register(repository);
       this.#assertSavedScope(repository.projectId, bound.scopedRequest);
       const ticket: Ticket = recordActivity({ id: request.requestId, projectId: repository.projectId, request, project: this.#projects.put(current), fingerprint,
+        taskPlacement: placement, placementRecoveries: [],
         ...(evidence ? { evidence } : {}),
         ...(bound.scope ? { scope: bound.scope } : {}),
         state: 'queued', attempts: 0, createdAt: Date.now(), updatedAt: Date.now(), error: null, result: null, decisionId: null, decisionAction: null, history: [], activity: [] }, { stage: 'queued', message: 'Request saved to the server backlog. Waiting for an available agent and ChatGPT connection.' });
@@ -870,12 +894,80 @@ export class ChangeRequests {
       this.#put(ticket);
       this.#seedConversation(ticket);
       this.#db.prepare('INSERT INTO submissions(id,ticket_id,fingerprint) VALUES(?,?,?)').run(request.requestId, ticket.id, fingerprint);
-    });
+    }));
     // Start after the acknowledgement can be sent; submission never awaits the worker.
     setImmediate(() => this.#pump());
     const summary = this.list(repository.projectId).find((item) => item.id === request.requestId);
     if (!summary) throw new Error('Missing request summary.');
     return summary;
+  }
+  async #placementGuard(placement: TaskPlacement, repository: RoomRepository, request: Pick<RequestInput, 'baseRevisionId' | 'target' | 'selectedObjectIds'>): Promise<(commit: () => void) => void> {
+    assertTaskPlacementBinding(placement, { repository, baseRevisionId: request.baseRevisionId,
+      target: request.target?.target ?? { kind: 'main' }, selectedObjectIds: request.selectedObjectIds });
+    const snapshot = await this.#placementSnapshot(placement, repository);
+    this.#assertOpen();
+    const resolution = resolveTaskPlacement(placement, repository, snapshot);
+    if (resolution.kind === 'placed' && (resolution.origin.status !== 'current' || resolution.requiresRecovery)) throw new BacklogConflict('Task placement context is stale, missing or unavailable. Capture explicit current context before submitting.');
+    return commit => {
+      if (snapshot && this.#geometry) {
+        const result = this.#geometry.withCatalogGuard(repository.projectId, snapshot.catalogToken, commit);
+        if (result.kind !== 'committed') throw new BacklogConflict('Linked placement sources changed during submission. Refresh before submitting.');
+      } else commit();
+    };
+  }
+  async #placementSnapshot(placement: TaskPlacement, repository: RoomRepository): Promise<Awaited<ReturnType<GeometryEvidenceSource['snapshot']>> | undefined> {
+    if (placement.kind === 'unplaced') return;
+    const refs = [...placement.targets.objects, ...placement.targets.regions.flatMap(region => region.source ? [region.source] : []), ...(placement.origin.source ? [placement.origin.source] : [])];
+    if (!refs.some(ref => ref.kind === 'ifc') || !this.#geometry) return;
+    const controller = new AbortController(); this.#geometryDecisions.add(controller);
+    try {
+      const target = placement.origin.snapshot.target;
+      const revisionId = repository.freezeDesignTarget(target).revisionId;
+      return await this.#geometry.snapshot({ projectId: repository.projectId,
+        native: { snapshot: repository.view(revisionId).snapshot, revisionId, target }, signal: controller.signal });
+    } finally { this.#geometryDecisions.delete(controller); }
+  }
+  async placement(id: string) {
+    this.#assertOpen();
+    const ticket = this.#get(id);
+    const text = this.project(ticket.projectId);
+    if (!text) throw new Error('Missing project.');
+    const repository = await RoomRepository.restore(text);
+    const original = ticket.taskPlacement ?? { version: 1, kind: 'unplaced', reason: 'legacy' } satisfies TaskPlacement;
+    const effective = ticket.placementRecoveries?.at(-1)?.placement ?? original;
+    let snapshot: Awaited<ReturnType<GeometryEvidenceSource['snapshot']>> | undefined;
+    try { snapshot = await this.#placementSnapshot(effective, repository) ?? await this.#placementSnapshot(original, repository); }
+    catch { this.#assertOpen(); }
+    this.#assertOpen();
+    return { projectId: ticket.projectId, ticketId: ticket.id, taskPlacement: original,
+      placementRecoveries: ticket.placementRecoveries ?? [], effectivePlacement: effective,
+      originalResolution: resolveTaskPlacement(original, repository, snapshot),
+      resolution: resolveTaskPlacement(effective, repository, snapshot) };
+  }
+  async recoverPlacement(id: string, input: unknown): Promise<TicketProjection> {
+    this.#assertOpen();
+    const command = parseTaskPlacementRecoveryCommand(input);
+    const ticket = this.#get(id);
+    const recoveries = ticket.placementRecoveries ?? [];
+    const prior = recoveries.find(item => item.recoveryId === command.recoveryId);
+    if (prior) {
+      const { at, ...recorded } = prior;
+      if (!isDeepStrictEqual(recorded, command)) throw new BacklogConflict('This recovery identity is bound to different input.');
+      return this.get(id);
+    }
+    if (this.#messages(id).length !== command.expectedSequence) throw new BacklogConflict('The conversation changed. Refresh before recording recovery.');
+    if (recoveries.length >= 8) throw new Error('This task reached its eight-recovery limit.');
+    const text = this.project(ticket.projectId);
+    if (!text) throw new Error('Missing project.');
+    const repository = await RoomRepository.restore(text);
+    const target = repository.freezeDesignTarget(ticket.request.target?.target ?? { kind: 'main' });
+    const guard = await this.#placementGuard(command.placement, repository, { baseRevisionId: target.revisionId, target,
+      selectedObjectIds: command.placement.targets.objects.flatMap(ref => ref.kind === 'native' ? [ref.entityId] : []) });
+    guard(() => this.#transaction(() => {
+      if (this.project(ticket.projectId) !== text || !isDeepStrictEqual(this.#get(id), ticket)) throw new BacklogConflict('The task or accepted model changed during placement recovery. Retry after refresh.');
+      this.#put({ ...ticket, updatedAt: Date.now(), placementRecoveries: [...recoveries, { ...command, at: Date.now() }] });
+    }));
+    return this.get(id);
   }
   async revise(id: string, project: unknown, input: unknown): Promise<TicketProjection> {
     this.#assertOpen();
@@ -883,7 +975,8 @@ export class ChangeRequests {
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
-    const request: RequestInput = { ...(bound.target ? { target: bound.target } : {}), ...(bound.evidencePins ? { evidencePins: bound.evidencePins } : {}), ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
+    if (bound.taskPlacement && !isDeepStrictEqual(bound.taskPlacement, ticket.taskPlacement)) throw new BacklogConflict('The task starting origin and initial targets are immutable. Record an explicit recovery association instead.');
+    const request: RequestInput = { ...(bound.taskPlacement ? { taskPlacement: bound.taskPlacement } : {}), ...(bound.target ? { target: bound.target } : {}), ...(bound.evidencePins ? { evidencePins: bound.evidencePins } : {}), ...(bound.conversationVisual ? { conversationVisual: bound.conversationVisual } : {}), requestId: bound.requestId, proposalName: bound.proposalName, baseRevisionId: bound.baseRevisionId,
       selectedObjectIds: bound.selectedObjectIds, instruction: bound.instruction, visualIntent: bound.visualIntent,
       ...(bound.scopedRequest ? { scope: bound.scopedRequest } : {}),
       ...(bound.sources ? { sources: bound.sources } : {}), ...(bound.authoringScope ? { authoringScope: bound.authoringScope } : {}) };

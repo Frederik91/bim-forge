@@ -5,6 +5,7 @@ import { plainScopeData } from './model-scope-contract.ts';
 import { parseRequestSources } from './request-sources.ts';
 import { EvidencePinSchema, MAX_EVIDENCE_PINS, parseEvidencePin } from './model-evidence.ts';
 import { SpatialMarkupSchema, parseSpatialMarkup } from './spatial-markup.ts';
+import { TaskPlacementSchema, TaskPlacementRecoveriesSchema, parseTaskPlacement, parseTaskPlacementRecoveries } from './task-placement.ts';
 
 export const CONVERSATION_LIMITS = Object.freeze({ messages: 48, userTurns: 20, textCharacters: 1000, sourceFiles: 4, sourceBytes: 12 * 1024 * 1024 });
 const exact = { additionalProperties: false };
@@ -46,6 +47,7 @@ export const ConversationMessageSchema = Type.Union([
 ]);
 export type ConversationMessage = Static<typeof ConversationMessageSchema>;
 export const RequestConversationSchema = Type.Object({ version: Type.Literal(1), ticketId: id, sequence: Type.Integer({ minimum: 0 }),
+  taskPlacement: Type.Optional(TaskPlacementSchema), placementRecoveries: Type.Optional(TaskPlacementRecoveriesSchema),
   messages: Type.Array(ConversationMessageSchema, { maxItems: 48 }) }, exact);
 export type RequestConversation = Static<typeof RequestConversationSchema>;
 function evidencePins(input: readonly Static<typeof EvidencePinSchema>[] | undefined): void {
@@ -73,6 +75,8 @@ export function parseRequestConversation(input: unknown): RequestConversation {
   const value = plainScopeData(input);
   if (!Check(RequestConversationSchema, value)) throw new Error('Invalid request conversation.');
   value.messages.forEach(parseConversationMessage);
+  if (value.taskPlacement) parseTaskPlacement(value.taskPlacement);
+  if (value.placementRecoveries) parseTaskPlacementRecoveries(value.placementRecoveries);
   if (value.sequence !== value.messages.length || value.messages.some((message, index) => message.sequence !== index + 1)) throw new Error('Invalid conversation sequence.');
   return value;
 }
