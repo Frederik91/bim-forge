@@ -54,12 +54,13 @@ async function send(page: Page): Promise<{ id: string; projectId: string }> {
   return { id: body.ticket.id, projectId: body.ticket.projectId };
 }
 async function inspectAndAccept(page: Page, label: string): Promise<void> {
-  const inspect = page.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
-  const accept = page.getByRole('button', { name: `Accept into ${label}`, exact: true });
+  const chat = page.locator('#request-chat-mount');
+  const inspect = chat.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
+  const accept = chat.getByRole('button', { name: `Accept into ${label}`, exact: true });
   await inspect.or(accept).first().waitFor({ timeout: 30_000 });
   if (await inspect.isVisible()) await inspect.click();
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: `Accept into ${label}`, exact: true }).click();
+  await accept.click();
   const response = await decision; assert.equal(response.status(), 200, await response.text());
   await page.locator('#request-chat .request-chat-status strong').filter({ hasText: /^Accepted$/ }).waitFor({ state: 'attached', timeout: 20_000 });
   await page.locator('#open-chat').click();

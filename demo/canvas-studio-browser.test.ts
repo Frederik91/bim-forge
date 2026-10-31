@@ -12,8 +12,10 @@ const worker: ModelWorker = {
   identity: { provider: 'fixture', model: 'canvas-studio-review' },
   async run(session) {
     const result = await session.executeTool('run_model_script', { language: 'typescript', source: `
-      await model.inspect();
-      await model.previewParameters({edits:[{definitionId:'geometry-width',name:'Width',value:{kind:'length',value:1000,unit:'mm'}}]});
+      const view = await model.inspect();
+      const layout = view.placement.layout;
+      if (!layout) throw new Error('The fixture requires a single-room layout.');
+      await model.previewRectangle({...layout,door:{...layout.door,widthMm:1000}});
       return {kind:'propose',review:{summary:'Widen the entry door to 1000 mm.',rationale:'Use the requested width.',
         constraints:'Preserve other model objects.',uncertainty:'Synthetic UI fixture; not a surveyed building.',
         intent:{interpretation:'Widen the selected door.',assumptions:[],certainty:100,basis:'Explicit fixture request.'}}};
@@ -72,14 +74,23 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
   const submission = await submitted; assert.equal(submission.status(), 202, await submission.text());
   const body: unknown = await submission.json();
   assert.ok(body && typeof body === 'object' && 'ticket' in body && body.ticket && typeof body.ticket === 'object'
-    && 'projectId' in body.ticket && typeof body.ticket.projectId === 'string');
+    && 'projectId' in body.ticket && typeof body.ticket.projectId === 'string'
+    && 'id' in body.ticket && typeof body.ticket.id === 'string');
   const projectId = body.ticket.projectId;
+  const ticketId = body.ticket.id;
   async function project(): Promise<RoomRepository> {
     const value: unknown = await (await page.request.get(`${base}/api/projects/${projectId}`)).json();
     assert.ok(value && typeof value === 'object' && 'project' in value && typeof value.project === 'string');
     return RoomRepository.restore(value.project);
   }
   const before = await project(); const baseline = before.head('main');
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const response: unknown = await (await page.request.get(`${base}/api/change-requests/${encodeURIComponent(ticketId)}`)).json();
+    assert.ok(response && typeof response === 'object' && 'ticket' in response && response.ticket && typeof response.ticket === 'object' && 'state' in response.ticket);
+    assert.notEqual(response.ticket.state, 'failed', JSON.stringify(response.ticket));
+    if (response.ticket.state === 'ready') break;
+    await new Promise<void>(resolve => setTimeout(resolve, 100));
+  }
   const inspect = page.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
   const tray = page.getByRole('region', { name: 'Canvas proposal review' });
   await inspect.or(tray).first().waitFor({ timeout: 30_000 });
