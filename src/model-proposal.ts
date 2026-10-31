@@ -26,6 +26,8 @@ import type { EvidenceEntry, EvidencePin, EvidenceReadSet, EvidenceSubject, Evid
 import { GeometryEvidenceSession, geometryNativeInput, encodeGeometryEvidence } from './geometry-evidence.ts';
 import type { GeometryEvidenceSource, GeometryCurrentContext, DraftContinuation } from './geometry-evidence.ts';
 import { spatialMarkupBounds, spatialMarkupDescription } from './spatial-markup.ts';
+import { parseTaskPlacement } from './task-placement.ts';
+import type { TaskPlacement } from './task-placement.ts';
 
 const REVISION = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-z][a-z0-9-]{0,63}$/;
@@ -34,6 +36,7 @@ const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const MAX_TOOL_CALLS = 12;
 
 interface BoundRequest {
+  taskPlacement?: TaskPlacement;
   target?: FrozenDesignTarget;
   evidencePins?: readonly EvidencePin[];
   conversationVisual?: ConversationVisual;
@@ -132,8 +135,8 @@ function assertContextEvidenceUses(context: ProposalEvidenceContext | undefined,
   }
 }
 function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
-  const input = isRecord(rawInput) && ['scope', 'target', 'evidencePins'].some(key => Object.hasOwn(rawInput, key)) ? plainScopeData(rawInput) : rawInput;
-  const extra = isRecord(input) ? ['sources', 'authoringScope', 'scope', 'conversationVisual', 'target', 'evidencePins'].filter((key) => Object.hasOwn(input, key)) : [];
+  const input = isRecord(rawInput) && ['scope', 'target', 'evidencePins', 'taskPlacement'].some(key => Object.hasOwn(rawInput, key)) ? plainScopeData(rawInput) : rawInput;
+  const extra = isRecord(input) ? ['sources', 'authoringScope', 'scope', 'conversationVisual', 'target', 'evidencePins', 'taskPlacement'].filter((key) => Object.hasOwn(input, key)) : [];
   fields(input, [...(isRecord(input) && Object.hasOwn(input, 'proposalName')
     ? ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']
     : ['requestId', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent']), ...extra]);
@@ -183,7 +186,10 @@ function request(rawInput: unknown, repository: RoomRepository): BoundRequest {
   const scope = scopedRequest ? freezeModelScope({ graph: base.snapshot, query: scopedRequest.query, baseRevisionId: base.id }) : undefined;
   if (scope) freezeScopeData(scope);
   if (scopedRequest) freezeScopeData(scopedRequest);
+  const taskPlacement = extra.includes('taskPlacement') ? parseTaskPlacement(input.taskPlacement) : undefined;
+  if (taskPlacement) freezeScopeData(taskPlacement);
   return Object.freeze({ ...(conversationVisual ? { conversationVisual } : {}), requestId, proposalName, baseRevisionId: base.id, instruction, visualIntent: Object.freeze(visualIntent), base,
+    ...(taskPlacement ? { taskPlacement } : {}),
     ...(target ? { target } : {}),
     ...(evidencePins ? { evidencePins } : {}),
     ...(scope && scopedRequest ? { scope, scopedRequest } : {}),
