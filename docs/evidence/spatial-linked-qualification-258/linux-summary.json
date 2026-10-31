@@ -1,0 +1,679 @@
+{
+  "source": {
+    "source": "5d20e8187f6158f1a310ffe6537a97dc42f8b84f",
+    "tree": "de32cceb03433694282a5a86158a0aa71a050bdc",
+    "baseImageId": "sha256:1553f4db19f9c53349d98a60700effb0eb53d4e367dbf510d0f59b0d65c16f70",
+    "tests": [
+      "demo/floor-plan-guide-browser.test.ts",
+      "demo/request-draft.test.ts",
+      "demo/canvas-studio-browser.test.ts",
+      "demo/request-chat.test.ts",
+      "demo/workspace-shell.test.ts",
+      "demo/spatial-plan-integration-browser.test.ts",
+      "demo/spatial-tasks-browser.test.ts",
+      "demo/spatial-tasks.test.ts",
+      "demo/spatial-markup-browser.test.ts",
+      "demo/view-navigation-browser.test.ts",
+      "demo/model-plan-browser.test.ts",
+      "demo/spatial-task-layer-browser.test.ts",
+      "demo/design-system-browser.test.ts",
+      "demo/preview-build.test.ts"
+    ],
+    "sourceArchiveSha256": "e06589dc6da24908d8b5ee769985662b69701f108145a047c726e162f59fb37b",
+    "baseImage": "bim-forge-spatial-local:domain-35f867e",
+    "dockerignoreSha256": "791f4ca5e59055f35cf9e0386700cc0fffa51b2642183b98f8173b4078804808"
+  },
+  "platform": "linux",
+  "node": "v24.22.1",
+  "commands": [
+    [
+      "npm",
+      "run",
+      "validate"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/floor-plan-guide-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/request-draft.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/canvas-studio-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/request-chat.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/workspace-shell.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/spatial-plan-integration-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/spatial-tasks-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/spatial-tasks.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/spatial-markup-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/view-navigation-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/model-plan-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/spatial-task-layer-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/design-system-browser.test.ts"
+    ],
+    [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-reporter=tap",
+      "demo/preview-build.test.ts"
+    ]
+  ],
+  "results": [
+    {
+      "file": "demo/floor-plan-guide-browser.test.ts",
+      "sourceSha256": "0928e2465806dbeb43d428bfc43c9d9e087ed025f7d7aab1cfc9325c386efeca",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/request-draft.test.ts",
+      "sourceSha256": "9e8b70d6194601d84674862efe86c19c282d9546f709318f0dbf23f90f04ab8e",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/canvas-studio-browser.test.ts",
+      "sourceSha256": "085c0e80d01cf8193a45e57fc041c75e44d168e4f61a3fac212be74c2d48a0d8",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/request-chat.test.ts",
+      "sourceSha256": "2c494902dc0b02f14859e6e457ca097183d98bef6f024c5028370e0d73376842",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/workspace-shell.test.ts",
+      "sourceSha256": "342e1adf69f9274b1bc654d3af84bd17ad10449b58dda0ebfe0e07935ba18920",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/spatial-plan-integration-browser.test.ts",
+      "sourceSha256": "b23f5e70a4efaf3183b94f1ddada6f4dfc15603fcda45491f09bc3eb5f07dfd8",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/spatial-tasks-browser.test.ts",
+      "sourceSha256": "d0e0a5f3ee08745e6485634cea0adc817441fd7f6e18fd7c8da2628e074d84d8",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/spatial-tasks.test.ts",
+      "sourceSha256": "ebc33b0e0191c9b035fe71dcaa3c930cfbf2fe24d390eaaa194bcf72d2732760",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 22,
+      "pass": 22,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/spatial-markup-browser.test.ts",
+      "sourceSha256": "7896a0598d7667b7ef691f570d5b08684fea318b5beb17a16bf38ab4a7c5f534",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/view-navigation-browser.test.ts",
+      "sourceSha256": "5f3750b7f23be84e0ff358a9c70348bf671d7caaf99cfc8aed89acb596d646eb",
+      "browserSelection": "/opt/qualification-browsers/chromium-1248/chrome-linux64/chrome",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/model-plan-browser.test.ts",
+      "sourceSha256": "3357ab05d3ea2a1c63c82f1fa1a213b9bf58928746f3ad4515d34c2f4b094cf7",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/spatial-task-layer-browser.test.ts",
+      "sourceSha256": "71516476a4b84c2c279d35a117f425457babd5fff2cc6284272890a7a53e3d3c",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/design-system-browser.test.ts",
+      "sourceSha256": "e82188d3d99fd2389c0f17d20b28392e6118e3c473dc883e3b6d362c2d08fc72",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    {
+      "file": "demo/preview-build.test.ts",
+      "sourceSha256": "7e018e08d855470ebad9d604c45df4ae77e295038d9447d78b71a0d2496f47b9",
+      "browserSelection": "Playwright default",
+      "exitCode": 0,
+      "signal": null,
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    }
+  ],
+  "tools": {
+    "chromiumExecutable": "/opt/qualification-browsers/chromium-1248/chrome-linux64/chrome",
+    "chromium": "Google Chrome for Testing 156.0.8078.4",
+    "prlimit": "prlimit from util-linux 2.38.1",
+    "pdfinfo": "pdfinfo version 22.12.0\nCopyright 2005-2022 The Poppler Developers - http://poppler.freedesktop.org\nCopyright 1996-2011, 2022 Glyph & Cog, LLC",
+    "pdftoppm": "pdftoppm version 22.12.0\nCopyright 2005-2022 The Poppler Developers - http://poppler.freedesktop.org\nCopyright 1996-2011, 2022 Glyph & Cog, LLC",
+    "pdftotext": "pdftotext version 22.12.0\nCopyright 2005-2022 The Poppler Developers - http://poppler.freedesktop.org\nCopyright 1996-2011, 2022 Glyph & Cog, LLC"
+  },
+  "networkInterfaces": [
+    "lo"
+  ],
+  "total": {
+    "tests": 60,
+    "pass": 60,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "validation": {
+    "exitCode": 0,
+    "signal": null
+  },
+  "complete": true,
+  "passed": true,
+  "ownedHandles": {
+    "name": "bim-forge-linux-browser-258-9e8c8f360a254f37bcd85f8680c5b1aa",
+    "source": "5d20e8187f6158f1a310ffe6537a97dc42f8b84f",
+    "image": "bim-forge-linux-browser:258-9e8c8f360a254f37bcd85f8680c5b1aa",
+    "root": "C:\\Users\\Frederik Tegnander\\AppData\\Local\\Temp\\bim-forge-linux-browser-258-run3",
+    "imageId": "sha256:26925635b4f709e08e1432361a65b77d00c6e9edf5ff3c05d2f56a85e69d01f7",
+    "containerId": "03f2e41e47650a41b01e7183d201dc1e582d36e1945fce8c82f841d2fd30b3fc"
+  },
+  "isolation": {
+    "tmpfs": {
+      "/tmp": "rw,nosuid,nodev,size=1g,mode=1777"
+    },
+    "mountDestinations": [
+      "/artifacts",
+      "/qualification/artifacts"
+    ],
+    "pids": 512,
+    "capDrop": [
+      "ALL"
+    ],
+    "securityOpt": [
+      "no-new-privileges:true"
+    ],
+    "memory": 4294967296,
+    "network": "none",
+    "readOnlyRoot": true,
+    "memorySwap": 4294967296,
+    "user": "65032:33",
+    "nanoCpus": 2000000000
+  },
+  "artifacts": [
+    {
+      "name": "container-after.json",
+      "sha256": "f5f0ace6c11109b78cc46d046a4a0941ff71c12424ec1720947da7a94adaf2ec",
+      "bytes": 8520
+    },
+    {
+      "name": "container-before.json",
+      "sha256": "aa046a176dea01503909bf30319a623cf244e2404148bf4f52f8d63db620f02e",
+      "bytes": 8138
+    },
+    {
+      "name": "execution.txt",
+      "sha256": "879340516f34682f5637a6c4790844280fa5c53d648a7ba51e47aae410f28f62",
+      "bytes": 2132
+    },
+    {
+      "name": "image-build.txt",
+      "sha256": "114e73123fff144bf92b73c083d48d13679527f33bd8a1c7e70ea26d4924c85c",
+      "bytes": 2627
+    },
+    {
+      "name": "owned-handles.json",
+      "sha256": "18b0bbe2552b9b063b4f62633588bb33aadf3c4280e06dcfd48b843875609978",
+      "bytes": 488
+    },
+    {
+      "name": "source.json",
+      "sha256": "ef1f1668e2b8840c887ab384f436c273c22104a9b2959f60161211dde514d470",
+      "bytes": 1056
+    },
+    {
+      "name": "validate.txt",
+      "sha256": "23095cd7da233228ae48368fdde6bd992170db2556002184906a1eac7b25f8ec",
+      "bytes": 302
+    },
+    {
+      "name": "canvas-studio-browser/canvas-studio-desktop.png",
+      "sha256": "f1d22c3b7a525277f812b97f24af45cbfb4e417b0b6e048a99c49f96df794363",
+      "bytes": 196880
+    },
+    {
+      "name": "canvas-studio-browser/canvas-studio-last.png",
+      "sha256": "ab74f333087298a068aee27c1af569f27266e866196e9fa715c001efa12ce515",
+      "bytes": 55210
+    },
+    {
+      "name": "canvas-studio-browser/canvas-studio-phone.png",
+      "sha256": "d89c43518d2e32e4a41e6e0bec8cbcf4952ad9c458f0c5460fb852337c248f34",
+      "bytes": 54933
+    },
+    {
+      "name": "canvas-studio-browser/canvas-studio-proposal.png",
+      "sha256": "c05adf6dfd6b7d2d82959682f34229ef97132db533424985240fb51b94b739cc",
+      "bytes": 190339
+    },
+    {
+      "name": "canvas-studio-browser/canvas-studio-trace.zip",
+      "sha256": "a4082171b9ee104782310f3268ecf0f17a0dd0cab1725d3163ca5853fdfcd93c",
+      "bytes": 4550709
+    },
+    {
+      "name": "canvas-studio-browser/test.tap",
+      "sha256": "a78a903da5409d346d6a2423601992fc176a82eab281050681ac22f3cc1d04c9",
+      "bytes": 822
+    },
+    {
+      "name": "design-system-browser/gallery-320.png",
+      "sha256": "813ee229d06bb0d84337df315b30c8ce8c90ad229ec16bb5703997ba6e2dc656",
+      "bytes": 203381
+    },
+    {
+      "name": "design-system-browser/gallery-390.png",
+      "sha256": "200140d787861bf44b196972ac7b4d288cba2028b7549820ca572fcee07e7841",
+      "bytes": 201855
+    },
+    {
+      "name": "design-system-browser/gallery-desktop.png",
+      "sha256": "bd1eed2cc5457df52be0864e0451442743efad4bb9a316cb5dca8e6b40a2b5ed",
+      "bytes": 230137
+    },
+    {
+      "name": "design-system-browser/gallery-high-contrast.png",
+      "sha256": "324632a8c9317e81a3f6823f98861f37575de6d53f717d31d78e4a311133280e",
+      "bytes": 163924
+    },
+    {
+      "name": "design-system-browser/native-plan-desktop.png",
+      "sha256": "b0868cd4a0f46efcdd1a4a70506ef5915dfc5aa691087439c5bd52780ded1223",
+      "bytes": 108202
+    },
+    {
+      "name": "design-system-browser/native-plan-narrow.png",
+      "sha256": "e34b201bc0f8bdccc5ff161f33fd7452671611e1e24e0e24b1337022c569ae48",
+      "bytes": 48573
+    },
+    {
+      "name": "design-system-browser/native-viewer-desktop.png",
+      "sha256": "796e522ca6b6c1174f9162699d38fae5bbf90e01af271106914c9a0d4dd48060",
+      "bytes": 201247
+    },
+    {
+      "name": "design-system-browser/test.tap",
+      "sha256": "62ee6c62504396660efccd5278717eedcabaffd273ce0c30ac8ea56da0b56801",
+      "bytes": 798
+    },
+    {
+      "name": "floor-plan-guide-browser/accepted-project.json",
+      "sha256": "83c540c2c173863c2a4da5187082325d1da70fa45e5f37e490c71c5c8741b32f",
+      "bytes": 10664
+    },
+    {
+      "name": "floor-plan-guide-browser/browser-trace.zip",
+      "sha256": "88933da92ca6d73ef70591e3fbebbf1b7f061575f02d38f2b4124ab985ec2bdf",
+      "bytes": 6316262
+    },
+    {
+      "name": "floor-plan-guide-browser/desktop-alternative.png",
+      "sha256": "d235436c08ce0b5eb08ae390fa146a9787e69c90e15e0194a65a50de9bc75fd1",
+      "bytes": 158961
+    },
+    {
+      "name": "floor-plan-guide-browser/desktop-confirmed.png",
+      "sha256": "431456715e5958483d9b8088a3033fdbea94313fafe516770fda99f354771e86",
+      "bytes": 123713
+    },
+    {
+      "name": "floor-plan-guide-browser/floor-plan-measurement.txt",
+      "sha256": "878d06ac4092e70625ef0600a75c714db7ce08a030edea67f7df83b68c537b39",
+      "bytes": 808
+    },
+    {
+      "name": "floor-plan-guide-browser/last-ui-state.png",
+      "sha256": "6ff0851d01e64a23e55cec6368049bc0a78a8af9b53005ffb3c8bb096082c1b0",
+      "bytes": 51879
+    },
+    {
+      "name": "floor-plan-guide-browser/model-delta.json",
+      "sha256": "efd26ff4ae66d9fcacf80bc2661702dadb39d6b44e013ade79394f884c2fcf9f",
+      "bytes": 7767
+    },
+    {
+      "name": "floor-plan-guide-browser/phone-pdf-confirmed.png",
+      "sha256": "7844bd8a6bfafe6f84acdc17999db944c6692d512392477737c896af2a25ef48",
+      "bytes": 55027
+    },
+    {
+      "name": "floor-plan-guide-browser/test.tap",
+      "sha256": "dee123ea656f905c56156e665a66ddd5b45d0f718b174f7bd37c12a0d5d86513",
+      "bytes": 638
+    },
+    {
+      "name": "model-plan-browser/test.tap",
+      "sha256": "2b4677ec919b9af54cf115d965b76cb126be8c8dead7635adf6c9964ca4bd666",
+      "bytes": 351
+    },
+    {
+      "name": "plan-core-262/attic-320.png",
+      "sha256": "f5a543dd6925e7fc779146013d88e8a0d65c7440689f13b0e03a6bb1c37a3cee",
+      "bytes": 45000
+    },
+    {
+      "name": "plan-core-262/browser-result.json",
+      "sha256": "3a47f988b0d0e179da92d1c6b4bd232c786bfa287dfc5a4eebd604c18781aa03",
+      "bytes": 143
+    },
+    {
+      "name": "plan-core-262/ground-1024.png",
+      "sha256": "270e95b20ec6bdd1a3a0d4f93689855fd830b995531324b0cb640fd651c6d385",
+      "bytes": 60550
+    },
+    {
+      "name": "plan-core-262/ground-320.png",
+      "sha256": "fad31fb7c6e010c3024faf774edbd7e330232301f25aaace7cb1675b4c605106",
+      "bytes": 50886
+    },
+    {
+      "name": "plan-core-262/ground-390.png",
+      "sha256": "f43534d97dab757fb6e55a02259cf94b642ce6c20bbfa40858b8230bc86d865a",
+      "bytes": 53512
+    },
+    {
+      "name": "preview-build/test.tap",
+      "sha256": "f2aec52d2d86cc164f6e816313cf4683b5b4b28b757db0a522273c326a3c4cea",
+      "bytes": 608
+    },
+    {
+      "name": "request-chat/test.tap",
+      "sha256": "d6ab38763852e18df2fac3820a93983aa9186808801fb51cab2fa7e34769fef4",
+      "bytes": 1824
+    },
+    {
+      "name": "request-draft/test.tap",
+      "sha256": "a9027c7bbe365097899738189cfdd23dc219063516d08db382cea9f4d48db698",
+      "bytes": 2313
+    },
+    {
+      "name": "spatial-markup-browser/browser-errors.json",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "bytes": 2
+    },
+    {
+      "name": "spatial-markup-browser/context.json",
+      "sha256": "8c35518d8548c43f85b563fe8b312534b6caffca779449249f9bffbb04e254c5",
+      "bytes": 1107
+    },
+    {
+      "name": "spatial-markup-browser/queue.sqlite",
+      "sha256": "abb12272461fac37b0d7e474ebf6e062bd4d197809e04d06b61879be35cd16cf",
+      "bytes": 299008
+    },
+    {
+      "name": "spatial-markup-browser/rectangle.png",
+      "sha256": "399a24047d3c429a18bd9da6fbe00e7e4498a6a0326616e76a2f333339dd8341",
+      "bytes": 783424
+    },
+    {
+      "name": "spatial-markup-browser/saved-chat.png",
+      "sha256": "15ee805668fe85c975777d4878b4a443bbbe0e37b9d296870a207ae8934dd79d",
+      "bytes": 929293
+    },
+    {
+      "name": "spatial-markup-browser/test.tap",
+      "sha256": "816c65be970723ead4ef481c236556888cfd068c1800089e9c309b7f90496836",
+      "bytes": 350
+    },
+    {
+      "name": "spatial-plan-integration-browser/desktop-inside.png",
+      "sha256": "71b6e7c2fda7cdfd0d29d0a75c123a90db2e794f1097701ff92040909a8fc0cb",
+      "bytes": 111406
+    },
+    {
+      "name": "spatial-plan-integration-browser/desktop-plan.png",
+      "sha256": "4c9fcc938bd8a9d517d1c2506a774796b0a2d995a0cb4d3187fe745d3bf31663",
+      "bytes": 118528
+    },
+    {
+      "name": "spatial-plan-integration-browser/narrow-plan.png",
+      "sha256": "0dd75f8818f33826e724c793c2037b878ee9b621a1e76aaab832a2b786342b22",
+      "bytes": 60066
+    },
+    {
+      "name": "spatial-plan-integration-browser/native-1100-comparison.png",
+      "sha256": "1ab6c953d601e313419f55eeb5a3087ce5f0acf88942458000654def2c92919d",
+      "bytes": 169502
+    },
+    {
+      "name": "spatial-plan-integration-browser/test.tap",
+      "sha256": "9469ea1ce8edf421a0e9ae8b374f524ea3f3450c7ab542c1d1361da15ade5c21",
+      "bytes": 489
+    },
+    {
+      "name": "spatial-task-layer-browser/browser-result.json",
+      "sha256": "c0e9fe27c614636c1dcb7c195b00f378a13973fca50b50d599b0bafd05fe87ad",
+      "bytes": 949
+    },
+    {
+      "name": "spatial-task-layer-browser/desktop.png",
+      "sha256": "96eb21efcd5d5e92e01d5c157d2bae64eb02d53b23bdeedb75de8bc430881b38",
+      "bytes": 97997
+    },
+    {
+      "name": "spatial-task-layer-browser/narrow-320.png",
+      "sha256": "8af9f8fa146575eab17cdc1ab8d191670f553ca0bd5cd143cb300060706fda23",
+      "bytes": 69612
+    },
+    {
+      "name": "spatial-task-layer-browser/narrow.png",
+      "sha256": "2ab679cdaccccb1a33d81813b9559e3690abf09d6cc3cfbbab50884f07d2da7a",
+      "bytes": 71578
+    },
+    {
+      "name": "spatial-task-layer-browser/test.tap",
+      "sha256": "9eb8063c7d77efa4ae4a310c458bdd9e65aa0af7f93d3c2593f39dfc159f42b0",
+      "bytes": 438
+    },
+    {
+      "name": "spatial-tasks/test.tap",
+      "sha256": "4e073d363c3df507989b45fde051965e5f0b5269ebe00da8192b2915f0c5e99f",
+      "bytes": 5416
+    },
+    {
+      "name": "spatial-tasks-browser/task-controller-fixed-trace.zip",
+      "sha256": "86ac62080d741024bb1ce142cd0ed2e512ee644325d31e3cbe7dad08bb9d8cad",
+      "bytes": 3737901
+    },
+    {
+      "name": "spatial-tasks-browser/task-controller-fixed.png",
+      "sha256": "f7b9ca00128d36bf4c27af84309afc3222b68cdc7ab0df37a926d300b9466247",
+      "bytes": 111893
+    },
+    {
+      "name": "spatial-tasks-browser/test.tap",
+      "sha256": "c5765abf2aacff080b373f540b661208c11ed4042fe4b9b6143f400d19e30945",
+      "bytes": 590
+    },
+    {
+      "name": "view-navigation-browser/test.tap",
+      "sha256": "f216c186a51a6c42ec0de16f26fe9c398f256277e641a9adc9d6d9201d3aeeca",
+      "bytes": 430
+    },
+    {
+      "name": "workspace-shell/test.tap",
+      "sha256": "03c3649c1f45c93278401e126f96db449d84eed107a0c4b18e95a902f788d651",
+      "bytes": 2229
+    }
+  ]
+}
