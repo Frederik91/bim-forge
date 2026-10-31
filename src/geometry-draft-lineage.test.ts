@@ -10,11 +10,11 @@ import { createGeometryDraftLineage, inactiveInheritedBoxMeasurements } from './
 
 const family = { id: 'portable-cube', type: 'AssetFamily', name: 'Portable cube', description: 'Deterministic lineage fixture.',
   parts: [{ id: 'body', kind: 'box', min: [0, 0, 0], size: [1, 1, 1], color: '#546778' }] };
-function cubes(base: ModelSnapshot, ids: readonly string[]): ModelSnapshot {
-  return previewAssets(base, { families: [family], instances: ids.map((id, index) => ({ id, type: 'AssetInstance', name: id,
-    familyId: family.id, position: [1.5 + index * 2, 2], rotationDeg: 0, size: { width: .3, depth: .3, height: .3 },
+function cubes(base: ModelSnapshot, ids: readonly ('cube-a' | 'cube-d')[]): ModelSnapshot {
+  return previewAssets(base, { families: [family], instances: ids.map(id => ({ id, type: 'AssetInstance', name: id,
+    familyId: family.id, position: [id === 'cube-a' ? 1.5 : 3.5, 2], rotationDeg: 0, size: { width: .3, depth: .3, height: .3 },
     placement: { kind: 'single-room' } })), removeInstanceIds: base.entities.filter(item => item.type === 'AssetInstance'
-      && !ids.includes(item.id)).map(item => item.id) });
+      && !ids.some(id => id === item.id)).map(item => item.id) });
 }
 function box(id: string): GeometryMeasureRequest {
   return { subject: { kind: 'box', candidateId: id, bounds: { min: [1, 1, 0], max: [1.3, 1.3, .3] },
@@ -113,7 +113,9 @@ test('unrelated accepted advances reconcile without a chat reset or rewriting se
 });
 
 test('concurrently accepted candidates reactivate even when absent from the original sealed final', async () => {
-  const f = await fixture(); const accepted = await accept(f.repository, cubes(f.base, ['cube-a']), 'accept-cube');
+  const f = await fixture();
+  assert.deepEqual(f.one.entities.find(entity => entity.id === 'cube-d'), f.both.entities.find(entity => entity.id === 'cube-d'));
+  const accepted = await accept(f.repository, cubes(f.base, ['cube-a']), 'accept-cube');
   const current = accepted.geometryHistory();
   assert.deepEqual(await inactiveInheritedBoxMeasurements({ evidence: f.second, binding: binding(current, f.second, f.one) }), []);
   await assertGeometryEvidenceBound(f.second, f.one, binding(current, f.second, f.one));
