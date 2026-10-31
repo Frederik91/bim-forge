@@ -97,6 +97,34 @@ test('compact proposal review in a real browser', async t => {
     assert.equal(await card.getByRole('button', { name: /Accept into|Request revision|Reject proposal/ }).count(), 0);
   });
 
+  await t.test('switching projects clears review authority and retains immutable source and visual bindings', async t => {
+    const page = await mount(browser, script); t.after(() => page.close());
+    await page.evaluate(() => {
+      const oldAccept = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Accept into Courtyard option');
+      if (!oldAccept) throw new Error('Acceptance action is required.');
+      const { chat, input } = window.chatTest;
+      chat.show({ ...input, projectId: 'project-two', conversation: { ...input.conversation,
+        messages: input.conversation.messages.map(message => message.kind === 'user' ? { ...message,
+          sources: [{ id: 'source-one', name: 'floor-plan.pdf', mediaType: 'application/pdf', byteLength: 128, sha256: 'c'.repeat(64) }],
+          visual: { snapshot: { kind: 'accepted', revisionId: message.baseRevisionId }, view: '3d', levelId: null,
+            selectedObjectIds: ['entry-door'], annotations: [] },
+        } : message),
+      } });
+      oldAccept.click();
+    });
+    assert.deepEqual(await page.evaluate(() => window.chatTest.decisions), []);
+    assert.equal(await page.getByRole('button', { name: /Accept into|Request revision|Reject proposal/ }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Inspect proposal', exact: true }).isVisible(), true);
+    assert.equal(await page.getByRole('link', { name: 'floor-plan.pdf', exact: true }).getAttribute('href'), '/api/projects/project-two/sources/source-one');
+    const source = page.locator('.source-reference');
+    await source.locator('summary').click();
+    assert.equal(await source.locator('code').textContent(), 'c'.repeat(64));
+    const visual = page.locator('.request-chat-visual');
+    await visual.locator('summary').click();
+    assert.equal(await visual.getByText('Selected IDs: entry-door', { exact: true }).isVisible(), true);
+    assert.equal(await visual.getByRole('button', { name: 'Inspect bound snapshot', exact: true }).isVisible(), true);
+  });
+
   await t.test('review refresh keeps expanded details and action focus when the display name changes', async t => {
     const page = await mount(browser, script); t.after(() => page.close());
     const card = page.locator('.request-chat-proposal');

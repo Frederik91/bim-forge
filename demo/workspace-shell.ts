@@ -6,9 +6,14 @@ const contextLabels: Record<WorkspaceContext, string> = {
   evidence: 'Project evidence',
 };
 
+const utilityPages = {
+  project: 'project-page', backlog: 'backlog-page', activity: 'activity-page', history: 'history-page', evidence: 'evidence-page',
+} satisfies Partial<Record<WorkspaceContext, string>>;
+type UtilityContext = keyof typeof utilityPages;
+
 type Panel = 'navigation' | 'context';
 const panelBounds = {
-  navigation: { min: 180, max: 320 },
+  navigation: { min: 220, max: 440 },
   context: { min: 280, max: 520 },
 };
 const minimumStageWidth = 320;
@@ -20,10 +25,14 @@ export class WorkspaceShell {
   private readonly navigationToggle: HTMLButtonElement;
   private readonly contextToggle: HTMLButtonElement;
   private readonly heading: HTMLElement;
+  private readonly navigationHeading: HTMLElement;
+  private readonly explorer: HTMLElement;
+  private readonly tools: HTMLElement;
+  private navigationReturn: HTMLButtonElement;
   private readonly toggleLabel: HTMLElement;
   private readonly content: HTMLElement;
   private readonly phone = window.matchMedia('(max-width: 900px)');
-  private readonly widths: Record<Panel, number> = { navigation: 208, context: 344 };
+  private readonly widths: Record<Panel, number> = { navigation: 280, context: 360 };
   private readonly resizers: Record<Panel, HTMLElement>;
 
   constructor() {
@@ -41,12 +50,18 @@ export class WorkspaceShell {
     this.navigation = required('workspace-navigation');
     this.context = required('workspace-context');
     this.navigationToggle = button('workspace-navigation-toggle');
+    this.navigationReturn = this.navigationToggle;
     this.contextToggle = button('workspace-context-toggle');
     this.heading = required('workspace-context-heading');
+    this.navigationHeading = required('workspace-navigation-heading');
+    this.explorer = required('workspace-explorer-content');
+    this.tools = required('workspace-tools-content');
+    for (const pageId of Object.values(utilityPages)) this.tools.append(required(pageId));
+    this.showNavigationContent('model');
     this.toggleLabel = required('workspace-context-toggle-label');
     this.content = required('workspace-context-content');
     if (this.shell.clientWidth <= 1200) {
-      this.widths.navigation = 184;
+      this.widths.navigation = 260;
       this.widths.context = 320;
     }
     this.resizers = { navigation: this.createResizer('navigation'), context: this.createResizer('context') };
@@ -62,7 +77,12 @@ export class WorkspaceShell {
         event.preventDefault();
       });
     }
-    this.navigationToggle.addEventListener('click', () => this.setPanel('navigation', this.navigation.hidden === true));
+    this.navigationToggle.addEventListener('click', () => {
+      const showingExplorer = this.shell.dataset.navigationContent === 'model';
+      this.showNavigationContent('model');
+      this.navigationReturn = this.navigationToggle;
+      this.setPanel('navigation', !showingExplorer || this.navigation.hidden === true);
+    });
     this.contextToggle.addEventListener('click', () => this.setPanel('context', this.context.hidden === true));
     button('workspace-navigation-close').addEventListener('click', () => this.close('navigation'));
     button('workspace-context-close').addEventListener('click', () => this.close('context'));
@@ -77,17 +97,63 @@ export class WorkspaceShell {
       if (this.phone.matches) this.setPanel('navigation', false);
       this.fitPanels();
     });
-    this.setPanel('navigation', !this.phone.matches);
+    this.setPanel('navigation', false);
     this.setPanel('context', !this.phone.matches);
     new ResizeObserver(() => this.fitPanels()).observe(this.shell);
   }
 
   showContext(page: WorkspaceContext): void {
-    if (this.shell.dataset.context !== page) this.content.scrollTop = 0;
-    this.heading.textContent = contextLabels[page];
-    this.toggleLabel.textContent = page === 'request' ? 'Request' : contextLabels[page];
+    if (this.shell.dataset.context !== page && (page === 'request' || page === 'review')) this.content.scrollTop = 0;
     this.shell.dataset.context = page;
+    if (page in utilityPages) {
+      const utility = this.utilityContext(page);
+      this.showNavigationContent(utility);
+      const commandId = utility === 'history' ? 'nav-history' : utility === 'evidence' ? 'open-project-evidence'
+        : utility === 'project' ? 'project-overview' : 'nav-backlog';
+      const command = document.getElementById(commandId);
+      if (command instanceof HTMLButtonElement) this.navigationReturn = command;
+      this.heading.textContent = 'Assistant';
+      this.toggleLabel.textContent = 'Assistant';
+      this.setPanel('navigation', true);
+      return;
+    }
+    this.showNavigationContent('model');
+    this.heading.textContent = page === 'request' ? 'Assistant' : contextLabels[page];
+    this.toggleLabel.textContent = page === 'request' ? 'Assistant' : 'Review';
     this.setPanel('context', true);
+  }
+
+  private utilityContext(page: WorkspaceContext): UtilityContext {
+    switch (page) {
+      case 'project': case 'backlog': case 'activity': case 'history': case 'evidence': return page;
+      case 'request': case 'review': throw new Error('Request and review are assistant contexts.');
+    }
+  }
+
+  private showNavigationContent(page: UtilityContext | 'model'): void {
+    this.shell.dataset.navigationContent = page;
+    this.navigationHeading.textContent = page === 'model' ? 'Model explorer' : contextLabels[page];
+    this.explorer.hidden = page !== 'model';
+    this.tools.hidden = page === 'model';
+    this.updateRailState();
+  }
+
+  private updateRailState(): void {
+    const navigationOpen = this.navigation.hidden === false;
+    const contextOpen = this.context.hidden === false;
+    const page = this.shell.dataset.navigationContent;
+    const commands: readonly [string, boolean][] = [
+      ['workspace-navigation-toggle', navigationOpen && page === 'model'],
+      ['nav-backlog', navigationOpen && (page === 'backlog' || page === 'activity')],
+      ['nav-history', navigationOpen && page === 'history'],
+      ['open-project-evidence', navigationOpen && page === 'evidence'],
+      ['open-chat', contextOpen && this.shell.dataset.context !== 'review'],
+      ['nav-review', contextOpen && this.shell.dataset.context === 'review'],
+    ];
+    for (const [id, active] of commands) {
+      const command = document.getElementById(id);
+      if (command) command.dataset.panelActive = String(active);
+    }
   }
 
   showRequestDetails(show: boolean): void {
@@ -96,6 +162,8 @@ export class WorkspaceShell {
   }
 
   showNavigation(): void {
+    this.showNavigationContent('model');
+    this.navigationReturn = this.navigationToggle;
     this.setPanel('navigation', true);
   }
 
@@ -191,7 +259,7 @@ export class WorkspaceShell {
 
   private close(panel: Panel): void {
     this.setPanel(panel, false);
-    (panel === 'navigation' ? this.navigationToggle : this.contextToggle).focus({ preventScroll: true });
+    (panel === 'navigation' ? this.navigationReturn : this.contextToggle).focus({ preventScroll: true });
   }
 
   private setPanel(panel: Panel, open: boolean): void {
@@ -199,9 +267,11 @@ export class WorkspaceShell {
     const node = panel === 'navigation' ? this.navigation : this.context;
     const toggle = panel === 'navigation' ? this.navigationToggle : this.contextToggle;
     node.hidden = !open;
-    toggle.setAttribute('aria-expanded', String(open));
+    node.inert = !open;
+    toggle.setAttribute('aria-expanded', String(open && (panel !== 'navigation' || this.shell.dataset.navigationContent === 'model')));
     if (panel === 'navigation') this.shell.dataset.navigationOpen = String(open);
     else this.shell.dataset.contextOpen = String(open);
+    this.updateRailState();
     this.fitPanels();
   }
 }

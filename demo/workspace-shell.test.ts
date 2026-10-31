@@ -1,32 +1,55 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { transform } from 'esbuild';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import type { Browser, Page } from 'playwright';
 
 // Run in the parent's server browser environment. This fixture uses the shipped
 // markup/styles and real DOM events; the shell needs no model server or renderer.
-async function workspace(browser: Browser, viewport = { width: 1440, height: 900 }, hasTouch = false): Promise<Page> {
+async function workspace(browser: Browser, viewport = { width: 1440, height: 900 }, hasTouch = false, openExplorer = true): Promise<Page> {
   const context = await browser.newContext({ viewport, hasTouch, reducedMotion: 'reduce' });
   const page = await context.newPage();
-  const [html, css, chatCss, source] = await Promise.all([
+  const [html, css, chatCss, studioCss] = await Promise.all([
     readFile(new URL('./index.html', import.meta.url), 'utf8'),
     readFile(new URL('./room.css', import.meta.url), 'utf8'),
     readFile(new URL('./request-chat.css', import.meta.url), 'utf8'),
-    readFile(new URL('./workspace-shell.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../dist/demo/canvas-studio.css', import.meta.url), 'utf8'),
   ]);
   await page.setContent(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link\b[^>]*>/g, ''));
   await page.addStyleTag({ content: css });
   await page.addStyleTag({ content: chatCss });
-  const script = await transform(source, { loader: 'ts', format: 'esm' });
-  await page.addScriptTag({ type: 'module', content: script.code + `
+  await page.addStyleTag({ content: studioCss });
+  const script = await build({
+    stdin: { contents: `
+    import { WorkspaceShell } from './workspace-shell.ts';
+    import { mountCanvasStudioChrome } from './workspace-react.tsx';
+    const chrome = document.getElementById('workspace-chrome-mount');
+    if (!chrome) throw new Error('Missing Canvas Studio chrome mount');
+    mountCanvasStudioChrome(chrome);
     const shell = new WorkspaceShell();
     document.addEventListener('test-request', () => shell.showContext('request'));
     document.addEventListener('test-inspector', () => shell.showInspector());
     document.addEventListener('test-canvas', () => shell.showRequestDetails(false));
+    document.getElementById('nav-history').disabled = false;
+    document.getElementById('nav-history').addEventListener('click', () => {
+      document.getElementById('history-page').hidden = false;
+      shell.showContext('history');
+    });
+    document.getElementById('open-project-evidence').disabled = false;
+    document.getElementById('open-project-evidence').addEventListener('click', () => {
+      document.getElementById('history-page').hidden = true;
+      document.getElementById('evidence-page').hidden = false;
+      shell.showContext('evidence');
+    });
     document.documentElement.dataset.shellReady = 'true';
-  ` });
+    `, resolveDir: fileURLToPath(new URL('.', import.meta.url)), loader: 'ts' },
+    bundle: true, format: 'iife', platform: 'browser', write: false, jsx: 'automatic',
+  });
+  const scriptOutput = script.outputFiles[0];
+  if (!scriptOutput) throw new Error('Workspace fixture did not compile');
+  await page.addScriptTag({ content: scriptOutput.text });
   await page.waitForFunction(() => document.documentElement.dataset.shellReady === 'true');
   await page.evaluate(() => {
     const canvas = document.createElement('canvas');
@@ -34,6 +57,7 @@ async function workspace(browser: Browser, viewport = { width: 1440, height: 900
     document.getElementById('proposal-drawing')?.replaceChildren(canvas);
     document.dispatchEvent(new Event('test-request'));
   });
+  if (openExplorer && viewport.width > 900) await page.locator('#workspace-navigation-toggle').click();
   return page;
 }
 
@@ -59,6 +83,50 @@ async function modelRemainsVisible(page: Page, minimumWidth = 320): Promise<void
 test('workspace panels preserve the model through desktop resizing, collapse and phone sheets', { timeout: 90_000 }, async t => {
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
+
+  await t.test('rail tools open persistent docked side panels and preserve a long model tree', async () => {
+    const page = await workspace(browser, { width: 1440, height: 900 }, false, false);
+    try {
+      assert.equal(await page.locator('#workspace-navigation').isHidden(), true, 'The model starts with the full canvas');
+      const fullCanvas = await box(page, '.workspace-stage');
+      await page.locator('#view-3d').click();
+      await page.locator('#workspace-navigation-toggle').click();
+      const modelPanel = await box(page, '#workspace-navigation');
+      const modelStage = await box(page, '.workspace-stage');
+      const shell = await box(page, '#workspace-shell');
+      assert.ok(Math.abs(modelPanel.y - shell.y) <= 1 && Math.abs(modelPanel.height - shell.height) <= 1, 'Explorer is a full-height dock');
+      assert.ok(modelStage.x >= modelPanel.x + modelPanel.width - 1, 'Explorer reserves canvas space');
+      assert.ok(modelStage.width < fullCanvas.width, 'Collapsing and opening reallocates the canvas');
+      await page.evaluate(() => {
+        const tree = document.getElementById('model-explorer');
+        if (!tree) throw new Error('Missing model tree');
+        for (let index = 0; index < 150; index++) {
+          const row = document.createElement('button'); row.className = 'model-tree-row'; row.textContent = `Building object ${index}`; tree.append(row);
+        }
+        tree.scrollTop = 480;
+      });
+      const scrollTop = await page.locator('#model-explorer').evaluate(element => element.scrollTop);
+      assert.ok(scrollTop > 0, 'Long tree scrolls independently');
+      await page.locator('#workspace-navigation-close').click();
+      await page.locator('#workspace-navigation-toggle').click();
+      assert.equal(await page.locator('#model-explorer').evaluate(element => element.scrollTop), scrollTop, 'Reopening preserves tree position');
+      await page.locator('#nav-history').click();
+      assert.equal(await page.locator('#workspace-navigation-heading').textContent(), 'Model history');
+      assert.equal(await page.locator('#workspace-tools-content #history-page').isVisible(), true);
+      assert.equal(await page.locator('#workspace-explorer-content').isHidden(), true);
+      assert.equal(await page.locator('#workspace-context').isVisible(), true, 'Assistant remains available beside tools');
+      assert.equal(await page.locator('dialog[open], .canvas-proposal-tray[role="dialog"]').count(), 0, 'Rail tools do not open popups');
+      await page.locator('#open-project-evidence').click();
+      assert.equal(await page.locator('#workspace-tools-content #evidence-page').isVisible(), true);
+      await page.locator('#workspace-navigation-close').click();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'open-project-evidence', 'Closing restores the initiating rail command');
+      await page.locator('#workspace-navigation-toggle').click();
+      assert.equal(await page.locator('#workspace-navigation-heading').textContent(), 'Model explorer');
+      assert.equal(await page.locator('#model-explorer').evaluate(element => element.scrollTop), scrollTop, 'Tool routing retains the same tree');
+      assert.equal(await page.locator('#workspace-navigation').evaluate(element => getComputedStyle(element).transitionDuration), '0s', 'Reduced motion skips panel transitions');
+      await modelRemainsVisible(page);
+    } finally { await page.context().close(); }
+  });
 
   await t.test('keyboard separators announce bounds, follow their physical edge and preserve model width on viewport changes', async () => {
     const page = await workspace(browser);
@@ -235,6 +303,12 @@ test('workspace panels preserve the model through desktop resizing, collapse and
         assert.equal(await page.locator('#workspace-context').isHidden(), true);
         for (const selector of ['#workspace-navigation-toggle', '#workspace-context-toggle', '#workspace-navigation-close', '#view-plan', '#view-3d']) {
           assert.ok((await box(page, selector)).height >= 44, `${selector} needs a phone touch target`);
+        }
+        for (const control of await page.locator('.canvas-rail-button').all()) {
+          if (!await control.isVisible()) continue;
+          const bounds = await control.boundingBox(); assert.ok(bounds);
+          assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, 'Every phone toolbar control fits the viewport.');
+          assert.ok(bounds.width >= 44 && bounds.height >= 44, 'Every phone toolbar control has a full touch target.');
         }
         await modelRemainsVisible(page, width);
         await page.locator('#workspace-navigation-close').click();

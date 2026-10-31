@@ -1,0 +1,49 @@
+Canvas Studio qualification, 2026-10-31
+Implementation: cd652f232a4dc03934dceb4d4573b55500b9646b
+Isolated coding VM: Node 24.22.1, Playwright 1.64.1 Chromium, Poppler 24.02.0
+No local Windows builds/tests, production data changes, merge or deployment.
+
+Environment used for unprivileged runs:
+  PATH=/opt/bim-forge/node/bin:/usr/bin:/bin
+  PLAYWRIGHT_BROWSERS_PATH=/var/lib/bim-forge/orchestrator/tmp/issue241-canvas-studio/browsers
+  XDG_CACHE_HOME=/var/lib/bim-forge/orchestrator/tmp/issue241-canvas-studio/artifacts/private/cache
+  umask 022
+The umask is command-local. The VM's inherited 0002 made immutable-tree fixture
+files group-writable; unchanged validators correctly rejected them. No global
+permissions setting, validator or test assertion was weakened.
+
+Validation/build and browser command:
+  npm run validate && npm run build:demo && node --test --test-concurrency=1 demo/request-chat.test.ts demo/workspace-shell.test.ts demo/canvas-studio-browser.test.ts demo/floor-plan-guide-browser.test.ts
+Result: exit 0; strict TypeScript 331 files; tsc and policy passed; build passed.
+Browser result: 19 tests, 19 pass, 0 fail, 0 cancelled, 0 skipped.
+
+Additional environment-conditional checks (run separately):
+  VIEWER_BENCHMARK_BROWSER_TESTS=1 node --test --test-name-pattern="real browser evaluations hanging after replay" benchmarks/viewer/runner-limits.test.ts
+Result: exit 0; 1 pass, 0 fail, 0 skipped.
+  node --test --test-name-pattern="both protected files independently reject a different owner" factory/scheduled-publication.test.ts
+Result: exit 0; 1 pass, 0 fail, 0 skipped. This owner check ran as root against
+its own disposable test fixture; no production paths or configuration touched.
+
+Full root command:
+  npm test
+Result: exit 0; all six stages passed.
+Qualification contracts: 5/5 pass.
+Geometry query: 35/35 pass.
+Linked revisions: 12/12 pass.
+Geometry evidence: 55/55 pass.
+Main stage: 844 tests, 842 pass, 0 fail, 0 cancelled, 2 skipped.
+Assets: 21 tests, 21 pass, 0 fail, 0 cancelled, 0 skipped.
+Aggregate: 972 tests, 970 pass, 0 fail, 2 conditional skips.
+The two conditional skips are the separately passed browser-timeout and
+file-owner checks recorded above.
+
+Retained final log SHA-256:
+  issue241-full-suite-final.log
+  822bbcf1140229a0a48755bf9356a2baef02c4edd350ff4843521817e9336e3b
+  issue241-release-browser.log
+  044e7c9006ebb416e25a1772efe3e1d196f88c4becacda589a83f1b15cd65321
+
+All browser model/worker results use disposable deterministic fixtures. Live
+provider, external IFC converter, production-image and physical touch-device
+qualification are not established by these runs. Historical failures remain in
+the parent design document's run ledger and retained logs.

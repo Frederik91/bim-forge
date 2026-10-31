@@ -24,7 +24,7 @@ test('draw spatial context through the real app, queue it and replay the saved c
       proxy.on('error', () => { response.writeHead(502); response.end(); }); request.pipe(proxy); return;
     }
     const filename = request.url === '/' ? 'index.html' : request.url?.slice(1);
-    if (!filename || !['index.html', 'room-app.mjs', 'room.css', 'request-chat.css'].includes(filename)) { response.writeHead(404); response.end(); return; }
+    if (!filename || !['index.html', 'room-app.mjs', 'room.css', 'request-chat.css', 'canvas-studio.css'].includes(filename)) { response.writeHead(404); response.end(); return; }
     response.setHeader('Content-Type', filename.endsWith('.mjs') ? 'text/javascript' : filename.endsWith('.css') ? 'text/css' : 'text/html');
     void fs.readFile(path.join(assets, filename)).then(bytes => response.end(bytes), () => { response.writeHead(404); response.end(); });
   });
@@ -41,6 +41,8 @@ test('draw spatial context through the real app, queue it and replay the saved c
   t.after(async () => { await page.screenshot({ path: path.join(output, 'final.png') }).catch(() => {});
     await fs.writeFile(path.join(output, 'browser-errors.json'), JSON.stringify(errors)); });
   await page.goto(base);
+  const stylesheet = await page.request.get(base + '/canvas-studio.css');
+  assert.equal(stylesheet.status(), 200, 'The markup browser fixture must serve the compiled workspace stylesheet.');
   await page.locator('#project-name').fill('Spatial markup test house');
   await page.locator('#project-template').selectOption('house');
   const created = page.waitForResponse(response => response.url() === base + '/api/projects' && response.request().method() === 'POST');
@@ -49,6 +51,7 @@ test('draw spatial context through the real app, queue it and replay the saved c
   assert.ok(projectValue && typeof projectValue === 'object' && 'project' in projectValue && typeof projectValue.project === 'string');
   const repo = await RoomRepository.restore(projectValue.project); const before = projectValue.project;
   await page.locator('#view-3d').click();
+  await page.locator('#workspace-navigation-toggle').click();
   await page.locator('#model-explorer').getByText('Attic', { exact: true }).click();
   if (await page.locator('#show-roof').isChecked()) await page.locator('#show-roof').uncheck();
   await page.waitForFunction(() => document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready') === 'true');
@@ -95,6 +98,10 @@ test('draw spatial context through the real app, queue it and replay the saved c
   assert.equal(saved.levelId, 'level-attic');
   if (shapes[0]?.kind === 'rectangle') assert.ok(shapes[0].corners.every(point => Math.abs(point[2] - 3) < .00001));
   await page.waitForFunction(() => document.querySelector('.model-markup-controls')?.getAttribute('data-reference-markup-count') === '2');
+  const visualDetails = page.locator('#request-chat .request-chat-visual');
+  await visualDetails.locator('summary').click();
+  assert.match(await visualDetails.innerText(), /rectangle.*Corners.*approximate user intent/i);
+  assert.match(await visualDetails.innerText(), /circle.*Centre.*approximate user intent/i);
   await page.screenshot({ path: path.join(output, 'saved-chat.png') });
   const stored = await page.request.get(base + '/api/projects/' + repo.projectId); const after: unknown = await stored.json();
   assert.ok(after && typeof after === 'object' && 'project' in after); assert.equal(after.project, before);

@@ -39,9 +39,9 @@ test('the built preview is one complete hashed release with every referenced bro
   const schema = Type.Object({ version: Type.Literal(1), files: Type.Array(Type.Object({
     name: Type.String({ pattern: '^[a-z.-]+$' }), byteLength: Type.Integer({ minimum: 1 }),
     sha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-  }, { additionalProperties: false }), { minItems: 4, maxItems: 4 }) }, { additionalProperties: false });
+  }, { additionalProperties: false }), { minItems: 5, maxItems: 5 }) }, { additionalProperties: false });
   assert.ok(Check(schema, value));
-  assert.deepEqual(value.files.map(file => file.name).sort(), ['index.html', 'request-chat.css', 'room-app.mjs', 'room.css']);
+  assert.deepEqual(value.files.map(file => file.name).sort(), ['canvas-studio.css', 'index.html', 'request-chat.css', 'room-app.mjs', 'room.css']);
   for (const file of value.files) {
     const bytes = await fs.readFile(new URL(file.name, root));
     assert.equal(bytes.byteLength, file.byteLength);
@@ -51,10 +51,16 @@ test('the built preview is one complete hashed release with every referenced bro
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length, 'Merged panels must not duplicate DOM identities.');
   assert.equal(ids.filter(id => id === 'request-chat-mount').length, 1);
+  for (const id of ['workspace-chrome-mount', 'canvas-proposal-tray-mount', 'workspace-explorer-content', 'workspace-tools-content']) {
+    assert.equal(ids.filter(value => value === id).length, 1, `${id} has one authoritative mount`);
+  }
   const references = [...html.matchAll(/(?:href|src)="\.\/([^"]+)"/g)].map(match => match[1]);
   assert.ok(references.length >= 3);
   assert.ok(references.every(name => value.files.some(file => file.name === name)), 'A page cannot load CSS or JavaScript from another release.');
   for (const name of ['index.html', 'room.css', 'request-chat.css']) {
     assert.deepEqual(await fs.readFile(new URL(name, root)), await fs.readFile(new URL(name, import.meta.url)));
   }
+  const studioCss = await fs.readFile(new URL('canvas-studio.css', root), 'utf8');
+  assert.ok(studioCss.includes('.canvas-studio'), 'The shipped release contains the Canvas Studio theme.');
+  assert.ok(!studioCss.includes('@import "tailwindcss"'), 'The browser receives compiled Tailwind CSS.');
 });

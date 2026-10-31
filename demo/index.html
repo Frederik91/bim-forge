@@ -4,13 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <meta name="theme-color" content="#102d35">
+    <meta name="theme-color" content="#087769">
     <title>Model workspace · BIM Forge</title>
     <link rel="stylesheet" href="./room.css">
     <link rel="stylesheet" href="./request-chat.css">
+    <link rel="stylesheet" href="./canvas-studio.css">
     <script type="module" src="./room-app.mjs"></script>
   </head>
-  <body>
+  <body class="canvas-studio">
     <a class="skip-link" href="#workbench">Skip to workbench</a>
     <header class="app-header">
       <a class="brand" href="./" aria-label="BIM Forge model workspace"><span class="brand-mark" aria-hidden="true">▱</span><span>BIM FORGE<small>Model workspace</small></span></a>
@@ -21,7 +22,6 @@
         <button id="project-overview" class="button quiet" type="button" disabled>Overview</button>
         <button id="auth-menu" class="button connection-button" type="button" aria-label="ChatGPT connection settings"><span class="connection-dot" aria-hidden="true"></span><span>Connect ChatGPT</span></button>
         <details class="workspace-file-menu"><summary>Project tools <span aria-hidden="true">⌄</span></summary><div>
-        <button id="open-project-evidence" class="button quiet" type="button" disabled>Project evidence</button>
         <button id="retry-synthetic-evidence" class="button quiet" type="button" hidden>Prepare generated evidence</button>
         <button id="view-original" class="button quiet" type="button" disabled>Original</button>
         <button id="export-project" class="button quiet" type="button" disabled>Export</button>
@@ -33,26 +33,17 @@
     </header>
 
     <main id="workbench" class="workbench" tabindex="-1">
-      <div class="workspace-toolbar">
-        <button id="workspace-navigation-toggle" class="button quiet" type="button" aria-controls="workspace-navigation" aria-expanded="true"><span aria-hidden="true">☷</span> Navigate</button>
-        <button id="open-chat" class="button quiet" type="button">Chat</button>
-        <details class="workspace-history-menu"><summary>Activity &amp; history</summary><nav id="journey" class="journey" aria-label="Model change process">
-        <button id="nav-request" type="button" aria-pressed="true"><span>1</span><b>Request</b><small>Show the intent</small></button>
-        <i aria-hidden="true"></i>
-        <button id="nav-backlog" type="button" aria-pressed="false" disabled>Backlog · 0 ready</button>
-        <button id="nav-review" type="button" aria-pressed="false" disabled><span>3</span><b>Review</b><small>Understand the proposal</small></button>
-        <i aria-hidden="true"></i>
-        <button id="nav-history" type="button" aria-pressed="false" disabled><span>4</span><b>History</b><small>Trace every outcome</small></button>
-      </nav></details>
-        <button id="workspace-context-toggle" class="button quiet" type="button" aria-label="Toggle context panel" aria-controls="workspace-context" aria-expanded="true"><span aria-hidden="true">◧</span> <span id="workspace-context-toggle-label">Request</span></button>
-      </div>
+      <div id="workspace-chrome-mount" class="workspace-toolbar"></div>
       <div id="workspace-shell" class="workspace-shell" data-navigation-open="true" data-context-open="true">
         <aside id="workspace-navigation" class="workspace-navigation" aria-labelledby="workspace-navigation-heading">
-          <div class="workspace-panel-heading"><div><p class="eyebrow">PROJECT EXPLORER</p><h2 id="workspace-navigation-heading">Navigate model</h2></div><button id="workspace-navigation-close" class="icon-button" type="button" aria-label="Close model navigation">×</button></div>
+          <div class="workspace-panel-heading"><div><h2 id="workspace-navigation-heading">Model explorer</h2></div><button id="workspace-navigation-close" class="icon-button" type="button" aria-label="Close model navigation">×</button></div>
+          <div id="workspace-explorer-content">
           <div class="model-explorer-toolbar"><label class="roof-toggle" for="show-roof"><input id="show-roof" type="checkbox"> Show roof</label><small>Click to view · arrows to expand</small></div>
           <div id="model-explorer" class="model-explorer"></div>
           <details id="linked-model-references" class="linked-model-references"><summary>Linked IFC models</summary><p class="editor-help">Read-only source models · shown in 3D. Native geometry and design baselines stay independent.</p><button id="show-linked-3d" type="button" class="button quiet">View references in 3D</button><div id="linked-model-mount"></div></details>
           <details id="element-inspector" class="element-inspector"><summary>Element properties</summary><div id="element-properties"></div></details>
+          </div>
+          <div id="workspace-tools-content"></div>
         </aside>
         <div class="workspace-stage" aria-label="Model workspace">
           <div id="design-readonly-banner" class="design-readonly-banner" hidden><span>Fixed baseline · read only. Create an alternative to request changes.</span><button id="fork-selected-baseline" class="button outline" type="button">Create alternative…</button></div>
@@ -81,6 +72,7 @@
         </div>
       </section>
           <section id="workspace-review-canvas" class="drawing-card review-canvas" hidden aria-labelledby="review-drawing-title"><header class="card-heading"><div><span class="card-kicker">AI-PREPARED MODEL</span><h2 id="review-drawing-title">Proposed model</h2></div><div class="view-switch" role="group" aria-label="Proposal review view"><button id="review-plan" type="button" aria-pressed="true">Plan</button><button id="review-3d" type="button" aria-pressed="false">3D</button></div></header><div class="comparison-toolbar"><button id="review-delta" class="button outline" type="button" aria-pressed="false">Show 3D changes</button><span>Compare with this proposal’s bound base</span></div><div id="review-drawing" class="drawing-surface"><p class="canvas-empty">A proposal will appear here.</p></div><div id="review-model-3d-controls" class="model-3d-controls" hidden><div class="view-switch" role="group" aria-label="Review rendering quality"><button id="review-render-basic" type="button" aria-pressed="false">Basic</button><button id="review-render-realistic" type="button" aria-pressed="true">Realistic</button></div><div class="viewer-tools"><button id="review-cutaway" class="button quiet" type="button" aria-pressed="true">Cutaway</button><button id="review-reset-3d" class="button quiet" type="button">Frame model</button></div><span class="viewer-help">Drag to orbit · Right-drag / Ctrl-drag to pan · Scroll / pinch to zoom<br>Concept geometry and materials · not product-accurate visualization</span></div><footer><span>Concept model · inspect all changes before accepting.</span><b id="review-view-caption">PLAN · METRES</b></footer></section>
+          <div id="canvas-proposal-tray-mount"></div>
         </div>
         <aside id="workspace-context" class="workspace-context" aria-labelledby="workspace-context-heading">
           <div class="workspace-panel-heading"><div><p class="eyebrow">MODEL CONTEXT</p><h2 id="workspace-context-heading">Change request</h2></div><button id="workspace-context-close" class="icon-button" type="button" aria-label="Close context panel">×</button></div>

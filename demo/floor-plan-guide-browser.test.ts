@@ -57,12 +57,13 @@ async function send(page: Page): Promise<{ id: string; projectId: string }> {
   return { id: body.ticket.id, projectId: body.ticket.projectId };
 }
 async function inspectAndAccept(page: Page, label: string): Promise<void> {
-  const inspect = page.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
-  const accept = page.getByRole('button', { name: `Accept into ${label}`, exact: true });
+  const chat = page.locator('#request-chat-mount');
+  const inspect = chat.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
+  const accept = chat.getByRole('button', { name: `Accept into ${label}`, exact: true });
   await inspect.or(accept).first().waitFor({ timeout: 30_000 });
   if (await inspect.isVisible()) await inspect.click();
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: `Accept into ${label}`, exact: true }).click();
+  await accept.click();
   const response = await decision; assert.equal(response.status(), 200, await response.text());
   await page.locator('#request-chat .request-chat-status strong').filter({ hasText: /^Accepted$/ }).waitFor({ state: 'attached', timeout: 20_000 });
   await page.locator('#open-chat').click();
@@ -153,7 +154,11 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
     alternative, reconstruction: diffSnapshots(before.view(root).snapshot, asIs.view(asIs.head('main')).snapshot), alternativeDelta: delta }, null, 2));
   await page.screenshot({ path: path.join(artifacts, 'desktop-alternative.png'), fullPage: true });
   await page.goto('about:blank');
-  await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers();
+  await new Promise<void>(resolve => {
+    server.close(() => resolve());
+    server.closeAllConnections();
+  });
+  await server.closeModelWorkers();
   server = await createDemoServer({ modelWorker: worker, backlogFile: path.join(directory, 'queue.sqlite') });
   await new Promise<void>(resolve => server.listen(address.port, '127.0.0.1', resolve));
   const recovered = await savedProject(page, base, ticket.projectId);

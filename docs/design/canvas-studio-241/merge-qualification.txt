@@ -1,0 +1,58 @@
+Canvas Studio integration qualification, 2026-10-31
+Main incorporated: 005fdf5 (spatial markup and geometry draft lineage).
+Product implementation checked: 2997cdd (integration merge).
+Follow-up: markup browser fixture serves canvas-studio.css and asserts HTTP 200.
+No product-code changes follow the integration merge; remaining changes are
+the fixture asset response/assertion and this qualification documentation.
+
+Isolated Linux coding VM, Node 24.22.1, existing Chromium/Poppler prerequisites.
+Command-local umask 022; no machine-wide setting or validator was weakened.
+
+Validation and build:
+  npm run validate && npm run build:demo
+  strict TypeScript: 347 files; typecheck/policy/build passed.
+
+Full npm test, isolated issue241-merge-suite worktree:
+  qualification contracts: 5 pass, 0 fail
+  geometry: 48 pass, 0 fail
+  linked revisions: 12 pass, 0 fail
+  geometry evidence: 81 pass, 0 fail
+  main: 855 pass, 0 fail, 2 conditional skips
+  assets: 21 pass, 0 fail
+  total: 1,024 tests; 1,022 pass, 0 fail, 2 conditional skips
+  npm's own debug receipt: cwd issue241-merge-suite; verbose exit 0; info ok.
+  /var/lib/bim-forge/.npm/_logs/2026-10-31T09_35_09_467Z-debug-0.log
+  The outer SSH shell exit-capture quoting was incorrect and exited 1 after
+  npm finished. Its status is not used as the npm result. All six Node stage
+  summaries and npm's independent exit-0 receipt were retained.
+
+Browser evidence, issue241-merge-qualification worktree:
+  node --test --test-concurrency=1 demo/request-chat.test.ts demo/workspace-shell.test.ts demo/canvas-studio-browser.test.ts demo/floor-plan-guide-browser.test.ts demo/spatial-markup-browser.test.ts
+  Initial combined run: 19 pass; markup screenshot timeout; 0 skipped.
+  All existing chat/workspace/Canvas Studio/guided-floor checks passed.
+
+Markup fixture regression:
+  HTTP assertion before allowlist fix: 404 != 200, failed as expected.
+  Static allowlist now includes the compiled canvas-studio.css asset.
+  Browser remains at deviceScaleFactor 2; no functional assertion or timeout
+  changed. Saved rectangle/circle descriptions are asserted in React chat.
+  Earlier screenshot timeouts remain retained. A diagnostic run passed; a
+  subsequent uninstrumented run on the otherwise idle VM also passed:
+    node --test demo/spatial-markup-browser.test.ts
+    1 pass, 0 fail, 0 cancelled, 0 skipped; actual command exit 0.
+  Together with the 19 green existing checks, all 20 distinct browser checks
+  are covered. This is not a claim of a single 20/20 combined invocation.
+
+One premature diagnostic copy ran before its transfer completed and reported
+only a file-level test. That run is excluded; its empty-file result is not
+markup qualification. Temporary instrumentation is absent from committed code.
+
+Retained log SHA-256:
+  issue241-merge-full-suite.log
+  b188008a1d6aa1603479a2c2198141181765670c3a717a8cedc003e309165800
+  issue241-markup-idle.log
+  0ddd6e15bd46d8b56988899884bd9a307776b3ab8553eab3fab4a96c2420bccf
+
+No production data, model/schema validator, deployment or branch-protection
+change. Live provider/external converter/production image/physical touch
+qualification is not established by these runs.
