@@ -1,3 +1,6 @@
+import type { TaskPlacementResolution, TaskPinResolution } from './task-placement.ts';
+import { parseTaskPlacement, parseTaskPlacementRecoveries } from '../src/task-placement.ts';
+import type { TaskPlacement, TaskPlacementRecovery } from '../src/task-placement.ts';
 import { parseFrozenDesignTarget } from '../src/design-targets.ts';
 import type { FrozenDesignTarget } from '../src/design-targets.ts';
 import { MAX_EVIDENCE_PINS, parseEvidencePin } from '../src/model-evidence.ts';
@@ -17,7 +20,7 @@ import { matchingProposalReview } from './request-chat-status.ts';
 import type { RequestChatProposalReview } from './request-chat-status.ts';
 
 type SubmissionRequest = Pick<ReturnType<typeof validateModelProposalRequest>, 'proposalName' | 'baseRevisionId' | 'instruction' | 'target'>
-  & { selectedObjectIds: readonly string[]; visualIntent: unknown; scope?: ScopedRequest; authoringScope?: string; sources?: readonly RequestSource[]; evidencePins?: readonly EvidencePin[]; conversationVisual?: ConversationReply['visual'] };
+  & { selectedObjectIds: readonly string[]; visualIntent: unknown; scope?: ScopedRequest; authoringScope?: string; sources?: readonly RequestSource[]; evidencePins?: readonly EvidencePin[]; conversationVisual?: ConversationReply['visual']; taskPlacement?: TaskPlacement };
 export interface TaskSubmission { project: string; request: SubmissionRequest }
 export interface TaskAcknowledgement { readonly ticket: BacklogItem; readonly preserveDraft: boolean }
 export interface TaskGeneration { readonly project: number; readonly task: number }
@@ -29,6 +32,7 @@ export interface TaskProjection<Draft> {
   readonly conversation: RequestConversation | null;
   readonly inspection: RequestChatProposalReview | null;
   readonly offline: boolean;
+  readonly placementResolution: TaskPlacementResolution | null;
   readonly drafts: ReadonlyMap<string, Draft>;
 }
 export class StaleTaskResponse extends Error {
@@ -58,6 +62,7 @@ export class SpatialTasks<Draft> {
   #inspection: RequestChatProposalReview | null = null;
   #projection: TaskProjection<Draft> | null = null;
   #offline = false;
+  #placementResolution: TaskPlacementResolution | null = null;
   #projectGeneration = 0;
   #taskGeneration = 0;
   #timer: ReturnType<typeof setInterval> | null = null;
@@ -69,7 +74,7 @@ export class SpatialTasks<Draft> {
   get projection(): TaskProjection<Draft> {
     this.#projection ??= Object.freeze({ projectId: this.#projectId, ticketId: this.#ticketId, draftId: this.#draftId,
       tickets: Object.freeze([...this.#tickets]), conversation: this.#conversation, inspection: this.#inspection,
-      offline: this.#offline, drafts: new Map(this.#drafts) });
+      offline: this.#offline, placementResolution: this.#placementResolution, drafts: new Map(this.#drafts) });
     return this.#projection;
   }
   get key(): string { return `${this.#projectId ?? 'none'}:${this.#ticketId ?? this.#draftId}`; }
@@ -87,16 +92,16 @@ export class SpatialTasks<Draft> {
   setProject(projectId: string | null): void {
     if (projectId === this.#projectId) return;
     this.#projectId = projectId; this.#projectGeneration += 1; this.#taskGeneration += 1;
-    this.#ticketId = null; this.#draftId = 'new'; this.#tickets = []; this.#conversation = null; this.#inspection = null; this.#offline = false;
+    this.#ticketId = null; this.#draftId = 'new'; this.#tickets = []; this.#placementResolution = null; this.#conversation = null; this.#inspection = null; this.#offline = false;
     this.#scopes.clear(); this.#appliedOrders.clear(); this.#summaryOrders.clear(); this.#conversationBindings.clear(); this.#projectSnapshot = null; this.#emit();
   }
   #selectTask(ticketId: string | null): boolean {
     if (ticketId === this.#ticketId) return false;
-    this.#ticketId = ticketId; this.#taskGeneration += 1; this.#conversation = null; this.#inspection = null; this.#offline = false; return true;
+    this.#ticketId = ticketId; this.#placementResolution = null; this.#taskGeneration += 1; this.#conversation = null; this.#inspection = null; this.#offline = false; return true;
   }
   selectTask(ticketId: string | null): void { if (this.#selectTask(ticketId)) this.#emit(); }
   startTask(draftId = `draft-${globalThis.crypto.randomUUID()}`): void {
-    this.#draftId = draftId; this.#ticketId = null; this.#taskGeneration += 1; this.#conversation = null; this.#inspection = null; this.#offline = false; this.#emit();
+    this.#draftId = draftId; this.#ticketId = null; this.#placementResolution = null; this.#taskGeneration += 1; this.#conversation = null; this.#inspection = null; this.#offline = false; this.#emit();
   }
   saveDraft(key: string, draft: Draft): void { this.#drafts.set(key, draft); this.#emit(); }
   deleteDraft(key: string): void { this.#drafts.delete(key); this.#emit(); }
@@ -185,6 +190,14 @@ export class SpatialTasks<Draft> {
     if (this.#ticketId === ticketId) this.receiveTask(value.ticket);
     else { this.#confirmDetail(value.ticket); this.#emit(); }
     return value;
+  }
+  async readPlacement(ticketId: string): Promise<void> {
+    const generation = this.generation;
+    const value = this.#record(await this.#json(`/api/change-requests/${encodeURIComponent(ticketId)}/placement`));
+    this.requireCurrent(generation);
+    if (value.projectId !== this.#projectId || value.ticketId !== this.#ticketId || value.ticketId !== ticketId) throw new Error('Placement identity mismatch.');
+    parseTaskPlacement(value.taskPlacement);
+    this.#placementResolution = freezeData(parsePlacementResolution(value.originalResolution)); this.#emit();
   }
   async openTask(ticketId: string): Promise<Record<string, unknown>> { this.selectTask(ticketId); return this.readTask(ticketId); }
   async readDraft(ticketId: string) {
@@ -323,6 +336,8 @@ export interface BacklogItem {
   id: string; projectId: string; title: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
   request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; target?: FrozenDesignTarget; evidencePins?: readonly EvidencePin[]; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
+  taskPlacement: TaskPlacement;
+  placementRecoveries: readonly TaskPlacementRecovery[];
 }
 function lifecycleChanged(previous: BacklogItem, next: BacklogItem): boolean {
   return previous.request.requestId !== next.request.requestId || previous.state !== next.state
@@ -359,6 +374,19 @@ function parseBacklogItem(value: unknown, ticketScopes: Map<string, { projectId:
   if (!first.trim() || first.length > 1000) throw new Error('Invalid chat title.');
   return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
+    taskPlacement: parseTaskPlacement(value.taskPlacement ?? { version: 1, kind: 'unplaced', reason: 'legacy' }),
+    placementRecoveries: parseTaskPlacementRecoveries(value.placementRecoveries ?? []),
     request: { requestId, proposalName: requiredText(value.request, 'proposalName'), instruction: requiredText(value.request, 'instruction'), baseRevisionId,
       ...(target ? { target } : {}), ...(evidencePins ? { evidencePins } : {}), selectedObjectIds, ...parseSourceContext(value.request), ...requestScope } };
+}
+
+function parsePlacementResolution(value: unknown): TaskPlacementResolution {
+  if (!isRecord(value)) throw new Error('Missing task placement resolution.');
+  if (value.kind === 'unplaced') return { kind: 'unplaced' };
+  if (value.kind !== 'placed' || !Array.isArray(value.objects) || !Array.isArray(value.regions) || typeof value.requiresRecovery !== 'boolean') throw new Error('Invalid task placement resolution.');
+  const pin = (input: unknown): TaskPinResolution => {
+    if (!isRecord(input) || typeof input.detail !== 'string' || (input.status !== 'current' && input.status !== 'stale' && input.status !== 'missing' && input.status !== 'unavailable')) throw new Error('Invalid task pin resolution.');
+    return { status: input.status, detail: input.detail };
+  };
+  return { kind: 'placed', origin: pin(value.origin), objects: value.objects.map(pin), regions: value.regions.map(pin), requiresRecovery: value.requiresRecovery };
 }

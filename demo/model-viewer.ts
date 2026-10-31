@@ -1,3 +1,6 @@
+import { SpatialTaskLayer } from './spatial-task-layer.ts';
+import type { TaskAgentDescriptor, TaskAgentHit, TaskAgentAnchor } from './spatial-task-layer.ts';
+import { spatialTokens } from './ui/design-tokens.ts';
 import { Engine } from '@babylonjs/core/Engines/engine.js';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { FileToolsOptions } from '@babylonjs/core/Misc/fileTools.pure.js';
@@ -19,9 +22,11 @@ import type { MarkupPoint, MarkupTool, SpatialMarkup } from '../src/spatial-mark
 export interface ViewerState {
   projectId?: ProjectId;
   navigationPin?: string;
+  navigationTarget?: string;
   snapshot: ModelSnapshot;
   comparison: ModelSnapshot | null;
   selectedId: string;
+  taskTargetIds?: readonly string[];
   focusId: string | null;
   mode: RenderingMode;
   cutaway: boolean;
@@ -40,6 +45,8 @@ interface ViewerActions {
   keyboardReference: () => void;
   markup?: (annotations: readonly SpatialMarkup[], binding: string) => boolean;
   markupChat?: () => void;
+  taskPick?: (hit: Exclude<TaskAgentHit, { kind: 'none' }>) => void;
+  taskAnchors?: (anchors: readonly TaskAgentAnchor[], bounds: DOMRect) => void;
 }
 interface MarkerDrag { id: number; origin: Point; target: SpatialReference | null; moved: boolean }
 
@@ -88,6 +95,8 @@ export class ModelViewer {
   private readonly engine: Engine;
   private readonly model: ModelScene;
   private readonly linked: LinkedModelLayer;
+  private readonly tasks: SpatialTaskLayer;
+  private taskDescriptors: readonly TaskAgentDescriptor[] = [];
   private readonly navigation: ViewNavigation;
   private previousFrame = 0;
   private readonly markup: SpatialMarkupView | null;
@@ -99,6 +108,8 @@ export class ModelViewer {
   private hoveredId: string | null = null;
   private frames = 2;
   private cameraSignature = '';
+  private poseNotice = '';
+  get poseRetentionNotice(): string { return this.poseNotice; }
   private active = false;
   private readonly actions: ViewerActions;
   private readonly embeddedImages = new Map<string, string>();
@@ -133,6 +144,9 @@ export class ModelViewer {
     FileToolsOptions.PreprocessUrl = this.imageUrl;
     this.model = new ModelScene(this.engine);
     this.linked = new LinkedModelLayer(this.model.scene);
+    this.tasks = new SpatialTaskLayer({ scene: this.model.scene, tokens: spatialTokens.color,
+      isConstructionMesh: mesh => this.model.isConstructionMesh(mesh) || this.linked.pick(mesh) !== null,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches });
     this.navigation = new ViewNavigation(this.model, this.canvas, () => {
       this.endDrag(false); this.pointer.reset(); this.hover(null); this.markup?.hide(); this.frames = 3;
     });
@@ -153,7 +167,11 @@ export class ModelViewer {
     });
     this.canvas.addEventListener('pointerup', (event) => {
       if (!this.pointer.up(event) || this.navigation.gesturing) return;
-      const [x, y] = this.local(event); const linked = this.linked.objectAt(x, y);
+      const [x, y] = this.local(event);
+      const task = this.tasks.pick(this.model.scene.createPickingRay(x, y, Matrix.Identity(), this.model.activeCamera), this.markup?.root.dataset.tool && this.markup.root.dataset.tool !== 'select' ? 'markup' : 'idle');
+      this.root.dataset.taskHit = JSON.stringify(task);
+      if (task.kind !== 'none') { this.navigation.stop(); this.actions.taskPick?.(task); return; }
+      const linked = this.linked.objectAt(x, y);
       if (linked) { this.actions.linkedReference?.(linked); return; }
       const id = this.model.objectAt(x, y);
       if (id) this.select(id);
@@ -282,12 +300,15 @@ export class ModelViewer {
     const signature = `${camera.uniqueId}:${camera.getViewMatrix().toArray().join(':')}`;
     if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; this.hover(null); }
     this.markup?.flush();
+    if (this.taskDescriptors.some(task => task.state === 'working')) this.frames = Math.max(this.frames, 1);
     const ready = this.model.scene.isReady();
     // Async shaders/textures can become ready after the last budgeted frame.
     // Render that transition before publishing readiness or going idle.
     if (ready && this.root.dataset.sceneReady !== 'true') this.frames = Math.max(1, this.frames);
     if (this.frames <= 0 && ready) return;
+    this.tasks.renderFrame(now);
     this.model.scene.render(false); this.frames -= 1;
+    this.actions.taskAnchors?.(this.tasks.anchors(camera, this.canvas.clientWidth, this.canvas.clientHeight), this.canvas.getBoundingClientRect());
     this.root.dataset.sceneReady = String(this.model.scene.isReady());
     this.root.dataset.activeMeshes = String(this.model.scene.getActiveMeshes().length);
     const errors = this.model.scene.meshes.flatMap((mesh) => mesh.subMeshes?.map((part) => part.effect?.getCompilationError() ?? '') ?? []).filter(Boolean);
@@ -302,6 +323,9 @@ export class ModelViewer {
   show(host: HTMLElement, state: ViewerState): void {
     let next: ActiveViewerState = { ...state, levelId: state.levelId ?? null, roofVisible: state.roofVisible ?? true };
     const projectChanged = this.state?.projectId !== next.projectId;
+    const previousPose = this.captureInsidePose();
+    const retainedPose = !projectChanged && this.state?.navigationTarget === next.navigationTarget && this.state?.levelId === next.levelId ? previousPose : null;
+    this.poseNotice = previousPose && !retainedPose && !projectChanged ? 'The source or level changed. Overview is shown; choose an explicit Inside or Fly entry.' : '';
     if (this.drag && (projectChanged || !state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
     if (projectChanged || !state.comparison || JSON.stringify(this.state?.comparison) !== JSON.stringify(state.comparison) || JSON.stringify(this.state?.snapshot) !== JSON.stringify(state.snapshot)) this.comparisonSelection = null;
     next = { ...next, selectedId: this.comparisonSelection ?? state.selectedId };
@@ -313,7 +337,7 @@ export class ModelViewer {
     const objects = [...new Map([...(state.comparison?.entities ?? []), ...state.snapshot.entities].map((item) => [item.id, item])).values()]
       .filter((item) => item.type !== 'AssetFamily' && (inLevel(state.snapshot, item.id) || inLevel(state.comparison, item.id)));
     const changes = new Map((state.comparison ? modelChanges(state.comparison, state.snapshot) : []).map((item) => [item.id, item.status]));
-    if (!objects.some((item) => item.id === next.selectedId) || state.comparison && !this.comparisonSelection && !changes.has(next.selectedId)) {
+    if (next.selectedId !== '' && !objects.some((item) => item.id === next.selectedId) || state.comparison && !this.comparisonSelection && !changes.has(next.selectedId)) {
       next = { ...next, selectedId: objects.find((item) => changes.has(item.id))?.id ?? objects[0]?.id ?? '' };
     }
     const focusChanged = this.state?.focusId !== state.focusId;
@@ -331,9 +355,14 @@ export class ModelViewer {
     this.selection.value = next.selectedId;
     if (this.root.parentElement !== host) host.replaceChildren(this.root);
     this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison, state.projectId ?? null); this.model.select(this.linkedSelection ? '' : next.selectedId);
+    this.model.selectTaskTargets(next.taskTargetIds ?? []); this.root.dataset.taskTargetIds = JSON.stringify(next.taskTargetIds ?? []);
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
     this.navigation.setContext({ projectId: state.projectId ?? null, sourcePin: state.navigationPin ?? JSON.stringify(state.snapshot),
       levelId: next.levelId, snapshot: state.snapshot });
+    if (retainedPose) {
+      const retained = this.navigation.returnTo({ ...retainedPose, sourcePin: next.navigationPin ?? '' });
+      if (retained.kind === 'unsupported') this.poseNotice = retained.reason + ' Overview is shown; choose an explicit Inside or Fly entry.';
+    }
     if (projectChanged) this.model.frame();
     this.model.setCutaway(state.cutaway);
     const floor = (next.levelId ? levels(state.snapshot).find(level => level.id === next.levelId) : entityLevel(state.snapshot, next.selectedId))
@@ -344,6 +373,14 @@ export class ModelViewer {
     if (!this.drag) this.model.mark(state.reference);
     this.updateCaption(); this.frames = 3; this.engine.resize();
     this.active = true; if (!document.hidden) this.engine.runRenderLoop(this.renderFrame);
+  }
+
+  setTasks(projectId: string | null, descriptors: readonly TaskAgentDescriptor[]): void {
+    this.taskDescriptors = descriptors; this.tasks.replace(projectId ?? 'none', descriptors); this.frames = 3;
+  }
+  frameTaskOrigin(point: readonly [number, number, number]): void {
+    this.changeView({ kind: 'overview' }); this.model.camera.setTarget(new Vector3(point[0], point[2], point[1]));
+    this.model.camera.radius = 4; this.frames = 3;
   }
 
   get navigationState(): ViewSession { return this.navigation.state; }
@@ -383,7 +420,7 @@ export class ModelViewer {
   frame(): void { this.changeView({ kind: 'overview' }); this.pointer.cancelClick(); this.hover(null); this.model.frame(); this.frames = 3; }
   dispose(): void {
     this.hide(); this.observer.disconnect(); document.removeEventListener('visibilitychange', this.visibility);
-    this.navigation.dispose(); this.markup?.dispose(); this.linked.dispose(); this.model.dispose(); this.engine.dispose();
+    this.navigation.dispose(); this.markup?.dispose(); this.tasks.dispose(); this.linked.dispose(); this.model.dispose(); this.engine.dispose();
     if (FileToolsOptions.PreprocessUrl === this.imageUrl) FileToolsOptions.PreprocessUrl = this.previousImageUrl;
     for (const url of this.embeddedImages.values()) URL.revokeObjectURL(url);
     this.embeddedImages.clear();
