@@ -1,131 +1,105 @@
-# Linked IFC qualification prerequisite #258
+# Spatial workspace qualification #258
 
-This record covers the linked IFC prerequisite for [#258](https://github.com/Frederik91/bim-forge/issues/258), within epic #251. The prerequisite passes on 2026-10-31. Combined qualification still depends on #256 and #257.
+The combined deterministic workflow passes on qualification commit `f9062c46a876d9fc3fc763989d6b0829fa8e5619`: **72 of 72 Linux checks and both real-IFC browser checks pass**, with zero failures, cancellations, skips, or todo cases. Strict validation passes with 385 TypeScript sources.
 
-## Plan
+The runtime artifact is `8268247336ced9e738a57e88628421a0aac01a0c`, published as `codex/spatial-workspace-release-candidate-2`. The qualification commit differs only in the navigation browser test and the Linux archive-extraction helper. No application, model, permission, schema, deployment configuration, or provider behavior changes in this delivery. Aggregate PR #282 remains the canonical runtime change review. Readiness, merge, and human visual acceptance remain maintainer decisions.
 
-Add `scripts/qualify-linked-ifc.ps1`, `demo/linked-navigation-qualification.test.ts`, and this record. Reuse the existing fixture generator, external converter, and `demo/linked-workspace-browser.test.ts`. Open the current shell's Model explorer in the existing browser test. Generate a tiny IFC from source in disposable storage. Run the actual worker under the repository's container isolation limits. Keep accepted native model bytes unchanged. Capture linked pointer selection, source context, and desktop and narrow screenshots. Retain converter receipts and source hashes for inspection.
+## Source and evidence
 
-No production application code, model data, validator, deployment configuration, credential, or provider connection changes. Construction-model delta is zero. The generated IFC is a qualification source, not accepted project content.
+| Item | Exact identity or result |
+| --- | --- |
+| Runtime source | `8268247336ced9e738a57e88628421a0aac01a0c` |
+| Qualification source | `f9062c46a876d9fc3fc763989d6b0829fa8e5619` |
+| Qualification tree | `243240c408da9176a693bcbc73fefe3d7346e9c7` |
+| Git ZIP archive SHA-256 | `8681eac624a4c4a807e041979924cdaf9b0a0f96c624478dea080a90a2f4f31f` |
+| Original `.dockerignore` SHA-256 | `791f4ca5e59055f35cf9e0386700cc0fffa51b2642183b98f8173b4078804808` |
+| Linux and Windows release manifest SHA-256 | `dcc4b28343c409791c4423bf0e39bc6d01bcbf57393e732598498570278ccd6e` |
 
-## Replay
+The [Linux receipt](spatial-linked-qualification-258/linux-summary.json) records every complete test file, command, source hash, count, browser choice, actual container settings, and retained artifact hash. Its `priorPrerequisite` retains the pre-#257 60-test result. `failedCombinedRuns` and `diagnosticProof` preserve the later failures and their evidence. The [IFC receipt](spatial-linked-qualification-258/converter-summary.json) records the actual converter manifest, source identity, shipped composition, camera result, isolation settings, and the earlier prerequisite. [Validator and execution output](spatial-linked-qualification-258/qualification.txt) includes the final raw run summaries. All final recorded artifact hashes were checked.
 
-From a Windows PowerShell session with Docker Linux containers, Node 24+, and installed Playwright Chromium:
+## Complete supported-Linux run
+
+| Test file | Passed |
+| --- | ---: |
+| `demo/floor-plan-guide-browser.test.ts` | 1 |
+| `demo/request-draft.test.ts` | 8 |
+| `demo/canvas-studio-browser.test.ts` | 3 |
+| `demo/request-chat.test.ts` | 7 |
+| `demo/workspace-shell.test.ts` | 8 |
+| `demo/spatial-plan-integration-browser.test.ts` | 1 |
+| `demo/spatial-tasks-browser.test.ts` | 1 |
+| `demo/spatial-tasks.test.ts` | 22 |
+| `demo/spatial-markup-browser.test.ts` | 1 |
+| `demo/view-navigation-browser.test.ts` | 1 |
+| `demo/model-plan-browser.test.ts` | 1 |
+| `demo/spatial-task-layer-browser.test.ts` | 1 |
+| `demo/design-system-browser.test.ts` | 3 |
+| `demo/preview-build.test.ts` | 2 |
+| `demo/spatial-workspace-browser.test.ts` | 2 |
+| `scripts/serve-spatial-preview.test.ts` | 10 |
+
+Linux Node `v24.22.1`, Chromium `156.0.8078.4`, util-linux `prlimit 2.38.1`, and Poppler `22.12.0` run the unchanged full PNG and phone-PDF journey and the actual Unix-socket draft feed. The source-preparation budgets and same-origin assertions remain intact. The run covers unsent recovery, explicit acceptance, baseline and alternative isolation, SQLite restart, lost acknowledgements, late replies, task persistence, markup, actual agent-body hits, exact door review, and launcher cleanup and restart.
+
+The Linux test container has network `none`, a read-only root, user `65032:33`, init, all capabilities dropped, and no new privileges. Bounds are 2 CPUs, 4 GiB memory with equal memory-swap, 512 processes, 512 MiB shared memory, and a 1 GiB temporary filesystem. Only owned artifacts and an exact disposable copy of built release assets are writable. The latter permits the launcher's unchanged missing-build test to temporarily rename and restore its own bundle. The release manifest must match before and after the tests. No Git metadata, host modules, account state, or user datasets enter the test image. A Dockerfile-specific ignore file includes tracked tests while keeping the original production `.dockerignore` and Dockerfile as real package-test inputs.
+
+## Real IFC and native-agent composition
+
+The existing `experiments/ifc-link/fixture.py` generator produces a real IFC4 file with rotated millimetre geometry and unfamiliar retained properties. Its 7,593 bytes have SHA-256 `a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5`. The unchanged IfcOpenShell `0.9.0.post1` converter reports 153 entities, 9 indexed objects, 4 meshes, 40 vertices, and 64 triangles. Its actual terminal receipt is `{"kind":"complete"}`. The prepared-artifact parser, every manifest hash and size, and the original source hash are checked.
+
+The actual worker retains network isolation, a read-only root, user `65032:33`, dropped capabilities, no new privileges, 0.5 CPU, 2,304 MiB memory with equal memory-swap, 64 processes, and the restricted 32 MiB `/tmp` mount. Its only bind mount is a fresh private spool. Its existing CPU, address-space, file-size, diagnostic, descriptor, and deadline limits remain unchanged. The root Docker ignore file excludes converter sources, so the replay runner copies the unchanged converter Dockerfile and its three inputs into a minimal disposable build context.
+
+The shipped workspace uploads these IFC bytes through the real server and waits for the actual spool conversion. Pointer picking retains the IFC source context without changing native scope. The attached context pins the actual source hash and pointer-picked GlobalId, includes occurrence and placement identity, and remains unsent until an explicit action. Referencing alone creates no ticket.
+
+An offline clarification fixture then creates a placed native task through the actual queue. The real task body, native wall, and converted IFC are pointer-picked separately in the same original canvas. Opening the task body preserves the complete eye pose. Linked framing preserves the saved task identity and exact placement. The accepted native repository serialization remains byte-for-byte unchanged throughout. A separate real-geometry ModelViewer check verifies Inside/Fly picking, repeated Plan-intent and Overview return, the same engine and scene, one active FXAA pass, stale-pose rejection, and disposal to zero engines. Plan intent in this seam does not render an IFC cut.
+
+Current captures show the [native task composition](spatial-linked-qualification-258/linked-native-agent-composition.png), [linked desktop workspace](spatial-linked-qualification-258/linked-workspace-desktop.png), [linked narrow workspace](spatial-linked-qualification-258/linked-workspace-phone.png), [Inside camera seam](spatial-linked-qualification-258/linked-inside-seam.png), and [Linux phone-PDF confirmation](spatial-linked-qualification-258/linux-phone-pdf-confirmed.png). Native and IFC framing are exercised sequentially with their shared task layer present; the captures do not claim that every object is visible in one camera frame.
+
+## Construction-model delta
+
+Repository and production-model delta is zero. In the IFC composition test, accepted native bytes do not change. The deterministic native spatial journey explicitly accepts only the fixture's hosted door from 900 to 1100 mm while preserving its physical centre and adjusting its existing host offset. The floor reconstruction fixture explicitly accepts two rooms, retains an As-is baseline, and changes the shared partition only in its alternative. Exact expected snapshots and deltas are asserted. The actual accepted fixture project and model-delta JSON remain in the Linux artifacts.
+
+## Failure ledger and repairs
+
+The user renewed this epic with "Continue with as many attempts as you need". That renewal overrides attempts-only stops. No validator, collision threshold, source-preparation budget, or container limit was weakened.
+
+| Attempt or evidence | Outcome and correction |
+| --- | --- |
+| Initial converter packaging | The root Docker context excluded converter inputs. A minimal owned context with unchanged inputs fixes the packaging prerequisite. |
+| Initial linked workspace | Model explorer starts closed. The test now opens its real navigation control; all prior assertions remain. |
+| Pre-#257 Linux prerequisite | 60 of 60 checks passed. Headless shell produced cancelling pointer-warp pairs; the existing executable-path convention selects full Chromium for navigation. Real key release waits for rendered frames. |
+| First combined `df0e094` | 65 of 72 passed. Shell width/history and hidden-control checks, omitted-target source-pin invalidation, and a detached-label measurement failed. Real IFC checks passed. |
+| Runtime repair in `c80a269` | The owner scoped spatial CSS to the actual mounted stage and restored legacy shell layout. Cross-pin pose retention now requires an explicit matching navigation target. Existing assertions stayed unchanged. |
+| Anchor proof and `525c2a9` | Retained nodes measured `isConnected=false,width=0`; a fresh query in the same callback measured connected widths `182.28125` and `64.96875`. Atomic query and measurement removes the stale-handle race. Two-label bounds, body picks, and occlusion remain; positive width is also required. |
+| Combined `8268247` | 71 of 72 passed. The only failure was a fixed 1,800 ms Walk hold. Diagnostic input reached Y `5.4662`, below the wall band, after only 18 frames in `1803.9` ms. Movement intentionally caps elapsed time to 0.05 seconds per frame. No wall crossing occurred. |
+| Walk harness `b93f0ce` | The key remains held until actual Y exceeds 5.5 within a bounded wait. Twenty further rendered observations and the final assertion retain the strict `5.5 < Y < 5.75` wall band. The key always releases in `finally`. No speed or performance claim is made. |
+| Native archive extraction | Windows `tar.exe` failed with a `Program Files/MacType` directory error despite the owned absolute target. No tests ran. Git ZIP plus absolute `Expand-Archive` removes that current-directory dependency. The host's underlying directory drift was not investigated. |
+| Final `f9062c4` | All 72 Linux checks and both real-IFC checks passed. Strict validation, artifact hashes, policy checks, and diff checks pass. |
+
+Raw failed full runs remain under temporary directories ending `bim-forge-linux-browser-258-final-df0e094` and `bim-forge-linux-browser-258-final-8268247`. The anchor proof is in `bim-forge-linux-browser-258-anchor-old-df0/test.tap`; Walk cadence is in `bim-forge-linux-browser-258-walk-cadence-826/test.tap`. Earlier setup and targeted runs are retained rather than represented as passing final qualification.
+
+## Replay and retained handles
+
+Run from a dedicated worktree at qualification commit `f9062c46a876d9fc3fc763989d6b0829fa8e5619`, using PowerShell 7, Node 24+, Docker Linux containers, and installed host Playwright Chromium for the IFC test:
 
 ```powershell
 npm ci --ignore-scripts --no-audit --no-fund
+npm run validate
+./scripts/qualify-linux-browser.ps1 -SourceRef f9062c46a876d9fc3fc763989d6b0829fa8e5619
 ./scripts/qualify-linked-ifc.ps1
 ```
 
-The runner creates a unique local image, a fresh temporary directory, and a named worker. It mounts only its private spool into the worker. The fixture generator sees only copied generator source and its own output directory. The browser test creates a disposable server on a dynamic loopback port and its own native store. The runner stops only its own worker in `finally`, retains the stopped container and image, and prints the artifact directory. Existing files are never deleted. Optional `-OutputRoot` must name a directory that does not exist.
+Both runners accept a fresh explicit absolute `-OutputRoot`. The Linux runner also accepts an explicit array of complete `demo/*.test.ts` and `scripts/*.test.ts` files. Empty lists, missing files, failures, cancellations, skipped tests, todo cases, and missing test counts fail qualification. The runner keeps each suite's outputs separate and stops only its own worker. Images and output directories remain for inspection.
 
-The root `.dockerignore` excludes `experiments`, so building `deploy/ifc-link/Dockerfile` directly against the repository fails. The runner copies that unchanged Dockerfile and the three required converter inputs into its fresh build context. No deployment-file change is needed.
+Final artifacts are in `C:/Users/Frederik Tegnander/AppData/Local/Temp/bim-forge-linux-browser-258-final-f9062c4/artifacts` and `C:/Users/Frederik Tegnander/AppData/Local/Temp/bim-forge-ifc-258-final-f9062c4/artifacts`. They contain per-suite TAP logs, three full Linux browser traces, the real linked composition trace, screenshots, converter requests and receipts, source pins, accepted fixture bytes, and model deltas.
 
-## Results
+Final Linux container `30d675bca42251206f7af2e54ce1ad1fd948331e752f3adc15ad042bcb44ec53` exits with code 0. Its image is `sha256:5b71227a573a6f8739a2324aab36328a1e5e9b8d0d3d8b619b4a67ab0afa4839`. Final IFC worker `3753c134257cf3e4f28df51e95139df49e5ebb5aa3ee2ae69abc59d7971b08dd` is stopped after the successful receipt. Its image is `sha256:7fc581946a4f928e9f093313062d76e3e6c1b82a6b525c5824eac4f2c103f735`. Test servers and browsers close. The parent's preview, persistent converter, and existing 4188 prototype remain untouched.
 
-Source baseline is `d6f078da7cf9967e3b38a84a94ee8ac6750118ae`, with the qualification changes in this delivery. Windows Node 24 and Docker 29.9.2 run the existing production server and Linux converter. The converter uses IfcOpenShell `0.9.0.post1`.
+## Parent-owned local preview
 
-The generator produces an IFC4 file with rotated millimetre geometry and unfamiliar retained properties. The 7,593-byte source has SHA-256 `a52ff45c732be3870dbcc368e7212d9736c6a6a536ba72901dccf05e083adfc5`. The actual converter reports 153 entities, 9 indexed objects, 4 meshes, 40 vertices, and 64 triangles. Its terminal receipt is `{"kind":"complete"}`. The camera test validates the prepared artifacts with `parseLinkedPrepared`, checks every manifest artifact hash and size, and checks the source hash against the generated IFC.
+The parent deployed runtime `8268247` at [the local preview](http://127.0.0.1:4189/). This lane independently read its ready receipt, confirmed process `64028` and healthy local status, and compared all four served bundle and stylesheet byte hashes with the qualified worktree build. AI was connected and IFC was configured. The ready receipt records clean source at startup and build identity `cfbee3d64e5dac36ded9709b1d4c8e7997a60d48b353552f909af1e1658f0682`. These facts and the parent's separately reported unchanged accepted head after restart are distinguished in the IFC receipt. This lane did not deploy or make provider calls. These checks do not constitute human visual acceptance.
 
-The runner verifies the actual Docker container configuration before the browser tests. The worker has network `none`, a read-only root, init enabled, user `65032:33`, all capabilities dropped, and `no-new-privileges:true`. Limits remain 0.5 CPU, 2,304 MiB memory with equal memory-swap, 64 processes, and the 32 MiB restricted `/tmp` mount. Its only bind mount is the fresh private spool. The unchanged worker also applies its CPU, address-space, file-size, descriptor, diagnostic, and deadline limits.
+## Limits and review decision
 
-| Evidence | Observed result |
-| --- | --- |
-| Shipped workspace, actual HTTP upload and spool conversion | Passed. Source hierarchy and original properties appear from the converted IFC. |
-| Actual pointer selection in the shipped viewer | Passed. Linked selection retains native scope selection, and only one canvas is visible. |
-| Reference in request | Passed. A source-pinned read-only context file is attached to the unsent draft. The prompt has no raw source metadata. No request ticket is submitted. |
-| Accepted native state | Passed. The server's accepted repository serialization is byte-for-byte unchanged. |
-| Visibility and narrow viewport | Passed. Linked geometry toggles off and on. The 390-pixel viewport has no horizontal overflow. This assertion is narrower than overall mobile usability approval. |
-| Actual converted geometry in the ModelViewer Inside seam | Passed. A real converted wall is picked by a pointer click in Fly perspective view, retaining its source hash, namespace, revision, occurrence, transform, and GlobalId. |
-| Repeated camera transitions | Passed. Four Plan-intent, Overview framing, and Inside-resume cycles retain one engine, the same scene, one canvas, and one active FXAA pass. This test does not render a Plan cut. |
-| Stale pose and disposal | Passed. A different source pin is rejected. Native snapshot JSON remains unchanged. Disposal leaves zero engines. No browser page errors occur in either test. |
-| Strict validation | Passed. `npm run validate` checks 378 TypeScript source files. Explicit policy validation checks all 9 changed files. `git diff --check` passes. |
+This run uses controlled native fixtures and generated real IFC. It does not assess a user-project copy, survey accuracy, arbitrary IFC compatibility, or production model data. Georeferencing remains retained but unapplied; unmapped properties and relationships remain explicit converter diagnostics. Linked IFC Plan cuts, Section, and linked-floor Walk support are unqualified. Team privacy and identity enforcement remain separate design work.
 
-Committed evidence includes [validator and browser output](spatial-linked-qualification-258/qualification.txt), [converter receipt, source identity, isolation settings, and camera result](spatial-linked-qualification-258/converter-summary.json), [desktop workspace](spatial-linked-qualification-258/linked-workspace-desktop.png), [narrow workspace](spatial-linked-qualification-258/linked-workspace-phone.png), and [Inside camera seam](spatial-linked-qualification-258/linked-inside-seam.png). The seam capture uses a dedicated test page with the real production ModelViewer. It does not show the forthcoming #256 controls.
-
-## Run ledger and retained handles
-
-The user renewed epic work with "Continue with as many attempts as you need". That renewal overrides attempts-only stops for this epic. Every isolation limit and validator remains in force.
-
-| Attempt | Outcome and correction |
-| --- | --- |
-| Direct converter image build | Failed because the root Docker context excludes converter sources. A fresh minimal context fixes the packaging prerequisite without changing deployment files. |
-| Runner 1 | Generated real IFC and started the isolated worker. The browser stopped before upload because the current shell starts Model explorer closed. The test now opens the actual navigation control. All existing assertions remain. |
-| Runner 2 | Real conversion and the shipped workspace test passed. The first separate camera-seam attempt chose a horizontal triangle. The test now finds a vertical wall face from the real tessellation. The corrected camera check passed. |
-| Runner 3 | Fresh source generation, actual isolation assertions, real conversion, shipped workspace test, and Inside camera test all passed. The screenshot was then constrained to the page width and the camera test passed again against the retained converted output. |
-| Final strict check | TypeScript reported an inference error in the test's triangle destructuring. Explicit `Vector3[]` annotation fixes the test type. Strict validation then passed without weakening a check. |
-
-The final retained root is `C:/Users/Frederik Tegnander/AppData/Local/Temp/bim-forge-ifc-258-prerequisite-run3`. Its `spool` contains the original IFC, request, converter stdout, terminal receipt, and actual output artifacts. Its `artifacts` contains raw Docker inspections, browser logs, screenshots, and validation output. The replay script can create a fresh run after #256 and #257 integrate.
-
-All three owned workers are stopped. Final worker `bd25a0bbf79af308db056d2b87321f0a8de983ac6afc3a1ada13d5dbb9101741` is named `bim-forge-ifc-258-906bbb39b7d54c95a2d78c02c40488f8`. Its image is `bim-forge-ifc-qualification:258-906bbb39b7d54c95a2d78c02c40488f8`, resolved to `sha256:22bdcf5dde735377529719094df7180b8f45884a46cd94f8ad8687945e6f59dd`.
-
-Earlier stopped worker IDs are `d78ca6a318aa53fee3295f4698c9b9a7eae6f8460acef97853957bec4b0071e9` and `c3e6d3767fa9945a1f1cf77dfa1494f64c878c051c6445e07696af45b5c567a8`. Their roots end in `prerequisite-run1` and `prerequisite-run2`. The initial standalone build context remains under temporary root `bim-forge-ifc-258-d6f078d`, with image tag `bim-forge-ifc-qualification:258-d6f078d`. No parent worker, existing preview, or other container was stopped. The dynamic test servers and browsers close at test completion. No live qualification process remains.
-
-## Limits
-
-This prerequisite does not qualify combined #256/#257 task flows, linked IFC Plan cuts, Section, linked Walk collision support, connected-provider behavior, human review, release, or deployment. It does not test camera behavior during a pending native proposal comparison. The converter explicitly reports unapplied georeferencing, unmapped properties and relationships, and source objects without representation. Those diagnostics remain visible and are not acceptance of survey coordinates or IFC round-trip fidelity.
-
-The narrow screenshot shows clipped header and rail labels in this baseline even though horizontal overflow is absent. Overall narrow-screen review remains with the combined UI qualification. The Windows PDF utility path and Unix socket limitations are outside this prerequisite. No final #258 pull request is opened, and no issue or pull request is closed or marked ready.
-
-## Linux browser regression
-
-The independent Linux prerequisite starts from combined source `a008d802`, including live #256 integration and the latest #253 ordering fix. `scripts/qualify-linux-browser.ps1` creates a fresh archive of an exact local commit. The image installs development dependencies, Linux Chromium, and browser dependencies from public packages. A Dockerfile-specific ignore file includes the tracked tests while preserving the original repository `.dockerignore` inside the image. The runtime has no external network, credentials, production data, or Git metadata. It uses only loopback test servers and disposable fixture workers.
-
-Run the unchanged complete floor-plan browser test, including phone PDF conversion with `/usr/bin/prlimit` and Poppler, and every request-draft test, including Unix sockets. Also run Canvas Studio, chat, shell, live Plan, task-controller, markup, navigation, native Plan, task graphics, design-system, and package-build tests. Keep each suite's screenshots, traces, TAP output, and source hash separate. Record actual image and source identities and all counts. This remains preparation for the final #257 integration qualification.
-
-### Replay the supported Linux suites
-
-Use PowerShell 7 and Docker Linux containers. The default base is the existing local image `bim-forge-spatial-local:domain-35f867e`. The runner resolves and records its image ID, then gives that immutable image a uniquely owned local build tag. Dependency installation occurs only during the image build. The final test container runs with network `none` and verifies that only loopback exists.
-
-```powershell
-./scripts/qualify-linux-browser.ps1 -SourceRef 5d20e8187f6158f1a310ffe6537a97dc42f8b84f
-```
-
-After #257 integrates, replace `-SourceRef` with the final combined commit. `-Tests` accepts an explicit array of complete `demo/*.test.ts` files. The default list contains the 14 files below. Empty lists, missing files, nonzero exits, missing test counts, failures, cancellations, skips, and todo cases fail qualification. The runner performs strict validation before the tests.
-
-The test image contains the exact Git archive plus the generated QA runner and source receipt. It contains no Git metadata and mounts no host dependencies, account state, or user models. The read-only test root has only the owned artifact directory mounted at `/artifacts` and `/qualification/artifacts`. The second mount supports an unchanged Plan test's fixed output path. Limits remain 2 CPUs, 4 GiB memory with equal memory-swap, 512 processes, 512 MiB shared memory, and a 1 GiB temporary filesystem. The container uses user `65032:33`, init, dropped capabilities, and no new privileges. The runner inspects the actual configuration before execution.
-
-### Retain the navigation assertions
-
-The first complete run on `a008d802` passed 58 of 60 tests, with no skips. One failure was the Plan test's fixed output path under the read-only source root. Mounting only the owned artifact output resolves that setup error.
-
-The other failure occurred after headless-shell pointer lock was granted. Event diagnostics showed trusted positive and negative pointer-warp pairs reaching the focused locked canvas. Their net movement was zero, so the existing final-orientation assertion correctly failed. The runtime was not edited. A separate full-Chromium probe confirmed a nonzero final camera turn with the same mouse moves.
-
-Full Chromium also exposed that a fixed 160 ms key interval could end before a rendered frame in this constrained environment. Commit `5d20e8187f6158f1a310ffe6537a97dc42f8b84f` updates only the browser test to accept the repository's existing `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` convention and wait two animation frames before key release. Every assertion and threshold remains unchanged. The complete navigation test passed after that correction. The Linux runner selects `/opt/qualification-browsers/chromium-1248/chrome-linux64/chrome` for this suite and records the exact path and test hash.
-
-Temporary diagnostic runs, including the failed full-browser timing and virtual-display probes, remain under `C:/Users/Frederik Tegnander/AppData/Local/Temp/bim-forge-linux-browser-258-nav-*`. The first raw full-run failure remains under `bim-forge-linux-browser-258-run2`. These diagnostics are not counted as passing qualification. The failed initial build under `run1` used a raw local image ID in `FROM`; the runner now uses the verified image's unique local tag.
-
-### Final pinned run
-
-Final source is `5d20e8187f6158f1a310ffe6537a97dc42f8b84f`, tree `de32cceb03433694282a5a86158a0aa71a050bdc`. Its archive SHA-256 is `e06589dc6da24908d8b5ee769985662b69701f108145a047c726e162f59fb37b`. The original `.dockerignore` SHA-256 remains `791f4ca5e59055f35cf9e0386700cc0fffa51b2642183b98f8173b4078804808` and is checked inside the image. The unchanged preview-build tests inspect the original production Dockerfile and ignore file.
-
-All 60 tests pass, with zero failures, cancellations, skips, or todo cases. Strict validation passes with 379 TypeScript sources. The run uses Linux Node `v24.22.1`, Chromium `156.0.8078.4`, `prlimit` from util-linux `2.38.1`, and Poppler `22.12.0`.
-
-| Complete suite | Passed |
-| --- | ---: |
-| `floor-plan-guide-browser.test.ts` | 1 |
-| `request-draft.test.ts` | 8 |
-| `canvas-studio-browser.test.ts` | 3 |
-| `request-chat.test.ts` | 7 |
-| `workspace-shell.test.ts` | 8 |
-| `spatial-plan-integration-browser.test.ts` | 1 |
-| `spatial-tasks-browser.test.ts` | 1 |
-| `spatial-tasks.test.ts` | 22 |
-| `spatial-markup-browser.test.ts` | 1 |
-| `view-navigation-browser.test.ts` | 1 |
-| `model-plan-browser.test.ts` | 1 |
-| `spatial-task-layer-browser.test.ts` | 1 |
-| `design-system-browser.test.ts` | 3 |
-| `preview-build.test.ts` | 2 |
-
-The unchanged floor-plan journey covers PNG preparation, source-bound confirmation, unsent reload, explicit acceptance, the As-is baseline, an alternative-only partition delta, SQLite restart, phone PDF confirmation, and readiness revocation after PDF removal. All eight request-draft cases pass, including the actual Unix-socket HTTP feed's read-only, same-origin, uncached, and completion assertions. The PNG and PDF source-preparation budgets remain unchanged. The final and initial receipts confirm byte-identical hashes for both complete test files.
-
-The [Linux receipt](spatial-linked-qualification-258/linux-summary.json) records the exact test hashes, commands, counts, browser choice, image ID, actual container settings, and hashes of retained artifacts. [The output summary](spatial-linked-qualification-258/qualification.txt) includes every suite result. The [phone PDF capture](spatial-linked-qualification-258/linux-phone-pdf-confirmed.png) shows confirmed source context. All recorded artifact hashes were checked after test execution.
-
-Raw artifacts remain under `C:/Users/Frederik Tegnander/AppData/Local/Temp/bim-forge-linux-browser-258-run3/artifacts`. They include three complete browser traces, per-suite TAP logs, Plan and Inside screenshots, markup captures, source measurement evidence, and the disposable floor fixture's actual accepted project and model delta. Repository construction-model delta is zero. The disposable fixture changes only through the test's explicit acceptance steps.
-
-Final image `bim-forge-linux-browser:258-9e8c8f360a254f37bcd85f8680c5b1aa` resolves to `sha256:26925635b4f709e08e1432361a65b77d00c6e9edf5ff3c05d2f56a85e69d01f7`. Final container `03f2e41e47650a41b01e7183d201dc1e582d36e1945fce8c82f841d2fd30b3fc` exits with code 0. All seven owned Linux test and diagnostic containers are stopped. Their short IDs are `03f2e41e4765`, `8877ae61dbb1`, `feba9ff02ecf`, `930138c7bf6e`, `989d8b3f774c`, `98d32b7fb4e4`, and `b2097fbb0f07`. Images and temporary directories remain for inspection. No parent container or existing preview was stopped.
-
-The parent explicitly approved 13 combined qualification paths for this coherent prerequisite, including the navigation test adjustment and retained evidence. No policy file, validator, or runtime application module changes.
-
-This Linux run excludes the separate real-IFC converter prerequisite above and `geometry-workflow-browser.test.ts`, which requires its dedicated geometry/provider qualification environment. It does not claim the final #257 task graphics integration, connected-provider accuracy, human approval, release, or deployment. The phone capture still shows cramped navigation labels in this baseline; passing the PDF and overflow assertions is not overall mobile UX approval.
+The parent's [bounded connected-provider evidence](spatial-connected-qualification-258.md) is separate from these deterministic checks. No additional provider interpretation accuracy is claimed here. Review the captures and these limits before changing readiness or authorizing merge. No issue closure, main merge, or automatic rollout is authorized by this report.
