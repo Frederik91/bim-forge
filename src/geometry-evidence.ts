@@ -4,10 +4,12 @@ import type { GeometryMeasureRequest, GeometryMeasureResult, GeometryRef, Geomet
 import { geometryDigest, geometryIdentityKey } from './geometry-query.ts';
 import { createGeometrySession, validateGeometryReceiptsInWorker } from './geometry-session.ts';
 import type { GeometrySession, GeometrySessionInput, GeometryCorrespondence } from './geometry-session.ts';
-import type { ModelSnapshot } from './room-model.ts';
+import type { GeometryNativeHistory, ModelSnapshot } from './room-model.ts';
 import type { FrozenModelScope } from './model-scope-contract.ts';
 import { parseGeometryEvidence as parseEvidenceContract, readGeometryEvidence as readEvidenceContract } from './geometry-evidence-contract.ts';
 import type { GeometryEvidence } from './geometry-evidence-contract.ts';
+import { createGeometryDraftLineage, inactiveInheritedBoxMeasurements } from './geometry-draft-lineage.ts';
+import type { GeometryDraftLineage, GeometryDraftSeal } from './geometry-draft-lineage.ts';
 export { GeometryEvidenceSchema, MAX_GEOMETRY_EVIDENCE_BYTES, GeometryEvidenceLimitError } from './geometry-evidence-contract.ts';
 export type { GeometryEvidence } from './geometry-evidence-contract.ts';
 
@@ -183,15 +185,17 @@ async function nativeDescription(session: GeometrySession, ref: Extract<Geometry
 
 /** Resolve actual final native shapes; guest boxes are never proof of authored geometry. */
 async function validateFinalMeasurements(evidence: GeometryEvidence, current: GeometrySessionInput, input: GeometrySessionInput, signal: AbortSignal,
-  correspondences: readonly GeometryCorrespondence[]): Promise<{ receipts: GeometryReceipt[]; measurements: GeometryEvidence['measurements'] }> {
+  correspondences: readonly GeometryCorrespondence[], inactiveInheritedBoxes: ReadonlySet<number> = new Set()): Promise<{ receipts: GeometryReceipt[]; measurements: GeometryEvidence['measurements'] }> {
   if (!evidence.measurements.length) return { receipts: [], measurements: [] };
   const receipts: GeometryReceipt[] = []; const measurements: GeometryEvidence['measurements'] = [];
+  const active = evidence.measurements.filter((_, index) => !inactiveInheritedBoxes.has(index));
+  const inactive = evidence.measurements.filter((_, index) => inactiveInheritedBoxes.has(index));
   const lastBox = new Map<string, string>();
-  for (const measurement of evidence.measurements) if (measurement.request.subject.kind === 'box') {
+  for (const measurement of active) if (measurement.request.subject.kind === 'box') {
     lastBox.set(measurement.request.subject.candidateId, geometryDigest(measurement.request.subject));
   }
   const latest = new Map<string, GeometryEvidence['measurements'][number]>();
-  for (const measurement of evidence.measurements) {
+  for (const measurement of active) {
     const subject = measurement.request.subject;
     // Distance/intersection probes describe a trial pose. Explicit clearance constraints survive pose changes.
     if (subject.kind === 'box' && measurement.request.operation !== 'clearance'
@@ -205,9 +209,21 @@ async function validateFinalMeasurements(evidence: GeometryEvidence, current: Ge
   for (const measurement of latest.values()) {
     const subject = measurement.request.subject;
     if (subject.kind === 'box') boxes.add(subject.candidateId);
+  }
+  // Inactive box subjects do not retire any of their observed native endpoints.
+  for (const measurement of [...latest.values(), ...inactive]) {
+    const subject = measurement.request.subject;
     const refs = [...(subject.kind === 'object' ? [subject.ref] : []),
       ...(measurement.request.against.kind === 'object' ? [measurement.request.against.ref] : queryMembers(measurement))];
     for (const ref of refs) if (ref.kind === 'native') endpoints.set(ref.entityId, nativeRef(ref.entityId, input));
+  }
+  for (const measurement of inactive) {
+    const against = measurement.request.against;
+    if (against.kind !== 'query') continue;
+    const refs = [...(against.query.exclude ?? []), ...(against.query.level ? [against.query.level] : [])];
+    if (refs.some(ref => ref.kind === 'native' && !input.native.snapshot.entities.some(entity => entity.id === ref.entityId))) {
+      throw new GeometryEvidenceConflict('A retained query reference has no final native identity.');
+    }
   }
   const baseline = new Map<string, string>();
   if (endpoints.size) {
@@ -287,9 +303,26 @@ async function validateFinalMeasurements(evidence: GeometryEvidence, current: Ge
 
 export async function validateGeometryEvidence(input: {
   evidence: GeometryEvidence; source: GeometryEvidenceSource; native: GeometrySessionInput['native'];
-  candidate: ModelSnapshot; signal: AbortSignal;
+  candidate: ModelSnapshot; signal: AbortSignal; history?: GeometryNativeHistory; authoredSnapshot?: ModelSnapshot;
 }): Promise<GeometryReadSnapshot & { verifiedCandidateSha256: string; finalReceipts: GeometryReceipt[]; finalMeasurements: GeometryEvidence['measurements'] }> {
   const evidence = parseGeometryEvidence(input.evidence);
+  assertNativeHistory(evidence.projectId, input.native, input.history);
+  if (evidence.version === 2 && (!input.history || !input.authoredSnapshot)) {
+    throw new GeometryEvidenceConflict('Geometry evidence v2 requires its original snapshot and complete current native history.');
+  }
+  let inactive: readonly number[] = [];
+  if (input.history && input.authoredSnapshot) {
+    const reconciled = input.history.reconcile(evidence.baseRevisionId, input.authoredSnapshot);
+    if (!isDeepStrictEqual(reconciled, input.candidate)) {
+      throw new GeometryEvidenceConflict('The final candidate differs from native reconciliation of the original authored snapshot.');
+    }
+    inactive = await inactiveInheritedBoxMeasurements({ evidence, binding: { history: input.history,
+      projectId: evidence.projectId, requestId: evidence.requestId, baseRevisionId: evidence.baseRevisionId,
+      snapshot: input.authoredSnapshot } });
+  } else if (input.authoredSnapshot && geometrySnapshotHash(input.authoredSnapshot) !== evidence.proposalSnapshotSha256) {
+    throw new GeometryEvidenceConflict('Geometry evidence does not match the original authored snapshot.');
+  }
+  input.signal.throwIfAborted();
   const snapshot = await readGeometrySnapshot(input.source, evidence.projectId, input.native, input.signal, evidence.receipts);
   const candidate = { ...snapshot.input, native: { ...snapshot.input.native, snapshot: input.candidate } };
   const status = await validateGeometryReceiptsInWorker({ receipts: evidence.receipts, current: snapshot.input,
@@ -297,34 +330,91 @@ export async function validateGeometryEvidence(input: {
   input.signal.throwIfAborted();
   if (status.kind !== 'fresh') throw new GeometryEvidenceConflict(status.reason);
   // Independent host verification sees the complete authorized project; no full-graph facts cross the guest boundary.
-  const final = await validateFinalMeasurements(evidence, snapshot.input, candidate, input.signal, snapshot.correspondences ?? []);
+  const final = await validateFinalMeasurements(evidence, snapshot.input, candidate, input.signal,
+    snapshot.correspondences ?? [], new Set(inactive));
   return { ...snapshot, verifiedCandidateSha256: geometrySnapshotHash(input.candidate), finalReceipts: final.receipts, finalMeasurements: final.measurements };
 }
 
-type OpenGeometryEvidence = { source: GeometryEvidenceSource; projectId: string; requestId: string;
-  native: GeometrySessionInput['native']; signal: AbortSignal; current?: () => Promise<GeometrySessionInput['native']>;
-  inherited?: GeometryEvidence };
+export type GeometryCurrentContext = { native: GeometrySessionInput['native']; history: GeometryNativeHistory };
+
+function assertNativeHistory(projectId: string, native: GeometrySessionInput['native'], history?: GeometryNativeHistory): void {
+  if (history && (history.projectId !== projectId || !isDeepStrictEqual(history.target, native.target)
+      || history.head.id !== native.revisionId || !isDeepStrictEqual(history.head.snapshot, native.snapshot))) {
+    throw new GeometryEvidenceConflict('Current native geometry differs from its complete accepted history.');
+  }
+}
+
+/** Host-selected predecessor: evidence and native snapshots cannot be supplied independently to a session. */
+export class DraftContinuation {
+  readonly history: GeometryNativeHistory;
+  readonly #predecessor: GeometryDraftSeal;
+  readonly #initialDraft: ModelSnapshot;
+  readonly #lineage: GeometryDraftLineage;
+  private constructor(history: GeometryNativeHistory, predecessor: GeometryDraftSeal, initialDraft: ModelSnapshot, lineage: GeometryDraftLineage) {
+    this.history = history; this.#predecessor = structuredClone(predecessor);
+    this.#initialDraft = structuredClone(initialDraft); this.#lineage = structuredClone(lineage);
+    Object.freeze(this);
+  }
+  static async fromPrior(input: { chatId: string; history: GeometryNativeHistory; predecessor: GeometryDraftSeal;
+    legacyAncestors?: readonly GeometryDraftSeal[] }): Promise<DraftContinuation> {
+    const predecessor = { evidence: parseGeometryEvidence(input.predecessor.evidence), snapshot: structuredClone(input.predecessor.snapshot) };
+    const ancestors = (input.legacyAncestors ?? []).map(seal => ({ evidence: parseGeometryEvidence(seal.evidence), snapshot: structuredClone(seal.snapshot) }));
+    const lineage = await createGeometryDraftLineage({ history: input.history, chatId: input.chatId,
+      ancestors: [...ancestors, predecessor] });
+    const initialDraft = input.history.reconcile(predecessor.evidence.baseRevisionId, predecessor.snapshot);
+    return new DraftContinuation(input.history, predecessor, initialDraft, lineage);
+  }
+  get initialDraft(): ModelSnapshot { return structuredClone(this.#initialDraft); }
+  get predecessor(): GeometryDraftSeal { return structuredClone(this.#predecessor); }
+  get lineage(): GeometryDraftLineage { return structuredClone(this.#lineage); }
+}
+
+export type OpenGeometryEvidence = { source: GeometryEvidenceSource; projectId: string; requestId: string;
+  native: GeometrySessionInput['native']; signal: AbortSignal; current?: () => Promise<GeometryCurrentContext>;
+  history?: GeometryNativeHistory; chatId?: string; continuation?: DraftContinuation };
 
 /** One host-owned request session. Guest decisions cannot supply, erase or replace receipts. */
 export class GeometryEvidenceSession {
   readonly #input: OpenGeometryEvidence;
   readonly #session: GeometrySession;
   readonly #inherited: GeometryEvidence | undefined;
+  readonly #lineage: GeometryDraftLineage | undefined;
   readonly #measurements: GeometryEvidence['measurements'] = [];
   #closed = false;
-  private constructor(input: OpenGeometryEvidence, session: GeometrySession) {
-    this.#input = input; this.#session = session; this.#inherited = input.inherited;
+  private constructor(input: OpenGeometryEvidence, session: GeometrySession, lineage?: GeometryDraftLineage) {
+    this.#input = input; this.#session = session; this.#inherited = input.continuation?.predecessor.evidence;
+    this.#lineage = lineage;
     if (this.#inherited) this.#measurements.push(...structuredClone(this.#inherited.measurements));
   }
   static async open(input: OpenGeometryEvidence): Promise<GeometryEvidenceSession> {
-    const inherited = input.inherited ? parseGeometryEvidence(input.inherited) : undefined;
+    input.signal.throwIfAborted();
+    if (Object.hasOwn(input, 'inherited')) throw new GeometryEvidenceConflict('Use an exact predecessor continuation to inherit geometry evidence.');
+    assertNativeHistory(input.projectId, input.native, input.history);
+    if ((input.continuation || input.chatId) && !input.history) {
+      throw new GeometryEvidenceConflict('A geometry conversation requires complete native history.');
+    }
+    const inherited = input.continuation?.predecessor.evidence;
     if (inherited && (inherited.projectId !== input.projectId || inherited.requestId === input.requestId)) {
       throw new GeometryEvidenceConflict('Inherited geometry evidence belongs to another project or the same request generation.');
+    }
+    let lineage: GeometryDraftLineage | undefined;
+    if (input.continuation) {
+      assertNativeHistory(input.projectId, input.native, input.continuation.history);
+      if (input.continuation.history.rootRevisionId !== input.history?.rootRevisionId) {
+        throw new GeometryEvidenceConflict('Geometry continuation belongs to another native project root.');
+      }
+      lineage = input.continuation.lineage;
+      if (input.chatId !== undefined && input.chatId !== lineage.root.chatId) {
+        throw new GeometryEvidenceConflict('Geometry continuation belongs to another conversation.');
+      }
+    } else if (input.history) {
+      if (!input.chatId) throw new GeometryEvidenceConflict('Geometry evidence v2 requires a host conversation identity.');
+      lineage = await createGeometryDraftLineage({ history: input.history, chatId: input.chatId, ancestors: [] });
     }
     const snapshot = await readGeometrySnapshot(input.source, input.projectId, input.native, input.signal);
     const session = await createGeometrySession(snapshot.input, { signal: input.signal, lifetimeMs: 180000 });
     if (input.signal.aborted) { await session.close(); input.signal.throwIfAborted(); }
-    return new GeometryEvidenceSession({ ...input, native: structuredClone(input.native), ...(inherited ? { inherited } : {}) }, session);
+    return new GeometryEvidenceSession({ ...input, native: structuredClone(input.native) }, session, lineage);
   }
   #assertAlive(): void {
     this.#input.signal.throwIfAborted();
@@ -342,7 +432,16 @@ export class GeometryEvidenceSession {
   async #read<T>(call: () => Promise<T>): Promise<T> {
     this.#assertAlive(); const value = await call(); this.#assertAlive(); return value;
   }
-  async #current(): Promise<GeometrySessionInput['native']> { return this.#input.current ? this.#input.current() : this.#input.native; }
+  async #current(): Promise<{ native: GeometrySessionInput['native']; history?: GeometryNativeHistory }> {
+    const context = this.#input.current ? await this.#input.current()
+      : { native: this.#input.native, history: this.#input.history };
+    assertNativeHistory(this.#input.projectId, context.native, context.history);
+    if (this.#lineage && !context.history) throw new GeometryEvidenceConflict('Current geometry history is unavailable.');
+    if (this.#input.history && context.history?.rootRevisionId !== this.#input.history.rootRevisionId) {
+      throw new GeometryEvidenceConflict('Current geometry belongs to another native project root.');
+    }
+    return context;
+  }
   #receipts(): GeometryReceipt[] {
     const receipts = [...(this.#inherited?.receipts ?? []), ...this.#session.receipts()];
     return [...new Map(receipts.map(receipt => [geometryDigest(receipt), receipt])).values()];
@@ -351,7 +450,7 @@ export class GeometryEvidenceSession {
     this.#assertAlive();
     const receipts = this.#receipts();
     if (!receipts.length) return;
-    const native = await this.#current();
+    const { native } = await this.#current();
     this.#assertAlive();
     const current = await readGeometrySnapshot(this.#input.source, this.#input.projectId, native, this.#input.signal, receipts);
     const result = await validateGeometryReceiptsInWorker({ receipts, current: current.input,
@@ -365,14 +464,14 @@ export class GeometryEvidenceSession {
     if (!this.#receipts().length && !this.#inherited) return;
     await this.assertFresh();
     this.#assertAlive();
-    const evidence = parseGeometryEvidence({ version: 1, projectId: this.#input.projectId, requestId: this.#input.requestId,
+    const evidence = parseGeometryEvidence({ ...(this.#lineage ? { version: 2, lineage: this.#lineage } : { version: 1 }),
+      projectId: this.#input.projectId, requestId: this.#input.requestId,
       baseRevisionId: this.#input.native.revisionId, proposalSnapshotSha256: geometrySnapshotHash(candidate),
-      receipts: this.#receipts(), measurements: this.#measurements,
-      ...(this.#inherited ? { inheritedFrom: [...(this.#inherited.inheritedFrom ?? []), {
-        requestId: this.#inherited.requestId, baseRevisionId: this.#inherited.baseRevisionId,
-        proposalSnapshotSha256: this.#inherited.proposalSnapshotSha256, evidenceSha256: geometryDigest(this.#inherited),
-      }] } : {}) });
-    await validateGeometryEvidence({ evidence, source: this.#input.source, native: await this.#current(), candidate, signal: this.#input.signal });
+      receipts: this.#receipts(), measurements: this.#measurements });
+    const { native, history } = await this.#current();
+    const reconciled = history ? history.reconcile(evidence.baseRevisionId, candidate) : candidate;
+    await validateGeometryEvidence({ evidence, source: this.#input.source, native, candidate: reconciled,
+      authoredSnapshot: candidate, ...(history ? { history } : {}), signal: this.#input.signal });
     this.#assertAlive(); return evidence;
   }
   async close(): Promise<void> { this.#closed = true; await this.#session.close(); }
