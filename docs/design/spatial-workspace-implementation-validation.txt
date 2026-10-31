@@ -1,0 +1,33 @@
+Planning validation — 2026-10-31
+
+Source baseline: bc7fbd392f036a6fda055599854f29670a27f279
+Study reference: PR #249, 9f5802d3f3d428fd91d367fba71477a787b26ad1
+Scope: implementation roadmap and this receipt only. No runtime code or model changes.
+
+Command: npm run validate
+Exit code: 0
+
+> bim-forge@0.1.0 validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+
+> bim-forge@0.1.0 lint
+> node scripts/validate-typescript.ts
+
+Strict TypeScript valid. 347 source file(s) checked.
+
+> bim-forge@0.1.0 typecheck
+> tsc --noEmit
+
+Policy valid. 0 changed file(s) checked.
+
+This validates the unchanged source baseline. It does not qualify planned features.
+Targeted changed-path policy and whitespace checks are recorded in the draft PR.
+No new application/browser/provider tests were run for this documentation change.
+
+Planning evidence: inspected existing viewer, task, queue, review, persistence and
+access owners; compared two independent same-model architecture sketches; reviewed
+the plan against current cancellation semantics. Corrected an unsupported public
+cleanup/draining-state assumption. No cross-family judge ran.
+
+Construction model delta: zero. No deployment, migration, provider execution,
+production data mutation, merge or readiness change.
