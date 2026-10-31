@@ -91,6 +91,14 @@ The earlier failed phone screenshot remains retained as `canvas-studio-241/last-
 
 ## Sources
 
+## Merge integration plan
+
+The maintainer authorized merging PR #242 on 2026-10-31. Integrate current main `005fdf5` before merging: retain the React chat facade, use main's `annotationDescription` in `request-chat-react.tsx`, and adapt `spatial-markup-browser.test.ts` to open Model navigation through the rail and verify saved rectangle/circle descriptions in the React transcript. Preserve the automatically merged draft-lineage, markup, source and acceptance contracts. No model entity or validator change is introduced by conflict resolution.
+
+Acceptance evidence: isolated-VM strict validation/build, full root tests, chat/workspace/Canvas Studio/guided-floor browser checks and the spatial-markup browser check. Prior receipts remain scoped to their original implementation commit. No deployment is authorized.
+
+## Sources
+
 - React incremental adoption: https://react.dev/learn/add-react-to-an-existing-project
 - assistant-ui external store: https://www.assistant-ui.com/docs/runtimes/custom/external-store
 - assistant-ui custom tool cards: https://www.assistant-ui.com/docs/tools/tool-ui

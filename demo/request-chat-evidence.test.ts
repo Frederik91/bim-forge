@@ -3,8 +3,22 @@ import test from 'node:test';
 import { multiStoreySnapshot } from '../src/multi-storey-house.ts';
 import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
 import { modelScopeFixture } from '../src/model-scope-fixture.ts';
+import { createMarkupPlane, createSpatialMarkup } from '../src/spatial-markup.ts';
 
 const revisionId = 'a'.repeat(64);
+
+test('spatial markup is cloned, bound and replayed without changing the model or inheriting a selected desk', () => {
+  const graph = multiStoreySnapshot(); const before = JSON.stringify(graph);
+  const level = graph.entities.find(item => item.type === 'Level' && item.id === 'level-attic'); assert.ok(level?.type === 'Level');
+  const mark = createSpatialMarkup({ tool: 'rectangle', plane: createMarkupPlane({ origin: [0, 0, level.elevation], normal: [0, 0, 1] }),
+    start: [1, 1, level.elevation], end: [3, 2, level.elevation], label: 'Kitchen' });
+  const visual = captureConversationVisual({ graph, snapshot: { kind: 'accepted', revisionId }, view: '3d', levelId: level.id,
+    selectedObjectIds: [], reference: null, markups: [mark] });
+  assert.deepEqual(visual.selectedObjectIds, []); assert.deepEqual(conversationInspection(graph, visual).annotations, [mark]);
+  mark.label = 'Changed draft'; assert.equal(visual.annotations[0]?.label, 'Kitchen');
+  assert.throws(() => requireCurrentVisual(visual, { kind: 'accepted', revisionId: 'b'.repeat(64) }), /another displayed snapshot/);
+  assert.equal(JSON.stringify(graph), before);
+});
 
 test('reopening a conversation restores its actual object, room and level instead of the prior browsing default', () => {
   const graph = modelScopeFixture(); const before = JSON.stringify(graph);

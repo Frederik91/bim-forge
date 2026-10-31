@@ -1,12 +1,15 @@
 import type { ConversationVisual } from '../src/request-conversation.ts';
+import { conversationMarkups } from './request-chat-evidence.ts';
+import { spatialMarkupDescription } from '../src/spatial-markup.ts';
 
-export type ComposerAction = 'files' | 'floor' | 'evidence' | 'reference' | 'view' | 'scope' | 'options';
+export type ComposerAction = 'files' | 'floor' | 'evidence' | 'reference' | 'view' | 'markup' | 'scope' | 'options';
 export const COMPOSER_ACTIONS: readonly { id: ComposerAction; label: string; description: string }[] = [
   { id: 'files', label: 'Attach files', description: 'Images, plans and documents' },
   { id: 'floor', label: 'Reconstruct a floor plan', description: 'Attach a plan, confirm a known dimension, review an AI proposal' },
   { id: 'evidence', label: 'Use project evidence', description: 'Retained sources and model-linked claims' },
   { id: 'reference', label: 'Reference a model item', description: 'Search the model with @' },
   { id: 'view', label: 'Attach current view', description: 'Selection and marked location · 2D or 3D' },
+  { id: 'markup', label: 'Draw in 3D', description: 'Outline an area with lines, rectangles or circles' },
   { id: 'scope', label: 'Choose model scope', description: 'Rooms, levels, types and parameters' },
   { id: 'options', label: 'Request options', description: 'Layout reconstruction and advanced details' },
 ];
@@ -84,7 +87,9 @@ export class RequestComposer {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = '×'; button.setAttribute('aria-label', `Remove ${label}`); button.disabled = this.#disabled;
       button.addEventListener('click', remove); chip.append(text, button); host.append(chip);
     };
-    add(`${visual.view === '2d' ? '2D' : '3D'} view · ${visual.snapshot.revisionId.slice(0, 7)}${visual.annotations.length ? ' · marked location' : ''}`, () => this.#actions.remove(null));
+    const markups = conversationMarkups(visual);
+    const description = markups.length === 1 && markups[0] ? spatialMarkupDescription(markups[0]) : markups.length ? `${markups.length} markup shapes` : 'view';
+    add(`${visual.view === '2d' ? '2D' : '3D'} ${description} · ${visual.snapshot.revisionId.slice(0, 7)}`, () => this.#actions.remove(null));
     const items = this.#actions.items();
     for (const id of visual.selectedObjectIds) add(`@${items.find(item => item.id === id)?.name ?? id}`, () => this.#actions.remove(id));
   }

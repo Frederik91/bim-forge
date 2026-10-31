@@ -9,7 +9,7 @@ import type { ConversationMessage, ConversationVisual } from '../src/request-con
 import { ACTIVITY_STAGES } from '../src/request-activity.ts';
 import type { RequestActivity } from '../src/request-activity.ts';
 import { renderSourceContext } from './request-source-ui.ts';
-import { visualLabel } from './request-chat-evidence.ts';
+import { annotationDescription, visualLabel } from './request-chat-evidence.ts';
 import { canDecideProposal, chatRequestStatus, groupTurnActivity, matchingProposalReview } from './request-chat-status.ts';
 import type { RequestChatDecision, RequestChatProposalReview } from './request-chat-status.ts';
 import type { RequestChatActions, RequestChatInput } from './request-chat.ts';
@@ -76,9 +76,7 @@ function Activity({ message, activity }: { message: ConversationMessage; activit
 function VisualEvidence({ visual, ...props }: MessageProps & { visual: ConversationVisual }) {
   return <details className="request-chat-visual" data-detail-key={`visual:${props.message.id}`}>
     <summary>{visualLabel(visual)}</summary><p>Selected IDs: {visual.selectedObjectIds.join(', ') || 'None'}</p>
-    {visual.annotations.map((annotation, index) => <p key={index}>{annotation.kind === 'pin'
-      ? `● ${annotation.label}: ${annotation.position.join(', ')} m`
-      : `↗ ${annotation.label}: ${annotation.from.join(', ')} → ${annotation.to.join(', ')} m`}</p>)}
+    {visual.annotations.map((annotation, index) => <p key={index}>{annotationDescription(annotation)}</p>)}
     <Control {...props} focusKey="inspect-visual" onClick={() => props.actions.inspect(visual)}>Inspect bound snapshot</Control>
   </details>;
 }

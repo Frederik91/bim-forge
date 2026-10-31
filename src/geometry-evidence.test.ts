@@ -155,7 +155,9 @@ test('real generated guest has one four-method namespace; trusted geometry evide
   assert.ok(measurement && measurement.result.kind === 'complete');
   measurement.result.value.distanceMetres = 1;
   const decoded = readWireGeometryEvidence(JSON.stringify(tampered));
-  await assert.rejects(assertGeometryEvidenceBound(decoded, result.repository.view(review.proposalRevisionId).snapshot), /digest changed/);
+  const snapshot = result.repository.view(review.proposalRevisionId).snapshot;
+  await assert.rejects(assertGeometryEvidenceBound(decoded, snapshot, { history: repository.geometryHistory(),
+    projectId: repository.projectId, requestId: review.requestId, baseRevisionId: review.baseRevisionId, snapshot }), /digest changed/);
   const portable: unknown = JSON.parse(result.repository.serialize());
   assert.ok(portable && typeof portable === 'object' && 'reviews' in portable && Array.isArray(portable.reviews));
   const stored = portable.reviews[0];
@@ -320,15 +322,22 @@ test('scope keeps full private host dependencies while guest cannot discover or 
 test('hosted opening world geometry changes invalidate even when the stored Door body is unchanged', async () => {
   const repository = await RoomRepository.create(); const source = new FixtureGeometrySource(); const revisionId = repository.head('main');
   const native = { snapshot: repository.view(revisionId).snapshot, revisionId, target: { kind: 'main' } } satisfies Parameters<typeof geometryNativeInput>[0];
-  let current = native;
+  let current = { native, history: repository.geometryHistory() };
   const session = await GeometryEvidenceSession.open({ source, projectId: repository.projectId, requestId: 'host-dependency', native,
     current: async () => current, signal: new AbortController().signal });
   try {
     await session.describe({ kind: 'native', projectId: repository.projectId, revisionId, target: { kind: 'main' }, entityId: 'door-entry' });
-    const layout = rectangleLayout(native.snapshot);
-    current = { ...native, snapshot: previewRectangle(native.snapshot, { ...layout,
-      boundsMm: { ...layout.boundsMm, minX: 1000, maxX: 7000 } }) };
-    assert.deepEqual(current.snapshot.entities.find(item => item.id === 'door-entry'), native.snapshot.entities.find(item => item.id === 'door-entry'));
+    const changed = await prepareModelProposal(repository, request(repository, 'move-host'), worker(async workerSession => {
+      await propose(workerSession, `const layout = (await model.inspect()).placement.layout;
+        if (!layout) throw new Error('Missing fixture layout');
+        await model.previewRectangle({...layout,boundsMm:{...layout.boundsMm,minX:1000,maxX:7000}});
+        return {kind:'propose',review:${JSON.stringify(geometryReview)}};`);
+    }));
+    assert.equal(changed.status, 'ready');
+    const accepted = await repository.acceptFrom(changed.repository, 'move-host', { decisionId: 'accept-host', actor: 'synthetic-human' });
+    const head = accepted.head('main');
+    current = { native: { ...native, revisionId: head, snapshot: accepted.view(head).snapshot }, history: accepted.geometryHistory() };
+    assert.deepEqual(current.native.snapshot.entities.find(item => item.id === 'door-entry'), native.snapshot.entities.find(item => item.id === 'door-entry'));
     await assert.rejects(session.assertFresh(), /changed|geometry|projection/);
   } finally { await session.close(); }
 });

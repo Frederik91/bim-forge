@@ -1,0 +1,199 @@
+[
+  {
+    "id": "rectangle-inside",
+    "tool": "rectangle",
+    "relation": "inside",
+    "count": 1,
+    "instruction": "Add a 0.4 m square table entirely inside the rectangle.",
+    "widthMetres": 0.4,
+    "depthMetres": 0.4
+  },
+  {
+    "id": "rectangle-outside",
+    "tool": "rectangle",
+    "relation": "outside-gap",
+    "gap": 0.2,
+    "count": 1,
+    "instruction": "Add a 0.3 m cube outside the rectangle, leaving 0.20 m clear to its nearest edge.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3
+  },
+  {
+    "id": "rectangle-edge",
+    "tool": "rectangle",
+    "relation": "edge-centres",
+    "count": 3,
+    "instruction": "Add three 0.3 m cubes with their centres on one longest edge of the rectangle, evenly spaced along that edge.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3
+  },
+  {
+    "id": "circle-inside",
+    "tool": "circle",
+    "relation": "inside",
+    "count": 1,
+    "instruction": "Add a 0.4 m square table entirely inside the circle.",
+    "widthMetres": 0.4,
+    "depthMetres": 0.4
+  },
+  {
+    "id": "circle-outside",
+    "tool": "circle",
+    "relation": "outside-gap",
+    "gap": 0.2,
+    "count": 1,
+    "instruction": "Add a 0.3 m cube outside the circle, leaving 0.20 m clear to the circle.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3
+  },
+  {
+    "id": "circle-edge",
+    "tool": "circle",
+    "relation": "edge-centres",
+    "count": 4,
+    "instruction": "Add four 0.2 m cubes with their centres on the edge of the circle, evenly spaced around it.",
+    "widthMetres": 0.2,
+    "depthMetres": 0.2,
+    "heightMetres": 0.2
+  },
+  {
+    "id": "polyline-inside",
+    "tool": "polyline",
+    "closed": true,
+    "relation": "inside",
+    "count": 2,
+    "instruction": "Add two separate 0.3 m cubes entirely inside this closed outline.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3
+  },
+  {
+    "id": "polyline-outside",
+    "tool": "polyline",
+    "closed": true,
+    "relation": "outside-gap",
+    "gap": 0.2,
+    "count": 1,
+    "instruction": "Add a 0.3 m cube outside this closed outline, leaving 0.20 m clear to its nearest edge.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3
+  },
+  {
+    "id": "polyline-edge",
+    "tool": "polyline",
+    "closed": true,
+    "relation": "edge-centres",
+    "count": 3,
+    "instruction": "Add three 0.2 m cubes with their centres evenly spaced around the edge of this closed outline.",
+    "widthMetres": 0.2,
+    "depthMetres": 0.2,
+    "heightMetres": 0.2
+  },
+  {
+    "id": "line-along",
+    "tool": "line",
+    "relation": "edge-centres",
+    "count": 3,
+    "instruction": "Add three 0.3 m cubes with their centres evenly along this line. Put the first and last centres at its endpoints.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3
+  },
+  {
+    "id": "line-offset",
+    "tool": "line",
+    "relation": "outside-gap",
+    "gap": 0.2,
+    "count": 1,
+    "instruction": "Add a 0.3 m cube on either side of this line, leaving 0.20 m clear to the line.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3,
+    "clarificationInstruction": "Use exactly one cube in total. Choose either side of the same marked line, keep it 0.30 m in all dimensions and leave at least 0.20 m clear between its whole footprint and the line. Preserve all existing model objects."
+  },
+  {
+    "id": "line-undefined-inside",
+    "tool": "line",
+    "relation": "undefined-region",
+    "instruction": "Add a small table inside this line."
+  },
+  {
+    "id": "attic-inside",
+    "tool": "rectangle",
+    "template": "house",
+    "level": "level-attic",
+    "relation": "inside",
+    "count": 1,
+    "instruction": "Add a 0.3 m cube entirely inside this rectangle on the same floor as the mark.",
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3
+  },
+  {
+    "id": "circle-too-large",
+    "tool": "circle",
+    "relation": "impossible-inside",
+    "count": 1,
+    "widthMetres": 2,
+    "depthMetres": 2,
+    "instruction": "Place a 2 m square table entirely inside the circle. Keep the table size and the circle unchanged."
+  },
+  {
+    "id": "circle-bounds-trap",
+    "tool": "circle",
+    "relation": "outside-within-bounds",
+    "count": 1,
+    "widthMetres": 0.15,
+    "depthMetres": 0.15,
+    "heightMetres": 0.15,
+    "instruction": "Add a 0.15 m cube outside the circle but entirely inside the circle's bounding square."
+  },
+  {
+    "id": "polyline-bounds-trap",
+    "tool": "polyline",
+    "closed": true,
+    "relation": "outside-within-bounds",
+    "count": 1,
+    "widthMetres": 0.2,
+    "depthMetres": 0.2,
+    "heightMetres": 0.2,
+    "instruction": "Add a 0.2 m cube outside this closed outline but entirely inside its bounding rectangle."
+  },
+  {
+    "id": "basement-fallback",
+    "tool": "rectangle",
+    "template": "house",
+    "relation": "inside",
+    "count": 1,
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3,
+    "instruction": "Add a 0.3 m cube entirely inside this rectangle on the floor marked by the outline, not on the ground floor."
+  },
+  {
+    "id": "surface-wall",
+    "tool": "rectangle",
+    "relation": "surface-wall",
+    "count": 1,
+    "gap": 0.1,
+    "widthMetres": 0.6,
+    "depthMetres": 0.3,
+    "heightMetres": 0.8,
+    "instruction": "Add a floor-standing cabinet below this wall rectangle, centred along its width, with its back 0.10 m from the marked wall. Make it 0.60 m wide, 0.30 m deep and 0.80 m high. Use the outline as location context, keep the cabinet on the room floor, and preserve all existing objects."
+  },
+  {
+    "id": "line-offset-one",
+    "tool": "line",
+    "relation": "outside-gap",
+    "count": 1,
+    "gap": 0.2,
+    "widthMetres": 0.3,
+    "depthMetres": 0.3,
+    "heightMetres": 0.3,
+    "instruction": "Add exactly one 0.30 m cube in total on whichever side of this marked line has space. Leave at least 0.20 m clear between the whole cube footprint and the line. Keep all existing building objects unchanged."
+  }
+]

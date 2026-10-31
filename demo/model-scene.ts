@@ -580,6 +580,17 @@ export class ModelScene {
     return hit ? this.pickParts.get(hit.mesh.uniqueId)?.objectId ?? null : null;
   }
 
+  surfaceAt(x: number, y: number): { position: Vector3; normal: Vector3 } | null {
+    const hit = this.batches.pick(x, y, mesh => mesh.isPickable && this.pickParts.get(mesh.uniqueId)?.before === false);
+    if (!hit) return null;
+    const ray = this.scene.createPickingRay(x, y, Matrix.Identity(), this.camera);
+    const source = ray.intersectsMesh(hit.mesh, false);
+    if (!source.hit || !source.pickedPoint || Vector3.Distance(source.pickedPoint, hit.point) > .00001) return null;
+    const normal = source.getNormal(true);
+    if (!normal) return null;
+    return { position: hit.point, normal: normal.normalize() };
+  }
+
   referenceAt(x: number, y: number): SpatialReference | null {
     if (!this.snapshot) return null;
     const hit = this.batches.pick(x, y, mesh => {

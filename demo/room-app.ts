@@ -55,7 +55,8 @@ import type { FrozenModelScope, ScopedRequest } from '../src/model-scope-contrac
 import { RequestChat, conversationFromTicket } from './request-chat.ts';
 import { RequestComposer } from './request-composer.ts';
 import { FloorPlanGuide, parseFloorGuideDraft } from './floor-plan-guide-ui.ts';
-import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection } from './request-chat-evidence.ts';
+import { captureConversationVisual, requireCurrentVisual, visualLabel, conversationInspection, conversationSelection, conversationMarkups } from './request-chat-evidence.ts';
+import type { SpatialMarkup } from '../src/spatial-markup.ts';
 import { parseConversationReply } from '../src/request-conversation.ts';
 import type { ConversationMessage, ConversationReply, ConversationVisual } from '../src/request-conversation.ts';
 import { parseRequestDraft } from '../src/request-draft.ts';
@@ -415,13 +416,17 @@ const composer = new RequestComposer({ root: generic('request-composer'), form: 
     if (action === 'floor') { floorGuide.start(); return true; }
     if (action === 'evidence') { showPage('evidence'); return true; }
     if (action === 'files') return sourcePicker.chooseFiles();
+    if (action === 'markup') {
+      if (!repo || busy || !serverAvailable || selectedDesignTarget.kind === 'baseline' || liveChatPreview || reviewRepository) return false;
+      modelView = '3d'; renderComparison(); modelViewer?.startMarkup(); return true;
+    }
     if (action === 'view') return attachChatContext(selectedObject ? [selectedObject] : []);
     const options = requiredElement('request-options', HTMLDetailsElement); options.open = true;
     const details = action === 'scope' ? requiredElement('composer-scope-options', HTMLDetailsElement) : options;
     details.open = true; details.querySelector('summary')?.focus(); details.scrollIntoView({ block: 'nearest' }); return true;
   },
   mention: id => attachChatContext([...new Set([...(chatVisual?.selectedObjectIds ?? []), id])]),
-  remove: id => { chatVisual = id && chatVisual ? { ...chatVisual, selectedObjectIds: chatVisual.selectedObjectIds.filter(item => item !== id) } : null; composer.setVisual(chatVisual); updateControls(); },
+  remove: id => { chatVisual = id && chatVisual ? { ...chatVisual, selectedObjectIds: chatVisual.selectedObjectIds.filter(item => item !== id) } : null; composer.setVisual(chatVisual); renderComparison(); updateControls(); },
   changed: updateControls,
 });
 
@@ -640,7 +645,7 @@ function attachChatContext(ids: readonly string[]): boolean {
     if (chatVisual) requireCurrentVisual(chatVisual, displayedChatSnapshot());
     if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved snapshot before capturing context. The unsent sketch is not a model revision.');
     chatVisual = captureConversationVisual({ graph: preview, snapshot: displayedChatSnapshot(), view: modelView === 'plan' ? '2d' : '3d',
-      levelId: activeLevelId, selectedObjectIds: ids, reference: visibleReference() });
+      levelId: activeLevelId, selectedObjectIds: ids, reference: visibleReference(), markups: conversationMarkups(chatVisual) });
     composer.setVisual(chatVisual); status(`Attached ${visualLabel(chatVisual)}. The model is unchanged.`); return true;
   } catch (error) { report(error); return false; }
 }
@@ -658,6 +663,32 @@ function requestDirty(): boolean {
 }
 
 function currentChatKey(): string { return `${repo?.projectId ?? 'none'}:${chatTicketId ?? newDraftId}`; }
+
+function markupBinding(): string { return `${currentChatKey()}:${selectedRevision}:${selectedBranch}`; }
+function attachMarkup(markups: readonly SpatialMarkup[], binding: string): boolean {
+  try {
+    if (binding !== markupBinding() || busy || !serverAvailable || currentPage !== 'request'
+        || selectedDesignTarget.kind === 'baseline' || liveChatPreview || reviewRepository || !preview) throw new Error('Return to this chat’s accepted model before drawing markup.');
+    if (chatVisual) requireCurrentVisual(chatVisual, displayedChatSnapshot());
+    if (JSON.stringify(preview) !== JSON.stringify(requireRepository().view(selectedRevision).snapshot)) throw new Error('Return to the saved model before attaching markup.');
+    const visual = captureConversationVisual({ graph: preview, snapshot: displayedChatSnapshot(), view: '3d', levelId: activeLevelId,
+      selectedObjectIds: chatVisual?.selectedObjectIds ?? [], reference: null, markups });
+    const previous = chatVisual?.annotations.filter(item => item.kind === 'pin' || item.kind === 'arrow') ?? [];
+    visual.annotations.unshift(...previous);
+    chatVisual = visual.annotations.length || visual.selectedObjectIds.length ? parseConversationReply({ messageId: 'markup', expectedSequence: 0,
+      baseRevisionId: visual.snapshot.revisionId, text: 'Markup', sources: [], visual }).visual : null;
+    composer.setVisual(chatVisual); renderComparison(); updateControls();
+    return true;
+  } catch (error) { report(error); return false; }
+}
+
+function referenceMarkups(): SpatialMarkup[] {
+  if (inspectedChatView) return conversationMarkups(inspectedChatView);
+  const conversation = requestChat.conversation;
+  if (!conversation || conversation.ticketId !== chatTicketId) return [];
+  const message = conversation.messages.findLast(item => item.kind === 'user');
+  return message?.kind === 'user' ? conversationMarkups(message.visual) : [];
+}
 const FLOOR_DRAFT_KEY = 'bim-forge-floor-plan-draft-v1:';
 function rememberFloorDraft(): void {
   if (!repo || busy || chatTicketId || !floorGuide.enabled || !sourcePicker.ready || selectedDesignTarget.kind === 'baseline') return;
@@ -1754,8 +1785,9 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     const guided = floorGuide.request(instruction, sources);
     if (guided) { instruction = guided.instruction; sources = guided.sources; }
     const scope = scopeBuilder.request();
-    const implicitNativeSelection = linkedSelection === null && selectedObject ? [selectedObject] : [];
-    const contextLevelId = activeLevelId ?? (linkedSelection === null ? entityLevel(preview, selectedObject)?.id ?? null : null);
+    const hasMarkup = conversationMarkups(chatVisual).length > 0;
+    const implicitNativeSelection = !hasMarkup && linkedSelection === null && selectedObject ? [selectedObject] : [];
+    const contextLevelId = activeLevelId ?? (!hasMarkup && linkedSelection === null ? entityLevel(preview, selectedObject)?.id ?? null : null);
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const frozenTarget = repo.freezeDesignTarget(selectedDesignTarget);
@@ -1763,7 +1795,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (explicitTarget && selectedRevision !== frozenTarget.revisionId) throw new Error('Open the current selected design or start a new chat before submitting.');
     const content = { project: repo.serialize(), request: { proposalName: name, baseRevisionId: explicitTarget ? frozenTarget.revisionId : selectedRevision,
       ...(explicitTarget ? { target: frozenTarget } : {}),
-      selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...implicitNativeSelection, ...(focusedRoomId ? [focusedRoomId] : []),
+      selectedObjectIds: [...new Set([...(chatVisual?.selectedObjectIds ?? []), ...implicitNativeSelection, ...(!hasMarkup && focusedRoomId ? [focusedRoomId] : []),
         ...(contextLevelId ? [contextLevelId] : [])])], instruction, visualIntent,
       ...(sources.length ? { sources } : {}),
       ...(chatEvidencePins.length ? { evidencePins: chatEvidencePins } : {}),
@@ -1938,6 +1970,7 @@ function setConversationOffline(offline: boolean): void {
 }
 
 function showChatTicket(value: unknown): void {
+  const previousMarkups = JSON.stringify(referenceMarkups());
   const ticket = parseBacklogItem(value); const conversation = conversationFromTicket(value);
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
   conversationTarget = ticket.request.target ?? null;
@@ -1950,6 +1983,7 @@ function showChatTicket(value: unknown): void {
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
     title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
+  if (JSON.stringify(referenceMarkups()) !== previousMarkups) renderComparison();
 }
 
 async function openConversation(id: string, keepProposal = false): Promise<void> {
@@ -2782,8 +2816,8 @@ function pointerPlan(event: PointerEvent, root: SVGSVGElement, camera: PlanCamer
 function renderVisualPanel(): void {
   const selected = preview?.entities.find((item) => item.id === selectedObject);
   const reference = visibleReference();
-  ui['visual-panel'].hidden = !selected;
-  if (!selected || !preview) return;
+  ui['visual-panel'].hidden = Boolean(liveChatPreview) || !selected;
+  if (liveChatPreview || !selected || !preview) return;
   ui['visual-context'].textContent = `Reference: ${selected.name}. A location does not imply moving this object or its neighbours. Describe what to create, move or copy.`;
   const view: ModelGraph = activeLevelId ? levelView(preview, activeLevelId) : preview;
   ui['visual-wall'].replaceChildren(new Option('Optional wall reference', ''), ...view.entities.filter(isWall).map((wall) => new Option(wall.name, wall.id)));
@@ -3245,6 +3279,8 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       return;
     }
     modelViewer ??= new ModelViewer({
+      markup: attachMarkup,
+      markupChat: () => { showRequestPane('details'); ui['request-text'].focus(); },
       linkedReference: selection => linkedPanel.select(selection),
       select: chooseObject,
       inspect: (id, graph) => { if (liveChatPreview) inspectLiveObject(id, graph); else { inspectedComparison = { id, graph }; renderElementProperties(generic('element-properties'), graph, id, 'Comparison snapshot'); workspace.showInspector(); } },
@@ -3257,7 +3293,9 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
     });
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
     modelViewer.show(host, { projectId: requireRepository().projectId, snapshot, comparison, selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
-      interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null });
+      interactive: !liveChatPreview && !comparison && currentPage === 'request' && !busy && serverAvailable, reference: !liveChatPreview && currentPage === 'request' ? visibleReference() : null,
+      markup: { binding: markupBinding(), editable: selectedDesignTarget.kind !== 'baseline' && !reviewRepository && !inspectedChatView,
+        annotations: conversationMarkups(chatVisual), references: referenceMarkups() } });
   } catch {
     modelViewer?.dispose(); modelViewer = null; viewerFailed = true;
     const note = element('p', '3D graphics are unavailable on this device. Open Plan to continue; your model is unchanged.', 'canvas-empty');

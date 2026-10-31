@@ -1,78 +1,32 @@
-import { Type } from 'typebox';
-import type { Static } from 'typebox';
-import { Check } from 'typebox/value';
-import { GeometryReceiptSchema, GeometryMeasureRequestSchema, GeometryMeasureResultSchema,
-  geometryPlainData, parseGeometryMeasureRequest, parseGeometryReceipts } from './geometry-contract.ts';
+import { parseGeometryEvidence, assertGeometrySnapshotBound, inactiveInheritedBoxMeasurements } from './geometry-draft-lineage.ts';
+import type { GeometryEvidence, GeometryDraftBinding } from './geometry-draft-lineage.ts';
 import type { ModelSnapshot } from './room-model.ts';
 
-const identity = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' });
-const hash = Type.String({ pattern: '^[a-f0-9]{64}$' });
-export const GeometryEvidenceSchema = Type.Object({
-  version: Type.Literal(1), projectId: identity, requestId: identity, baseRevisionId: hash, proposalSnapshotSha256: hash,
-  receipts: Type.Array(GeometryReceiptSchema, { maxItems: 128 }),
-  measurements: Type.Array(Type.Object({ request: GeometryMeasureRequestSchema, result: GeometryMeasureResultSchema },
-    { additionalProperties: false }), { maxItems: 64 }),
-  inheritedFrom: Type.Optional(Type.Array(Type.Object({ requestId: identity, baseRevisionId: hash,
-    proposalSnapshotSha256: hash, evidenceSha256: hash }, { additionalProperties: false }), { maxItems: 20 })),
-}, { additionalProperties: false });
-export type GeometryEvidence = Static<typeof GeometryEvidenceSchema>;
-export const MAX_GEOMETRY_EVIDENCE_BYTES = 64 * 1024;
+export { GeometryEvidenceSchema, MAX_GEOMETRY_EVIDENCE_BYTES, GeometryEvidenceLimitError,
+  parseGeometryEvidence, readGeometryEvidence } from './geometry-draft-lineage.ts';
+export type { GeometryEvidence, GeometryEvidenceV1, GeometryEvidenceV2, GeometryDraftLineage,
+  GeometryEvidenceLimitDiagnostic } from './geometry-draft-lineage.ts';
 
-export type GeometryEvidenceLimitDiagnostic = { code: 'geometry-evidence-byte-limit'; bytes: number; limitBytes: number;
-  receiptCount: number; measurementCount: number };
-export class GeometryEvidenceLimitError extends Error {
-  readonly diagnostic: Readonly<GeometryEvidenceLimitDiagnostic>;
-  constructor(bytes: number, receiptCount: number, measurementCount: number) {
-    super(`[geometry-evidence-byte-limit] Geometry evidence uses ${bytes} bytes; the limit is ${MAX_GEOMETRY_EVIDENCE_BYTES} bytes.`);
-    this.name = 'GeometryEvidenceLimitError';
-    this.diagnostic = Object.freeze({ code: 'geometry-evidence-byte-limit', bytes,
-      limitBytes: MAX_GEOMETRY_EVIDENCE_BYTES, receiptCount, measurementCount });
-  }
-}
-
-/** Geometry wire digests sort JSON keys lexically; no platform locale or Node-only hashing is involved. */
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value !== null && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
-    .map(([key, entry]) => `${JSON.stringify(key)}:${canonical(entry)}`).join(',')}}`;
-  if (value === null || typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) return JSON.stringify(value);
-  throw new Error('Geometry evidence requires finite JSON data.');
-}
-
-export function parseGeometryEvidence(input: unknown): GeometryEvidence {
-  const value = geometryPlainData(input);
-  if (!Check(GeometryEvidenceSchema, value)) throw new Error('Invalid bounded geometry evidence.');
-  const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
-  if (bytes > MAX_GEOMETRY_EVIDENCE_BYTES) throw new GeometryEvidenceLimitError(bytes, value.receipts.length, value.measurements.length);
-  parseGeometryReceipts(value.receipts);
-  if (value.inheritedFrom && (new Set(value.inheritedFrom.map(parent => parent.requestId)).size !== value.inheritedFrom.length
-      || value.inheritedFrom.some(parent => parent.requestId === value.requestId))) throw new Error('Geometry evidence lineage must be acyclic and unique.');
-  for (const receipt of value.receipts) if (receipt.projectId !== value.projectId) throw new Error('Geometry evidence crosses projects.');
-  for (const measurement of value.measurements) {
-    parseGeometryMeasureRequest(measurement.request);
-    if (!value.receipts.some(receipt => canonical(receipt) === canonical(measurement.result.receipt))) {
-      throw new Error('Geometry measurement is not bound to its host observation.');
+/** V2 requires complete native authority. The snapshot-only form reads historical v1 bindings only. */
+export async function assertGeometryEvidenceBound(evidence: GeometryEvidence, snapshot: ModelSnapshot,
+  binding?: GeometryDraftBinding): Promise<void> {
+  const parsed = parseGeometryEvidence(evidence);
+  if (parsed.version === 2 && !binding) throw new Error('Geometry evidence v2 requires a complete native history binding.');
+  await assertGeometrySnapshotBound(parsed, snapshot);
+  if (!binding) return;
+  await assertGeometrySnapshotBound(parsed, binding.snapshot);
+  const inactive = await inactiveInheritedBoxMeasurements({ evidence: parsed, binding });
+  if (parsed.version !== 2) return;
+  const original = binding.history.validateSnapshots([binding.snapshot])[0];
+  if (!original) throw new Error('Missing original geometry snapshot.');
+  const final = binding.history.validateSnapshots([binding.history.reconcile(binding.baseRevisionId, original)])[0];
+  if (!final) throw new Error('Missing reconciled geometry snapshot.');
+  const present = new Set(final.entities.map(entity => entity.id.toString()));
+  const suppressed = new Set(inactive);
+  for (const [index, measurement] of parsed.measurements.entries()) {
+    if (measurement.request.subject.kind === 'box' && !suppressed.has(index)
+        && !present.has(measurement.request.subject.candidateId)) {
+      throw new Error('An active geometry box candidate is absent from the final native model.');
     }
-  }
-  return value;
-}
-export function readGeometryEvidence(value: unknown): GeometryEvidence {
-  if (typeof value !== 'string' || new TextEncoder().encode(value).byteLength > MAX_GEOMETRY_EVIDENCE_BYTES) throw new Error('Invalid stored geometry evidence.');
-  return parseGeometryEvidence(JSON.parse(value));
-}
-
-async function digest(value: unknown): Promise<string> {
-  const bytes = new TextEncoder().encode(canonical(value));
-  const hash = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-/** Browser and server restoration verify the exact proposal and typed request/result digests. */
-export async function assertGeometryEvidenceBound(evidence: GeometryEvidence, snapshot: ModelSnapshot): Promise<void> {
-  if (await digest(snapshot) !== evidence.proposalSnapshotSha256) throw new Error('Geometry evidence does not match the final authored snapshot.');
-  for (const measurement of evidence.measurements) {
-    const { receipt, ...outcome } = measurement.result;
-    if (await digest({ method: 'measure', input: measurement.request }) !== receipt.operationDigest
-        || await digest(outcome) !== receipt.resultDigest) throw new Error('Geometry measurement request or result digest changed.');
   }
 }
