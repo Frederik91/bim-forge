@@ -153,6 +153,7 @@ export class ModelScene {
   private readonly comparisonLines: { mesh: Mesh; levelIds: readonly string[] }[] = [];
   private mode: RenderingMode = 'realistic';
   private selectedId = '';
+  private taskTargetIds: ReadonlySet<string> = new Set();
   private hoveredId: string | null = null;
   private readonly pickParts = new Map<number, RenderPart>();
   private readonly batches: SceneMeshBatches;
@@ -484,6 +485,8 @@ export class ModelScene {
     this.updateHighlights();
   }
 
+  selectTaskTargets(ids: readonly string[]): void { this.taskTargetIds = new Set(ids); this.updateHighlights(); }
+
   hover(id: string | null): void {
     if (id === this.hoveredId) return;
     this.hoveredId = id; this.updateHighlights();
@@ -491,7 +494,7 @@ export class ModelScene {
 
   private updateHighlights(): void {
     for (const part of this.parts) {
-      const selected = part.objectId === this.selectedId;
+      const selected = part.objectId === this.selectedId || part.objectId !== null && this.taskTargetIds.has(part.objectId);
       const hovered = part.objectId !== null && part.objectId === this.hoveredId;
       part.mesh.renderOutline = selected || hovered;
       part.mesh.outlineColor = Color3.FromHexString(selected ? SELECTION_COLOR : HOVER_COLOR);
@@ -591,6 +594,8 @@ export class ModelScene {
   }
 
   renderResources(): ReturnType<SceneMeshBatches['resources']> { return this.batches.resources(); }
+
+  isConstructionMesh(mesh: { readonly uniqueId: number; readonly name: string }): boolean { return this.pickParts.get(mesh.uniqueId)?.before === false || mesh.name.startsWith('bim-batch-'); }
 
   objectAt(x: number, y: number): string | null {
     const hit = this.batches.pick(x, y, mesh => mesh.isPickable && this.pickParts.get(mesh.uniqueId)?.objectId != null);

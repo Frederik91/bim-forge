@@ -220,10 +220,6 @@ body.canvas-studio {
   .canvas-studio .canvas-rail-bottom { margin-top: 0; }
   .canvas-studio .canvas-rail-bottom [data-rail-label] { max-width: 42px; }
   .canvas-studio .workspace-shell, .canvas-studio .workspace-shell[data-navigation-open="false"], .canvas-studio .workspace-shell[data-context-open="false"], .canvas-studio .workspace-shell[data-navigation-open="false"][data-context-open="false"] { grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); transition: grid-template-rows 180ms ease; }
-  .canvas-studio .workspace-shell[data-navigation-open="true"], .canvas-studio .workspace-shell[data-context-open="true"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-  .canvas-studio .workspace-shell[data-context="request"][data-context-open="true"],
-  .canvas-studio .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="live"],
-  .canvas-studio .workspace-shell[data-context="request"][data-context-open="true"][data-chat-model="proposal"] { grid-template-rows: minmax(0, .85fr) minmax(0, 1.15fr); }
   .canvas-studio .workspace-navigation[hidden], .canvas-studio .workspace-context[hidden] { display: none !important; }
   .canvas-studio .workspace-navigation { transform: none; animation: studio-sheet-in 180ms ease; }
   .canvas-studio .workspace-context { transform: none; animation: studio-sheet-in 180ms ease; }
@@ -261,6 +257,46 @@ body.canvas-studio {
 .canvas-studio .workspace-stage .drawing-surface[data-model-view="plan"] { overflow: hidden; touch-action: none; }
 .canvas-studio .workspace-stage .view-switch button:disabled { color: var(--spatial-color-disabled-ink); background: var(--spatial-color-disabled-fill); cursor: not-allowed; }
 
+/* Spatial conversation: one existing chat mount floats over the live model. */
+.canvas-studio .workspace-shell, .canvas-studio .workspace-shell[data-navigation-open="false"], .canvas-studio .workspace-shell[data-context-open="false"], .canvas-studio .workspace-shell[data-navigation-open="false"][data-context-open="false"] { grid-template-columns: var(--workspace-navigation-width, 280px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.canvas-studio .workspace-shell[data-navigation-open="false"] { grid-template-columns: 0 minmax(0, 1fr); }
+.canvas-studio .spatial-workspace-stage { position: relative; min-width: 0; overflow: hidden; }
+.canvas-studio .spatial-workspace-stage > .spatial-conversation { position: absolute; z-index: 12; width: min(358px, calc(100% - 16px)); max-height: 66%; height: auto; min-height: 0; border: 0; border-radius: var(--spatial-radius-panel); box-shadow: var(--spatial-elevation-panel); transform: none; transition: none; }
+.canvas-studio .spatial-conversation[data-expanded="true"] { max-height: 88%; }
+.canvas-studio .spatial-conversation[hidden] { display: none; }
+.canvas-studio .spatial-conversation .workspace-panel-resizer { display: none; }
+.canvas-studio .spatial-conversation .workspace-panel-heading { min-height: 44px; padding: 4px 12px; }
+.canvas-studio .spatial-conversation-tools { display: flex; flex-wrap: wrap; padding: 0 8px; gap: 4px; }
+.canvas-studio :is(.spatial-conversation-tools button, .spatial-task-launcher, .spatial-task-list button, .spatial-task-label) { min-height: 44px; padding: 8px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--spatial-radius-control); overflow-wrap: anywhere; text-align: left; }
+.canvas-studio :is(.spatial-conversation-tools button, .spatial-task-label) { font-size: 12px; }
+.canvas-studio :is(.spatial-conversation-tools button, .spatial-task-list button, .spatial-task-launcher, .spatial-task-label):hover { background: var(--studio-soft); }
+.canvas-studio .spatial-conversation-tools button:disabled { color: var(--spatial-color-disabled-ink); background: var(--spatial-color-disabled-fill); }
+.canvas-studio .spatial-conversation .workspace-context-content { overflow: auto; overscroll-behavior: contain; }
+.canvas-studio .spatial-conversation .chat-workspace { min-height: 0; }
+.canvas-studio .spatial-placement-notice { flex: 0 0 auto; padding: 8px 12px; margin: 0; font-size: 12px; color: var(--muted); }
+.canvas-studio .spatial-task-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 7; }
+.canvas-studio .spatial-task-label { position: absolute; pointer-events: auto; max-width: calc(100% - 16px); white-space: normal; }
+.canvas-studio .spatial-task-launcher { position: static; flex: 0 0 auto; }
+.canvas-studio .spatial-task-list { position: absolute; top: 168px; left: 8px; z-index: 15; width: min(350px, calc(100% - 16px)); max-height: 65%; overflow: auto; padding: 12px; color: var(--ink); background: var(--paper); border-radius: var(--spatial-radius-panel); box-shadow: var(--spatial-elevation-panel); }
+.canvas-studio .spatial-task-list h3 { margin: 0 0 12px; font-size: 14px; }
+.canvas-studio .spatial-task-list button { display: block; width: 100%; margin-top: 4px; }
 @media (max-width: 900px) {
-  .canvas-studio .workspace-shell[data-spatial-view="plan"][data-context-open="true"] { grid-template-rows: minmax(400px, 1fr) minmax(220px, 1fr); }
+  .canvas-studio .workspace-shell, .canvas-studio .workspace-shell[data-navigation-open="true"], .canvas-studio .workspace-shell[data-context-open="true"], .canvas-studio .workspace-shell[data-spatial-view="plan"][data-context-open="true"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .canvas-studio .workspace-stage { grid-column: 1; grid-row: 1; }
+  .canvas-studio .workspace-navigation:not([hidden]) { position: absolute; inset: 0; z-index: 20; }
+  .canvas-studio .spatial-workspace-stage > .spatial-conversation { max-height: 44%; }
+  .canvas-studio .spatial-conversation[data-expanded="true"] { max-height: 88%; }
+  .canvas-studio .spatial-task-list { top: 200px; }
 }
+.canvas-studio .spatial-conversation .workspace-context-content { flex: 1 1 auto; }
+.canvas-studio .spatial-conversation .chat-workspace.request-pane { flex: 0 0 auto; min-height: min-content; overflow: visible; }
+.canvas-studio .spatial-conversation #request-chat-mount { flex: 0 0 auto; max-height: 220px; overflow: auto; }
+.canvas-studio .spatial-conversation-tools { flex: 0 0 auto; }
+@media (max-width: 900px) {
+  .canvas-studio .workspace-stage .model-card-heading > div:first-child { flex: 1 0 100%; }
+  .canvas-studio .workspace-stage .model-card-heading .view-switch { flex: 1 1 auto; }
+  .canvas-studio .spatial-task-list { top: 120px; bottom: auto; }
+  .canvas-studio .spatial-conversation .workspace-panel-heading { min-height: 44px; }
+  .canvas-studio .spatial-conversation .spatial-placement-notice { max-height: 60px; overflow: auto; }
+}
+.canvas-studio .workspace-shell[data-context][data-context-open][data-chat-model] { grid-template-rows: minmax(0, 1fr); }
