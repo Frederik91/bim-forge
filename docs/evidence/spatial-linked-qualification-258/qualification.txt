@@ -35,3 +35,22 @@ Strict TypeScript valid. 378 source file(s) checked.
 
 Policy valid. 0 changed file(s) checked.
 Explicit policy validation: 9 changed files passed. git diff --check: passed.
+
+Linux prerequisite source: 5d20e8187f6158f1a310ffe6537a97dc42f8b84f
+All 14 complete suites: 60 tests; 60 passed; 0 failed; 0 cancelled; 0 skipped; 0 todo.
+demo/floor-plan-guide-browser.test.ts: 1/1 passed, exit 0; source SHA-256 0928e2465806dbeb43d428bfc43c9d9e087ed025f7d7aab1cfc9325c386efeca
+demo/request-draft.test.ts: 8/8 passed, exit 0; source SHA-256 9e8b70d6194601d84674862efe86c19c282d9546f709318f0dbf23f90f04ab8e
+demo/canvas-studio-browser.test.ts: 3/3 passed, exit 0; source SHA-256 085c0e80d01cf8193a45e57fc041c75e44d168e4f61a3fac212be74c2d48a0d8
+demo/request-chat.test.ts: 7/7 passed, exit 0; source SHA-256 2c494902dc0b02f14859e6e457ca097183d98bef6f024c5028370e0d73376842
+demo/workspace-shell.test.ts: 8/8 passed, exit 0; source SHA-256 342e1adf69f9274b1bc654d3af84bd17ad10449b58dda0ebfe0e07935ba18920
+demo/spatial-plan-integration-browser.test.ts: 1/1 passed, exit 0; source SHA-256 b23f5e70a4efaf3183b94f1ddada6f4dfc15603fcda45491f09bc3eb5f07dfd8
+demo/spatial-tasks-browser.test.ts: 1/1 passed, exit 0; source SHA-256 d0e0a5f3ee08745e6485634cea0adc817441fd7f6e18fd7c8da2628e074d84d8
+demo/spatial-tasks.test.ts: 22/22 passed, exit 0; source SHA-256 ebc33b0e0191c9b035fe71dcaa3c930cfbf2fe24d390eaaa194bcf72d2732760
+demo/spatial-markup-browser.test.ts: 1/1 passed, exit 0; source SHA-256 7896a0598d7667b7ef691f570d5b08684fea318b5beb17a16bf38ab4a7c5f534
+demo/view-navigation-browser.test.ts: 1/1 passed, exit 0; source SHA-256 5f3750b7f23be84e0ff358a9c70348bf671d7caaf99cfc8aed89acb596d646eb
+demo/model-plan-browser.test.ts: 1/1 passed, exit 0; source SHA-256 3357ab05d3ea2a1c63c82f1fa1a213b9bf58928746f3ad4515d34c2f4b094cf7
+demo/spatial-task-layer-browser.test.ts: 1/1 passed, exit 0; source SHA-256 71516476a4b84c2c279d35a117f425457babd5fff2cc6284272890a7a53e3d3c
+demo/design-system-browser.test.ts: 3/3 passed, exit 0; source SHA-256 e82188d3d99fd2389c0f17d20b28392e6118e3c473dc883e3b6d362c2d08fc72
+demo/preview-build.test.ts: 2/2 passed, exit 0; source SHA-256 7e018e08d855470ebad9d604c45df4ae77e295038d9447d78b71a0d2496f47b9
+Linux strict validation: passed; 379 TypeScript source files. Original .dockerignore integrity and actual container isolation assertions: passed.
+Final host validation: passed; explicit policy checks passed for all 13 coordinated qualification paths; PowerShell syntax and git diff --check passed.

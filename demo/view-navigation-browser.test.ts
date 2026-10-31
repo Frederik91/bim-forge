@@ -48,7 +48,8 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); assert.ok(address && typeof address === 'object');
-  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
   t.after(async () => { await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); });
   const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
@@ -57,7 +58,11 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   await page.waitForFunction(() => document.querySelector('.babylon-viewer')?.getAttribute('data-scene-ready') === 'true');
   const pose = () => page.evaluate<InsidePose>('window.navHarness.pose()');
   const enter = async () => { assert.equal((await page.evaluate<{kind: string}>('window.navHarness.inside()')).kind, 'changed'); await page.locator('canvas').focus(); };
-  const hold = async (key: string, duration = 160) => { await page.keyboard.down(key); await page.waitForTimeout(duration); await page.keyboard.up(key); };
+  const hold = async (key: string, duration = 160) => {
+    await page.keyboard.down(key); await page.waitForTimeout(duration);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await page.keyboard.up(key);
+  };
   await enter();
   const start = await pose();
   await hold('w'); const north = await pose();

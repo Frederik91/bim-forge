@@ -66,3 +66,66 @@ Earlier stopped worker IDs are `d78ca6a318aa53fee3295f4698c9b9a7eae6f8460acef978
 This prerequisite does not qualify combined #256/#257 task flows, linked IFC Plan cuts, Section, linked Walk collision support, connected-provider behavior, human review, release, or deployment. It does not test camera behavior during a pending native proposal comparison. The converter explicitly reports unapplied georeferencing, unmapped properties and relationships, and source objects without representation. Those diagnostics remain visible and are not acceptance of survey coordinates or IFC round-trip fidelity.
 
 The narrow screenshot shows clipped header and rail labels in this baseline even though horizontal overflow is absent. Overall narrow-screen review remains with the combined UI qualification. The Windows PDF utility path and Unix socket limitations are outside this prerequisite. No final #258 pull request is opened, and no issue or pull request is closed or marked ready.
+
+## Linux browser regression
+
+The independent Linux prerequisite starts from combined source `a008d802`, including live #256 integration and the latest #253 ordering fix. `scripts/qualify-linux-browser.ps1` creates a fresh archive of an exact local commit. The image installs development dependencies, Linux Chromium, and browser dependencies from public packages. A Dockerfile-specific ignore file includes the tracked tests while preserving the original repository `.dockerignore` inside the image. The runtime has no external network, credentials, production data, or Git metadata. It uses only loopback test servers and disposable fixture workers.
+
+Run the unchanged complete floor-plan browser test, including phone PDF conversion with `/usr/bin/prlimit` and Poppler, and every request-draft test, including Unix sockets. Also run Canvas Studio, chat, shell, live Plan, task-controller, markup, navigation, native Plan, task graphics, design-system, and package-build tests. Keep each suite's screenshots, traces, TAP output, and source hash separate. Record actual image and source identities and all counts. This remains preparation for the final #257 integration qualification.
+
+### Replay the supported Linux suites
+
+Use PowerShell 7 and Docker Linux containers. The default base is the existing local image `bim-forge-spatial-local:domain-35f867e`. The runner resolves and records its image ID, then gives that immutable image a uniquely owned local build tag. Dependency installation occurs only during the image build. The final test container runs with network `none` and verifies that only loopback exists.
+
+```powershell
+./scripts/qualify-linux-browser.ps1 -SourceRef 5d20e8187f6158f1a310ffe6537a97dc42f8b84f
+```
+
+After #257 integrates, replace `-SourceRef` with the final combined commit. `-Tests` accepts an explicit array of complete `demo/*.test.ts` files. The default list contains the 14 files below. Empty lists, missing files, nonzero exits, missing test counts, failures, cancellations, skips, and todo cases fail qualification. The runner performs strict validation before the tests.
+
+The test image contains the exact Git archive plus the generated QA runner and source receipt. It contains no Git metadata and mounts no host dependencies, account state, or user models. The read-only test root has only the owned artifact directory mounted at `/artifacts` and `/qualification/artifacts`. The second mount supports an unchanged Plan test's fixed output path. Limits remain 2 CPUs, 4 GiB memory with equal memory-swap, 512 processes, 512 MiB shared memory, and a 1 GiB temporary filesystem. The container uses user `65032:33`, init, dropped capabilities, and no new privileges. The runner inspects the actual configuration before execution.
+
+### Retain the navigation assertions
+
+The first complete run on `a008d802` passed 58 of 60 tests, with no skips. One failure was the Plan test's fixed output path under the read-only source root. Mounting only the owned artifact output resolves that setup error.
+
+The other failure occurred after headless-shell pointer lock was granted. Event diagnostics showed trusted positive and negative pointer-warp pairs reaching the focused locked canvas. Their net movement was zero, so the existing final-orientation assertion correctly failed. The runtime was not edited. A separate full-Chromium probe confirmed a nonzero final camera turn with the same mouse moves.
+
+Full Chromium also exposed that a fixed 160 ms key interval could end before a rendered frame in this constrained environment. Commit `5d20e8187f6158f1a310ffe6537a97dc42f8b84f` updates only the browser test to accept the repository's existing `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` convention and wait two animation frames before key release. Every assertion and threshold remains unchanged. The complete navigation test passed after that correction. The Linux runner selects `/opt/qualification-browsers/chromium-1248/chrome-linux64/chrome` for this suite and records the exact path and test hash.
+
+Temporary diagnostic runs, including the failed full-browser timing and virtual-display probes, remain under `C:/Users/Frederik Tegnander/AppData/Local/Temp/bim-forge-linux-browser-258-nav-*`. The first raw full-run failure remains under `bim-forge-linux-browser-258-run2`. These diagnostics are not counted as passing qualification. The failed initial build under `run1` used a raw local image ID in `FROM`; the runner now uses the verified image's unique local tag.
+
+### Final pinned run
+
+Final source is `5d20e8187f6158f1a310ffe6537a97dc42f8b84f`, tree `de32cceb03433694282a5a86158a0aa71a050bdc`. Its archive SHA-256 is `e06589dc6da24908d8b5ee769985662b69701f108145a047c726e162f59fb37b`. The original `.dockerignore` SHA-256 remains `791f4ca5e59055f35cf9e0386700cc0fffa51b2642183b98f8173b4078804808` and is checked inside the image. The unchanged preview-build tests inspect the original production Dockerfile and ignore file.
+
+All 60 tests pass, with zero failures, cancellations, skips, or todo cases. Strict validation passes with 379 TypeScript sources. The run uses Linux Node `v24.22.1`, Chromium `156.0.8078.4`, `prlimit` from util-linux `2.38.1`, and Poppler `22.12.0`.
+
+| Complete suite | Passed |
+| --- | ---: |
+| `floor-plan-guide-browser.test.ts` | 1 |
+| `request-draft.test.ts` | 8 |
+| `canvas-studio-browser.test.ts` | 3 |
+| `request-chat.test.ts` | 7 |
+| `workspace-shell.test.ts` | 8 |
+| `spatial-plan-integration-browser.test.ts` | 1 |
+| `spatial-tasks-browser.test.ts` | 1 |
+| `spatial-tasks.test.ts` | 22 |
+| `spatial-markup-browser.test.ts` | 1 |
+| `view-navigation-browser.test.ts` | 1 |
+| `model-plan-browser.test.ts` | 1 |
+| `spatial-task-layer-browser.test.ts` | 1 |
+| `design-system-browser.test.ts` | 3 |
+| `preview-build.test.ts` | 2 |
+
+The unchanged floor-plan journey covers PNG preparation, source-bound confirmation, unsent reload, explicit acceptance, the As-is baseline, an alternative-only partition delta, SQLite restart, phone PDF confirmation, and readiness revocation after PDF removal. All eight request-draft cases pass, including the actual Unix-socket HTTP feed's read-only, same-origin, uncached, and completion assertions. The PNG and PDF source-preparation budgets remain unchanged. The final and initial receipts confirm byte-identical hashes for both complete test files.
+
+The [Linux receipt](spatial-linked-qualification-258/linux-summary.json) records the exact test hashes, commands, counts, browser choice, image ID, actual container settings, and hashes of retained artifacts. [The output summary](spatial-linked-qualification-258/qualification.txt) includes every suite result. The [phone PDF capture](spatial-linked-qualification-258/linux-phone-pdf-confirmed.png) shows confirmed source context. All recorded artifact hashes were checked after test execution.
+
+Raw artifacts remain under `C:/Users/Frederik Tegnander/AppData/Local/Temp/bim-forge-linux-browser-258-run3/artifacts`. They include three complete browser traces, per-suite TAP logs, Plan and Inside screenshots, markup captures, source measurement evidence, and the disposable floor fixture's actual accepted project and model delta. Repository construction-model delta is zero. The disposable fixture changes only through the test's explicit acceptance steps.
+
+Final image `bim-forge-linux-browser:258-9e8c8f360a254f37bcd85f8680c5b1aa` resolves to `sha256:26925635b4f709e08e1432361a65b77d00c6e9edf5ff3c05d2f56a85e69d01f7`. Final container `03f2e41e47650a41b01e7183d201dc1e582d36e1945fce8c82f841d2fd30b3fc` exits with code 0. All seven owned Linux test and diagnostic containers are stopped. Their short IDs are `03f2e41e4765`, `8877ae61dbb1`, `feba9ff02ecf`, `930138c7bf6e`, `989d8b3f774c`, `98d32b7fb4e4`, and `b2097fbb0f07`. Images and temporary directories remain for inspection. No parent container or existing preview was stopped.
+
+The parent explicitly approved 13 combined qualification paths for this coherent prerequisite, including the navigation test adjustment and retained evidence. No policy file, validator, or runtime application module changes.
+
+This Linux run excludes the separate real-IFC converter prerequisite above and `geometry-workflow-browser.test.ts`, which requires its dedicated geometry/provider qualification environment. It does not claim the final #257 task graphics integration, connected-provider accuracy, human approval, release, or deployment. The phone capture still shows cramped navigation labels in this baseline; passing the PDF and overflow assertions is not overall mobile UX approval.
