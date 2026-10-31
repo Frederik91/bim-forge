@@ -213,9 +213,9 @@ body.canvas-studio {
   .canvas-studio .header-actions #design-views-mount { flex: 1 1 100%; width: 100%; }
   .canvas-studio .workbench { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
   .canvas-studio .workspace-toolbar { grid-column: 1; grid-row: 1; border-right: 0; border-bottom: 1px solid var(--line); }
-  .canvas-studio .canvas-rail { flex-direction: row; justify-content: space-between; gap: 2px; padding: 4px; }
-  .canvas-studio .canvas-journey { flex-direction: row; gap: 2px; }
-  .canvas-studio .canvas-rail-button, .canvas-studio .canvas-journey .canvas-rail-button { min-width: 40px; width: auto; min-height: 44px; padding: 5px; gap: 3px; font-size: 10px; }
+  .canvas-studio .canvas-rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 0; padding: 4px; }
+  .canvas-studio .canvas-journey { display: contents; }
+  .canvas-studio .canvas-rail-button, .canvas-studio .canvas-journey .canvas-rail-button { min-width: 0; width: 100%; min-height: 44px; padding: 5px 2px; gap: 3px; font-size: 10px; }
   .canvas-studio .canvas-rail-button svg { width: 17px; height: 17px; }
   .canvas-studio .canvas-rail-bottom { margin-top: 0; }
   .canvas-studio .canvas-rail-bottom [data-rail-label] { max-width: 42px; }

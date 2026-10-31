@@ -304,6 +304,12 @@ test('workspace panels preserve the model through desktop resizing, collapse and
         for (const selector of ['#workspace-navigation-toggle', '#workspace-context-toggle', '#workspace-navigation-close', '#view-plan', '#view-3d']) {
           assert.ok((await box(page, selector)).height >= 44, `${selector} needs a phone touch target`);
         }
+        for (const control of await page.locator('.canvas-rail-button').all()) {
+          if (!await control.isVisible()) continue;
+          const bounds = await control.boundingBox(); assert.ok(bounds);
+          assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, 'Every phone toolbar control fits the viewport.');
+          assert.ok(bounds.width >= 44 && bounds.height >= 44, 'Every phone toolbar control has a full touch target.');
+        }
         await modelRemainsVisible(page, width);
         await page.locator('#workspace-navigation-close').click();
         await page.evaluate(() => document.dispatchEvent(new Event('test-request')));
