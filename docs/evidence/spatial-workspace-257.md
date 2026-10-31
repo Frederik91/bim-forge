@@ -103,3 +103,20 @@ Repair verification:
 Repair attempt notes: the initial diagnostic run encountered the existing guarded “workspace changed while this response arrived” path while a worker result arrived; the unchanged rerun completed. An intentionally stricter first layout assertion required all actions to fit simultaneously and failed because the last row legitimately crossed the dedicated scrollport bottom by 17 px. The parent clarified that usable scrolling was required. The final test proves every action is reachable, fully visible and hittable after deliberate transcript scrolling, with no header overlap. No queue or causal guard was weakened.
 
 The final evidence-only follow-up changes this document and the three captures. Runtime qualification can pin `e4c56e9`; the parent owns the final combined server/provider/release SHA and deployment.
+
+
+## Final combined-lane boundary repairs
+
+Linux qualification at parent `df0e094` exposed two boundaries that the narrower shipped journey did not exercise. The isolated #257 worktree merged that parent before repair. Neither failing fixture nor its assertions changed.
+
+First, generic selectors in the spatial CSS also affected consumers that mount `WorkspaceShell` and chrome without `SpatialWorkspacePresentation`. The docked fixture lost its third desktop column, phone history could collapse to zero, and its legitimate phone toggle disappeared. All spatial-only shell rows/columns, overlaid phone navigation, phone header layout and redundant-toggle hiding now require the existing `.spatial-workspace-stage` mount. The original non-spatial mobile sheet rows are restored. The unchanged fixture again proves its 320 px desktop stage floor, 120 px readable phone history and usable toggle; the actual shipped spatial mount still proves the model, anchored conversation and single phone Assistant entry.
+
+Second, `undefined === undefined` previously allowed two omitted `navigationTarget` fields to authorize rebinding an Inside pose to another source pin. Cross-pin retention now requires an explicit matching target. Callers that omit it retain the original source-pin invalidation behavior. The fallback notice is emitted only after navigation actually falls back to Overview, so unchanged contexts do not acquire a false warning. The original `context('r2')` assertion remains intact; the shipped app supplies its explicit design target and still preserves compatible native proposal/current poses.
+
+Verification after both repairs: `npm run validate` passed (385 sources), the production demo build passed, and the unchanged shell/navigation plus shipped Plan/spatial batch passed **12 tests, 0 failures/skips**:
+
+```powershell
+node --test --test-concurrency=1 demo/workspace-shell.test.ts demo/view-navigation-browser.test.ts demo/spatial-plan-integration-browser.test.ts demo/spatial-workspace-browser.test.ts
+```
+
+The changed-CSS detector returned `[]`; whitespace and explicit changed-path policy checks passed. This patch changes presentation scoping and the existing camera compatibility boundary only. The parent owns final Linux rerun, accepted qualification SHA and local server restart; no readiness or deployment claim follows from the local checks alone.
