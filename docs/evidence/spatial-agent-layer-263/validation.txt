@@ -1,0 +1,26 @@
+2026-10-31 renewed #263 qualification
+
+npm run validate
+> npm run lint && npm run typecheck && node scripts/validate-policy.ts
+Strict TypeScript valid. 357 source file(s) checked.
+> tsc --noEmit
+Policy valid. 0 changed file(s) checked.
+Exit 0.
+
+node --test --test-concurrency=1 demo/spatial-task-layer.test.ts demo/spatial-task-layer-browser.test.ts
+Tests 8; pass 8; fail 0; cancelled 0; skipped 0.
+Full Chromium journey at 1440x1000, 390x844 and 320x844 passes.
+Seven Babylon NullEngine behavior tests pass.
+Exit 0.
+
+npm run build:demo
+> node scripts/build-demo.ts
+Built dist/demo/room-app.mjs (3.4mb).
+Exit 0.
+
+impeccable detect --json demo/spatial-task-layer-gallery.ts demo/spatial-task-layer.ts
+[]
+Exit 0.
+
+Browser errors: []
+Construction-model delta: 0
