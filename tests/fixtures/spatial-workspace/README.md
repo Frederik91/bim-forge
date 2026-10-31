@@ -19,14 +19,39 @@ copied from another run.
 
 `spatialExpectedDoorSnapshot` is an independent expected-data oracle. It must
 never be supplied as a canned worker result or accepted through a test-only route.
-The real deterministic worker must use the bounded ScriptBox method delivered by
-#270 and the existing queue/review/explicit decision path. That worker and combined
-restart/cancellation/stale-result journey are still pending at this preparation
-checkpoint. These three fixture checks do not qualify the end-to-end workflow.
+The offline `spatialFixtureWorker` calls #270's real bounded ScriptBox WASM method
+`model.previewHostedDoorWidth`, then uses the existing queue/review/explicit
+decision path. It never calls a provider or injects a snapshot. Its optional
+`region-context` mode actually returns a clarification asking which door to use.
 
 `spatialFixtureVisual` supports object, region-only and mixed source-bound visual
 context. Origin and camera constants are separate from those targets. #254 owns
-validated durable placement and #255 owns camera pose types; adapters must consume
-their concrete contracts instead of treating this manifest as a wire schema.
+validated durable placement: `spatialFixturePlacement` consumes its concrete types
+and binds the real project, main revision, frame and creation level. Object, region
+and mixed modes preserve separate origin and target collections. #255 owns camera
+pose types; manifest eye/forward/up values are input constants, not a wire schema.
 
-Preparation check: `node --test demo/spatial-workspace-fixture.test.ts`.
+Reusable helpers for #258:
+
+- `fixture.ts`: `spatialAcceptanceFixture`, `spatialFixtureManifest`,
+  `spatialFixtureRequest`, `spatialFixtureVisual`, `spatialFixturePlacement`,
+  `spatialMissingTargetPlacement`, `spatialUnplacedFixture`, `spatialDoorFacts`,
+  `spatialExpectedDoorSnapshot`. Request IDs/proposal names use lowercase words
+  separated by hyphens. Region mode intentionally grants no object selection.
+- `worker.ts`: `spatialFixtureWorker({ mode, inspectInput, afterScript })`;
+  `spatialWorkerGate()` pauses after a real script result and releases on abort
+  (or explicit `release`). `reached`/`finished` promises avoid timing guesses.
+- `harness.ts`: `spatialQueueFixture(testContext, worker?)`, `spatialWaitFor`,
+  `spatialAcceptedSnapshot`, `assertSpatialDoorDelta`. The queue helper uses #265's
+  single asynchronous resource owner to drain all queues/SQLite before deletion.
+
+`npm run test:spatial-acceptance` runs 12 checks, including persisted acceptance,
+same-door identity/replay/follow-up, region clarification, legacy/unplaced/missing
+targets, cancellation/late staged result, superseded turns, conflicting proposals,
+restart during work and explicit retry. The historical legacy fixture modifies
+only a disposable SQLite record to simulate an omitted placement field. The
+missing-target fixture is inspectable historical data and deliberately rejects
+new submission; no nearby native object substitutes for it.
+
+#258 owns actual browser/UI navigation, graphics, Plan, local server and combined
+release evidence. These deterministic queue checks do not qualify those gates.

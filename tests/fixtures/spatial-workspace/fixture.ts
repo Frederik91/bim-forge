@@ -2,6 +2,8 @@ import { RoomRepository, diffSnapshots, validateSnapshot } from '../../../src/ro
 import type { ModelSnapshot } from '../../../src/room-model.ts';
 import { multiStoreySnapshot } from '../../../src/multi-storey-house.ts';
 import { parseConversationVisual } from '../../../src/request-conversation.ts';
+import type { PlacedTask, TaskPlacement } from '../../../src/task-placement.ts';
+import type { ModelScopeQuery } from '../../../src/model-scope-contract.ts';
 
 /** Disposable authored geometry; never a surveyed building or accepted user project. */
 export const spatialFixtureManifest = {
@@ -53,12 +55,36 @@ export function spatialFixtureVisual(repository: RoomRepository, mode: 'object' 
   });
 }
 
-export function spatialFixtureRequest(repository: RoomRepository, requestId: string) {
+export function spatialFixturePlacement(repository: RoomRepository, mode: 'object' | 'region' | 'objects-and-region' = 'object'): PlacedTask {
+  const snapshot: PlacedTask['origin']['snapshot'] = { projectId: repository.projectId,
+    target: { kind: 'main' }, revisionId: repository.head('main') };
+  return { version: 1, kind: 'placed', origin: { snapshot, frame: spatialFixtureManifest.frame,
+    point: [...spatialFixtureManifest.origin], view: '3d', levelId: spatialFixtureManifest.levelId },
+    targets: { objects: mode === 'region' ? [] : [{ kind: 'native', ...snapshot, entityId: spatialFixtureManifest.doorId }],
+      regions: mode === 'object' ? [] : [{ snapshot, markup: { kind: 'rectangle', label: 'Ground-floor region',
+        corners: [[3, 2.6, 0], [3.9, 2.6, 0], [3.9, 4.2, 0], [3, 4.2, 0]] } }] } };
+}
+
+/** Historical missing references are inspectable, but cannot create a new task. */
+export function spatialMissingTargetPlacement(repository: RoomRepository): PlacedTask {
+  const placement = spatialFixturePlacement(repository);
+  placement.targets.objects = [{ kind: 'native', ...placement.origin.snapshot, entityId: 'missing-spatial-door' }];
+  return placement;
+}
+
+export function spatialUnplacedFixture(reason: 'legacy' | 'not-provided'): TaskPlacement {
+  return { version: 1, kind: 'unplaced', reason };
+}
+
+export function spatialFixtureRequest(repository: RoomRepository, requestId: string,
+  mode: 'object' | 'region' | 'objects-and-region' = 'object') {
   return { requestId, baseRevisionId: repository.head('main'),
-    proposalName: requestId, selectedObjectIds: [spatialFixtureManifest.doorId],
+    proposalName: requestId, selectedObjectIds: mode === 'region' ? [] : [spatialFixtureManifest.doorId],
     instruction: 'Widen this door from 900 mm to 1100 mm while preserving its centre and existing host. Keep every other object unchanged.',
     visualIntent: { kind: 'selection' } satisfies { kind: 'selection' },
-    conversationVisual: spatialFixtureVisual(repository, 'object'),
+    conversationVisual: spatialFixtureVisual(repository, mode), taskPlacement: spatialFixturePlacement(repository, mode),
+    ...(mode === 'region' ? {} : { scope: { query: { version: 1,
+      allOf: [{ kind: 'ids', ids: [spatialFixtureManifest.doorId] }], anyOf: [], excludeIds: [] } satisfies ModelScopeQuery } }),
   };
 }
 
