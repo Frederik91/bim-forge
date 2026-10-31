@@ -113,7 +113,8 @@ export class SpatialMarkupView {
     const bindingChanged = state.binding !== this.state?.binding;
     if (this.state && (bindingChanged || selectionChanged || !state.enabled || state.floor.elevation !== this.state.floor.elevation)) this.choose(null);
     if (bindingChanged || selectionChanged) {
-      this.selectionPlane = state.selection?.surface ? createMarkupPlane(state.selection.surface) : null;
+      const surface = state.selection?.surface;
+      this.selectionPlane = surface ? createMarkupPlane({ origin: surface.position, normal: surface.normal }) : null;
       this.planeChoice.value = state.selection ? 'selection' : 'floor';
     }
     this.state = state;
@@ -192,7 +193,7 @@ export class SpatialMarkupView {
     if (this.planeChoice.value === 'selection') {
       if (this.selectionPlane) return this.selectionPlane;
       if (!hit || hit.key !== this.state.selection?.objectKey) return null;
-      this.selectionPlane = createMarkupPlane(hit); this.refresh(); return this.selectionPlane;
+      this.selectionPlane = createMarkupPlane({ origin: hit.position, normal: hit.normal }); this.refresh(); return this.selectionPlane;
     }
     return hit ? createMarkupPlane({ origin: hit.position, normal: hit.normal }) : null;
   }
