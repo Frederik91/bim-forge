@@ -19,50 +19,50 @@
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
-  --radius-sm: 5px;
-  --radius-md: 7px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius-sm: var(--spatial-radius-control);
+  --radius-md: var(--spatial-radius-group);
+  --radius-lg: var(--spatial-radius-panel);
+  --radius-xl: var(--spatial-radius-panel);
 }
 
 /* Canvas Studio changes presentation and panel placement, never model ownership. */
 body.canvas-studio {
-  --background: #fff;
-  --foreground: #202b34;
-  --primary: #087b6b;
-  --primary-foreground: #fff;
-  --secondary: #f1f5f4;
-  --secondary-foreground: #273b34;
-  --muted-surface: #f6f8f8;
-  --muted-foreground: #64717d;
-  --accent: #e6f4ee;
-  --accent-foreground: #087b6b;
-  --destructive: #b53a2e;
-  --border: #e2e7e8;
-  --input: #d3dcdd;
-  --ring: #087b6b;
-  --card: #fff;
-  --card-foreground: #202b34;
-  --popover: #fff;
-  --popover-foreground: #202b34;
-  --ink: #202b34;
-  --navy: #202b34;
-  --teal: #087b6b;
-  --mint: #e6f4ee;
-  --paper: #fff;
-  --muted: #64717d;
-  --line: #e2e7e8;
-  --studio-canvas: #f1f1ec;
-  --studio-soft: #f6f8f8;
-  --studio-shadow: 0 5px 24px #253b3810;
-  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  --background: var(--spatial-color-paper);
+  --foreground: var(--spatial-color-ink);
+  --primary: var(--spatial-color-primary);
+  --primary-foreground: var(--spatial-color-white);
+  --secondary: var(--spatial-color-soft);
+  --secondary-foreground: var(--spatial-color-ink);
+  --muted-surface: var(--spatial-color-soft);
+  --muted-foreground: var(--spatial-color-muted);
+  --accent: var(--spatial-color-selection-fill);
+  --accent-foreground: var(--spatial-color-primary);
+  --destructive: var(--spatial-color-error);
+  --border: var(--spatial-color-border);
+  --input: var(--spatial-color-input);
+  --ring: var(--spatial-color-focus);
+  --card: var(--spatial-color-paper);
+  --card-foreground: var(--spatial-color-ink);
+  --popover: var(--spatial-color-paper);
+  --popover-foreground: var(--spatial-color-ink);
+  --ink: var(--spatial-color-ink);
+  --navy: var(--spatial-color-ink);
+  --teal: var(--spatial-color-primary);
+  --mint: var(--spatial-color-selection-fill);
+  --paper: var(--spatial-color-paper);
+  --muted: var(--spatial-color-muted);
+  --line: var(--spatial-color-border);
+  --studio-canvas: var(--spatial-color-canvas);
+  --studio-soft: var(--spatial-color-soft);
+  --studio-shadow: var(--spatial-elevation-panel);
+  font-family: var(--spatial-font-ui);
   font-size: 14px;
   color: var(--ink);
   background: var(--paper);
   -webkit-font-smoothing: antialiased;
 }
 .canvas-studio button, .canvas-studio input, .canvas-studio select, .canvas-studio textarea { font: inherit; }
-.canvas-studio :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.canvas-studio :focus-visible { outline: var(--spatial-control-focus-width) solid var(--spatial-color-focus); outline-offset: var(--spatial-control-focus-offset); }
 .canvas-studio .app-header { min-height: 60px; padding: 10px 18px; gap: 20px; color: var(--ink); background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: none; }
 .canvas-studio .brand { gap: 9px; color: var(--ink); letter-spacing: -.035em; font-size: 15px; }
 .canvas-studio .brand-mark { color: var(--teal); font-size: 30px; }
@@ -71,7 +71,7 @@ body.canvas-studio {
 .canvas-studio .project-identity strong { font-size: 13px; font-weight: 550; }
 .canvas-studio .workspace-label { display: none; }
 .canvas-studio #server-save-status { color: var(--muted); font-size: 11px; }
-.canvas-studio #server-save-status[data-state="disconnected"] { color: #9b4c24; }
+.canvas-studio #server-save-status[data-state="disconnected"] { color: var(--spatial-color-warning); }
 .canvas-studio .header-actions { gap: 7px; }
 .canvas-studio .header-actions .button, .canvas-studio .workspace-file-menu summary { border-color: var(--line); color: var(--ink); background: var(--paper); border-radius: 7px; }
 .canvas-studio .header-actions .button:hover, .canvas-studio .workspace-file-menu summary:hover { background: var(--studio-soft); }
@@ -164,10 +164,10 @@ body.canvas-studio {
 .canvas-studio .workspace-context .chat-composer-form { padding: 12px 14px; border-color: var(--line); background: var(--paper); }
 .canvas-studio .composer-binding { color: var(--muted); font-size: 11px; }
 .canvas-studio .request-composer { padding: 8px; border-color: var(--line); background: var(--paper); box-shadow: var(--studio-shadow); border-radius: 11px; }
-.canvas-studio .request-composer:focus-within { border-color: var(--teal); box-shadow: 0 0 0 2px #087b6b14; }
+.canvas-studio .request-composer:focus-within { border-color: var(--teal); box-shadow: none; }
 .canvas-studio .composer-input-row textarea { font-size: 13px; min-height: 64px; }
 .canvas-studio .composer-icon { background: var(--studio-soft); color: var(--muted); }
-.canvas-studio .composer-send { background: var(--teal); color: #fff; border-radius: 7px; }
+.canvas-studio .composer-send { background: var(--teal); color: var(--spatial-color-white); border-radius: 7px; }
 .canvas-studio :is(.composer-help, .composer-connection, .request-options > summary, .chat-turn-count, #chat-count) { color: var(--muted); font-size: 11px; }
 .canvas-studio .workspace-status { grid-column: 1 / -1; grid-row: 2; border-color: var(--line); background: var(--paper); padding: 5px 14px; min-height: 28px; }
 .canvas-studio .workspace-concept { color: var(--muted); font-size: 11px; }
