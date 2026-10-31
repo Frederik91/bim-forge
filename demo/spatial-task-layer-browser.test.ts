@@ -30,9 +30,9 @@ test('real 3D agent bodies choose same-place conversations, keep target highligh
   await page.goto(`http://127.0.0.1:${address.port}`);
   await page.waitForSelector('body[data-ready=true]');
   const marker = page.locator('[data-task="T-01"]'); await marker.waitFor();
-  const point = await marker.evaluate(element => ({ x: Number.parseFloat(element.style.left), y: Number.parseFloat(element.style.top) }));
+  const point = await marker.evaluate(element => ({ x: Number(element.dataset.anchorX), y: Number(element.dataset.anchorY) }));
   const canvas = await page.locator('canvas').boundingBox(); assert.ok(canvas);
-  await page.mouse.click(canvas.x + point.x, canvas.y + point.y + 50);
+  await page.mouse.click(canvas.x + point.x, canvas.y + point.y + 42);
   await page.getByRole('button', { name: 'T-02', exact: true }).waitFor();
   await page.getByRole('button', { name: 'T-02', exact: true }).click();
   assert.match(await page.locator('#conversation').innerText(), /T-02 · Check door clearance/);
@@ -47,15 +47,33 @@ test('real 3D agent bodies choose same-place conversations, keep target highligh
   assert.match(await page.locator('#tasks').innerText(), /T-04.*Legacy conversation/s);
   await page.getByRole('button', { name: 'Toggle wall occlusion' }).click();
   await marker.waitFor();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: /Draft-03 · Unsent wall question/ }).click();
-  assert.match(await page.locator('#conversation').innerText(), /Unsent draft. No worker has started/);
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  await page.screenshot({ path: path.join(output, 'narrow.png'), fullPage: true });
+  const narrowBounds: unknown[] = [];
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.waitForFunction(value => document.body.dataset.renderWidth === String(value), width);
+    await page.getByRole('button', { name: /Draft-03 · Unsent wall question/ }).click();
+    assert.match(await page.locator('#conversation').innerText(), /Unsent draft. No worker has started/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    const bounds = await page.locator('.anchor').evaluateAll(elements => elements.map(element => {
+      const box = element.getBoundingClientRect(); return { text: element.textContent, left: box.left, right: box.right, width: box.width };
+    }));
+    assert.equal(bounds.length, 2, 'both same-place and draft labels remain visible');
+    assert.ok(bounds.every(box => box.left >= 7.5 && box.right <= width - 7.5), `readable labels fit inside the ${width}px stage: ${JSON.stringify(bounds)}`);
+    narrowBounds.push({ viewport: width, bounds });
+    // The true body point remains pickable even when its label is clamped at the edge.
+    const bodyPoint = await marker.evaluate(element => ({ x: Number(element.dataset.anchorX), y: Number(element.dataset.anchorY) }));
+    await page.locator('canvas').scrollIntoViewIfNeeded();
+    const stage = await page.locator('canvas').boundingBox(); assert.ok(stage);
+    await page.mouse.click(stage.x + bodyPoint.x, stage.y + bodyPoint.y + 26);
+    await page.getByRole('button', { name: 'T-02', exact: true }).click();
+    assert.match(await page.locator('#conversation').innerText(), /T-02 · Check door clearance/);
+    await page.locator('header').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(output, width === 390 ? 'narrow.png' : 'narrow-320.png'), fullPage: true });
+  }
   await page.getByRole('button', { name: /T-04 · Legacy conversation/ }).focus(); await page.keyboard.press('Enter');
   assert.match(await page.locator('#conversation').innerText(), /T-04 · Legacy conversation/);
   await page.getByRole('button', { name: 'Dispose task layer' }).click();
   assert.equal(await page.locator('#tasks button').count(), 0); assert.equal(await page.locator('.anchor').count(), 0);
   assert.deepEqual(errors, []);
-  await fs.writeFile(path.join(output, 'browser-result.json'), JSON.stringify({ errors, viewports: ['1440x1000', '390x844'], actualBodyPick: true, samePlaceChooser: true, unplacedKeyboardAccess: true, occlusion: true, constructionModelDelta: 0 }, null, 2));
+  await fs.writeFile(path.join(output, 'browser-result.json'), JSON.stringify({ errors, viewports: ['1440x1000', '390x844', '320x844'], narrowBounds, actualBodyPick: true, samePlaceChooser: true, unplacedKeyboardAccess: true, occlusion: true, constructionModelDelta: 0 }, null, 2));
 });

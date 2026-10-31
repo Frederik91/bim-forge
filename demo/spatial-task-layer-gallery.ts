@@ -53,7 +53,7 @@ function open(identity: TaskAgentIdentity): void {
   descriptors = descriptors.map(value => ({ ...value, selected: id(value.identity) === id(identity) }));
   door.material = ['T-01', 'T-02'].includes(id(identity)) ? selectedMat : doorMat;
   conversation.replaceChildren(); const heading = document.createElement('h2'); heading.textContent = id(identity) + ' · ' + entry.title;
-  const text = document.createElement('p'); text.textContent = identity.kind === 'draft' ? 'Unsent draft. No worker has started.' : 'Conversation selected. Only its associated entry door is highlighted. The camera stays in place.';
+  const text = document.createElement('p'); text.textContent = identity.kind === 'draft' ? 'Unsent draft. No worker has started.' : entry.placement.kind === 'unplaced' ? 'Conversation selected from the list. This legacy task has no placed target in the fixture.' : 'Conversation selected. Only its associated entry door is highlighted. The camera stays in place.';
   conversation.append(heading, text); chooser.replaceChildren(); sync();
 }
 function sync(): void {
@@ -95,9 +95,18 @@ engine.runRenderLoop(() => {
     const key = anchor.candidates.map(id).join(','); if (seen.has(key)) continue; seen.add(key);
     const label = document.createElement('span'); label.className = 'anchor';
     label.textContent = anchor.candidates.length > 1 ? `${anchor.candidates.length} conversations · T-01 / T-02` : id(anchor.identity);
-    label.style.left = anchor.x + 'px'; label.style.top = anchor.y - 8 + 'px';
+    label.style.maxWidth = Math.max(0, canvas.clientWidth - 16) + 'px';
+    label.style.width = 'max-content';
+    label.style.whiteSpace = 'normal'; label.style.overflowWrap = 'anywhere';
+    // Preserve the true projected point for body picking; only the HTML label moves to fit.
+    label.dataset.anchorX = String(anchor.x); label.dataset.anchorY = String(anchor.y);
     label.dataset.task = id(anchor.identity); anchors.append(label);
+    const bounds = label.getBoundingClientRect();
+    const left = Math.max(8 + bounds.width / 2, Math.min(canvas.clientWidth - 8 - bounds.width / 2, anchor.x));
+    const top = Math.max(8 + bounds.height, Math.min(canvas.clientHeight - 8, anchor.y - 8));
+    label.style.left = left + 'px'; label.style.top = top + 'px';
   }
+  document.body.dataset.renderWidth = String(canvas.clientWidth);
   document.body.dataset.ready = 'true';
 });
 window.addEventListener('pagehide', () => { window.removeEventListener('resize', resize); engine.stopRenderLoop(); layer.dispose(); scene.dispose(); engine.dispose(); }, { once: true });
