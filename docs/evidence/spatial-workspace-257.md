@@ -15,7 +15,7 @@ Construction-model delta outside disposable fixtures: **zero**. This change adds
 - `spatial-workspace-presentation.ts` / `canvas-studio.css`: one floating chat mount, measured/clamped labels, same-place chooser, truthful task list, explicit Return and draft-context refresh.
 - `spatial-workspace-browser.test.ts`: shipped UI and real native worker journey, plus actual batched ModelScene construction/pick/frame/export qualification.
 
-Read-only native context includes Wall, Door, Window, Space, Slab, Stair, Roof, Furniture, Equipment, AssetInstance and Level. No task mesh becomes a native entity. Region-only requests now submit zero implicit native IDs; a browsing level is not an object target.
+Read-only native context includes Wall, Door, Window, Space, Slab, Stair, Roof, Furniture, Equipment, AssetInstance and Level. No task mesh becomes a native entity. Requests contain explicit visual IDs or the selected native object; browsing floor/room context is not automatically added as an object target. Region-only requests submit zero implicit native IDs.
 
 ## Behavior and provenance
 
@@ -79,3 +79,27 @@ node --test --test-concurrency=1 demo/spatial-workspace-browser.test.ts demo/spa
 This is deterministic native/offline-worker qualification. It does not establish connected-provider interpretation accuracy or the final linked-IFC source/occurrence journey. Human visual acceptance and the combined local-release qualification remain #258 work. The parent lane already records Linux-only PDF preparation/socket prerequisites; this change does not weaken those checks or change source preparation.
 
 The existing `createDemoServer` and demo build remain the local-server seams. Browser tests run that real server on an ephemeral local port with a disposable SQLite queue and `spatialFixtureWorker`. Production deployment, provider connection, ready flags, merges and issue closure were not performed here.
+
+
+## Parent change-review repair
+
+Runtime repair: `e4c56e970d791df6d7d26af47e5f1972f84ef594`, following `14117e3`. The parent requested a presentation repair after reviewing the captures, and independently observed an incidental floor ID in the provider-lane payload. No server, queue, review authority or provider behavior changes were made.
+
+The DOM diagnosis found two competing scroll boundaries: a 508 px outer content area contained a 521 px min-content editor, while the transcript independently scrolled in a fixed 220 px viewport. The repair reserves non-shrinking header/navigation space and makes the transcript the dedicated conversation scrollport. The composer is bounded separately. The repaired outer content and editor both measure 455 px with zero outer overflow; the transcript starts exactly below the 51 px Chats navigation. The old bottom Assistant toggle remains in the existing controller seam but is hidden on phones, leaving one visible Assistant rail entry.
+
+The focused live test now opens Sources & checks and returns through Revise before inspecting the actual proposal controls. Each action is deliberately scrolled into the transcript viewport and checked for complete bounds and a real centre pointer hit. Transcript scrolling must leave the fixed navigation bounds unchanged. This preserves usable scrolling instead of requiring every proposal action to fit simultaneously in a compact conversation. Phone checks require the primary Assistant entry to remain visible and the redundant toggle to be hidden. Fresh desktop, 390 px and 320 px captures above were inspected after repair. Compact phone presentation prioritizes fixed navigation and composer; Expand conversation provides more transcript room.
+
+The request adapter also previously added browsing level/room IDs for ordinary object requests. It now keeps only explicit visual IDs or the selected native object. A deliberately selected Level still remains a valid object selection. The actual HTTP request and persisted placement are both asserted to contain exactly `[level-ground-door-inner]` in the door journey. Region-only behavior remains unchanged. The existing view/origin level metadata retains browsing context.
+
+The gold wall in the door-only capture is derived comparison geometry, not a broader object target. Executing `modelChanges(base, independentExpected)` returns exactly the Door with reason `object` and its inner host Wall with reason `placement`. The viewer paints modified geometry gold and selection outlines blue. The independent accepted-model oracle still changes only Door width and the existing hosted-by offset.
+
+Repair verification:
+
+- `npm run validate`: passed, 381 source files; demo build passed.
+- Focused actual browser/batched-source journey: **2 passed, 0 failed/skipped**, including exact door-only HTTP/placement IDs, body hit, same-place chooser, acceptance/reload, unplaced fallback and the new scroll-boundary/action-hit checks.
+- `node --test --test-concurrency=1 demo/canvas-studio-browser.test.ts demo/spatial-tasks-browser.test.ts demo/spatial-markup-browser.test.ts demo/spatial-plan-integration-browser.test.ts`: **6 passed, 0 failed/skipped**. Existing assertions were preserved.
+- Changed CSS detector: `[]`; whitespace check passed.
+
+Repair attempt notes: the initial diagnostic run encountered the existing guarded “workspace changed while this response arrived” path while a worker result arrived; the unchanged rerun completed. An intentionally stricter first layout assertion required all actions to fit simultaneously and failed because the last row legitimately crossed the dedicated scrollport bottom by 17 px. The parent clarified that usable scrolling was required. The final test proves every action is reachable, fully visible and hittable after deliberate transcript scrolling, with no header overlap. No queue or causal guard was weakened.
+
+The final evidence-only follow-up changes this document and the three captures. Runtime qualification can pin `e4c56e9`; the parent owns the final combined server/provider/release SHA and deployment.
