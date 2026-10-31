@@ -53,3 +53,9 @@ no blockers. #256 waits for #252/#253/#255/#262; #257 waits for #254/#256/#263;
 
 Application implementation has not started. No provider or application/browser
 execution was added by this planning update. Construction-model delta remains zero.
+
+Scope confirmation — 2026-10-31
+
+Maintainer selected single-engineer spatial workflow first. Removed the pending
+milestone-scope decision from the plan and recorded team collaboration as a later
+milestone; privacy design can continue in parallel. Documentation only.

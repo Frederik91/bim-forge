@@ -16,9 +16,9 @@ Deliver one engineer's complete task journey in the existing trusted single-oper
 
 Use multiple independent conversations at the same door and a region-only task as acceptance cases. Show actual queued, running, waiting, failed, cancelled and proposal states. A visible task agent represents a durable conversation; it does not mean a worker process runs continuously. Retain the server's configured execution limits.
 
-The first-milestone recommendation is single-engineer work, not simulated collaboration presented as real. Team identity, personal/discipline/company authorization, shared presence and human communication follow separate gates. Do not expose audience selectors as if they enforce privacy before the server supports them. Upstream deployed authentication has not been qualified by this planning exercise.
+The maintainer confirmed single-engineer spatial workflow first on 2026-10-31. Team identity, personal/discipline/company authorization, shared presence and human communication follow separate gates; privacy design may proceed in parallel. Do not expose audience selectors as if they enforce privacy before the server supports them. Upstream deployed authentication has not been qualified by this planning exercise.
 
-If the maintainer chooses team collaboration for the first release, move the identity and authorization gates ahead of that release. Do not add audience controls to the current service and treat them as protection. The recommendation here is not a confirmed scope decision.
+Team collaboration is outside the first implementation milestone. Adding it requires a separately reviewed scope change and the identity/authorization gates before shared release. This scope confirmation does not launch implementation or authorize merge, provider calls or deployment.
 
 Time-linked speech, pointing and drawing remains explicitly deferred in [#250](https://github.com/Frederik91/bim-forge/issues/250). It is not required to ship this milestone.
 
@@ -249,7 +249,6 @@ Privacy qualification must cover lists, counts, titles, search, direct reads/wri
 
 ## Review gates still needed
 
-- Confirm the first milestone's single-engineer scope versus team collaboration from its first release.
 - Agree the valid entry/eye-height policy and what grounded walking means on supported geometry. Navigation affordances are not engineering clearance certificates.
 - Set the supported native Plan/Section representations and explicitly gate linked IFC cut rendering until qualified.
 - Design participant identity, ownership migration, default audience and private-to-shared publication before any collaboration release.
