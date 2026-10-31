@@ -89,6 +89,7 @@ test('selecting a wall then opening Markup uses that face, with an explicit pers
   await page.getByRole('button', { name: '3D markup', exact: true }).click();
   const plane = page.getByLabel('Markup drawing plane');
   assert.match(await plane.locator('option:checked').innerText(), /selected surface/i);
+  assert.match(await page.locator('.model-markup-status').innerText(), /Drawing on selected surface/);
   await draw(page, point);
   await plane.selectOption('floor');
   await page.getByRole('button', { name: '3D markup', exact: true }).click();
@@ -106,6 +107,24 @@ test('selecting a wall then opening Markup uses that face, with an explicit pers
   assert.ok(floor.corners.every(p => Math.abs(p[2]) < .00001), 'Floor override must use the level elevation.');
   const accepted: unknown = await (await page.request.get(f.base + '/api/projects/' + f.projectId)).json();
   assert.ok(accepted && typeof accepted === 'object' && 'project' in accepted); assert.equal(accepted.project, f.project);
+  assert.deepEqual(f.errors, []);
+});
+
+test('changing selection without a picked face requires that element and never projects onto a floor', { timeout: 90_000 }, async t => {
+  const f = await fixture(t, 'missing-face'); const { page } = f;
+  const point = await wallPoint(page); await page.mouse.click(point.x, point.y);
+  const picker = page.getByLabel('Select 3D object');
+  const ids = await picker.locator('option').evaluateAll(items => items.flatMap(item => item instanceof HTMLOptionElement ? [item.value] : []));
+  const other = ids.find(id => id.startsWith('wall-') && id !== point.id); assert.ok(other);
+  await picker.selectOption(other);
+  await page.getByRole('button', { name: '3D markup', exact: true }).click();
+  assert.match(await page.getByLabel('Markup drawing plane').locator('option:checked').innerText(), /selected surface/i);
+  await page.getByRole('button', { name: 'Rectangle', exact: true }).click();
+  await page.mouse.move(point.x, point.y); await page.mouse.down();
+  await page.mouse.move(point.x + 65, point.y + 40, { steps: 8 }); await page.mouse.up();
+  assert.equal(await page.locator('.model-markup-controls').getAttribute('data-markup-count'), '0');
+  assert.match(await page.locator('.model-markup-status').innerText(), /selected element/);
+  await page.locator('.babylon-viewer canvas').press('Escape');
   assert.deepEqual(f.errors, []);
 });
 

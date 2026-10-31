@@ -580,6 +580,10 @@ export class ModelScene {
     return hit ? this.pickParts.get(hit.mesh.uniqueId)?.objectId ?? null : null;
   }
 
+  hasSurface(objectId: string): boolean {
+    return this.parts.some(part => part.objectId === objectId && !part.before);
+  }
+
   surfaceAt(x: number, y: number): { objectId: string; position: Vector3; normal: Vector3 } | null {
     const hit = this.batches.pick(x, y, mesh => mesh.isPickable && this.pickParts.get(mesh.uniqueId)?.before === false);
     if (!hit) return null;

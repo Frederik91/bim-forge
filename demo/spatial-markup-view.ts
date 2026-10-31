@@ -158,7 +158,7 @@ export class SpatialMarkupView {
     this.attach.disabled = !enabled || !this.state?.annotations.length;
     const last = this.state?.annotations.at(-1);
     const target = this.planeChoice.value === 'selection' ? this.selectionPlane
-      ? `Drawing on selected surface · ${this.state?.selection?.name}` : `Pick the selected surface · ${this.state?.selection?.name}`
+      ? `Drawing on selected surface · ${this.state?.selection?.name}` : `Pick a visible face of the selected element · ${this.state?.selection?.name}`
       : this.planeChoice.value === 'floor' ? `Drawing on ${this.state?.floor.name ?? 'floor'}` : 'Pick a visible surface to draw';
     this.message.textContent = this.candidate ? `${spatialMarkupDescription(this.candidate)} · approximate · ${target}`
       : this.tool === 'polyline' ? 'Click points · Enter or Finish · Escape cancels'

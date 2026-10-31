@@ -239,7 +239,7 @@ export class ModelViewer {
     const state = this.state; if (!state) return;
     const item = state.snapshot.entities.find(item => item.id === state.selectedId);
     const objectKey = this.linkedSelection ? 'ifc:' + linkedSelectionKey(this.linkedSelection) : 'native:' + state.selectedId;
-    const selection: MarkupSelection | null = this.markupObjectKey === objectKey ? {
+    const selection: MarkupSelection | null = this.markupObjectKey === objectKey && (this.linkedSelection || this.model.hasSurface(state.selectedId)) ? {
       key: `${this.markupEpoch}:${objectKey}`, objectKey, name: this.linkedSelection?.source.globalId ?? item?.name ?? state.selectedId,
       surface: this.pickedMarkupSurface,
     } : null;
@@ -344,7 +344,8 @@ export class ModelViewer {
       || this.state?.mode !== next.mode || this.state?.cutaway !== next.cutaway || this.state?.roofVisible !== next.roofVisible
       || JSON.stringify([this.state?.snapshot, this.state?.comparison]) !== JSON.stringify([next.snapshot, next.comparison]);
     if (viewChanged) { this.pointer.cancelClick(); this.hover(null); this.pickedMarkupSurface = null; this.markupEpoch += 1; }
-    if (this.state && next.selectedId !== this.state.selectedId && this.markupObjectKey !== 'native:' + next.selectedId) {
+    if (projectChanged) this.markupObjectKey = null;
+    if (this.state && !projectChanged && next.selectedId !== this.state.selectedId && this.markupObjectKey !== 'native:' + next.selectedId) {
       this.captureMarkupSurface('native:' + next.selectedId, null);
     }
     this.state = next;
