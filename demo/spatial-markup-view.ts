@@ -5,7 +5,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color.js';
 import type { Scene } from '@babylonjs/core/scene.js';
-import type { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera.js';
+import type { Camera } from '@babylonjs/core/Cameras/camera.js';
 import { createMarkupPlane, createSpatialMarkup, parseSpatialMarkup, spatialMarkupDescription, spatialMarkupVertices, MARKUP_LIMITS } from '../src/spatial-markup.ts';
 import type { MarkupPlane, MarkupPoint, MarkupTool, SpatialMarkup } from '../src/spatial-markup.ts';
 
@@ -14,7 +14,7 @@ interface MarkupState {
   annotations: readonly SpatialMarkup[]; references: readonly SpatialMarkup[];
 }
 interface MarkupActions {
-  scene: Scene; camera: ArcRotateCamera; canvas: HTMLCanvasElement;
+  scene: Scene; camera: () => Camera; canvas: HTMLCanvasElement;
   surface: (x: number, y: number) => { position: MarkupPoint; normal: MarkupPoint } | null;
   changed: (annotations: readonly SpatialMarkup[], binding: string) => boolean;
   begin: () => void; render: () => void; attach: () => void;
@@ -119,9 +119,10 @@ export class SpatialMarkupView {
 
   private choose(tool: MarkupTool | null): void {
     this.cancelGesture();
+    if (tool && this.state?.enabled) this.actions.begin();
     this.tool = this.state?.enabled ? tool : null;
-    if (this.tool) { this.actions.begin(); this.actions.camera.detachControl(); }
-    else this.actions.camera.attachControl(this.actions.canvas, false);
+    if (this.tool) this.actions.camera().detachControl();
+    else this.actions.camera().attachControl(this.actions.canvas, false);
     this.actions.canvas.classList.toggle('is-markup-drawing', this.tool !== null);
     this.root.dataset.tool = this.tool ?? 'select'; this.refresh(); this.actions.render();
   }
@@ -158,7 +159,7 @@ export class SpatialMarkupView {
 
   private point(event: PointerEvent, plane: MarkupPlane): MarkupPoint | null {
     const { x, y, inside } = this.location(event); if (!inside) return null;
-    const ray = this.actions.scene.createPickingRay(x, y, Matrix.Identity(), this.actions.camera);
+    const ray = this.actions.scene.createPickingRay(x, y, Matrix.Identity(), this.actions.camera());
     const distance = ray.intersectsPlane(Plane.FromPositionAndNormal(world(plane.origin), world(plane.normal)));
     if (distance === null || !Number.isFinite(distance) || distance < 0 || distance > MARKUP_LIMITS.spanMetres * 2) return null;
     const point = project(ray.origin.add(ray.direction.scale(distance)));
