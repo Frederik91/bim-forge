@@ -1,0 +1,68 @@
+{
+  "assembledAt": "2026-10-31T16:56:51.269Z",
+  "runtimeSource": "8268247336ced9e738a57e88628421a0aac01a0c",
+  "sourceCleanAtStartup": true,
+  "url": "http://127.0.0.1:4189",
+  "pid": 64028,
+  "buildSha256": "cfbee3d64e5dac36ded9709b1d4c8e7997a60d48b353552f909af1e1658f0682",
+  "health": {
+    "status": "ok",
+    "runtimeMode": "local",
+    "chatgptConnected": true,
+    "ifcLinks": "configured"
+  },
+  "previewStore": "Dedicated canonical local preview directory outside AI account home; exact path retained in local startup receipt",
+  "projects": {
+    "projects": [
+      {
+        "projectId": "a838ac8d-cbf7-4ab2-a43e-d49c0a6d46e1",
+        "name": "Inside-first workspace review",
+        "headRevisionId": "a62b2bcad79c10766d3f9b53012875e809b90f067004d7d7e3cbe09665f8d37d",
+        "recordedAt": 1793464052336
+      }
+    ]
+  },
+  "servedAssets": [
+    {
+      "route": "/room-app.mjs",
+      "status": 200,
+      "sha256": "14bc0266d89a92f4c323a0c6e77656da4ea7ed170a768b690c3059b7bba3f022",
+      "bytes": 3637221
+    },
+    {
+      "route": "/canvas-studio.css",
+      "status": 200,
+      "sha256": "69200f1ea5ddf32e961d65cb2865380f248bc0f829760d1112521aee45d0ade9",
+      "bytes": 52292
+    },
+    {
+      "route": "/room.css",
+      "status": 200,
+      "sha256": "de5c8a6854c34147b2f2f01df87ea933d5314e82252875d43cc5f23a4f846ec8",
+      "bytes": 75606
+    },
+    {
+      "route": "/request-chat.css",
+      "status": 200,
+      "sha256": "a4b27e8e458ca1899af757e6a521249138a6ec0c6732ad69cc31e881d0dc633b",
+      "bytes": 14038
+    }
+  ],
+  "liveRestartBrowser": {
+    "canvases": 1,
+    "linkedModels": 1,
+    "messageInputEnabled": true,
+    "method": "Observed in actual Codex in-app browser after final runtime restart"
+  },
+  "actualIfcConversion": {
+    "fixtureBytes": 7593,
+    "providerRequests": 0,
+    "workerId": "d2a06b4f8e4aa484c02ec8e34c965e5c3ec4674202e247c1f4196b99b9b1d0bd",
+    "imageId": "sha256:2ee734fe21f91f9af3a980c0ab69919e2b65f21037eecab5beeea1ecbd52b0e7",
+    "network": "none",
+    "rootFilesystem": "read-only",
+    "mounts": "dedicated canonical spool only"
+  },
+  "providerQualification": "Separate bounded one-request case; see spatial-connected-qualification-258.md",
+  "productionModelDelta": 0
+}
