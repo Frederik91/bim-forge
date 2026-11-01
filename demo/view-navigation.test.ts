@@ -68,6 +68,11 @@ test('real active perspective camera, picking, explicit return and source-safe p
   assert.deepEqual(navigation.capture()?.eye, pose.eye);
   navigation.setContext({ ...context, levelId: 'level-attic' });
   assert.equal(navigation.returnTo(pose).kind, 'unsupported');
+  assert.equal(navigation.returnTo({ ...pose, sourcePin: 'old' }, { allowLevelChange: true }).kind, 'unsupported');
+  assert.equal(navigation.returnTo({ ...pose, projectId: null }, { allowLevelChange: true }).kind, 'unsupported');
+  assert.equal(navigation.returnTo(pose, { allowLevelChange: true }).kind, 'changed', 'An explicit task return may revisit its supported floor');
+  assert.equal(navigation.capture()?.levelId, 'level-ground');
+  navigation.setContext({ ...context, levelId: 'level-attic' });
   assert.equal(navigation.change({ kind: 'inside', motion: 'walk', entry: [6, 1.5, 3] }).kind, 'unsupported');
   assert.equal(navigation.change({ kind: 'inside', motion: 'fly', entry: [6, 1.5, 8] }).kind, 'changed');
   assert.deepEqual(scene.cameras, cameras); assert.deepEqual(scene.meshes, meshes);

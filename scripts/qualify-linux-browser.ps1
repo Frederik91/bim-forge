@@ -8,7 +8,7 @@ param(
     'demo/spatial-plan-integration-browser.test.ts', 'demo/spatial-tasks-browser.test.ts', 'demo/spatial-tasks.test.ts',
     'demo/spatial-markup-browser.test.ts', 'demo/view-navigation-browser.test.ts', 'demo/model-plan-browser.test.ts',
     'demo/spatial-task-layer-browser.test.ts', 'demo/design-system-browser.test.ts', 'demo/preview-build.test.ts',
-    'demo/spatial-workspace-browser.test.ts', 'scripts/serve-spatial-preview.test.ts'
+    'demo/spatial-workspace-browser.test.ts', 'demo/native-walk-browser.test.ts', 'scripts/serve-spatial-preview.test.ts'
   )
 )
 $ErrorActionPreference = 'Stop'
@@ -99,7 +99,7 @@ for (const file of source.tests) {
   const name = path.basename(file, '.test.ts'); const directory = '/artifacts/'+name;
   fs.mkdirSync(directory,{recursive:true});
   const env = {...process.env, QUAL_ARTIFACTS:directory, PLAN_INTEGRATION_ARTIFACTS:directory,
-    MARKUP_BROWSER_EVIDENCE:directory, TASK_AGENT_EVIDENCE:directory, SPATIAL_WORKSPACE_ARTIFACTS:directory};
+    MARKUP_BROWSER_EVIDENCE:directory, TASK_AGENT_EVIDENCE:directory, SPATIAL_WORKSPACE_ARTIFACTS:directory, NATIVE_WALK_ARTIFACTS:directory};
   if (file === 'demo/view-navigation-browser.test.ts') env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = chromium.executablePath();
   console.log(`START ${file}`);
   const {result,log} = run('node',['--test','--test-concurrency=1','--test-reporter=tap',file],directory+'/test.tap',env);
