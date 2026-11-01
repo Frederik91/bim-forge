@@ -16,11 +16,69 @@ Choose project -> understand current state -> enter a model view
 
 The accepted model remains versioned and reviewable throughout this flow. A gesture, spoken instruction, or agent action cannot silently change it.
 
+## A multiplayer building workspace
+
+BIM Forge should feel like entering a building where people and agents are already at work. Engineers explore the same spatial environment, discuss objects and places, assign tasks, and see relevant activity around them. The immediacy of a multiplayer game is a product direction: interaction, presence, and shared spatial context shape the experience.
+
+The model remains visible while a person expresses intent, talks to an agent, and reviews proposed work. A separate chat panel is not the primary home of this interaction. Selecting a door or marking an area lets the person start typing or speaking in that context. Voice and future VR interactions should use the same task and spatial context as text.
+
+### Being inside the building is the primary experience
+
+The primary spatial experience places the person inside the building. People work from rooms, circulation spaces, and meaningful locations, rather than always observing a detached model from outside. Looking at an object, approaching it, and starting a task should form one continuous interaction.
+
+Plan, section, elevation, and overview views remain readily available. Switching views preserves the selected objects, active task, relevant conversations, and spatial reference. A plan can show the person's location and direction of view. A section can frame the area under discussion. Returning inside restores the prior position and orientation.
+
+People can navigate through the building or jump directly to a room, object, saved viewpoint, or permitted shared task. Routine work must not require walking through every intervening space. Navigation controls and transitions still need testing across desktop, touch, keyboard, and future VR.
+
+Desktop navigation includes familiar game-style controls. WASD moves relative to the facing direction, and mouse movement turns that direction in an explicitly enabled mouse-look mode. Escape restores the cursor for selection and conversation. A separate free-roam flight mode allows movement beyond eye height and through the building for inspection. Shift ascends and Ctrl descends. Walking and flying remain distinguishable, and a return-to-room action recovers a useful location. Navigation input stops while a person types, changes views, or leaves the model focus.
+
+### People can talk within the shared building
+
+Built-in voice chat, text chat, and private conversations let people communicate with others they encounter through the model or a shared task. A person can identify a permitted participant or task owner and start a conversation without finding external contact details or switching to a separate calling application.
+
+The interface must make the recipient and audience clear. Talking to another engineer and instructing an agent are different actions, even when both concern the same door. Joining a human conversation does not assign an agent, capture speech as model-editing intent, or grant model-change authority by itself.
+
+Conversation privacy still applies. Spatial proximity does not make personal conversations discoverable or audible. Whether shared voice uses proximity audio, explicit channels, or direct calls remains open, as do recording, transcription, consent, and retention rules. No automatic voice capture is implied by entering the building.
+
+### Conversations and agents belong to tasks in places
+
+Starting a task conversation assigns an agent the instruction and its model context. The task retains its owner, source revision, relevant objects or region, and conversation. Several independent tasks can concern the same object or nearby places. An object does not have to share one conversation for every intention.
+
+People can continue navigating while agents work. In 3D, a conversation is represented by a hovering task agent at the place where the conversation started. Its origin is separate from the objects the task concerns. Selecting the agent opens the conversation and highlights the associated objects or region. The agent does not follow the currently focused item. Where visibility permits, these representations distinguish active work, a question awaiting an answer, and a proposal awaiting review. Equivalent task references remain available in 2D. A searchable task list provides another route back to the relevant location and view.
+
+Another engineer can communicate with the task owner or join a shared discussion within its visibility scope. The maintainer selected hovering 3D task agents as the conversation representation; their final art and dense-scene behavior need further design. Human avatars, camera sharing, clustering, and notification behavior remain open.
+
+### Concurrent agents coordinate overlapping work
+
+Agents should recognize when their tasks affect the same entities, relationships, or constraints. Spatial proximity can suggest overlap, but shared dependencies determine coordination needs. Work on separate floors may affect the same riser; adjacent tasks may be independent.
+
+For example, one agent may widen a door while another moves its adjoining wall. Within the information they are permitted to share, the agents identify the dependency, exchange relevant constraints, and propose compatible work. People can inspect the overlap and the resulting proposals in the model.
+
+Coordination does not grant approval authority. Agents cannot silently overwrite another task's proposal or apply an unapproved model change. An accepted change causes other affected proposals to be checked against the changed source context. The existing cross-discipline approval and revision rules still govern acceptance.
+
+### Visibility is chosen for the conversation
+
+The intended high-level visibility choices include:
+
+- Personal: the conversation and its activity are not disclosed to other participants.
+- Discipline: the conversation is shared with the permitted discipline audience.
+- Company: the conversation is shared with the permitted company audience.
+
+Personal means that other participants do not see a marker, task listing, activity cue, or agent coordination message that reveals the private conversation. The wish to coordinate overlapping work does not override this choice.
+
+Detailed privacy design remains open. It must resolve audience membership, cross-company disciplines, invitations, defaults, policy administration, and what becomes visible when personal exploration becomes a shared proposal. This vision does not select an authorization implementation or promise coordination using information that an agent cannot access.
+
+### Design consequences
+
+The design system must support spatial selection, anchored conversation, permitted presence, task status, proposal comparison, and a secondary task list. These need a consistent language across 2D, 3D, text, and intended voice interaction. The first view should answer what place is selected, which visible task is active there, and what needs the person's attention while preserving the model context.
+
+This section records intended product behavior, not implemented multiplayer, voice, privacy, or agent-coordination capabilities. The direction was confirmed by the maintainer on 2026-10-31 and informs [design exploration #248](https://github.com/Frederik91/bim-forge/issues/248).
+
 ## Project experience
 
 ### Project overview
 
-After choosing a project, a person lands on an overview that answers:
+Entering a model can resume the person's saved working location and task. A project overview remains available and answers:
 
 - What is the current accepted revision?
 - What changed recently, and what is waiting for review?
@@ -82,6 +140,18 @@ Each captured intent is anchored to enough context for another person or agent t
 A change session groups related intentions and the resulting proposals. In VR, a review walk adds a time-ordered spatial record of where the person was, what they pointed at or measured, and what they said. The person can pause, inspect the captured list, correct an interpretation, and decide which intentions should become proposals.
 
 The agent then uses bounded model tools to create a proposal. Reviewers see the semantic delta, rationale, constraints, validation evidence, assumptions, and uncertainty. They can approve the exact proposal or request another revision without losing earlier proposals or the original model state.
+
+### Speech and drawing form one time-linked instruction
+
+A planned capability connects what a person says with what they point at and draw at the relevant time. For example, the person says "move this one this way, then this one this way" while drawing two arrows at different objects. The agent must associate each reference and direction with the correct object and gesture.
+
+The instruction retains a shared timeline for spoken phrases, transcript timing, selection, pointer movement, and progressive strokes. The final transcript and finished drawing alone cannot express which gesture accompanied each phrase. Each relevant event also retains its model revision, spatial reference, and active view so camera movement does not detach the intent from its place.
+
+Speech may precede or follow a stroke. Interpretation uses the surrounding temporal and spatial context, not exact timestamp equality. People can inspect or replay the agent's object-and-direction interpretation and correct it. Ambiguous references require clarification, and "a bit further" does not become an unexplained precise distance.
+
+The intended inputs include mouse or pointer drawing on desktop, touch on a phone, and future hand or controller gestures in VR. They capture intent through the same proposal boundary. Human voice chat is not automatically recorded as an agent instruction; capture and retention remain subject to the conversation's visibility and later privacy design.
+
+This capability is explicitly deferred at the maintainer's request. [Planning issue #250](https://github.com/Frederik91/bim-forge/issues/250) records requirements, dependencies, and future evidence. It is not implemented or included in the current spatial interaction study.
 
 ## Property-centered model work
 
