@@ -34,6 +34,7 @@ The traversal owner compiles support and solids, retains the particular active f
 1. First full-app run exposed an idle navigation callback cancelling polyline markup; idle focus handling was corrected. The traversal journey also stopped early.
 2. Markup passed. The new journey still stopped after one frame: an asynchronous browser wait predicate was being treated as truthy before its result. The test now reads a synchronous capture bridge.
 3. The complete doorway/ascent/descent journey passed. A final focused repeat also passed after adding cross-floor return/source guards and improving the arrival capture. No validator or assertion was weakened.
+4. The later two-CPU Linux qualification passed 72 existing checks, but the new journey timed out on its first doorway target. After the user reported the Linux VM back online, the unchanged test reproduced that failure. A temporary trace showed stable source, facing and canvas focus: the walker crossed the doorway and advanced from X=3 to X=4.3, but only 13 animation frames arrived before the 15-second deadline for X=4.6. The existing 50 ms frame cap correctly prevented large movement jumps. Changing only this navigation test to Basic rendering passed the full journey under the same resource limits and deadlines. The committed setup makes that choice explicit; no application rendering default, collision policy, timeout, or acceptance assertion changes. Temporary instrumentation remains outside the repository.
 
 ## Scope and review
 

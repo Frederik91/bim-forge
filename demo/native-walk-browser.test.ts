@@ -53,6 +53,8 @@ test('native doorway and stair walking retains the saved chat, selection, draft 
   await page.locator('#open-chat').click();
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'inside');
   await page.evaluate(async () => { const url = '/room-app.mjs'; window.walk284Pose = (await import(url)).captureWorkspaceInsidePose; });
+  // Exercise real navigation without the Realistic software-rendering bottleneck in CPU-limited Linux QA.
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await face([3, 3.45, 1.6], [1, 0, 0]);
   await page.locator('#new-chat').click(); await page.locator('.model-object-picker').selectOption('level-ground-door-inner');
   await page.locator('#request-text').fill('Keep this door as the reference for my building walk.');
