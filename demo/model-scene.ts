@@ -164,6 +164,7 @@ export class ModelScene {
   private projectId: ProjectId | null = null;
   private cutaway = true;
   private levelId: string | null = null;
+  private walkView: { levelId: string | null; visibleLevelIds: readonly string[] } | null = null;
   private roofVisible = true;
   private markerLevelId: string | null = null;
   private marker: Mesh | null = null;
@@ -544,7 +545,18 @@ export class ModelScene {
     if (levelId === this.levelId) return;
     if (levelId !== null && this.snapshot && ![...levels(this.snapshot), ...(this.comparison ? levels(this.comparison) : [])].some((level) => level.id === levelId)) throw new Error('Unknown viewer level.');
     this.hover(null);
+    this.walkView = null;
     this.levelId = levelId; this.focusId = null; this.updateCutaway(); this.frame(null);
+  }
+
+  setWalkView(view: { levelId: string | null; visibleLevelIds: readonly string[] } | null): void {
+    if (this.walkView?.levelId === view?.levelId
+      && this.walkView?.visibleLevelIds.length === view?.visibleLevelIds.length
+      && (view === null || view.visibleLevelIds.every((levelId, index) => this.walkView?.visibleLevelIds[index] === levelId))) return;
+    this.hover(null);
+    this.walkView = view ? { levelId: view.levelId, visibleLevelIds: [...view.visibleLevelIds] } : null;
+    if (view) this.levelId = view.levelId;
+    this.updateCutaway();
   }
 
   setRoofVisible(visible: boolean): void {
@@ -564,11 +576,15 @@ export class ModelScene {
 
   private updateCutaway(): void {
     if (!this.snapshot) return;
+    const walkingLevels = this.walkView?.visibleLevelIds;
+    const visibleAtLevel = (levelIds: readonly string[]): boolean => walkingLevels
+      ? levelIds.some(levelId => walkingLevels.includes(levelId))
+      : this.levelId === null || levelIds.includes(this.levelId);
     const b = boundsMm(this.contextBounds());
     const centre = modelPoint((b.minX + b.maxX) / 2000, (b.minY + b.maxY) / 2000);
     for (const part of this.parts) {
       const wall = part.wallId ? this.walls.get(part.wallId) : null;
-      let visible = (this.levelId === null || part.levelIds.includes(this.levelId)) && (this.roofVisible || part.surface !== 'roof');
+      let visible = visibleAtLevel(part.levelIds) && (this.roofVisible || part.surface !== 'roof');
       const changedWallPart = this.comparison && part.objectId && this.changes.has(part.objectId);
       if (visible && this.cutaway && this.activeCamera === this.camera && wall && !part.before && !changedWallPart) {
         const midpoint = modelPoint((wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2);
@@ -577,8 +593,8 @@ export class ModelScene {
       }
       part.mesh.setEnabled(visible);
     }
-    for (const line of this.comparisonLines) line.mesh.setEnabled(this.levelId === null || line.levelIds.includes(this.levelId));
-    const markerVisible = this.levelId === null || this.markerLevelId === this.levelId;
+    for (const line of this.comparisonLines) line.mesh.setEnabled(visibleAtLevel(line.levelIds));
+    const markerVisible = this.markerLevelId === null ? this.levelId === null : visibleAtLevel([this.markerLevelId]);
     this.marker?.setEnabled(markerVisible); this.markerLine?.setEnabled(markerVisible);
     this.syncBatches();
   }

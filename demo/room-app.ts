@@ -3235,6 +3235,9 @@ function renderRoomNavigation(snapshot: ModelSnapshot): void {
   if (!activeLevelId && (modelView === 'plan' || workspaceView.kind === 'inside') && storeys.length) activeLevelId = (storeys.find(level => level.elevation === 0) ?? storeys[0]).id;
   const view = activeLevelId ? levelView(snapshot, activeLevelId) : snapshot;
   const objects = view.entities.filter(item => item.type !== 'AssetFamily');
+  const session = modelViewer?.navigationState;
+  const selected = snapshot.entities.find(item => item.id === selectedObject && item.type !== 'AssetFamily');
+  if (session?.kind === 'inside' && selected && !objects.some(item => item.id === selected.id)) objects.push(selected);
   ui['selected-object'].replaceChildren(...objects.map(item => new Option(item.name, item.id)));
   if (!snapshot.entities.some(item => item.id === selectedObject) && !(tasks.projection.ticketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
   if (tasks.projection.ticketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
@@ -3302,6 +3305,15 @@ function updateViewChrome(): void {
   }
 }
 
+function updateWalkLevelChrome(snapshot: ModelSnapshot): boolean {
+  const session = modelViewer?.navigationState;
+  if (session?.kind !== 'inside' || session.motion !== 'walk') return false;
+  const level = levels(snapshot).find(item => item.id === activeLevelId);
+  if (!level) return false;
+  ui['selected-title'].textContent = `Walk · ${level.name}`;
+  return true;
+}
+
 function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
   const inDeltaDialog = ui['changes-dialog'].open && changesTab === '3d';
   const host = inDeltaDialog ? generic('changes-drawing') : currentPage === 'review' ? ui['review-drawing'] : ui['proposal-drawing'];
@@ -3312,6 +3324,11 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       return;
     }
     modelViewer ??= new ModelViewer({
+      navigationLevel: levelId => {
+        activeLevelId = levelId;
+        const current = liveChatPreview?.snapshot ?? preview;
+        if (current && !updateWalkLevelChrome(current)) ui['selected-title'].textContent = levels(current).find(item => item.id === levelId)?.name ?? 'Whole building';
+      },
       taskPick: hit => spatialWorkspace.pick(hit),
       taskAnchors: (anchors, bounds) => spatialWorkspace.anchors(anchors, bounds),
       markup: attachMarkup,
@@ -3428,7 +3445,7 @@ function renderComparison(): void {
   button('changes-3d-tab').setAttribute('aria-pressed', String(changesTab === '3d'));
   button('changes-properties-tab').setAttribute('aria-pressed', String(changesTab === 'properties'));
   renderDeltaSummary(generic('changes-delta-summary'), comparison, selected);
-  ui['selected-title'].textContent = spaces(selected).length ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
+  if (!updateWalkLevelChrome(selected)) ui['selected-title'].textContent = spaces(selected).length ? spaces(selected).find((room) => room.id === focusedRoomId)?.name ?? levels(selected).find(level => level.id === activeLevelId)?.name ?? 'Whole building' : dirty() ? 'Your visual request' : isOriginal ? 'Original · ready for a request' : requestLabel(selectedBranch);
   ui['selected-badge'].textContent = selectedDesignTarget.kind === 'baseline' ? 'Fixed baseline · read only' : liveChatPreview ? 'Live agent draft' : dirty() ? 'Request sketch' : isOriginal ? 'Original' : selectedBranch === 'main' ? `${designLabel()} · accepted` : selectedRevision === project.head(selectedBranch) ? 'AI proposal' : 'Earlier revision';
   ui['study-caption'].textContent = spaces(selected).length ? 'Choose a storey for its plan, or explore the whole building in 3D. Select an object and describe a change for review.' : 'Inspect the same revision in Plan or 3D. Select an object and describe the change.';
   renderProperties(comparison, selected, diffSnapshots(comparison, selected), reviewedRevision

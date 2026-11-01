@@ -47,6 +47,7 @@ interface ViewerActions {
   markupChat?: () => void;
   taskPick?: (hit: Exclude<TaskAgentHit, { kind: 'none' }>) => void;
   taskAnchors?: (anchors: readonly TaskAgentAnchor[], bounds: DOMRect) => void;
+  navigationLevel?: (levelId: string | null) => void;
 }
 interface MarkerDrag { id: number; origin: Point; target: SpatialReference | null; moved: boolean }
 
@@ -296,6 +297,7 @@ export class ModelViewer {
     if (!this.active || this.root.clientWidth === 0 || this.root.clientHeight === 0) return;
     const now = performance.now();
     this.navigation.tick(this.previousFrame ? (now - this.previousFrame) / 1000 : 0); this.previousFrame = now;
+    this.syncNavigationView();
     const camera = this.model.activeCamera; camera.update();
     const signature = `${camera.uniqueId}:${camera.getViewMatrix().toArray().join(':')}`;
     if (signature !== this.cameraSignature) { this.cameraSignature = signature; this.frames = 2; this.hover(null); }
@@ -320,10 +322,25 @@ export class ModelViewer {
     }
   };
 
+  private syncNavigationView(returnLevelId?: string | null): void {
+    const view = this.navigation.walkView;
+    if (view) this.model.setWalkView(view);
+    else {
+      if (returnLevelId !== undefined) this.model.setWalkView({ levelId: returnLevelId, visibleLevelIds: returnLevelId === null ? [] : [returnLevelId] });
+      this.model.setWalkView(null);
+    }
+    const levelId = view?.levelId ?? returnLevelId;
+    if (levelId === undefined || !this.state || this.state.levelId === levelId) return;
+    this.state = { ...this.state, levelId };
+    this.frames = 3;
+    this.actions.navigationLevel?.(levelId);
+  }
+
   show(host: HTMLElement, state: ViewerState): void {
     let next: ActiveViewerState = { ...state, levelId: state.levelId ?? null, roofVisible: state.roofVisible ?? true };
     const projectChanged = this.state?.projectId !== next.projectId;
     const previousPose = this.captureInsidePose();
+    const retainInsideSelection = previousPose !== null && !projectChanged && this.state?.levelId === next.levelId;
     const retainedPose = !projectChanged && next.navigationTarget !== undefined && this.state?.navigationTarget === next.navigationTarget && this.state?.levelId === next.levelId ? previousPose : null;
     this.poseNotice = '';
     if (this.drag && (projectChanged || !state.interactive || state.selectedId !== this.state?.selectedId || next.levelId !== this.state?.levelId || next.roofVisible !== this.state?.roofVisible)) this.endDrag(false);
@@ -335,9 +352,10 @@ export class ModelViewer {
         && (next.roofVisible || item.type !== 'Roof'));
     };
     const objects = [...new Map([...(state.comparison?.entities ?? []), ...state.snapshot.entities].map((item) => [item.id, item])).values()]
-      .filter((item) => item.type !== 'AssetFamily' && (inLevel(state.snapshot, item.id) || inLevel(state.comparison, item.id)));
+      .filter((item) => item.type !== 'AssetFamily' && (inLevel(state.snapshot, item.id) || inLevel(state.comparison, item.id)
+        || retainInsideSelection && item.id === next.selectedId));
     const changes = new Map((state.comparison ? modelChanges(state.comparison, state.snapshot) : []).map((item) => [item.id, item.status]));
-    if (next.selectedId !== '' && !objects.some((item) => item.id === next.selectedId) || state.comparison && !this.comparisonSelection && !changes.has(next.selectedId)) {
+    if (next.selectedId !== '' && !objects.some((item) => item.id === next.selectedId) || !retainInsideSelection && state.comparison && !this.comparisonSelection && !changes.has(next.selectedId)) {
       next = { ...next, selectedId: objects.find((item) => changes.has(item.id))?.id ?? objects[0]?.id ?? '' };
     }
     const focusChanged = this.state?.focusId !== state.focusId;
@@ -357,14 +375,16 @@ export class ModelViewer {
     this.model.setMode(state.mode); this.model.setModel(state.snapshot, state.comparison, state.projectId ?? null); this.model.select(this.linkedSelection ? '' : next.selectedId);
     this.model.selectTaskTargets(next.taskTargetIds ?? []); this.root.dataset.taskTargetIds = JSON.stringify(next.taskTargetIds ?? []);
     this.model.setRoofVisible(next.roofVisible); this.model.setLevel(next.levelId);
-    this.navigation.setContext({ projectId: state.projectId ?? null, sourcePin: state.navigationPin ?? JSON.stringify(state.snapshot),
+    const sourcePin = state.navigationPin ?? JSON.stringify(state.snapshot);
+    this.navigation.setContext({ projectId: state.projectId ?? null, sourcePin,
       levelId: next.levelId, snapshot: state.snapshot });
-    if (retainedPose) {
-      const retained = this.navigation.returnTo({ ...retainedPose, sourcePin: next.navigationPin ?? '' });
+    if (retainedPose && this.navigation.state.kind === 'overview') {
+      const retained = this.navigation.returnTo({ ...retainedPose, sourcePin });
       if (retained.kind === 'unsupported') this.poseNotice = retained.reason + ' Overview is shown; choose an explicit Inside or Fly entry.';
     } else if (previousPose && !projectChanged && this.navigation.state.kind === 'overview') {
       this.poseNotice = 'The source or level changed. Overview is shown; choose an explicit Inside or Fly entry.';
     }
+    this.syncNavigationView();
     if (projectChanged) this.model.frame();
     this.model.setCutaway(state.cutaway);
     const floor = (next.levelId ? levels(state.snapshot).find(level => level.id === next.levelId) : entityLevel(state.snapshot, next.selectedId))
@@ -390,10 +410,12 @@ export class ModelViewer {
   stopNavigation(): void { this.navigation.stop(); }
   async activateMouseLook(): Promise<'locked' | 'drag' | 'unavailable'> { return this.navigation.activateMouseLook(); }
   changeView(intent: ViewIntent): NavigationResult {
-    const result = this.navigation.change(intent); this.frames = 3; return result;
+    const result = this.navigation.change(intent); this.syncNavigationView(); this.frames = 3; return result;
   }
   returnToPose(pose: InsidePose): NavigationResult {
-    const result = this.navigation.returnTo(pose); this.frames = 3; return result;
+    const result = this.navigation.returnTo(pose, { allowLevelChange: true });
+    this.syncNavigationView(result.kind === 'changed' ? pose.levelId : undefined);
+    this.frames = 3; return result;
   }
 
   hide(): void { this.navigation.stop(); this.endDrag(false); this.markup?.hide(); this.pointer.reset(); this.hover(null); this.active = false; this.engine.stopRenderLoop(this.renderFrame); this.root.remove(); }
