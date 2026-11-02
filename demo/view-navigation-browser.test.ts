@@ -102,7 +102,12 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   const height = (await pose()).eye[2];
   await hold('Space'); assert.ok(Math.abs((await pose()).eye[2] - height) < .001);
   await hold('Shift'); const above = (await pose()).eye[2]; assert.ok(above > height + .1);
-  await hold('Control'); assert.ok((await pose()).eye[2] < above - .1);
+  await hold('Control'); assert.equal((await pose()).eye[2], above, 'Control is no longer a navigation key');
+  await page.keyboard.down('q'); await hold('w'); await page.keyboard.up('q');
+  const descended = await pose(); assert.ok(descended.eye[2] < above - .1 && descended.eye[1] > north.eye[1], 'Q and W descend while moving forward without a browser shortcut');
+  const shortcut = await page.locator('canvas').evaluate(node => node.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, bubbles: true, cancelable: true })));
+  assert.equal(shortcut, true, 'Browser command chords are not cancelled by the viewer');
+  await page.waitForTimeout(140); assert.deepEqual((await pose()).eye, descended.eye, 'Browser command chords cannot leave navigation moving');
   const facing: InsidePose = { ...start, forward: [Math.SQRT1_2, 0, Math.SQRT1_2], up: [-Math.SQRT1_2, 0, Math.SQRT1_2] };
   assert.equal((await page.evaluate(p => window.navHarness.returnTo(p), facing)).kind, 'changed');
   await page.locator('canvas').focus(); await hold('w'); const gaze = await pose();
@@ -111,8 +116,8 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   await page.locator('canvas').dispatchEvent('keydown', { key: 'w', repeat: true }); const escaped = await pose();
   await page.waitForTimeout(140); assert.deepEqual((await pose()).eye, escaped.eye); await page.keyboard.up('w');
   assert.equal(await page.evaluate(() => document.pointerLockElement === null), true);
-  await page.locator('#composer').focus(); const typing = await pose(); await page.keyboard.type('wasd WASD '); assert.deepEqual((await pose()).eye, typing.eye);
-  assert.equal(await page.locator('#composer').inputValue(), 'wasd WASD ');
+  await page.locator('#composer').focus(); const typing = await pose(); await page.keyboard.type('wasdq WASDQ '); assert.deepEqual((await pose()).eye, typing.eye);
+  assert.equal(await page.locator('#composer').inputValue(), 'wasdq WASDQ ');
   await page.locator('canvas').focus();
   await page.keyboard.down('w'); await page.evaluate(() => window.dispatchEvent(new Event('blur'))); const blurred = await pose();
   await page.waitForTimeout(140); assert.deepEqual((await pose()).eye, blurred.eye); await page.keyboard.up('w');
