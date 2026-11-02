@@ -134,7 +134,7 @@ const inspection = Type.Object({
       roomId: Type.Union([identifier, Type.Null()]), levelId: Type.Union([identifier, Type.Null()]), elevation: Type.Number() }), { maxItems: 32 }),
     layout: Type.Union([layout, Type.Null()]), floorBounds: Type.Union([bounds, Type.Null()]),
     rooms: Type.Array(Type.Object({ ...space.properties, clearBounds: bounds, entityIds: Type.Array(identifier) })),
-    doorConnections: Type.Array(Type.Object({ door, roomIds: Type.Array(identifier), exterior: Type.Boolean() })),
+    doorConnections: Type.Array(Type.Object({ door: Type.Union([door, opening]), roomIds: Type.Array(identifier), exterior: Type.Boolean() })),
     coordinates: Type.String(), suggestedDimensions: Type.Object({ desk: Type.Array(Type.Number()), monitor: Type.Array(Type.Number()),
       laptop: Type.Array(Type.Number()), chair: Type.Array(Type.Number()), table: Type.Array(Type.Number()), plant: Type.Array(Type.Number()) }),
   }),
@@ -457,7 +457,7 @@ const model = api.namespace({ name: 'model', description: 'Read a bound model an
     effect: 'draft-write', params: { input: AssetEditSchema }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context,
       () => previewAssets(call.context.snapshot, input), () => call.throwIfRevoked()) }),
   previewFloor: api.method({ summary: 'Compile a rectangular multi-room floor shell from rooms and hosted openings, in whole millimetres.',
-    description: 'Requires explicit floor-plan-reconstruction or building-reconstruction scope. Reconstructs one stable level, retaining its elevation, slab, roof, incident stairs, all contents and every other level. Rooms tile one rectangle; shared walls are generated once. Door/Window offsets run from each room side minimum X (north/south) or Y (east/west).',
+    description: 'Requires explicit floor-plan-reconstruction or building-reconstruction scope. Reconstructs one stable level, retaining its elevation, slab, roof, incident stairs, all contents and every other level. Rooms tile one rectangle; shared walls are generated once. Door/Opening/Window offsets run from each room side minimum X (north/south) or Y (east/west).',
     effect: 'draft-write', params: { input: FloorLayoutSchema }, result: Type.Object({ model: snapshot, changes }), handler: ({ input }, call) => stage(call.context, () => {
       const scope = call.context.binding.authoringScope;
       if (scope !== 'floor-plan-reconstruction' && scope !== 'building-reconstruction') throw new Error('Floor reconstruction requires explicit authoring scope.');
@@ -504,7 +504,7 @@ const guide = new DocsTree().addFile('/guides/model.md', 'Model units, scope, dr
   'On a building it retains that level elevation, slab, roof, incident stairs, all contents and every other level. Floor-only scope must target the bound level. ' +
   'Floor-only reconstruction authority resolves from the immutable base and request binding; transferring selected furnishings changes inspection context, never that authority. ' +
   'Supply level:{id,name}, 2..12 rooms:{id,name,boundsMm:{minX,minY,maxX,maxY}}, wallThicknessMm, heightMm and openings. ' +
-  'Each opening has type:Door|Window, id,name,roomId,side:north|south|east|west,offsetMm,widthMm,heightMm; Windows also require sillHeightMm. ' +
+  'Each opening has type:Door|Opening|Window, id,name,roomId,side:north|south|east|west,offsetMm,widthMm,heightMm; Opening is a permanent doorless passage; Windows also require sillHeightMm. ' +
   'All floor values are whole millimetres. Room bounds are wall centrelines; offsets run from the side minimum X for north/south or Y for east/west. ' +
   'Rooms tile each level rectangle; doors and stairs together must provide a path to a real exterior exit. Basement and attic do not each need an exterior door. Shared walls and opening hosts are compiled automatically. ' +
   'previewBuilding(input:BuildingLayout) requires building-reconstruction scope ONLY. Selection, spatial references and attached files never grant building authority. ' +
