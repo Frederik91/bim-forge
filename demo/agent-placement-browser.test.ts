@@ -61,7 +61,7 @@ test('Overview dispatch puts real door and wall task bodies beside geometry, vis
   const door = await submit('level-ground-door-inner');
   const baseline = await (await page.request.get(`${base}/api/projects/${door.projectId}`)).json();
   assert.ok(baseline && typeof baseline === 'object' && 'project' in baseline && typeof baseline.project === 'string');
-  const repository = RoomRepository.restore(baseline.project); const graph = repository.view(repository.head('main')).snapshot;
+  const repository = await RoomRepository.restore(baseline.project); const graph = repository.view(repository.head('main')).snapshot;
   const placement = parseTaskPlacement(door.taskPlacement); assert.equal(placement.kind, 'placed'); if (placement.kind !== 'placed') return;
   const host = graph.relationships.find(link => link.source === 'level-ground-door-inner'); assert.ok(host);
   const wall = graph.entities.find(entity => entity.id === host.target); assert.ok(wall?.type === 'Wall');
