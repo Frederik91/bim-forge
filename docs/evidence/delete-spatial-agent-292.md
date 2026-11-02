@@ -6,6 +6,8 @@ Delete agent is available in the selected agent's conversation controls and on e
 
 Unsent draft removal clears its text, attachment/context state and saved local draft. Another draft remains intact. Saved removal stops queued/working execution and fences late results; the saved conversation and proposal/review evidence remain in Chats. The accepted model is unchanged. A failed server deletion retains the visible agent and reports the error.
 
+Deleting the active agent explicitly returns the displayed model to the accepted source while retaining the actual eye, facing, level and motion. Its proposal remains available through saved history. Snapshot binding is checked separately from viewpoint continuity, because an orphaned proposal must not remain visible after closing its task.
+
 ## Implementation and persistence
 
 The existing request journal stores an optional literal `agentDeleted: true`. Deletion requires the currently reviewed request identity, is idempotent, and uses the existing cancellation decision/state and worker abort path. No database table migration or model entity change is introduced. Older binaries that strictly reject unknown stored fields cannot read flagged tickets; use a build supporting this field when reopening this preview data.

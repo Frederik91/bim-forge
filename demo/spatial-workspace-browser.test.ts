@@ -77,6 +77,8 @@ test('created draft and saved agents can be deleted from controls and Tasks with
   await page.locator('#new-chat').click();
   const b = await submit('Keep another independent door proposal.');
   const accepted = await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json();
+  assert.ok(accepted && typeof accepted === 'object' && typeof accepted.project === 'string');
+  const acceptedModel = await RoomRepository.restore(accepted.project);
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await page.route('**/api/change-requests/*/agent', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Deletion connection failed. Retry.' }) }));
   await list.locator(`[data-delete-agent="${a.id}"]`).click(); await confirm();
@@ -89,7 +91,10 @@ test('created draft and saved agents can be deleted from controls and Tasks with
   const pose = await capture(); const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
   await page.locator('#spatial-delete-agent').click(); await confirm();
   await page.waitForFunction(id => !document.querySelector(`.spatial-task-label[data-task-id="${id}"]`), a.id);
-  assert.deepEqual(await capture(), pose, 'Agent deletion retains the eye and facing');
+  const afterDeletion = await capture(); assert.ok(pose && afterDeletion);
+  assert.deepEqual({ eye: afterDeletion.eye, forward: afterDeletion.forward, up: afterDeletion.up, level: afterDeletion.levelId, motion: afterDeletion.motion },
+    { eye: pose.eye, forward: pose.forward, up: pose.up, level: pose.levelId, motion: pose.motion }, 'Agent deletion retains the actual viewpoint');
+  assert.ok(afterDeletion.sourcePin.startsWith(`main:${acceptedModel.head('main')}:`), 'Deleting the active agent returns the displayed model to the accepted source, never an orphaned proposal');
   assert.equal(await canvas.evaluate(node => node.isConnected), true);
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 0);
