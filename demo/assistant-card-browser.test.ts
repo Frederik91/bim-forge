@@ -93,6 +93,13 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     await page.locator('#spatial-task-list button[data-task-id]').first().click();
     await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
   }
+  const proposalContext = page.locator('.spatial-placement-notice').filter({ hasText: 'Task targets refer to the accepted model. Showing proposal geometry.' });
+  await page.waitForFunction(() => [...document.querySelectorAll('.spatial-placement-notice')].some(node => node.textContent?.includes('Showing proposal geometry.') && node.getBoundingClientRect().height > 0)
+    || [...document.querySelectorAll<HTMLButtonElement>('#request-chat button')].some(node => node.textContent === 'Inspect proposal' && !node.disabled));
+  if (!await proposalContext.isVisible()) await page.getByRole('button', { name: 'Inspect proposal', exact: true }).click();
+  await proposalContext.waitFor();
+  if (await page.locator('#assistant-dispatch-context').count()) await page.locator('#assistant-dispatch-context').waitFor();
+  await page.waitForFunction(() => !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
   await page.locator('#request-text').fill('Keep this follow-up reachable while the task is open.');
   await page.setViewportSize({ width: 320, height: 900 });
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
@@ -116,6 +123,12 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
   await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.scrollFallback === 'true');
   await page.locator('#request-text').scrollIntoViewIfNeeded();
+  t.diagnostic(JSON.stringify(await page.evaluate(() => ({ shortViewport: {
+    cardHeight: document.getElementById('workspace-context')?.getBoundingClientRect().height,
+    cardScrollTop: document.getElementById('workspace-context')?.scrollTop,
+    notices: [...document.querySelectorAll('.spatial-placement-notice')].filter(node => node.getBoundingClientRect().height > 0).map(node => node.textContent),
+    targets: ['request-text', 'save-proposal'].map(id => { const node = document.getElementById(id); if (!node) throw new Error(`Missing ${id}`); const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { id, top: box.top, bottom: box.bottom, hit: hit === node || node.contains(hit) }; }),
+  } }))));
   for (const selector of ['#request-text', '#save-proposal']) assert.equal(await page.locator(selector).evaluate(node => {
     const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit);
   }), true, 'Short viewport scrolling reaches each composer control');
@@ -124,5 +137,9 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit);
   }), true, 'Short viewport scrolling also reaches the transcript');
   await page.screenshot({ path: path.join(artifacts, 'short-320.png'), fullPage: true });
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.scrollFallback === 'false');
+  assert.equal(await panel.evaluate(node => node.scrollTop), 0, 'Leaving short-viewport fallback resets its outer scroll offset');
+  assert.equal(await handle.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true);
   assert.deepEqual(errors, []);
 });
