@@ -71,6 +71,7 @@ function placeKey(placement: TaskAgentPlacement): string {
 
 type Figure = {
   descriptor: TaskAgentDescriptor;
+  inView: boolean;
   readonly root: TransformNode;
   readonly meshes: readonly Mesh[];
   readonly materials: readonly StandardMaterial[];
@@ -155,10 +156,10 @@ export class SpatialTaskLayer {
 
   /** Caller supplies time from its existing render loop. Only reported working state can bob. */
   renderFrame(timeMs: number): void {
-    for (const { root, descriptor, hands, workBead } of this.#figures.values()) {
+    for (const { root, descriptor, hands, workBead, inView } of this.#figures.values()) {
       if (descriptor.placement.kind !== 'placed') continue;
       const [x, y, z] = descriptor.placement.origin;
-      const working = !this.#reducedMotion && root.isEnabled() && descriptor.state === 'working';
+      const working = !this.#reducedMotion && inView && (typeof document === 'undefined' || !document.hidden) && root.isEnabled() && descriptor.state === 'working';
       const bob = working ? Math.sin(timeMs / 550) * .018 : 0;
       root.position.set(x, z + .24 + bob, y);
       for (const [index, hand] of hands.entries()) {
@@ -188,7 +189,8 @@ export class SpatialTaskLayer {
     if (this.#disposed) return [];
     const viewport = camera.viewport.toGlobal(width, height);
     const transform = camera.getViewMatrix().multiply(camera.getProjectionMatrix());
-    return [...this.#figures.values()].map(({ descriptor, root }) => {
+    return [...this.#figures.values()].map(figure => {
+      const { descriptor, root } = figure; figure.inView = false;
       const base = { identity: structuredClone(descriptor.identity), candidates: this.#candidates(descriptor) };
       if (descriptor.placement.kind === 'unplaced') return { ...base, kind: 'hidden', reason: 'unplaced' };
       if (!descriptor.visible || descriptor.state === 'completed') return { ...base, kind: 'hidden', reason: 'hidden' };
@@ -200,6 +202,7 @@ export class SpatialTaskLayer {
         return { ...base, kind: 'hidden', reason: 'offscreen' };
       }
       if (this.#occluded(camera.globalPosition, point)) return { ...base, kind: 'hidden', reason: 'occluded' };
+      figure.inView = true;
       const body = Vector3.Project(root.position, Matrix.IdentityReadOnly, transform, viewport);
       return { ...base, kind: 'visible', x: projected.x, y: projected.y, bodyX: body.x, bodyY: body.y };
     });
@@ -267,7 +270,7 @@ export class SpatialTaskLayer {
     const workBead = part(MeshBuilder.CreateSphere('task-agent:working', { diameter: .045, segments: 8 }, this.#scene), new Vector3(0, -.22, .16), status, false);
     const unread = part(MeshBuilder.CreateSphere('task-agent:unread', { diameter: .065, segments: 12 }, this.#scene), new Vector3(0, .39, 0), material('unread', this.#tokens.proposed), false);
     const viewed = part(MeshBuilder.CreateTube('task-agent:viewed', { path: [new Vector3(-.04, .39, 0), new Vector3(-.01, .36, 0), new Vector3(.045, .425, 0)], radius: .008, tessellation: 8 }, this.#scene), Vector3.Zero(), material('viewed', this.#tokens.muted), false);
-    return { descriptor, root, meshes, materials, body, ring, hands, workBead, unread, viewed };
+    return { descriptor, inView: true, root, meshes, materials, body, ring, hands, workBead, unread, viewed };
   }
 
   #remove(figure: Figure): void {
