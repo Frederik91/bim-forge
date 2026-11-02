@@ -141,7 +141,7 @@ test('real Babylon rays and plan/geometry readers expose a 2 m empty wall void w
   const [x,y] = result.impact.after.centreMetres;
   const wallOnly = (mesh: {name: string}) => mesh.name.startsWith(result.impact.hostWallId + '-solid-');
   const ray = (offset: number, height = 1) => new Ray(modelPoint(x + offset, y - .5, height), new Vector3(0,0,1), 1);
-  for (const offset of [-.95, 0, .95]) assert.equal(viewer.scene.pickWithRay(ray(offset), wallOnly)?.hit, false, '2 m opening contains no wall infill');
+  for (const offset of [-.99, 0, .99]) assert.equal(viewer.scene.pickWithRay(ray(offset), mesh => viewer.isConstructionMesh(mesh))?.hit, false, 'Full 2 m passage contains no wall infill, leaf or inset door frame');
   assert.equal(viewer.scene.pickWithRay(ray(1.05), wallOnly)?.hit, true, 'Wall remains outside the opening');
   assert.equal(viewer.scene.pickWithRay(ray(0, 2.3), wallOnly)?.hit, true, 'Wall remains above the retained opening height');
   const source = { projectId: '11111111-1111-4111-8111-111111111111', target: { kind: 'main' } satisfies { kind: 'main' }, revisionId: 'b'.repeat(64), snapshot: result.snapshot };
