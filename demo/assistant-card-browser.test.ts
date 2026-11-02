@@ -87,10 +87,16 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
   await page.waitForFunction(width => Math.abs((document.getElementById('workspace-context')?.getBoundingClientRect().width ?? 0) - width) < 1, desktop.width);
   assert.ok(Math.abs((await bounds()).height - desktop.height) < 1, 'Desktop dimensions return after a narrow viewport');
+  if (await panel.getAttribute('data-assistant-mode') === 'personal') {
+    await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
+    await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+    await page.locator('#spatial-task-list button[data-task-id]').first().click();
+    await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
+  }
   await page.locator('#request-text').fill('Keep this follow-up reachable while the task is open.');
   await page.setViewportSize({ width: 320, height: 900 });
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
-  await page.locator('#spatial-delete-agent').waitFor();
+  if (await page.locator('#spatial-delete-agent').count()) await page.locator('#spatial-delete-agent').waitFor();
   await handle.focus();
   for (let step = 0; step < 40; step++) await page.keyboard.press('ArrowUp');
   const minimum = await page.evaluate(() => {
