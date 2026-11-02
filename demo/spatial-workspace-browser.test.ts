@@ -215,7 +215,10 @@ test('live native agent body opens the same saved task without moving the eye; e
   assert.equal(await page.locator('#request-text').evaluate(node => document.activeElement === node), true);
   assert.equal((await project()).head('main'), baseline); await page.locator('#request-text').fill('');
   for (const width of [390, 320]) {
-    await page.setViewportSize({ width, height: 900 }); await page.locator('#open-chat').click(); await page.waitForTimeout(150);
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+    await page.locator(`#spatial-task-list [data-task-id="${id}"]`).click();
+    await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.equal(await page.locator('#workspace-context-toggle').isVisible(), false, 'The old bottom Assistant toggle is redundant in the phone rail');
     assert.equal(await page.locator('#open-chat').isVisible(), true);
@@ -223,15 +226,19 @@ test('live native agent body opens the same saved task without moving the eye; e
     await page.screenshot({ path: path.join(artifacts, `narrow-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await tray.waitFor(); await page.locator('#workspace-context-close').click();
+  const accept = tray.getByRole('button', { name: /^Accept into/ });
+  assert.equal(await accept.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true, 'Expose the canvas acceptance action before using it');
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
-  await tray.getByRole('button', { name: /^Accept into/ }).click(); assert.equal((await decision).status(), 200);
+  await accept.click(); assert.equal((await decision).status(), 200);
   const accepted = await project(); const expected = spatialExpectedDoorSnapshot(before.view(baseline).snapshot);
   assert.deepEqual(accepted.view(accepted.head('main')).snapshot, expected);
   assert.deepEqual(diffSnapshots(before.view(baseline).snapshot, expected).entities.modified.map(item => item.id), [spatialFixtureManifest.doorId]);
   const origin = placement.origin; await page.reload(); await page.locator('#open-chat').click(); await page.locator('.spatial-task-launcher').click(); await page.locator(`#spatial-task-list button[data-task-id="${id}"]`).click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
   assert.deepEqual(parseTaskPlacement((await ticket()).taskPlacement), placement, 'Reload and acceptance preserve original placement and pinned targets');
   assert.deepEqual(parseTaskPlacement((await ticket()).taskPlacement).kind, 'placed'); assert.deepEqual(origin, placement.origin);
-  assert.match(await page.locator('.spatial-placement-notice').textContent() ?? '', /historical|stale/);
+  assert.match(await page.locator('.spatial-placement-notice[role="status"]').textContent() ?? '', /historical|stale/);
   await page.locator('#spatial-return-task').click();
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'overview');
   assert.match(await page.locator('#status').textContent() ?? '', /saved task point/);
