@@ -54,7 +54,7 @@ test('Overview dispatch puts real door and wall task bodies beside geometry, vis
   await page.goto(base); await page.locator('#project-template').selectOption('house');
   await page.locator('#project-name').fill('Agents beside selected geometry'); await page.locator('#create-project').click();
   await page.locator('#open-chat').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
-  await page.locator('#view-overview').click(); await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor();
+  await page.locator('#view-3d').click(); await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor();
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'overview');
   assert.equal(await page.evaluate(async () => { const url = '/room-app.mjs'; return (await import(url)).captureWorkspaceInsidePose(); }), null);
   const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
