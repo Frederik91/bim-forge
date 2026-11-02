@@ -3562,7 +3562,7 @@ function renderComparison(): void {
   ui['view-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
   ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d' && modelViewer?.navigationState.kind === 'overview'));
   ui['model-3d-controls'].hidden = modelView !== '3d';
-  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES · Native footprints · Linked IFC cuts unsupported' : modelViewer?.navigationState.kind === 'inside' ? 'INSIDE · WASD · Shift up / Ctrl down in Fly · Escape releases' : 'OVERVIEW · Orbit / pan / zoom';
+  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES · Native footprints · Linked IFC cuts unsupported' : modelViewer?.navigationState.kind === 'inside' ? 'INSIDE · WASD · Shift up / Q down in Fly · Escape releases' : 'OVERVIEW · Orbit / pan / zoom';
   updateViewChrome();
   ui['model-revision'].textContent = liveChatPreview ? `Live draft · update ${liveChatPreview.sequence} · base ${liveChatPreview.baseRevisionId.slice(0, 10)} · ${selected.entities.length} objects` : `Revision ${selectedRevision.slice(0, 10)} · ${selected.entities.length} objects`;
   ui['review-drawing'].dataset.modelView = modelView;
