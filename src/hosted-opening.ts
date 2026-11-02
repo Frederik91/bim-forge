@@ -17,6 +17,8 @@ const state = Type.Object({ widthMetres: Type.Number(), offsetMetres: Type.Numbe
   centreMetres: Type.Array(Type.Number(), { minItems: 3, maxItems: 3 }) }, exact);
 export const HostedDoorWidthImpactSchema = Type.Object({ doorId: id, hostWallId: id, relationshipId: id,
   anchor: Type.Literal('centre'), before: state, after: state }, exact);
+export const DoorToOpeningImpactSchema = Type.Object({ ...HostedDoorWidthImpactSchema.properties,
+  beforeKind: Type.Literal('Door'), afterKind: Type.Literal('Opening') }, exact);
 
 /** Pure native preview. Read dependencies and stored writes confer no acceptance authority. */
 export function previewHostedDoorWidth(baseSnapshot: unknown, value: unknown, options: { readable?: ModelGraph } = {}) {
@@ -27,7 +29,7 @@ export function previewHostedDoorWidth(baseSnapshot: unknown, value: unknown, op
   const base = validateSnapshot(baseSnapshot);
   const doorId = identifier(input.doorId);
   const door = base.entities.find(item => item.id === doorId);
-  if (door?.type !== 'Door') throw new Error('Choose an existing native Door. Linked and IFC identities are read-only.');
+  if (door?.type !== 'Door' && door?.type !== 'Opening') throw new Error('Choose an existing native Door or Opening. Linked and IFC identities are read-only.');
   const hosts = base.relationships.filter(link => link.source === door.id);
   const host = hosts[0];
   const wall = base.entities.find(item => item.id === host?.target);
@@ -72,7 +74,7 @@ export function previewHostedDoorWidth(baseSnapshot: unknown, value: unknown, op
   for (const link of hostLinks) {
     if (link.id === host.id) continue;
     const sibling = base.entities.find(item => item.id === link.source);
-    if (sibling && (sibling.type === 'Door' || sibling.type === 'Window')
+    if (sibling && (sibling.type === 'Door' || sibling.type === 'Opening' || sibling.type === 'Window')
         && offsetMm / 1000 < link.offset + sibling.width - 1e-9 && offsetMm / 1000 + widthMetres > link.offset + 1e-9) {
       throw new Error('Hosted openings cannot overlap.');
     }
@@ -86,5 +88,19 @@ export function previewHostedDoorWidth(baseSnapshot: unknown, value: unknown, op
   const impact = { doorId: door.id, hostWallId: wall.id, relationshipId: host.id, anchor: input.anchor,
     before: { widthMetres: door.width, offsetMetres: host.offset, centreMetres: centre(door.width, host.offset) },
     after: { widthMetres, offsetMetres: offsetMm / 1000, centreMetres: centre(widthMetres, offsetMm / 1000) } } satisfies Static<typeof HostedDoorWidthImpactSchema>;
+  return { snapshot, delta: diffSnapshots(base, snapshot), impact };
+}
+
+/** Convert the selected native door into a permanent void, preserving identity, host and centre. */
+export function previewDoorToOpening(baseSnapshot: unknown, value: unknown, options: { readable?: ModelGraph } = {}) {
+  const base = validateSnapshot(baseSnapshot);
+  const input = plainScopeData(value);
+  if (!Check(HostedDoorWidthRequestSchema, input)) throw new Error('Provide an exact native door ID, bounded widthMetres and centre anchor.');
+  const door = base.entities.find(item => item.id === input.doorId);
+  if (door?.type !== 'Door') throw new Error('Conversion requires an existing native Door.');
+  const converted = validateSnapshot({ ...base, entities: base.entities.map(item => item.id === door.id ? { ...door, type: 'Opening' } : item) });
+  const widened = previewHostedDoorWidth(converted, input, options);
+  const snapshot = widened.snapshot;
+  const impact = { ...widened.impact, beforeKind: 'Door', afterKind: 'Opening' } satisfies Static<typeof DoorToOpeningImpactSchema>;
   return { snapshot, delta: diffSnapshots(base, snapshot), impact };
 }

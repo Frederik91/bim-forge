@@ -1,4 +1,4 @@
-import type { Bounds, Door, Entity, ModelGraph, Point, Space, Stair, Wall } from './room-model.ts';
+import type { Bounds, Door, Opening, Entity, ModelGraph, Point, Space, Stair, Wall } from './room-model.ts';
 import { entityLevel, levelView, levels, roofHeightAt, stairFootprint } from './building-levels.ts';
 
 export function spaces(snapshot: ModelGraph): Space[] {
@@ -66,11 +66,11 @@ export function entitySpace(snapshot: ModelGraph, entity: Entity): Space | null 
   return null;
 }
 
-export interface DoorConnection { door: Door; roomIds: string[]; exterior: boolean }
+export interface DoorConnection { door: Door | Opening; roomIds: string[]; exterior: boolean }
 
 /** Opening endpoints, not just its midpoint, must belong to each connected room side. */
 export function doorConnections(snapshot: ModelGraph): DoorConnection[] {
-  return snapshot.entities.filter((item): item is Door => item.type === 'Door').map((door) => {
+  return snapshot.entities.filter((item): item is Door | Opening => item.type === 'Door' || item.type === 'Opening').map((door) => {
     const host = snapshot.relationships.find((link) => link.source === door.id);
     const wall = snapshot.entities.find((item) => item.id === host?.target);
     if (!host || wall?.type !== 'Wall') throw new Error('Door requires a wall host.');
@@ -93,7 +93,7 @@ export function doorConnections(snapshot: ModelGraph): DoorConnection[] {
 }
 
 /** The same inward/bidirectional clearance applies to furnishings and stair landings/voids. */
-export function doorClearanceBounds(snapshot: ModelGraph, door: Door): Bounds {
+export function doorClearanceBounds(snapshot: ModelGraph, door: Door | Opening): Bounds {
   const host = snapshot.relationships.find((link) => link.source === door.id);
   const wall = snapshot.entities.find((item) => item.id === host?.target);
   if (!host || wall?.type !== 'Wall') throw new Error('Door requires a wall host.');
@@ -104,7 +104,8 @@ export function doorClearanceBounds(snapshot: ModelGraph, door: Door): Bounds {
   const dx = (wall.end[0] - wall.start[0]) / length; const dy = (wall.end[1] - wall.start[1]) / length;
   const x1 = wall.start[0] + dx * host.offset; const y1 = wall.start[1] + dy * host.offset;
   const x2 = x1 + dx * door.width; const y2 = y1 + dy * door.width;
-  const clearance = Math.max(.9, door.width);
+  // Doorless passages reserve access space without inventing a door-leaf sweep.
+  const clearance = door.type === 'Opening' ? .9 : Math.max(.9, door.width);
   if (spaces(view).length) return dx !== 0
     ? { minX: Math.min(x1, x2), maxX: Math.max(x1, x2), minY: y1 - clearance, maxY: y1 + clearance }
     : { minY: Math.min(y1, y2), maxY: Math.max(y1, y2), minX: x1 - clearance, maxX: x1 + clearance };
@@ -158,7 +159,7 @@ function validateSingleFloor(snapshot: ModelGraph, levelId?: string): void {
         && Math.min(other.start[axis], other.end[axis]) < high && Math.max(other.start[axis], other.end[axis]) > low)) throw new Error('Shared walls must exist once, without duplicate overlapping segments.');
     const openings = snapshot.relationships.filter((link) => link.target === wall.id).map((link) => {
       const item = snapshot.entities.find((entity) => entity.id === link.source);
-      if (item?.type !== 'Door' && item?.type !== 'Window') throw new Error('Invalid opening.');
+      if (item?.type !== 'Door' && item?.type !== 'Opening' && item?.type !== 'Window') throw new Error('Invalid opening.');
       if (item.type === 'Window' && item.sillHeight + item.height > wall.height) throw new Error('Window must fit below the wall top.');
       return { start: link.offset, end: link.offset + item.width };
     }).sort((a, b) => a.start - b.start);
@@ -212,7 +213,7 @@ export function validateFloorPlan(snapshot: ModelGraph): void {
       if (minimum <= 0) throw new Error('Roof underside must remain above its level.');
     }
     for (const opening of view.entities) {
-      if (opening.type !== 'Door' && opening.type !== 'Window') continue;
+      if (opening.type !== 'Door' && opening.type !== 'Opening' && opening.type !== 'Window') continue;
       const host = view.relationships.find((link) => link.source === opening.id);
       const wall = view.entities.find((item) => item.id === host?.target);
       if (!host || wall?.type !== 'Wall') continue;
@@ -245,7 +246,7 @@ export function validateFloorPlan(snapshot: ModelGraph): void {
     const upper = spaceForFootprint(upperView, footprint);
     if (!lower || !upper) throw new Error('The complete stair footprint must fit a room at both endpoints.');
     for (const view of [lowerView, upperView]) for (const entity of view.entities) {
-      if (entity.type === 'Door' && overlapsBounds(footprint, doorClearanceBounds(view, entity))) {
+      if ((entity.type === 'Door' || entity.type === 'Opening') && overlapsBounds(footprint, doorClearanceBounds(view, entity))) {
         throw new Error('Stair flights and slab voids must remain clear of door clearance zones.');
       }
     }

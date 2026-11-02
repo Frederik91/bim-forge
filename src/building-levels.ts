@@ -17,7 +17,7 @@ export function entityLevel(snapshot: ModelGraph, entityOrId: Entity | string): 
     return room ? entityLevel(snapshot, room) : null;
   }
   if (entity.type === 'Level') return entity;
-  if (entity.type === 'Door' || entity.type === 'Window') {
+  if (entity.type === 'Door' || entity.type === 'Opening' || entity.type === 'Window') {
     const host = snapshot.relationships.find((link) => link.source === entity.id);
     const wall = snapshot.entities.find((item) => item.id === host?.target);
     return wall?.type === 'Wall' ? entityLevel(snapshot, wall) : null;
