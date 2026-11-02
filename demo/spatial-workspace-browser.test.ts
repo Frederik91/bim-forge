@@ -123,7 +123,7 @@ test('live native agent body opens the same saved task without moving the eye; e
   t.after(async () => { await page.screenshot({ path: path.join(artifacts, 'last.png'), fullPage: true }); t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() })); await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers(); await fs.rm(directory, { recursive: true, force: true }); });
   const capture = () => page.evaluate(async () => { const url = '/room-app.mjs'; const api = await import(url); return api.captureWorkspaceInsidePose(); });
   await page.goto(base); await page.locator('#project-template').selectOption('house'); await page.locator('#project-name').fill('Live spatial fixture'); await page.locator('#create-project').click();
-  await page.locator('#open-chat').click();
+  await page.locator('#open-chat').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'inside');
   await page.evaluate(async () => { const url = '/room-app.mjs'; const api = await import(url); const pose = api.captureWorkspaceInsidePose(); const n = Math.sqrt(1.25); if (!pose || !api.returnWorkspaceToPose({ ...pose, eye: [2, 3.45, 1.6], forward: [1 / n, 0, -.5 / n], up: [.5 / n, 0, 1 / n], motion: 'fly' })) throw new Error('Explicit fixture eye could not open'); });
   await page.locator('#new-chat').click(); await page.locator('.model-object-picker').selectOption(spatialFixtureManifest.doorId);
