@@ -162,7 +162,7 @@ export function previewWallShift(baseSnapshot: unknown, input: WallShiftRequest)
       if (item.type === 'Equipment') {
         const [x, y] = item.position;
         const footprint = { minX: x - item.width / 2, maxX: x + item.width / 2, minY: y - item.depth / 2, maxY: y + item.depth / 2 };
-        if (candidateView.entities.some((door) => door.type === 'Door' && overlapsBounds(footprint, doorClearanceBounds(candidateView, door)))) {
+        if (candidateView.entities.some((door) => (door.type === 'Door' || door.type === 'Opening') && overlapsBounds(footprint, doorClearanceBounds(candidateView, door)))) {
           throw new Error(`Equipment ${item.id} blocks a door clearance zone.`);
         }
       }

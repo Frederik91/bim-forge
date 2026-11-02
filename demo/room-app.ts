@@ -1,5 +1,6 @@
 import { SpatialWorkspacePresentation } from './spatial-workspace-presentation.ts';
-import type { TaskAgentDescriptor } from './spatial-task-layer.ts';
+import { taskDispatchPoint } from './task-dispatch.ts';
+import type { TaskAgentDescriptor, TaskAgentIdentity } from './spatial-task-layer.ts';
 import { parseTaskPlacement } from '../src/task-placement.ts';
 import type { TaskOrigin, TaskPlacement } from '../src/task-placement.ts';
 import { createResidentialProject } from '../src/residential-floor.ts';
@@ -48,7 +49,7 @@ import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 import type {
-  Door, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, ModelGraph, Point, ProposalReview, RoomLayout, Wall, Window,
+  Door, Opening, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, ModelGraph, Point, ProposalReview, RoomLayout, Wall, Window,
 } from '../src/room-model.ts';
 import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pilot.ts';
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
@@ -630,7 +631,7 @@ const designWorkspace = new DesignWorkspace(generic('design-views-mount'), {
 });
 button('open-project-evidence').addEventListener('click', () => showPage('evidence'));
 button('fork-selected-baseline').addEventListener('click', () => designWorkspace.createAlternative());
-button('open-chat').addEventListener('click', () => { showPage('request'); showRequestPane('details'); ui['request-text'].focus(); });
+button('open-chat').addEventListener('click', () => { void perform(async () => { await openPersonalAssistant(); }); });
 button('selection-properties').addEventListener('click', () => {
   if (linkedSelection) {
     if (!linkedReferenceDetails(linkedSelection)) return;
@@ -747,9 +748,12 @@ function recoverFloorDraft(): boolean {
 function taskIdentity(): { projectId: string | undefined; ticketId: string | null; draftId: string } {
   return { projectId: repo?.projectId, ticketId: tasks.projection.ticketId, draftId: tasks.projection.draftId };
 }
+const personalDraftKeys = new Map<string, string>();
+let personalReferenceId: string | null = null;
 const spatialWorkspace = new SpatialWorkspacePresentation({
   stage: generic('workspace-shell').querySelector<HTMLElement>('.workspace-stage') ?? generic('workspace-shell'),
   panel: generic('workspace-context'),
+  remove: identity => { void perform(() => deleteSpatialAgent(identity)); },
   open: identity => { void perform(async () => {
     if (!repo || identity.projectId !== repo.projectId) return;
     if (identity.kind === 'task') await openConversation(identity.ticketId);
@@ -773,6 +777,13 @@ const spatialWorkspace = new SpatialWorkspacePresentation({
     saveChatDraft(); updateSpatialWorkspace(); status('Draft context refreshed explicitly. Its original point, message and attachments are retained.');
   },
 });
+const personalAssistantButton = element('button', 'Personal assistant');
+personalAssistantButton.type = 'button'; personalAssistantButton.id = 'personal-assistant';
+personalAssistantButton.title = 'Assign a separate task while this agent continues working';
+personalAssistantButton.addEventListener('click', () => { void perform(async () => { await openPersonalAssistant(); }); });
+generic('workspace-context').querySelector('.spatial-conversation-tools')?.prepend(personalAssistantButton);
+const dispatchContext = element('p', '', 'spatial-placement-notice'); dispatchContext.id = 'assistant-dispatch-context';
+generic('workspace-context').querySelector('.spatial-conversation-tools')?.after(dispatchContext);
 let spatialProjectionPending = false;
 tasks.observeWorkspace(() => {
   if (spatialProjectionPending) return;
@@ -796,7 +807,19 @@ function ensureDraftOrigin(): void {
   }
 }
 function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlacement {
-  ensureDraftOrigin(); const origin = draftOrigin;
+  if (!repo || !preview || selectedDesignTarget.kind === 'baseline') throw new Error('Open a writable accepted design before assigning a task.');
+  const graph = preview;
+  const pose = modelView === '3d' ? captureWorkspaceInsidePose() : null;
+  const planSvg = modelView === 'plan' ? ui['proposal-drawing'].querySelector<SVGSVGElement>('svg') : null;
+  const plan = planSvg ? getWorkspacePlanContext(planSvg) : null;
+  const location = pose?.eye ?? plan?.projection.inverse([plan.width / 2, plan.height / 2]).point ?? null;
+  const markups = conversationMarkups(chatVisual);
+  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: location });
+  const objectLevels = new Set(selectedObjectIds.map(id => entityLevel(graph, id)?.id ?? null));
+  const levelId = markups.length ? chatVisual?.levelId ?? activeLevelId
+    : selectedObjectIds.length ? objectLevels.size === 1 ? [...objectLevels][0] ?? null : null : activeLevelId;
+  const origin: TaskOrigin | null = point ? { snapshot: { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision },
+    frame: 'project-engineering-metres', view: modelView === '3d' ? '3d' : '2d', levelId, point: [...point] } : null;
   if (!origin) return { version: 1, kind: 'unplaced', reason: 'not-provided' };
   if (!repo || origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget)) {
     throw new Error('The draft source changed. Use Refresh draft context to retain its point and explicitly bind the new source before sending.');
@@ -820,37 +843,38 @@ function currentTaskObjectIds(placement: TaskPlacement): string[] {
 function spatialDescriptors(): TaskAgentDescriptor[] {
   if (!repo) return [];
   const projectId = repo.projectId;
-  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.map(ticket => ({
+  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.filter(ticket => !ticket.agentDeleted).map(ticket => ({
     identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state,
     placement: ticket.taskPlacement.kind === 'placed' ? { kind: 'placed', origin: ticket.taskPlacement.origin.point } : { kind: 'unplaced' },
     selected: ticket.id === tasks.projection.ticketId, visible: true,
   }));
-  for (const [key, draft] of tasks.projection.drafts) {
-    if (draft.projectId !== projectId || draft.ticketId || key === tasks.key) continue;
-    descriptors.push({ identity: { kind: 'draft', projectId, draftId: draft.draftId }, title: draft.text.trim().slice(0, 60) || 'New conversation', state: 'unsent',
-      placement: draft.spatial.origin ? { kind: 'placed', origin: draft.spatial.origin.point } : { kind: 'unplaced' }, selected: false, visible: true });
-  }
-  if (!tasks.projection.ticketId) descriptors.push({ identity: { kind: 'draft', projectId, draftId: tasks.projection.draftId }, title: 'New conversation', state: 'unsent',
-    placement: draftOrigin ? { kind: 'placed', origin: draftOrigin.point } : { kind: 'unplaced' }, selected: true, visible: true });
   return descriptors;
 }
 function updateSpatialWorkspace(): void {
   const ticket = tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId);
+  personalAssistantButton.hidden = !ticket;
+  dispatchContext.textContent = ticket ? 'Replies continue this task. Personal assistant starts separate work.'
+    : conversationMarkups(chatVisual).length ? 'Describe the change. I’ll assign an agent to the marked area.'
+      : personalReferenceId || chatVisual?.selectedObjectIds.length ? 'Describe the change. I’ll assign an agent to the referenced item.'
+        : 'Describe the change. With no reference selected, I’ll place its agent where you are.';
+  generic('workspace-context').dataset.assistantMode = ticket ? 'task' : 'personal';
+  if (currentPage === 'request') generic('workspace-context-heading').textContent = ticket ? 'Task agent' : 'Personal assistant';
+  button('new-chat').textContent = 'New task';
   const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
   const staleDraft = !ticket && !!origin && (origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget));
   const stale = ticket?.taskPlacement.kind === 'placed' && (ticket.taskPlacement.origin.snapshot.revisionId !== selectedRevision || ticket.taskPlacement.targets.objects.some(ref => ref.kind === 'ifc'));
   const resolution = tasks.projection.placementResolution;
   const unresolved = resolution?.kind === 'placed' ? [resolution.origin, ...resolution.objects, ...resolution.regions].filter(pin => pin.status !== 'current') : [];
   const showingProposal = !!origin && serverAcceptedRepository?.designTargets().find(view => designKey(view.target) === designKey(parseDesignTarget(origin.snapshot.target)))?.revisionId === origin.snapshot.revisionId && selectedRevision !== origin.snapshot.revisionId;
-  const notice = tasks.projection.offline ? 'Connection unavailable. Showing the last server task state; decisions wait for reconnection.' : unresolved.length ? unresolved.map(pin => `${pin.status}: ${pin.detail}`).join(' ') : staleDraft ? 'Draft source changed. Refresh context explicitly before sending.' : showingProposal ? 'Task targets refer to the accepted model. Showing proposal geometry.' : stale ? 'Saved context is historical or needs source verification. Original targets are retained; inspect their evidence before refreshing context.'
-    : !origin ? 'Unplaced conversation. Open it from Tasks; no spatial point has been inferred.' : '';
+  const notice = ticket?.agentDeleted ? 'This agent was deleted. Saved conversation and review history remain available; start a new chat to assign more work.' : tasks.projection.offline ? 'Connection unavailable. Showing the last server task state; decisions wait for reconnection.' : unresolved.length ? unresolved.map(pin => `${pin.status}: ${pin.detail}`).join(' ') : staleDraft ? 'Draft source changed. Refresh context explicitly before sending.' : showingProposal ? 'Task targets refer to the accepted model. Showing proposal geometry.' : stale ? 'Saved context is historical or needs source verification. Original targets are retained; inspect their evidence before refreshing context.'
+    : ticket && !origin ? 'Unplaced conversation. Open it from Tasks; no spatial point has been inferred.' : '';
   const descriptors = spatialDescriptors();
-  spatialWorkspace.update(descriptors, notice, !!origin, staleDraft);
+  spatialWorkspace.update(descriptors, notice, !!ticket && !!origin, staleDraft);
   modelViewer?.setTasks(repo?.projectId ?? null, descriptors);
 }
 
 function captureChatDraft() {
-  return { ...taskIdentity(), spatial: { origin: draftOrigin, pose: draftCreationPose, key: draftOriginKey }, text: ui['request-text'].value, name: ui['proposal-name'].value,
+  return { ...taskIdentity(), personalReferenceId, spatial: { origin: draftOrigin, pose: draftCreationPose, key: draftOriginKey }, text: ui['request-text'].value, name: ui['proposal-name'].value,
     model: repo, reviewModel: reviewRepository, revision: selectedRevision, branch: selectedBranch, designTarget: selectedDesignTarget, conversationTarget, selection: selectedObject,
     room: focusedRoomId, level: activeLevelId, view: modelView, preview, layout, visual: chatVisual, marker: visualDraft, inspection: inspectedChatView,
     sources: sourcePicker.ready ? sourcePicker.sources : [], invalid: invalidInput, evidencePins: chatEvidencePins, evidenceEdited: chatEvidenceEdited,
@@ -862,6 +886,8 @@ function captureChatDraft() {
 function saveChatDraft(): void {
   if (!repo) return;
   const key = currentChatKey();
+  if (tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId)?.agentDeleted) return;
+  if (!tasks.projection.ticketId) personalDraftKeys.set(repo.projectId, key);
   if (requestDirty()) tasks.saveDraft(key, captureChatDraft()); else tasks.deleteDraft(key);
 }
 function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
@@ -874,6 +900,7 @@ function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
   invalidInput = draft.invalid;
   draftOrigin = draft.spatial.origin; draftCreationPose = draft.spatial.pose; draftOriginKey = draft.spatial.key;
   if (draft.ticketId) tasks.selectTask(draft.ticketId); else tasks.startTask(draft.draftId);
+  personalReferenceId = draft.personalReferenceId;
   chatEvidencePins = draft.evidencePins; chatEvidenceEdited = draft.evidenceEdited;
   activeReview = draft.review; activeTicketId = draft.reviewTicketId; activeChatProposalMessageId = draft.proposalMessageId;
   ui['request-text'].value = draft.text; ui['proposal-name'].value = draft.name;
@@ -935,6 +962,39 @@ async function discardRequest(message: string): Promise<boolean> {
     target.addEventListener('close', () => { if (target.returnValue === 'discard') { forgetFloorDraft(currentChatKey()); tasks.deleteDraft(currentChatKey()); } resolve(target.returnValue === 'discard'); }, { once: true });
     openDialog(target);
   });
+}
+
+async function deleteSpatialAgent(identity: TaskAgentIdentity): Promise<void> {
+  if (!repo || repo.projectId !== identity.projectId) return;
+  const key = `${identity.projectId}:${identity.kind === 'task' ? identity.ticketId : identity.draftId}`;
+  const ticket = identity.kind === 'task' ? tasks.projection.tickets.find(item => item.id === identity.ticketId) : null;
+  if (identity.kind === 'task' && (!ticket || ticket.agentDeleted)) return;
+  const target = dialog('delete-agent-dialog');
+  generic('delete-agent-message').textContent = ticket
+    ? 'Remove this agent from the model and Tasks? Any active work will stop. Its saved conversation, proposals and review history will remain in Chats. The accepted model will stay unchanged.'
+    : 'Delete this agent and its unsent draft, including attached context and files? The accepted model will stay unchanged.';
+  const generation = tasks.generation;
+  target.returnValue = 'keep';
+  const confirmed = new Promise<boolean>(resolve => target.addEventListener('close', () => resolve(target.returnValue === 'delete'), { once: true }));
+  openDialog(target);
+  if (!await confirmed) return;
+  tasks.requireCurrent(generation);
+  const current = key === currentChatKey();
+  const accepted = current ? await projects.read(identity.projectId) : null;
+  tasks.requireCurrent(generation);
+  if (ticket) await tasks.deleteAgent({ ticketId: ticket.id, expectedRequestId: ticket.request.requestId });
+  tasks.requireCurrent(generation);
+  tasks.deleteDraft(key); sourcePicker.deleteDraft(key); forgetFloorDraft(key); chatInspectionOrigins.delete(key);
+  if (current) {
+    clearRequestSources(); visualDraft = null; invalidInput = false;
+    ui['request-text'].value = ''; ui['proposal-name'].value = '';
+    await openPersonalAssistant(true, accepted);
+    closeChatSwitcher();
+  }
+  renderChatSwitcher(); updateSpatialWorkspace();
+  const list = generic('spatial-task-list');
+  if (!current && !list.hidden) list.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  status(ticket ? 'Agent deleted. Its saved conversation and review history remain in Chats.' : 'Agent and unsent draft deleted. Start a new chat when you need another agent.');
 }
 
 function evidenceById(id: EvidenceItem['id']): EvidenceItem | undefined {
@@ -1235,7 +1295,8 @@ function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
   const writable = serverAvailable && !busy && !dragging;
-  const authoring = writable && selectedDesignTarget.kind !== 'baseline';
+  const authoring = writable && selectedDesignTarget.kind !== 'baseline'
+    && !tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId)?.agentDeleted;
   generic('design-readonly-banner').hidden = selectedDesignTarget.kind !== 'baseline';
   button('fork-selected-baseline').disabled = !writable;
   button('show-linked-3d').disabled = !repo || !linkedDisplays.some(link => link.visible);
@@ -1249,6 +1310,7 @@ function updateControls() {
   for (const control of geometryControls) control.disabled = !authoring || !layout || Boolean(gesture) || Boolean(tasks.projection.ticketId);
   ui['project-template'].disabled = !writable;
   ui['selected-object'].disabled = busy || !preview || dragging;
+  modelViewer?.setSelectionDisabled(ui['selected-object'].disabled);
   ui['proposal-name'].disabled = !authoring || !preview || Boolean(gesture) || Boolean(tasks.projection.ticketId);
   ui['request-text'].disabled = !authoring || !preview || Boolean(gesture);
   sourcePicker.setDisabled(!authoring || !preview || Boolean(reviewRepository && !tasks.projection.ticketId));
@@ -1335,8 +1397,8 @@ function resetEditor() {
   ui['selected-object'].replaceChildren(...objects.map((object) => {
     const option = element('option', object.name); option.value = object.id; return option;
   }));
-  if (!objects.some((object) => object.id === selectedObject) && !(tasks.projection.ticketId && selectedObject === '')) selectedObject = objects[0]?.id ?? '';
-  if (tasks.projection.ticketId && selectedObject === '') ui['selected-object'].prepend(new Option('Saved reference unavailable · choose an item', ''));
+  if (selectedObject && !objects.some((object) => object.id === selectedObject)) selectedObject = '';
+  ui['selected-object'].prepend(new Option(tasks.projection.ticketId ? 'Saved reference unavailable · choose an item' : 'No reference selected · use my location', ''));
   syncInspector();
 }
 
@@ -1400,6 +1462,7 @@ function chooseObject(id: string): void {
   if (invalidInput && !window.confirm('Discard the incomplete or invalid input and select another object?')) return;
   if (linkedSelection) linkedPanel.select(null);
   invalidInput = false; clearError(); selectedObject = id; inspectedComparison = null;
+  if (!tasks.projection.ticketId) personalReferenceId = id || null;
   const item = preview?.entities.find((entity) => entity.id === id);
   if (item?.type === 'Space') focusedRoomId = item.id;
   else if (preview && focusedRoomId && item) focusedRoomId = entitySpace(preview, item)?.id ?? focusedRoomId;
@@ -1712,24 +1775,36 @@ ui['open-room'].addEventListener('click', () => {
   showPage('request');
   status(`Model opened at revision ${selectedRevision.slice(0, 10)}. Plan and 3D share the same selection.`);
 });
-async function beginRequest(): Promise<boolean> {
+async function openPersonalAssistant(fresh = false, acceptedProject: RoomRepository | null = null): Promise<boolean> {
   if (!repo) return false;
   if (selectedDesignTarget.kind === 'baseline') throw new Error('Create an alternative from this baseline to request changes.');
+  if (!fresh && !tasks.projection.ticketId && !reviewRepository && !liveChatPreview) {
+    if (!personalDraftKeys.has(repo.projectId) && !personalReferenceId) { selectedObject = ''; syncInspector(); renderComparison(); }
+    personalDraftKeys.set(repo.projectId, tasks.key);
+    showPage('request'); showRequestPane('details'); ui['request-text'].focus(); return true;
+  }
   saveChatDraft();
+  const key = !fresh ? personalDraftKeys.get(repo.projectId) : undefined;
+  const draft = key ? tasks.getDraft(key) : undefined;
+  const accepted = acceptedProject ?? await projects.read(repo.projectId);
   closeChat();
-  tasks.startTask();
+  if (draft) tasks.startTask(draft.draftId); else tasks.startTask();
+  personalReferenceId = null;
+  if (!draft) selectedObject = '';
+  personalDraftKeys.set(repo.projectId, tasks.key);
   draftOrigin = null; draftCreationPose = null; draftOriginKey = tasks.key;
   sourcePicker.switchDraft(`${repo.projectId}:${tasks.projection.draftId}`);
-  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
-  renderComparison();
-  const accepted = await projects.read(repo.projectId);
+  if (!draft) clearRequestSources();
+  ui['request-text'].value = ''; ui['proposal-name'].value = '';
   displayAccepted(accepted);
   reviewRepository = null; activeTicketId = null; activeReview = null;
   selectedBranch = 'main'; selectedRevision = selectedDesignHead(repo);
-  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
-  resetEditor(); render(); showPage('request');
+  if (draft) restoreChatDraft(draft);
+  else { resetEditor(); render(); }
+  showPage('request'); showRequestPane('details'); ui['request-text'].focus();
   return true;
 }
+async function beginRequest(): Promise<boolean> { return openPersonalAssistant(true); }
 function openRoomRequest(roomId: string | null): void {
   if (busy) return;
   void perform(async () => {
@@ -1936,7 +2011,7 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (guided) { instruction = guided.instruction; sources = guided.sources; }
     const scope = scopeBuilder.request();
     const hasMarkup = conversationMarkups(chatVisual).length > 0;
-    const implicitNativeSelection = !hasMarkup && linkedSelection === null && selectedObject ? [selectedObject] : [];
+    const implicitNativeSelection = !hasMarkup && linkedSelection === null && personalReferenceId ? [personalReferenceId] : [];
     const visualIntent = visualDraft ? { kind: 'spatial-reference', destination: visualDraft }
       : JSON.stringify(preview) !== JSON.stringify(repo.view(selectedRevision).snapshot) ? { kind: 'rectangle-layout-sketch', layout } : { kind: 'selection' };
     const frozenTarget = repo.freezeDesignTarget(selectedDesignTarget);
@@ -1972,8 +2047,9 @@ ui['proposal-form'].addEventListener('submit', (event) => {
     if (!acknowledgement.preserveDraft) resetEditor();
     renderComparison();
     await refreshBacklog();
-    await refreshConversation();
-    status(acknowledgement.preserveDraft ? 'The original submission was confirmed. Your later edits and attachments remain unsent in this conversation.' : `“${requestLabel(submittedName)}” started. Continue this conversation below while the agent works.`);
+    if (acknowledgement.preserveDraft) await refreshConversation();
+    else await openPersonalAssistant(true);
+    status(acknowledgement.preserveDraft ? 'The original submission was confirmed. Your later edits and attachments remain unsent in this conversation.' : `“${requestLabel(submittedName)}” assigned to a new agent. Your personal assistant is ready for the next task; open that agent to follow up.`);
     showRequestPane('details');
   }).then(() => ui['request-text'].focus());
 });
@@ -2630,7 +2706,7 @@ function isEquipment(entity: Entity): entity is Equipment { return entity.type =
 function entry(snapshot: ModelGraph): Door | undefined {
   return snapshot.entities.find((entity): entity is Door => entity.type === 'Door' && entity.id === 'door-entry');
 }
-function hostFor(snapshot: ModelGraph, opening: Door | Window | undefined): { link: HostingRelationship; wall: Wall } | null {
+function hostFor(snapshot: ModelGraph, opening: Door | Opening | Window | undefined): { link: HostingRelationship; wall: Wall } | null {
   if (!opening) return null;
   const link = snapshot.relationships.find((relation): relation is HostingRelationship => relation.type === 'hosted-by' && relation.source === opening.id);
   const wall = link && snapshot.entities.find((entity): entity is Wall => entity.id === link.target && entity.type === 'Wall');
@@ -3343,6 +3419,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
+    modelViewer.setSelectionDisabled(busy || Boolean(gesture || visualGesture));
     modelViewer.setTasks(requireRepository().projectId, spatialDescriptors());
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
     modelViewer.show(host, { projectId: requireRepository().projectId, navigationTarget: designKey(selectedDesignTarget), navigationPin: `${designKey(selectedDesignTarget)}:${selectedRevision}:${JSON.stringify(snapshot)}`, snapshot, comparison, taskTargetIds: currentTaskHighlights(), selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,

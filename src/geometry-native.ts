@@ -39,7 +39,7 @@ function wallMeshes(snapshot: ModelSnapshot, wall: Wall, work: GeometryWork): Ge
   const point = (x: number, y: number, z: number): Vec3 => [wall.start[0] + x * c - y * s, wall.start[1] + x * s + y * c, base + z];
   const openings = snapshot.relationships.filter(link => link.target === wall.id).flatMap(link => {
     const opening = snapshot.entities.find(entity => entity.id === link.source);
-    return opening?.type === 'Door' || opening?.type === 'Window' ? [{ start: link.offset, end: link.offset + opening.width,
+    return opening?.type === 'Door' || opening?.type === 'Opening' || opening?.type === 'Window' ? [{ start: link.offset, end: link.offset + opening.width,
       bottom: opening.type === 'Window' ? opening.sillHeight : 0, top: (opening.type === 'Window' ? opening.sillHeight : 0) + opening.height }] : [];
   }).sort((a, b) => a.start - b.start);
   const sections: ReturnType<typeof wallSections> = [];
@@ -82,7 +82,7 @@ function nativeShape(snapshot: ModelSnapshot, entity: Entity, work: GeometryWork
     }
     case 'Slab': return { shape: shapeOf(slabPieces(snapshot, entity).map(bounds => box([bounds.minX, bounds.minY, base - entity.thickness],
       [bounds.maxX, bounds.maxY, base]))), representation: 'native-slab-with-stair-voids', error: 0 };
-    case 'Door': case 'Window': {
+    case 'Door': case 'Opening': case 'Window': {
       const host = snapshot.relationships.find(link => link.source === entity.id);
       const wall = snapshot.entities.find(item => item.id === host?.target);
       if (!host || wall?.type !== 'Wall') return { shape: null, representation: 'missing-host', error: null };
@@ -143,7 +143,7 @@ export function nativeGeometryRecords(projectId: string, input: NativeGeometryIn
     let derived: ReturnType<typeof nativeShape>;
     try { derived = nativeShape(snapshot, entity, work); }
     catch (error) { if (error instanceof GeometryLimitError) throw error; derived = { shape: null, representation: 'unsupported-native-evaluation', error: null }; }
-    const isContext = ['Level', 'Space', 'AssetFamily', 'Door', 'Window'].includes(entity.type);
+    const isContext = ['Level', 'Space', 'AssetFamily', 'Door', 'Opening', 'Window'].includes(entity.type);
     return { description: { ref: ref(entity.id), name: entity.name.slice(0, 256), class: entity.type, category: geometryCategory(entity.type), role: isContext ? 'context' : 'physical',
       frame: 'project-engineering-metres', sourceUnitsToMetres: 1, writeAuthority: 'native-review',
       bounds: derived.shape?.bounds ?? null, capability: derived.shape ? { kind: 'mesh', closed: derived.shape.meshes.every(mesh => mesh.closed),

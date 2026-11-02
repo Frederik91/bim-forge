@@ -93,6 +93,53 @@ test('optional names derive from intent and stable identity; concurrent unnamed 
 function decide(queue: ChangeRequests, id: string, input: { action: string; decisionId: string }) {
   return queue.decide(id, { ...input, expectedRequestId: queue.get(id).request.requestId });
 }
+test('deleting a saved agent persists across restart while its conversation, proposal and accepted model remain intact', async t => {
+  const resources = temporaryRequestResources(t, 'bim-delete-agent-');
+  const file = path.join(resources.directory, 'queue.sqlite');
+  const queue = await resources.openQueue(file, () => worker);
+  const repo = await RoomRepository.create('Agent deletion');
+  const a = await queue.submit(repo.serialize(), request(repo, 'delete-one', 'delete-one'));
+  const b = await queue.submit(repo.serialize(), request(repo, 'keep-other', 'keep-other'));
+  await waitFor(queue, a.id); await waitFor(queue, b.id);
+  const before = queue.get(a.id); const accepted = queue.project(repo.projectId);
+  assert.throws(() => queue.deleteAgent(a.id, { expectedRequestId: 'wrong-version' }), BacklogConflict);
+  assert.equal(queue.get(a.id).agentDeleted, undefined);
+  const removed = queue.deleteAgent(a.id, { expectedRequestId: before.request.requestId });
+  assert.equal(removed.agentDeleted, true); assert.equal(removed.state, 'ready');
+  assert.deepEqual(removed.result, before.result); assert.deepEqual(removed.conversation, before.conversation);
+  assert.deepEqual(queue.deleteAgent(a.id, { expectedRequestId: before.request.requestId }), removed);
+  assert.equal(queue.get(b.id).agentDeleted, undefined); assert.equal(queue.project(repo.projectId), accepted);
+  await assert.rejects(() => queue.revise(a.id, repo.serialize(), request(repo, 'no-respawn', 'no-respawn')), /agent was deleted/);
+  await queue.close();
+  const reopened = await resources.openQueue(file, () => worker);
+  assert.equal(reopened.get(a.id).agentDeleted, true); assert.deepEqual(reopened.get(a.id).result, before.result);
+  assert.equal(reopened.list(repo.projectId).find(item => item.id === a.id)?.agentDeleted, true);
+  assert.equal(reopened.project(repo.projectId), accepted);
+});
+test('deleting a working agent aborts it and fences late completion across restart', async t => {
+  const resources = temporaryRequestResources(t, 'bim-delete-running-');
+  const file = path.join(resources.directory, 'queue.sqlite');
+  let release: () => void = () => {};
+  const finish = new Promise<void>(resolve => { release = resolve; });
+  let started: () => void = () => {};
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  let signal: AbortSignal | undefined;
+  const queue = await resources.openQueue(file, () => ({ identity: worker.identity, async run(session) {
+    signal = session.signal; started(); await finish;
+  } }));
+  t.after(async () => { release(); await queue.close(); });
+  const repo = await RoomRepository.create('Stop deleted agent');
+  const a = await queue.submit(repo.serialize(), request(repo, 'running-delete', 'running-delete'));
+  await ready; const accepted = queue.project(repo.projectId);
+  const removed = queue.deleteAgent(a.id, { expectedRequestId: a.request.requestId });
+  assert.equal(removed.state, 'cancelled'); assert.equal(removed.agentDeleted, true); assert.ok(signal?.aborted);
+  assert.equal(queue.draft(a.id), null);
+  release(); await queue.close();
+  const reopened = await resources.openQueue(file, () => worker);
+  assert.equal(reopened.get(a.id).agentDeleted, true); assert.equal(reopened.get(a.id).state, 'cancelled');
+  assert.equal(reopened.get(a.id).result, null); assert.equal(reopened.project(repo.projectId), accepted);
+  assert.equal(removed.result, null); assert.equal(removed.conversation?.messages.at(-1)?.kind, 'decision');
+});
 async function waitFor(queue: ChangeRequests, id: string, states = ['ready', 'needs-input', 'failed']): Promise<void> {
   for (let attempt = 0; attempt < 4000; attempt += 1) {
     if (states.includes(queue.get(id).state)) return;

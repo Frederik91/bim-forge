@@ -17,7 +17,100 @@ import { RoomRepository, diffSnapshots, validateSnapshot } from '../src/room-mod
 import { spatialFixtureWorker } from '../tests/fixtures/spatial-workspace/worker.ts';
 import { spatialExpectedDoorSnapshot, spatialFixtureManifest } from '../tests/fixtures/spatial-workspace/fixture.ts';
 import { parseTaskPlacement } from '../src/task-placement.ts';
+import { SpatialTasks } from './spatial-tasks.ts';
 
+test('created task agents can be deleted while the personal assistant and saved history stay available', { timeout: 120_000 }, async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'delete-agent-292-'));
+  const server = await createDemoServer({ modelWorker: spatialFixtureWorker(), backlogFile: path.join(directory, 'queue.sqlite') });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); assert.ok(address && typeof address === 'object'); const base = `http://127.0.0.1:${address.port}`;
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  t.after(async () => {
+    t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() }));
+    await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers(); await fs.rm(directory, { recursive: true, force: true });
+  });
+  const capture = () => page.evaluate(async () => { const url = '/room-app.mjs'; return (await import(url)).captureWorkspaceInsidePose(); });
+  const confirm = () => page.locator('#delete-agent-dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
+  const list = page.locator('#spatial-task-list');
+  const personal = () => page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && document.getElementById('request-text')?.getAttribute('disabled') === null);
+  await page.goto(base); await page.locator('#project-template').selectOption('house');
+  await page.locator('#project-name').fill('Delete agents fixture'); await page.locator('#create-project').click();
+  await page.locator('#open-chat').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor(); await personal();
+  assert.equal(await page.locator('.spatial-task-label').count(), 0, 'The always available assistant is not a disposable task figure');
+  assert.equal(await page.locator('#spatial-delete-agent').isVisible(), false);
+  const parser = new SpatialTasks();
+  const submit = async (text: string) => {
+    await page.locator('.model-object-picker').selectOption(spatialFixtureManifest.doorId);
+    await page.locator('#request-text').fill(text);
+    const response = page.waitForResponse(r => r.url() === `${base}/api/change-requests` && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    const acknowledgement = await response; assert.equal(acknowledgement.status(), 202, await acknowledgement.text());
+    const data: unknown = await acknowledgement.json(); assert.ok(data && typeof data === 'object' && 'ticket' in data);
+    const ticket = parser.parseTicket(data.ticket);
+    await page.waitForFunction(async id => { const value = await (await fetch(`/api/change-requests/${id}`)).json(); return value.ticket.state === 'ready'; }, ticket.id);
+    await personal(); return ticket;
+  };
+  const a = await submit('Widen this door to 1100 mm, keeping its centre.');
+  const b = await submit('Keep another independent door proposal.');
+  const accepted = await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json();
+  assert.ok(accepted && typeof accepted === 'object' && typeof accepted.project === 'string');
+  const acceptedModel = await RoomRepository.restore(accepted.project);
+  await page.locator('#request-text').fill('Keep this personal draft and its file.');
+  await page.locator('#request-source-files').setInputFiles({ name: 'personal-only.txt', mimeType: 'text/plain', buffer: Buffer.from('This belongs to the private personal draft.') });
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await list.locator('button[data-task-id]').count(), 2, 'Only assigned tasks appear in Tasks');
+  await list.locator(`[data-delete-agent="${a.id}"]`).click();
+  await page.locator('#delete-agent-dialog').getByRole('button', { name: 'Keep agent' }).click();
+  assert.equal(await list.locator('button[data-task-id]').count(), 2);
+  await page.route('**/api/change-requests/*/agent', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Deletion connection failed. Retry.' }) }));
+  await list.locator(`[data-delete-agent="${a.id}"]`).click(); await confirm();
+  await page.getByText('Deletion connection failed. Retry.', { exact: true }).waitFor();
+  assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 1, 'Failed deletion keeps the agent');
+  await page.unroute('**/api/change-requests/*/agent');
+  await list.locator(`[data-delete-agent="${a.id}"]`).click(); await confirm();
+  await page.waitForFunction(id => !document.querySelector(`#spatial-task-list [data-task-id="${id}"]`), a.id);
+  assert.equal(await list.evaluate(node => node.contains(document.activeElement)), true, 'Deleting a row keeps keyboard focus in Tasks');
+  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal draft and its file.');
+  assert.match(await page.locator('#request-source-list').textContent() ?? '', /personal-only.txt/);
+  assert.equal(await list.locator(`[data-task-id="${b.id}"]`).count(), 1);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const remove = list.locator(`[data-delete-agent="${b.id}"]`); await remove.scrollIntoViewIfNeeded();
+    assert.equal(await remove.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await list.locator(`[data-task-id="${b.id}"]`).click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
+  const pose = await capture(); const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
+  await page.locator('#spatial-delete-agent').click(); await confirm(); await personal();
+  await page.waitForFunction(() => document.querySelectorAll('.spatial-task-label').length === 0);
+  const afterDeletion = await capture(); assert.ok(pose && afterDeletion);
+  assert.deepEqual({ eye: afterDeletion.eye, forward: afterDeletion.forward, up: afterDeletion.up, level: afterDeletion.levelId, motion: afterDeletion.motion },
+    { eye: pose.eye, forward: pose.forward, up: pose.up, level: pose.levelId, motion: pose.motion }, 'Agent deletion retains the actual viewpoint');
+  assert.ok(afterDeletion.sourcePin.startsWith(`main:${acceptedModel.head('main')}:`), 'The personal assistant displays the accepted source after deleting a task');
+  assert.equal(await canvas.evaluate(node => node.isConnected), true);
+  assert.equal(await page.locator('#request-text').isEnabled(), true, 'Deletion never disables the personal assistant');
+  assert.equal(await page.locator('#spatial-delete-agent').isVisible(), false);
+  await page.locator('#chat-switcher-button').click();
+  await page.locator('#chat-list').getByRole('button', { name: /Keep this personal draft and its file/ }).click();
+  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal draft and its file.');
+  assert.match(await page.locator('#request-source-list').textContent() ?? '', /personal-only.txt/);
+  for (const id of [a.id, b.id]) {
+    const saved: unknown = await (await page.request.get(`${base}/api/change-requests/${id}`)).json();
+    assert.ok(saved && typeof saved === 'object' && 'ticket' in saved && saved.ticket && typeof saved.ticket === 'object' && 'conversation' in saved.ticket);
+    assert.equal(parser.parseTicket(saved.ticket).agentDeleted, true);
+    assert.ok(saved.ticket.conversation, 'Saved transcript is still available');
+  }
+  assert.deepEqual(await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json(), accepted);
+  await page.reload(); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await list.locator('[data-task-id]').count(), 0, 'Deleted saved agents stay absent after reload');
+  assert.deepEqual(errors, []);
+});
 test('live native agent body opens the same saved task without moving the eye; exact 1100 mm review remains explicit', { timeout: 150_000 }, async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'spatial-257-'));
   const artifacts = process.env.SPATIAL_WORKSPACE_ARTIFACTS ?? 'artifacts/spatial-workspace-257'; await fs.mkdir(artifacts, { recursive: true });
@@ -30,9 +123,9 @@ test('live native agent body opens the same saved task without moving the eye; e
   t.after(async () => { await page.screenshot({ path: path.join(artifacts, 'last.png'), fullPage: true }); t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() })); await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers(); await fs.rm(directory, { recursive: true, force: true }); });
   const capture = () => page.evaluate(async () => { const url = '/room-app.mjs'; const api = await import(url); return api.captureWorkspaceInsidePose(); });
   await page.goto(base); await page.locator('#project-template').selectOption('house'); await page.locator('#project-name').fill('Live spatial fixture'); await page.locator('#create-project').click();
-  await page.locator('#open-chat').click();
+  await page.locator('#open-chat').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'inside');
-  await page.evaluate(async () => { const url = '/room-app.mjs'; const api = await import(url); const pose = api.captureWorkspaceInsidePose(); if (!pose || !api.returnWorkspaceToPose({ ...pose, eye: [2, 3.45, 1.6], forward: [1, 0, 0], up: [0, 0, 1], motion: 'fly' })) throw new Error('Explicit fixture eye could not open'); });
+  await page.evaluate(async () => { const url = '/room-app.mjs'; const api = await import(url); const pose = api.captureWorkspaceInsidePose(); const n = Math.sqrt(1.25); if (!pose || !api.returnWorkspaceToPose({ ...pose, eye: [2, 3.45, 1.6], forward: [1 / n, 0, -.5 / n], up: [.5 / n, 0, 1 / n], motion: 'fly' })) throw new Error('Explicit fixture eye could not open'); });
   await page.locator('#new-chat').click(); await page.locator('.model-object-picker').selectOption(spatialFixtureManifest.doorId);
   await page.locator('#request-text').fill('Widen this door to 1100 mm, keeping its centre.');
   const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
@@ -122,23 +215,37 @@ test('live native agent body opens the same saved task without moving the eye; e
   assert.equal(await page.locator('#request-text').evaluate(node => document.activeElement === node), true);
   assert.equal((await project()).head('main'), baseline); await page.locator('#request-text').fill('');
   for (const width of [390, 320]) {
-    await page.setViewportSize({ width, height: 900 }); await page.locator('#open-chat').click(); await page.waitForTimeout(150);
+    await page.setViewportSize({ width, height: 900 });
+    await page.locator('#workspace-context-close').click();
+    const launcher = page.getByRole('button', { name: 'Tasks', exact: true });
+    assert.equal(await launcher.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true, 'Collapse the phone conversation to expose its spatial task launcher');
+    await launcher.click();
+    await page.locator(`#spatial-task-list [data-task-id="${id}"]`).click();
+    await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.equal(await page.locator('#workspace-context-toggle').isVisible(), false, 'The old bottom Assistant toggle is redundant in the phone rail');
     assert.equal(await page.locator('#open-chat').isVisible(), true);
-    const panel = await page.locator('#workspace-context').boundingBox(); assert.ok(panel && panel.width <= width - 16 && panel.height < 900 * .6);
+    const panel = await page.locator('#workspace-context').boundingBox();
+    const stage = await page.locator('.spatial-workspace-stage').boundingBox(); assert.ok(panel && stage);
+    assert.ok(panel.width <= width - 16 && panel.x >= stage.x + 7 && panel.x + panel.width <= stage.x + stage.width - 7);
+    assert.ok(panel.y >= stage.y + 7 && panel.y + panel.height <= stage.y + stage.height - 7, 'The measured task card stays within the model workspace');
+    assert.ok(stage.height - panel.height >= 48, 'The model retains a visible band beside the readable task controls');
     await page.screenshot({ path: path.join(artifacts, `narrow-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await tray.waitFor(); await page.locator('#workspace-context-close').click();
+  const accept = tray.getByRole('button', { name: /^Accept into/ });
+  assert.equal(await accept.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true, 'Expose the canvas acceptance action before using it');
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
-  await tray.getByRole('button', { name: /^Accept into/ }).click(); assert.equal((await decision).status(), 200);
+  await accept.click(); assert.equal((await decision).status(), 200);
   const accepted = await project(); const expected = spatialExpectedDoorSnapshot(before.view(baseline).snapshot);
   assert.deepEqual(accepted.view(accepted.head('main')).snapshot, expected);
   assert.deepEqual(diffSnapshots(before.view(baseline).snapshot, expected).entities.modified.map(item => item.id), [spatialFixtureManifest.doorId]);
   const origin = placement.origin; await page.reload(); await page.locator('#open-chat').click(); await page.locator('.spatial-task-launcher').click(); await page.locator(`#spatial-task-list button[data-task-id="${id}"]`).click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
   assert.deepEqual(parseTaskPlacement((await ticket()).taskPlacement), placement, 'Reload and acceptance preserve original placement and pinned targets');
   assert.deepEqual(parseTaskPlacement((await ticket()).taskPlacement).kind, 'placed'); assert.deepEqual(origin, placement.origin);
-  assert.match(await page.locator('.spatial-placement-notice').textContent() ?? '', /historical|stale/);
+  assert.match(await page.locator('.spatial-placement-notice[role="status"]').textContent() ?? '', /historical|stale/);
   await page.locator('#spatial-return-task').click();
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'overview');
   assert.match(await page.locator('#status').textContent() ?? '', /saved task point/);

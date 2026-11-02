@@ -102,15 +102,21 @@
               <p id="request-source-error" class="source-error" role="alert" hidden></p>
               <p id="proposal-help" class="composer-help">Paste files · @ reference · / shortcuts <span>Sent files are kept with this project · Enter to send</span></p>
               <div class="proposal-connection composer-connection"><p><strong id="proposal-auth-copy">Connect ChatGPT</strong></p><button id="proposal-auth-action" class="text-button" type="button">Connect</button></div>
-              <details id="request-options" class="request-options"><summary>Request options <span id="request-options-summary"></span></summary>
-              <details id="composer-scope-options" class="model-scope-panel"><summary>Model scope · optional</summary><div id="model-scope-builder"></div></details>
-              <div class="reconstruction-scope">
-                <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Allow layout reconstruction</span></label>
-                <label for="reconstruction-scope">Layout scope</label><select id="reconstruction-scope" disabled><option value="floor-plan-reconstruction">One storey · retain the other levels</option><option value="building-reconstruction">Whole building · levels, stairs and roof</option></select>
-                <p id="reconstruction-help" class="editor-help">The original stays preserved. Existing furniture is kept unless separately requested. Choose whole building to add a basement or attic. Check proposed levels, scale, dimensions and roof assumptions before accepting.</p>
-              </div>
-                <label for="proposal-name">Request name · optional</label><input id="proposal-name" placeholder="Named automatically" pattern="[a-z]+(-[a-z]+)*" maxlength="64" disabled>
-                <details class="request-reference-options"><summary>Model reference and markup</summary>
+              <details id="request-options" class="request-options"><summary>Advanced settings <span id="request-options-summary"></span></summary>
+                <p class="editor-help request-options-intro">For most tasks, select an object or draw markup and describe the change. Leave these settings off unless you need one of the cases below.</p>
+              <details id="composer-scope-options" class="model-scope-panel"><summary>Limit changes to matching objects</summary><p class="editor-help">Use filters for a group, such as all doors on a storey. Preview the matching objects before sending. For one selected object or a drawn area, leave this off.</p><div id="model-scope-builder"></div></details>
+              <details class="request-reconstruction-options"><summary>Rebuild a floor layout</summary>
+                <p class="editor-help">Only needed when creating or reconstructing walls and rooms from a plan, or changing storeys, stairs or a roof. Ordinary changes to an existing door or object do not need this.</p>
+                <div class="reconstruction-scope">
+                  <label for="request-reconstruct"><input id="request-reconstruct" type="checkbox" aria-describedby="reconstruction-help" disabled><span>Allow layout reconstruction</span></label>
+                  <label for="reconstruction-scope">What may be rebuilt?</label><select id="reconstruction-scope" disabled><option value="floor-plan-reconstruction">One storey · retain the other levels</option><option value="building-reconstruction">Whole building · levels, stairs and roof</option></select>
+                  <p id="reconstruction-help" class="editor-help">Permission stays off until you enable it. Choose whole building to add a basement or attic. Existing furniture is retained unless separately requested. Review proposed levels, scale, dimensions and roof assumptions before accepting; the original stays preserved.</p>
+                </div>
+              </details>
+              <details class="request-naming-options"><summary>Name this request</summary><p class="editor-help">A name is generated from your message. Set a short name only when you need a specific reference for this proposal.</p>
+                <label for="proposal-name">Request name · optional</label><input id="proposal-name" placeholder="Named automatically" pattern="[a-z]+(-[a-z]+)*" maxlength="64" aria-describedby="request-name-help" disabled><p id="request-name-help" class="editor-help">Lowercase words separated by hyphens, for example widen-entrance.</p>
+              </details>
+                <details class="request-reference-options"><summary>Inspect references and coordinates</summary><p class="editor-help">Inspect the selected object, exact location and attached evidence. You can normally select and draw directly in the model.</p>
             <section id="visual-panel" class="visual-panel" aria-labelledby="visual-heading" hidden>
               <div><p class="eyebrow">SPATIAL CONTEXT</p><h3 id="visual-heading">Point to a location</h3><p id="visual-context"></p></div>
               <p id="visual-feedback" role="status" aria-live="polite"></p>
@@ -272,6 +278,12 @@
 
     <dialog id="evidence-dialog" class="modal evidence-modal" aria-labelledby="evidence-title"><div class="dialog-heading"><div><p class="eyebrow">BOUND SOURCE</p><h2 id="evidence-title">Evidence</h2></div><button class="icon-button" data-close="evidence-dialog" type="button" aria-label="Close evidence">×</button></div><div class="evidence-body"><span id="evidence-kind" class="pill teal">Evidence</span><p id="evidence-description"></p><dl id="evidence-metadata" class="evidence-metadata"></dl><a id="evidence-source" class="button outline full" target="_blank" rel="noreferrer" hidden>Open source document</a></div><p class="dialog-note">This metadata is bound to the displayed model revision. Opening it does not change the model.</p></dialog>
 
+    <dialog id="delete-agent-dialog" class="modal" aria-labelledby="delete-agent-heading" aria-describedby="delete-agent-message">
+      <form method="dialog">
+        <h2 id="delete-agent-heading">Delete agent?</h2><p id="delete-agent-message"></p>
+        <div class="auth-actions"><button class="button outline" value="keep" autofocus>Keep agent</button><button class="button primary" value="delete">Delete agent</button></div>
+      </form>
+    </dialog>
     <dialog id="discard-request-dialog" class="modal" aria-labelledby="discard-request-heading" aria-describedby="discard-request-message">
       <form method="dialog">
         <p class="eyebrow">UNSENT REQUEST</p><h2 id="discard-request-heading">Keep your draft?</h2>

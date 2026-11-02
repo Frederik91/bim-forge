@@ -25,7 +25,7 @@ function derivedGeometry(snapshot: ModelSnapshot, id: string) {
     const support = snapshot.entities.find((entity) => entity.id === item.supportId);
     return { base, supportHeight: support?.type === 'Furniture' ? support.height : 0 };
   }
-  if (item.type === 'Door' || item.type === 'Window') {
+  if (item.type === 'Door' || item.type === 'Opening' || item.type === 'Window') {
     const host = snapshot.relationships.find((link) => link.source === item.id);
     const wall = snapshot.entities.find((entity) => entity.id === host?.target);
     return wall?.type === 'Wall' && host ? { base, host: wall.id, offset: host.offset, start: wall.start, end: wall.end, thickness: wall.thickness } : null;
@@ -33,7 +33,7 @@ function derivedGeometry(snapshot: ModelSnapshot, id: string) {
   if (item.type === 'Wall') {
     const openings = snapshot.relationships.filter((link) => link.target === item.id).flatMap((link) => {
       const opening = snapshot.entities.find((entity) => entity.id === link.source);
-      return opening?.type === 'Door' || opening?.type === 'Window'
+      return opening?.type === 'Door' || opening?.type === 'Opening' || opening?.type === 'Window'
         ? [{ id: opening.id, offset: link.offset, width: opening.width, height: opening.height, bottom: opening.type === 'Window' ? opening.sillHeight : 0 }] : [];
     }).sort((a, b) => a.offset - b.offset || a.id.localeCompare(b.id));
     const solids = []; let cursor = 0;

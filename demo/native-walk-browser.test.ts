@@ -79,6 +79,9 @@ test('native doorway and stair walking retains the saved chat, selection, draft 
   }
   const originalPlacement = await placement(); assert.equal(originalPlacement.kind, 'placed');
   const originalProject = await (await page.request.get(`${base}/api/projects/${projectId}`)).json();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.locator(`#spatial-task-list [data-task-id="${id}"]`).click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
   await page.locator('#request-text').fill('Unsent refinement stays with this conversation.');
   const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
   const initial = await pose(); assert.ok(initial);

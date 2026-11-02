@@ -296,7 +296,7 @@ export class ModelScene {
     let piece = 0;
     const openings = snapshot.relationships.filter((link) => link.target === wall.id).flatMap((link) => {
       const item = snapshot.entities.find((candidate) => candidate.id === link.source);
-      return item?.type === 'Door' || item?.type === 'Window' ? [{ item, offset: link.offset, bottom: item.type === 'Window' ? item.sillHeight : 0 }] : [];
+      return item?.type === 'Door' || item?.type === 'Opening' || item?.type === 'Window' ? [{ item, offset: link.offset, bottom: item.type === 'Window' ? item.sillHeight : 0 }] : [];
     }).sort((a, b) => a.offset - b.offset);
     const segment = (start: number, end: number, bottom: number, top: number): void => {
       if (end - start < .001 || top - bottom < .001) return;
@@ -320,10 +320,12 @@ export class ModelScene {
       segment(offset, offset + item.width, bottom + item.height, wall.height);
       const centre = offset + item.width / 2;
       const at = (along: number, elevation: number): Vector3 => modelPoint(wall.start[0] + dx * along / length, wall.start[1] + dy * along / length, base + elevation);
-      this.box(snapshot, `${item.id}-leaf`, new Vector3(item.width - .04, item.height - .03, item.type === 'Door' ? .045 : .018),
-        at(centre, bottom + item.height / 2), item.id, wall.id, item.type === 'Door' ? 'wood' : 'glass', item.type === 'Door' ? '#be946d' : '#a8d2df', angle);
-      for (const along of [offset + .02, offset + item.width - .02]) this.box(snapshot, `${item.id}-jamb-${along}`, new Vector3(.04, item.height, wall.thickness + .025), at(along, bottom + item.height / 2), item.id, wall.id, 'wall', '#faf8f1', angle);
-      this.box(snapshot, `${item.id}-header`, new Vector3(item.width, .04, wall.thickness + .025), at(centre, bottom + item.height - .02), item.id, wall.id, 'wall', '#faf8f1', angle);
+      if (item.type !== 'Opening') {
+        this.box(snapshot, `${item.id}-leaf`, new Vector3(item.width - .04, item.height - .03, item.type === 'Door' ? .045 : .018),
+          at(centre, bottom + item.height / 2), item.id, wall.id, item.type === 'Door' ? 'wood' : 'glass', item.type === 'Door' ? '#be946d' : '#a8d2df', angle);
+        for (const along of [offset + .02, offset + item.width - .02]) this.box(snapshot, `${item.id}-jamb-${along}`, new Vector3(.04, item.height, wall.thickness + .025), at(along, bottom + item.height / 2), item.id, wall.id, 'wall', '#faf8f1', angle);
+        this.box(snapshot, `${item.id}-header`, new Vector3(item.width, .04, wall.thickness + .025), at(centre, bottom + item.height - .02), item.id, wall.id, 'wall', '#faf8f1', angle);
+      }
       cursor = offset + item.width;
     }
     segment(cursor, length, 0, wall.height);

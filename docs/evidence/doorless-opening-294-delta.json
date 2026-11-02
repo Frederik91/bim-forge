@@ -1,0 +1,79 @@
+{
+  "beforeRevision": "a62b2bcad79c10766d3f9b53012875e809b90f067004d7d7e3cbe09665f8d37d",
+  "afterRevision": "c7266932d5fa07058bd78c231e73e23b710ac7d25a4c3e36095dd3058d8c4665",
+  "impact": {
+    "doorId": "door-entry",
+    "hostWallId": "level-ground-wall-south",
+    "relationshipId": "host-door-entry",
+    "anchor": "centre",
+    "before": {
+      "widthMetres": 0.9,
+      "offsetMetres": 2,
+      "centreMetres": [
+        2.45,
+        0,
+        0
+      ]
+    },
+    "after": {
+      "widthMetres": 2,
+      "offsetMetres": 1.45,
+      "centreMetres": [
+        2.45,
+        0,
+        0
+      ]
+    },
+    "beforeKind": "Door",
+    "afterKind": "Opening"
+  },
+  "delta": {
+    "entities": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        {
+          "id": "door-entry",
+          "before": {
+            "id": "door-entry",
+            "type": "Door",
+            "name": "Ground entrance",
+            "width": 0.9,
+            "height": 2.1
+          },
+          "after": {
+            "id": "door-entry",
+            "type": "Opening",
+            "name": "Ground entrance",
+            "width": 2,
+            "height": 2.1
+          }
+        }
+      ]
+    },
+    "relationships": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        {
+          "id": "host-door-entry",
+          "before": {
+            "id": "host-door-entry",
+            "type": "hosted-by",
+            "source": "door-entry",
+            "target": "level-ground-wall-south",
+            "offset": 2
+          },
+          "after": {
+            "id": "host-door-entry",
+            "type": "hosted-by",
+            "source": "door-entry",
+            "target": "level-ground-wall-south",
+            "offset": 1.45
+          }
+        }
+      ]
+    }
+  },
+  "errors": []
+}

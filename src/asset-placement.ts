@@ -55,7 +55,7 @@ export function validateAssets(graph: ModelGraph): void {
       [footprint.maxX, footprint.minY], [footprint.maxX, footprint.maxY]];
     if (owner && corners.some((point) => instance.size.height > roofHeightAt(view, owner.id, point) + 1e-9)) throw new Error('Asset must fit below the roof underside.');
     for (const entity of view.entities) {
-      if (entity.type === 'Door' && overlapsBounds(footprint, doorClearanceBounds(view, entity))) throw new Error('Asset blocks a door clearance zone.');
+      if ((entity.type === 'Door' || entity.type === 'Opening') && overlapsBounds(footprint, doorClearanceBounds(view, entity))) throw new Error('Asset blocks a passage clearance zone.');
       if (entity.type === 'Stair' && overlapsBounds(footprint, stairFootprint(entity))) throw new Error('Asset must remain clear of stairs and slab voids.');
       if (entity.type === 'Furniture') {
         const support = view.entities.find((item) => item.id === entity.supportId);

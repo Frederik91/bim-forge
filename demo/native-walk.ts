@@ -127,9 +127,9 @@ export function compileNativeWalk(source: ModelSnapshot, sourcePin: string): Nat
     else if (entity.type === 'Wall') {
       const dx = entity.end[0] - entity.start[0]; const dy = entity.end[1] - entity.start[1]; const length = Math.hypot(dx, dy);
       const u: XY = [dx / length, dy / length]; const v: XY = [-u[1], u[0]];
-      const doors = snapshot.relationships.filter(link => link.target === entity.id).flatMap(link => {
-        const door = snapshot.entities.find(item => item.id === link.source);
-        return door?.type === 'Door' ? [{ start: link.offset, end: link.offset + door.width, height: door.height }] : [];
+      const openings = snapshot.relationships.filter(link => link.target === entity.id).flatMap(link => {
+        const opening = snapshot.entities.find(item => item.id === link.source);
+        return opening?.type === 'Door' || opening?.type === 'Opening' ? [{ start: link.offset, end: link.offset + opening.width, height: opening.height }] : [];
       }).sort((a, b) => a.start - b.start);
       const add = (start: number, end: number, bottom: number): void => {
         for (const section of wallSections(snapshot, entity, start, end, bottom, entity.height)) solids.push({
@@ -138,7 +138,7 @@ export function compileNativeWalk(source: ModelSnapshot, sourcePin: string): Nat
         });
       };
       let cursor = 0;
-      for (const door of doors) { add(cursor, door.start, 0); add(door.start, door.end, door.height); cursor = door.end; }
+      for (const opening of openings) { add(cursor, opening.start, 0); add(opening.start, opening.end, opening.height); cursor = opening.end; }
       add(cursor, length, 0);
     } else if (entity.type === 'Equipment') solids.push(rectangle({ minX: entity.position[0] - entity.width / 2, maxX: entity.position[0] + entity.width / 2,
       minY: entity.position[1] - entity.depth / 2, maxY: entity.position[1] + entity.depth / 2 }, base + entity.elevation, base + entity.elevation + entity.height, 'obstacle', entity.id));
