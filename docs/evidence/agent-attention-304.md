@@ -78,7 +78,7 @@ assertion that viewing/reload never submits a task mutation.
 - Exactly three task writes occur: the user's submit, subsequent reply and
   explicit accept. Result viewing and reload perform no task mutations.
 - The exact accepted fixture snapshot matches the expected 1100 mm door result;
-  the only changed entity is `door-ground-connecting`. Main stays unchanged before
+  the only changed entity is `level-ground-door-inner`. Main stays unchanged before
   the explicit acceptance; the figure and active task disappear afterward while
   both saved assistant results remain readable through Chats.
 
