@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import type { Locator } from 'playwright';
 import { createDemoServer } from './server.ts';
 import { RoomRepository, diffSnapshots } from '../src/room-model.ts';
 import type { ModelWorker } from '../src/model-proposal.ts';
@@ -104,6 +105,16 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
       && input instanceof HTMLTextAreaElement && !input.disabled;
   });
   const tray = page.getByRole('region', { name: 'Canvas proposal review' });
+  const canvasReviewAction = async (control: Locator): Promise<void> => {
+    await page.locator('#workspace-context').waitFor({ state: 'visible' });
+    await page.locator('#workspace-context-close').click();
+    await control.scrollIntoViewIfNeeded();
+    assert.equal(await control.evaluate(node => {
+      const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return hit === node || node.contains(hit);
+    }), true, 'Dismiss the assistant card so the Canvas review control receives the actual pointer hit');
+    await control.click();
+  };
   await tray.waitFor({ state: 'visible' });
   assert.equal((await project()).head('main'), baseline, 'A displayed proposal leaves accepted Main unchanged.');
   assert.equal(await page.locator('[data-chat-framework="assistant-ui"]').count(), 1);
@@ -138,9 +149,9 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
   });
   await t.test('Revise returns from Sources & checks to the focused composer', async () => {
     await page.locator('#request-text').fill('Preserve this unsent refinement.');
-    await tray.getByRole('button', { name: 'Sources & checks', exact: true }).click();
+    await canvasReviewAction(tray.getByRole('button', { name: 'Sources & checks', exact: true }));
     assert.equal(await page.locator('#editor-panel').isHidden(), true);
-    await tray.getByRole('button', { name: 'Revise', exact: true }).click();
+    await canvasReviewAction(tray.getByRole('button', { name: 'Revise', exact: true }));
     assert.equal(await page.locator('#editor-panel').isVisible(), true);
     assert.equal(await page.locator('#request-text').isEnabled(), true);
     assert.equal(await page.locator('#request-text').evaluate(element => element === document.activeElement), true);
@@ -149,7 +160,7 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
     await page.locator('#request-text').fill('');
   });
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
-  await tray.getByRole('button', { name: /^Accept into/ }).click();
+  await canvasReviewAction(tray.getByRole('button', { name: /^Accept into/ }));
   const accepted = await decision; assert.equal(accepted.status(), 200, await accepted.text());
   const after = await project();
   assert.notEqual(after.head('main'), baseline);
