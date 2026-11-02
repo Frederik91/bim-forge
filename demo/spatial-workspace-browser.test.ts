@@ -1,3 +1,4 @@
+import { clickConversationControl } from '../tests/fixtures/spatial-workspace/browser.ts';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { Ray } from '@babylonjs/core/Culling/ray.js';
@@ -86,7 +87,7 @@ test('created task agents can be deleted while the personal assistant and saved 
   await list.locator(`[data-task-id="${b.id}"]`).click();
   await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
   const pose = await capture(); const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
-  await page.locator('#spatial-delete-agent').click(); await confirm(); await personal();
+  await clickConversationControl(page, '#spatial-delete-agent'); await confirm(); await personal();
   await page.waitForFunction(() => document.querySelectorAll('.spatial-task-label').length === 0);
   const afterDeletion = await capture(); assert.ok(pose && afterDeletion);
   assert.deepEqual({ eye: afterDeletion.eye, forward: afterDeletion.forward, up: afterDeletion.up, level: afterDeletion.levelId, motion: afterDeletion.motion },
@@ -95,7 +96,7 @@ test('created task agents can be deleted while the personal assistant and saved 
   assert.equal(await canvas.evaluate(node => node.isConnected), true);
   assert.equal(await page.locator('#request-text').isEnabled(), true, 'Deletion never disables the personal assistant');
   assert.equal(await page.locator('#spatial-delete-agent').isVisible(), false);
-  await page.locator('#chat-switcher-button').click();
+  await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('#chat-list').getByRole('button', { name: /Keep this personal draft and its file/ }).click();
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal draft and its file.');
   assert.match(await page.locator('#request-source-list').textContent() ?? '', /personal-only.txt/);
@@ -187,7 +188,7 @@ test('live native agent body opens the same saved task without moving the eye; e
   await page.locator('#request-chat .ticket-actions button').first().waitFor();
   const layout = await page.evaluate(() => {
     const content = document.getElementById('workspace-context-content'); const host = document.getElementById('request-chat-mount');
-    const toolbar = document.querySelector('.chat-toolbar'); if (!content || !host || !toolbar) throw new Error('Missing conversation scroll boundary');
+    const toolbar = document.querySelector('#workspace-context > .workspace-panel-heading'); if (!content || !host || !toolbar) throw new Error('Missing conversation scroll boundary');
     const viewport = host.getBoundingClientRect(); const navigation = toolbar.getBoundingClientRect();
     return { contentOverflow: content.scrollHeight - content.clientHeight, top: viewport.top, bottom: viewport.bottom, navigationBottom: navigation.bottom,
       actions: [...host.querySelectorAll('.ticket-actions button')].map(node => ({ text: node.textContent, top: node.getBoundingClientRect().top, bottom: node.getBoundingClientRect().bottom })) };
@@ -195,12 +196,12 @@ test('live native agent body opens the same saved task without moving the eye; e
   assert.ok(layout.contentOverflow <= 1, 'The fixed conversation shell must not become an outer scrollport');
   assert.ok(layout.top >= layout.navigationBottom - 1, 'Transcript starts below reserved navigation');
   assert.ok(layout.actions.length >= 3);
-  const navigationBeforeScroll = await page.locator('.chat-toolbar').boundingBox();
+  const navigationBeforeScroll = await page.locator('#workspace-context > .workspace-panel-heading').boundingBox(); assert.ok(navigationBeforeScroll);
   const reviewActions = page.locator('#request-chat .ticket-actions button');
   for (const action of await reviewActions.all()) {
     await action.scrollIntoViewIfNeeded();
     const hit = await action.evaluate(node => {
-      const host = document.getElementById('request-chat-mount'); const nav = document.querySelector('.chat-toolbar');
+      const host = document.getElementById('request-chat-mount'); const nav = document.querySelector('#workspace-context > .workspace-panel-heading');
       if (!host || !nav) throw new Error('Missing conversation bounds');
       const box = node.getBoundingClientRect(); const viewport = host.getBoundingClientRect(); const navigation = nav.getBoundingClientRect();
       const centre = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
@@ -209,7 +210,7 @@ test('live native agent body opens the same saved task without moving the eye; e
     assert.ok(hit.top >= hit.viewportTop - 1 && hit.top >= hit.navigationBottom - 1 && hit.bottom <= hit.viewportBottom + 1, JSON.stringify(hit));
     assert.equal(hit.hit, true, 'A deliberately scrolled proposal action must receive the actual pointer hit below fixed navigation');
   }
-  assert.deepEqual(await page.locator('.chat-toolbar').boundingBox(), navigationBeforeScroll, 'Transcript scrolling cannot move or overlap its fixed navigation');
+  assert.deepEqual(await page.locator('#workspace-context > .workspace-panel-heading').boundingBox(), navigationBeforeScroll, 'Transcript scrolling cannot move or overlap its fixed header');
   await page.screenshot({ path: path.join(artifacts, 'desktop.png'), fullPage: true });
   await tray.getByRole('button', { name: 'Revise', exact: true }).click(); await page.locator('#request-text').fill('Keep this unsent revision independent.');
   assert.equal(await page.locator('#request-text').evaluate(node => document.activeElement === node), true);
@@ -241,12 +242,18 @@ test('live native agent body opens the same saved task without moving the eye; e
   const accepted = await project(); const expected = spatialExpectedDoorSnapshot(before.view(baseline).snapshot);
   assert.deepEqual(accepted.view(accepted.head('main')).snapshot, expected);
   assert.deepEqual(diffSnapshots(before.view(baseline).snapshot, expected).entities.modified.map(item => item.id), [spatialFixtureManifest.doorId]);
-  const origin = placement.origin; await page.reload(); await page.locator('#open-chat').click(); await page.locator('.spatial-task-launcher').click(); await page.locator(`#spatial-task-list button[data-task-id="${id}"]`).click();
+  const origin = placement.origin; await page.reload(); await page.locator('#open-chat').click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
+  await page.locator('.spatial-task-launcher').click();
+  assert.equal(await page.locator(`#spatial-task-list button[data-task-id="${id}"]`).count(), 0, 'Accepted agents leave the active task list');
+  await page.getByRole('button', { name: 'Close task list', exact: true }).click();
+  await clickConversationControl(page, '#chat-switcher-button');
+  await page.locator('#chat-list button').filter({ hasText: 'Widen this door to 1100 mm, keeping its centre.' }).click();
   await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
   assert.deepEqual(parseTaskPlacement((await ticket()).taskPlacement), placement, 'Reload and acceptance preserve original placement and pinned targets');
   assert.deepEqual(parseTaskPlacement((await ticket()).taskPlacement).kind, 'placed'); assert.deepEqual(origin, placement.origin);
   assert.match(await page.locator('.spatial-placement-notice[role="status"]').textContent() ?? '', /historical|stale/);
-  await page.locator('#spatial-return-task').click();
+  await clickConversationControl(page, '#spatial-return-task');
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'overview');
   assert.match(await page.locator('#status').textContent() ?? '', /saved task point/);
   const legacyResponse = await page.request.post(`${base}/api/change-requests`, { data: { project: accepted.serialize(), request: {

@@ -1,3 +1,4 @@
+import { clickConversationControl } from '../tests/fixtures/spatial-workspace/browser.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs/promises';
@@ -46,7 +47,7 @@ test('shipped task controller keeps independent attachments and drafts, appends 
   await page.locator('#request-text').fill('Second independent door task');
   await page.locator('#request-source-files').setInputFiles({ name: 'second.txt', mimeType: 'text/plain', buffer: Buffer.from('Second task source') });
   await page.getByText('1 of 4 files ready', { exact: true }).waitFor();
-  await page.locator('#chat-switcher-button').click();
+  await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('#chat-list button').filter({ hasText: 'First independent door task' }).click();
   await waitForDraft('First independent door task');
   assert.equal(await page.locator('#request-text').inputValue(), 'First independent door task');
@@ -80,15 +81,15 @@ test('shipped task controller keeps independent attachments and drafts, appends 
   const initial: unknown = await (await page.request.get(`${base}/api/projects/${projectId}`)).json();
   assert.ok(initial && typeof initial === 'object' && 'project' in initial && typeof initial.project === 'string');
   const initialRepository = await RoomRepository.restore(initial.project); const acceptedHead = initialRepository.head('main');
-  await page.locator('#chat-switcher-button').click();
+  await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('#chat-list button').filter({ hasText: 'First independent door task' }).click();
   await page.locator('#request-chat-mount').getByText('What width should the selected desk have?', { exact: true }).waitFor();
-  await page.locator('#chat-switcher-button').click();
+  await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('#chat-list button').filter({ hasText: 'Second independent door task' }).click();
   await waitForDraft('Second independent door task');
   assert.equal(await page.locator('#request-text').inputValue(), 'Second independent door task');
   assert.match(await page.locator('#request-source-list').textContent() ?? '', /second.txt/);
-  await page.locator('#chat-switcher-button').click();
+  await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('#chat-list button').filter({ hasText: 'First independent door task' }).click();
   await waitForDraft('');
   assert.equal(await page.locator('#request-text').inputValue(), '');
@@ -139,7 +140,7 @@ test('shipped task controller keeps independent attachments and drafts, appends 
   await page.locator('#saved-projects').selectOption(projectId);
   await page.locator('#open-saved-project').click();
   await page.locator('#project-title').filter({ hasText: /^Task controller fixture$/ }).waitFor();
-  await page.locator('#open-chat').click(); await page.locator('#chat-switcher-button').click();
+  await page.locator('#open-chat').click(); await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('#chat-list button').filter({ hasText: 'Keep this unsent draft after the delayed reply' }).click();
   await waitForDraft('Keep this unsent draft after the delayed reply');
   assert.match(await page.locator('#request-source-list').textContent() ?? '', /late-draft.txt/);

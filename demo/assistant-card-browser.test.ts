@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { clickConversationControl } from '../tests/fixtures/spatial-workspace/browser.ts';
 import test from 'node:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -76,7 +77,8 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   await page.locator('#new-chat').click(); assert.deepEqual(await bounds(), chosen, 'An independent chat retains manual dimensions');
 
   const options = page.locator('#request-options'); assert.equal(await options.getAttribute('open'), null);
-  await options.locator(':scope > summary').click();
+  await clickConversationControl(page, '#chat-request-settings');
+  assert.equal(await options.getAttribute('open'), '');
   await page.getByText('For most tasks, select an object or draw markup and describe the change.', { exact: false }).waitFor();
   assert.equal(await page.locator('#composer-scope-options').getAttribute('open'), null);
   assert.equal(await page.locator('.request-reconstruction-options').getAttribute('open'), null);
@@ -123,15 +125,19 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   }
   const proposalContext = page.locator('.spatial-placement-notice').filter({ hasText: 'Task targets refer to the accepted model. Showing proposal geometry.' });
   await page.waitForFunction(() => [...document.querySelectorAll('.spatial-placement-notice')].some(node => node.textContent?.includes('Showing proposal geometry.') && node.getBoundingClientRect().height > 0)
-    || [...document.querySelectorAll<HTMLButtonElement>('#request-chat button')].some(node => node.textContent === 'Inspect proposal' && !node.disabled));
+    || [...document.querySelectorAll<HTMLButtonElement>('#request-chat button')].some(node => node.getAttribute('aria-label') === 'Inspect proposal' && !node.disabled));
   if (!await proposalContext.isVisible()) await page.getByRole('button', { name: 'Inspect proposal', exact: true }).click();
   await proposalContext.waitFor();
-  if (await page.locator('#assistant-dispatch-context').count()) await page.locator('#assistant-dispatch-context').waitFor();
+  await proposalContext.locator(':scope > summary').click();
+  await proposalContext.locator('p').waitFor();
+  await page.locator('#spatial-chat-options-toggle').click();
+  await page.locator('#assistant-dispatch-context').waitFor();
+  await page.locator('#spatial-delete-agent').waitFor();
+  await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
   await page.locator('#request-text').fill('Keep this follow-up reachable while the task is open.');
   await page.setViewportSize({ width: 320, height: 900 });
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
-  if (await page.locator('#spatial-delete-agent').count()) await page.locator('#spatial-delete-agent').waitFor();
   await handle.focus();
   for (let step = 0; step < 40; step++) await page.keyboard.press('ArrowUp');
   const minimum = await page.evaluate(() => {
@@ -139,7 +145,7 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     const hit = (selector: string) => { const node = required(selector); const box = node.getBoundingClientRect(); const at = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { top: box.top, bottom: box.bottom, height: box.height, hit: at === node || node.contains(at) }; };
     return { panel: hit('#workspace-context'), input: hit('#request-text'), send: hit('#save-proposal'),
       transcript: hit('#request-chat-mount'), content: hit('#workspace-context-content'),
-      tools: hit('.spatial-conversation-tools'), footer: hit('.spatial-conversation-resize') };
+      heading: hit('.workspace-panel-heading'), footer: hit('.spatial-conversation-resize') };
   });
   t.diagnostic(JSON.stringify({ minimum }));
   await page.screenshot({ path: path.join(artifacts, 'minimum-320.png'), fullPage: true });
