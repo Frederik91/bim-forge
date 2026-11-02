@@ -38,9 +38,12 @@ test('unreferenced dispatch uses the actual current eye and does not infer an Ov
 test('Overview door, window and permanent opening agents are outside the host face and beside the jamb', () => {
   const before = structuredClone(graph);
   for (const type of ['Door', 'Window', 'Opening']) {
-    const variant = validateSnapshot({ ...graph, entities: graph.entities.map(entity => entity.id === 'door-entry'
-      ? { ...entity, type, ...(type === 'Window' ? { sillHeight: .8, height: 1.5 } : {}) } : entity) });
-    const item = variant.entities.find(entity => entity.id === 'door-entry'); assert.ok(item && 'width' in item);
+    const selectedId = type === 'Window' ? 'dispatch-window' : 'door-entry';
+    const variant = validateSnapshot(type === 'Window' ? { ...graph, entities: [...graph.entities,
+      { id: selectedId, type: 'Window', name: 'Dispatch window', width: .9, height: 1.5, sillHeight: .8 }],
+      relationships: [...graph.relationships, { id: 'host-dispatch-window', type: 'hosted-by', source: selectedId, target: 'level-ground-wall-south', offset: 5 }] }
+      : { ...graph, entities: graph.entities.map(entity => entity.id === selectedId ? { ...entity, type } : entity) });
+    const item = variant.entities.find(entity => entity.id === selectedId); assert.ok(item && 'width' in item);
     const host = variant.relationships.find(link => link.source === item.id); assert.ok(host);
     const wall = variant.entities.find(entity => entity.id === host.target); assert.ok(wall?.type === 'Wall');
     const anchor = entityAnchor(item, variant);
