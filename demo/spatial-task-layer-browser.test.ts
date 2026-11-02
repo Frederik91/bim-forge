@@ -40,8 +40,23 @@ test('real 3D agent bodies choose same-place conversations, keep target highligh
   await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Report T-01 working' }).click();
   assert.match(await page.locator('#tasks').innerText(), /Working/);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.waitForFunction(() => document.body.dataset.reducedMotion === 'false');
+  const orbit = await page.locator('body').getAttribute('data-working-orbit');
+  await page.waitForFunction(previous => document.body.dataset.workingOrbit !== previous, orbit);
+  await page.screenshot({ path: path.join(output, 'working.png'), fullPage: true });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.waitForFunction(() => document.body.dataset.reducedMotion === 'true');
+  const reduced = await page.locator('body').getAttribute('data-working-orbit');
+  const frame = Number(await page.locator('body').getAttribute('data-motion-frame'));
+  await page.waitForFunction(previous => Number(document.body.dataset.motionFrame) > previous + 8, frame);
+  assert.equal(await page.locator('body').getAttribute('data-working-orbit'), reduced, 'Reduced motion retains a static working cue');
   await page.getByRole('button', { name: 'Report T-01 ready' }).click();
-  assert.match(await page.locator('#tasks').innerText(), /Ready for review/);
+  assert.match(await page.locator('#tasks').innerText(), /Ready for review · Unread result/);
+  await page.screenshot({ path: path.join(output, 'unread.png'), fullPage: true });
+  await page.getByRole('button', { name: /T-01 · Widen entry door/ }).click();
+  assert.match(await page.locator('#tasks').innerText(), /Ready for review · Viewed/);
+  await page.screenshot({ path: path.join(output, 'viewed.png'), fullPage: true });
   await page.getByRole('button', { name: 'Toggle wall occlusion' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.anchor').length === 0);
   assert.match(await page.locator('#tasks').innerText(), /T-04.*Legacy conversation/s);
@@ -72,6 +87,10 @@ test('real 3D agent bodies choose same-place conversations, keep target highligh
   }
   await page.getByRole('button', { name: /T-04 · Legacy conversation/ }).focus(); await page.keyboard.press('Enter');
   assert.match(await page.locator('#conversation').innerText(), /T-04 · Legacy conversation/);
+  await page.getByRole('button', { name: 'Report T-01 accepted' }).click();
+  assert.equal(await page.locator('#tasks').getByRole('button', { name: /T-01 · Widen entry door/ }).count(), 0, 'Accepted work leaves the active task list');
+  assert.equal(await page.locator('[data-task="T-01"]').count(), 0, 'Accepted work leaves the model anchors');
+  assert.match(await page.locator('#conversation').innerText(), /T-04 · Legacy conversation/, 'Completing another task does not discard the open saved conversation');
   await page.getByRole('button', { name: 'Dispose task layer' }).click();
   assert.equal(await page.locator('#tasks button').count(), 0); assert.equal(await page.locator('.anchor').count(), 0);
   assert.deepEqual(errors, []);
