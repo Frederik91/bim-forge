@@ -581,7 +581,7 @@ export class ModelScripts {
         ...(input.geometry ? { geometry: input.geometry } : {}),
         onActivity: input.onActivity, ...(input.onPreview ? { onPreview: input.onPreview } : {}) };
       const session = runtime.createSession({ context: draft,
-        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewHostedDoorWidth', 'model.previewWallShift', 'model.previewRoomDimensionChange', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
+        capabilities: ['model.inspect', 'model.scope', 'model.previewParameters', 'model.previewHostedDoorWidth', 'model.previewDoorToOpening', 'model.previewWallShift', 'model.previewRoomDimensionChange', 'model.previewRectangle', 'model.previewFurnishings', 'model.previewRoomFurnishings', 'model.previewAssets',
           ...(input.geometry ? GEOMETRY_SCRIPT_CAPABILITIES : []),
           ...(input.binding.authoringScope === 'floor-plan-reconstruction' || input.binding.authoringScope === 'building-reconstruction' ? ['model.previewFloor'] : []),
           ...(input.binding.authoringScope === 'building-reconstruction' ? ['model.previewBuilding'] : [])],
