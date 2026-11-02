@@ -351,7 +351,7 @@ body.canvas-studio {
 .canvas-studio .spatial-conversation .request-chat .ticket-actions { flex-wrap: wrap; gap: 4px; }
 .canvas-studio .spatial-conversation .request-chat .ticket-actions .chat-icon-button { flex: 0 0 44px; min-width: 44px; max-width: 44px; }
 .canvas-studio .spatial-conversation .request-chat .chat-turn-count { display: none; }
-.canvas-studio .spatial-conversation .spatial-conversation-resize { justify-content: flex-end; border: 0; padding: 0 4px; }
+.canvas-studio .spatial-conversation .spatial-conversation-resize { justify-content: flex-start; border: 0; padding: 0 4px; }
 .canvas-studio .spatial-conversation .spatial-conversation-size { display: none; }
 .canvas-studio .spatial-conversation #spatial-resize-conversation { font-size: 0; gap: 0; width: 44px; padding: 10px; }
 .canvas-studio .request-options > details { margin-top: 12px; }
