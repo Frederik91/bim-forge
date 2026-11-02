@@ -971,14 +971,17 @@ async function deleteSpatialAgent(identity: TaskAgentIdentity): Promise<void> {
   openDialog(target);
   if (!await confirmed) return;
   tasks.requireCurrent(generation);
+  const current = key === currentChatKey();
+  const accepted = current ? await projects.read(identity.projectId) : null;
+  tasks.requireCurrent(generation);
   if (ticket) await tasks.deleteAgent({ ticketId: ticket.id, expectedRequestId: ticket.request.requestId });
   tasks.requireCurrent(generation);
-  const current = key === currentChatKey();
   tasks.deleteDraft(key); sourcePicker.deleteDraft(key); forgetFloorDraft(key); chatInspectionOrigins.delete(key);
   if (current) {
     clearRequestSources(); visualDraft = null; invalidInput = false;
     closeChat(); tasks.startTask(); deletedDraftAgents.add(tasks.key);
     ui['request-text'].value = ''; ui['proposal-name'].value = ''; sourcePicker.switchDraft(tasks.key);
+    if (accepted) displayAccepted(accepted);
     button('workspace-context-close').click(); closeChatSwitcher();
   }
   renderChatSwitcher(); updateSpatialWorkspace();
