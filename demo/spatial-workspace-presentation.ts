@@ -1,4 +1,5 @@
 import type { TaskAgentAnchor, TaskAgentDescriptor, TaskAgentHit, TaskAgentIdentity } from './spatial-task-layer.ts';
+import { setChatIcon } from './chat-icons.ts';
 
 const key = (identity: TaskAgentIdentity): string => identity.kind === 'task' ? identity.ticketId : identity.draftId;
 const stateLabel: Readonly<Record<TaskAgentDescriptor['state'], string>> = { unsent: 'Unsent draft', queued: 'Queued', working: 'Working', 'needs-input': 'Needs input', ready: 'Ready for review', completed: 'Accepted', failed: 'Failed', cancelled: 'Cancelled', rejected: 'Rejected' };
@@ -13,7 +14,9 @@ export class SpatialWorkspacePresentation {
   readonly #panel: HTMLElement;
   readonly #labels = document.createElement('div');
   readonly #list = document.createElement('section');
-  readonly #notice = document.createElement('p');
+  readonly #notice = document.createElement('details');
+  readonly #noticeText = document.createElement('p');
+  readonly #noticeSummary = document.createElement('summary');
   readonly #return: HTMLButtonElement;
   readonly #rebind: HTMLButtonElement;
   readonly #delete: HTMLButtonElement;
@@ -40,22 +43,44 @@ export class SpatialWorkspacePresentation {
     this.#list.className = 'spatial-task-list'; this.#list.id = 'spatial-task-list'; this.#list.hidden = true; this.#list.setAttribute('aria-label', 'Tasks at this place');
     const launcher = control('Tasks', () => { this.#list.hidden = !this.#list.hidden; launcher.setAttribute('aria-expanded', String(!this.#list.hidden)); this.#chooser = undefined; this.#renderList(); });
     launcher.className = 'spatial-task-launcher'; launcher.setAttribute('aria-controls', this.#list.id); launcher.setAttribute('aria-expanded', 'false');
-    const tools = document.createElement('div'); tools.className = 'spatial-conversation-tools';
+    const tools = document.createElement('div'); tools.className = 'spatial-conversation-tools'; tools.id = 'spatial-chat-options'; tools.popover = 'auto'; tools.setAttribute('aria-label', 'Conversation options');
     this.#return = control('Return to task', options.returnToTask); this.#return.id = 'spatial-return-task';
     this.#rebind = control('Refresh draft context', options.rebind); this.#rebind.id = 'spatial-refresh-context'; this.#rebind.hidden = true;
     this.#expand = control('Expand conversation', () => { const expanded = this.#panel.dataset.expanded !== 'true'; this.#layout = { kind: 'automatic' }; this.#panel.dataset.expanded = String(expanded); this.#expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position(); });
     this.#expand.id = 'spatial-expand-conversation';
     this.#delete = control('Delete agent', () => { const selected = this.#descriptors.find(item => item.selected); if (selected) this.#remove(selected.identity); });
     this.#delete.id = 'spatial-delete-agent';
-    tools.append(this.#return, this.#expand, this.#rebind, this.#delete); this.#notice.className = 'spatial-placement-notice'; this.#notice.setAttribute('role', 'status'); this.#notice.hidden = true;
-    this.#panel.insertBefore(tools, this.#panel.children[1] ?? null); tools.after(this.#notice);
+    tools.append(this.#return, this.#expand, this.#rebind, this.#delete);
+    const heading = this.#panel.querySelector('.workspace-panel-heading');
+    const more = control('', () => {}); more.id = 'spatial-chat-options-toggle'; setChatIcon(more, 'Conversation options', 'more'); more.setAttribute('popovertarget', tools.id);
+    more.addEventListener('click', () => {
+      const box = more.getBoundingClientRect();
+      tools.style.left = `${Math.max(8, Math.min(innerWidth - 248, box.right - 240))}px`;
+      tools.style.top = `${Math.min(box.bottom + 4, Math.max(8, innerHeight - 360))}px`;
+    });
+    tools.addEventListener('click', event => { if (event.target instanceof Element && event.target.closest('button') && tools.matches(':popover-open')) tools.hidePopover(); });
+    const closeOptions = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !tools.matches(':popover-open')) return;
+      event.preventDefault(); event.stopPropagation(); tools.hidePopover(); more.focus();
+    };
+    tools.addEventListener('keydown', closeOptions); more.addEventListener('keydown', closeOptions);
+    const close = this.#panel.querySelector('#workspace-context-close');
+    heading?.insertBefore(more, close); heading?.append(tools);
+    const chats = this.#panel.querySelector<HTMLButtonElement>('#chat-switcher-button');
+    const create = this.#panel.querySelector<HTMLButtonElement>('#new-chat');
+    if (chats) { chats.textContent = 'Chats'; const count = document.createElement('span'); count.id = 'chat-count'; count.className = 'sr-only'; chats.append(count); tools.prepend(chats); }
+    if (create) { setChatIcon(create, 'New task', 'new'); heading?.insertBefore(create, more); }
+    this.#notice.className = 'spatial-placement-notice'; this.#notice.setAttribute('role', 'status'); this.#notice.hidden = true;
+    this.#notice.append(this.#noticeSummary, this.#noticeText);
+    this.#panel.insertBefore(this.#notice, this.#panel.children[1] ?? null);
     this.#installResize();
     this.#stage.append(this.#labels, this.#list);
     (this.#stage.querySelector('.model-card-heading') ?? this.#stage).append(launcher);
     new ResizeObserver(() => this.#position()).observe(this.#stage);
   }
   update(descriptors: readonly TaskAgentDescriptor[], notice: string, canReturn: boolean, needsRebind: boolean): void {
-    this.#notice.textContent = notice; this.#notice.hidden = !notice; this.#rebind.hidden = !needsRebind; this.#return.disabled = !canReturn;
+    this.#noticeText.textContent = notice; this.#noticeSummary.textContent = notice.startsWith('Connection unavailable') ? 'Offline · check connection' : notice.includes('Showing proposal geometry') ? 'Proposal view' : 'Check context';
+    this.#noticeSummary.title = notice; this.#notice.hidden = !notice; this.#rebind.hidden = !needsRebind; this.#return.disabled = !canReturn;
     this.#delete.hidden = !descriptors.some(item => item.selected);
     const signature = JSON.stringify(descriptors); if (signature === this.#signature) { this.#position(); return; }
     this.#signature = signature; this.#descriptors = descriptors; this.#labels.replaceChildren(); this.#labelNodes.clear();
