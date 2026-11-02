@@ -325,6 +325,7 @@ body.canvas-studio {
 .canvas-studio .chat-icon-button:hover { background: var(--studio-soft); }
 .canvas-studio .chat-icon-button.button.primary { color: var(--spatial-color-white); background: var(--primary); }
 .canvas-studio .chat-icon-button svg { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.canvas-studio .spatial-conversation :is(#workspace-context-close, #composer-add, #save-proposal) svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .canvas-studio #spatial-chat-options { position: fixed; inset: auto; width: 240px; max-width: calc(100vw - 16px); max-height: min(360px, calc(100vh - 16px)); overflow: auto; margin: 0; padding: 8px; flex-direction: column; gap: 2px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--spatial-radius-control); box-shadow: var(--spatial-elevation-panel); }
 .canvas-studio #spatial-chat-options:not(:popover-open) { display: none; }
 .canvas-studio #spatial-chat-options > button { width: 100%; border: 0; padding: 8px; }

@@ -75,7 +75,7 @@
           <div id="canvas-proposal-tray-mount"></div>
         </div>
         <aside id="workspace-context" class="workspace-context" aria-labelledby="workspace-context-heading">
-          <div class="workspace-panel-heading"><div><p class="eyebrow">MODEL CONTEXT</p><h2 id="workspace-context-heading">Change request</h2></div><button id="workspace-context-close" class="icon-button" type="button" aria-label="Close context panel">×</button></div>
+          <div class="workspace-panel-heading"><div><h2 id="workspace-context-heading">Change request</h2></div><button id="workspace-context-close" class="icon-button" type="button" aria-label="Close context panel" title="Close assistant"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button></div>
           <div id="workspace-context-content" class="workspace-context-content">
           <section id="evidence-page" class="workflow-page" aria-label="Project evidence" hidden><div id="project-evidence-mount"></div></section>
           <section id="editor-panel" class="editor-panel request-pane chat-workspace" data-active="false" aria-label="Request chats">
@@ -91,9 +91,9 @@
                 <ul id="request-source-list" class="source-list composer-source-list" aria-label="Attached request sources"></ul>
                 <div id="floor-plan-guide"></div>
                 <div class="composer-input-row">
-                  <button id="composer-add" class="composer-icon" type="button" aria-label="Add files or context" aria-controls="composer-menu" aria-expanded="false" title="Add files or context" disabled>+</button>
+                  <button id="composer-add" class="composer-icon" type="button" aria-label="Add files or context" aria-controls="composer-menu" aria-expanded="false" title="Add files or context" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg></button>
                   <label class="sr-only" for="request-text">Message</label><textarea id="request-text" maxlength="1000" rows="2" placeholder="Ask for a change…" aria-describedby="proposal-help request-source-status" aria-controls="composer-menu" aria-expanded="false" aria-autocomplete="list" required disabled></textarea>
-                  <button id="save-proposal" type="submit" class="composer-send" aria-label="Send message" title="Send message" disabled><span aria-hidden="true">↑</span></button>
+                  <button id="save-proposal" type="submit" class="composer-send" aria-label="Send message" title="Send message" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M4 7l4-4l4 4"></path></svg></button>
                 </div>
                 <div id="composer-menu" class="composer-menu" popover="manual" role="listbox" aria-label="Add to this chat" hidden></div>
               </div>
