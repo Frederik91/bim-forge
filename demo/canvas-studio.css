@@ -284,6 +284,9 @@ body.canvas-studio {
 .canvas-studio .spatial-task-list { position: absolute; top: 168px; left: 8px; z-index: 15; width: min(350px, calc(100% - 16px)); max-height: 65%; overflow: auto; padding: 12px; color: var(--ink); background: var(--paper); border-radius: var(--spatial-radius-panel); box-shadow: var(--spatial-elevation-panel); }
 .canvas-studio .spatial-task-list h3 { margin: 0 0 12px; font-size: 14px; }
 .canvas-studio .spatial-task-list button { display: block; width: 100%; margin-top: 4px; }
+.canvas-studio .spatial-task-row { display: flex; align-items: stretch; gap: 8px; }
+.canvas-studio .spatial-task-row > button:first-child { flex: 1; min-width: 0; }
+.canvas-studio .spatial-task-row > button[data-delete-agent] { flex: 0 0 auto; width: auto; }
 @media (max-width: 900px) {
   .canvas-studio .workspace-shell:has(> .spatial-workspace-stage), .canvas-studio .workspace-shell:has(> .spatial-workspace-stage)[data-navigation-open], .canvas-studio .workspace-shell:has(> .spatial-workspace-stage)[data-context-open="true"], .canvas-studio .workspace-shell:has(> .spatial-workspace-stage)[data-spatial-view="plan"][data-context-open="true"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .canvas-studio .spatial-workspace-stage { grid-column: 1; grid-row: 1; }

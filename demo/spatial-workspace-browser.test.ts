@@ -17,6 +17,96 @@ import { RoomRepository, diffSnapshots, validateSnapshot } from '../src/room-mod
 import { spatialFixtureWorker } from '../tests/fixtures/spatial-workspace/worker.ts';
 import { spatialExpectedDoorSnapshot, spatialFixtureManifest } from '../tests/fixtures/spatial-workspace/fixture.ts';
 import { parseTaskPlacement } from '../src/task-placement.ts';
+import { SpatialTasks } from './spatial-tasks.ts';
+
+test('created draft and saved agents can be deleted from controls and Tasks without replacing them or changing the model', { timeout: 120_000 }, async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'delete-agent-292-'));
+  const server = await createDemoServer({ modelWorker: spatialFixtureWorker(), backlogFile: path.join(directory, 'queue.sqlite') });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); assert.ok(address && typeof address === 'object'); const base = `http://127.0.0.1:${address.port}`;
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  t.after(async () => {
+    t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() }));
+    await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers(); await fs.rm(directory, { recursive: true, force: true });
+  });
+  const capture = () => page.evaluate(async () => { const url = '/room-app.mjs'; return (await import(url)).captureWorkspaceInsidePose(); });
+  const confirm = () => page.locator('#delete-agent-dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
+  const list = page.locator('#spatial-task-list');
+  await page.goto(base); await page.locator('#project-template').selectOption('house');
+  await page.locator('#project-name').fill('Delete agents fixture'); await page.locator('#create-project').click();
+  await page.locator('#open-chat').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor();
+  await page.locator('#new-chat').click(); await page.locator('#request-text').fill('First unsent agent');
+  await page.locator('#request-source-files').setInputFiles({ name: 'first-agent.txt', mimeType: 'text/plain', buffer: Buffer.from('Only for the first draft.') });
+  await page.locator('#new-chat').click(); await page.locator('#request-text').fill('Keep this second draft');
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await list.locator('button[data-task-id]').count(), 2);
+  const first = list.getByRole('button', { name: 'Delete agent: First unsent agent', exact: true });
+  await first.click(); await page.locator('#delete-agent-dialog').getByRole('button', { name: 'Keep agent' }).click();
+  assert.equal(await list.locator('button[data-task-id]').count(), 2);
+  await first.click(); await confirm();
+  await page.waitForFunction(() => document.querySelectorAll('#spatial-task-list button[data-task-id]').length === 1);
+  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this second draft');
+  const beforeDraftDelete = await capture();
+  await list.getByRole('button', { name: 'Close task list' }).click();
+  await page.locator('#spatial-delete-agent').click(); await confirm();
+  await page.waitForFunction(() => document.querySelectorAll('.spatial-task-label').length === 0);
+  assert.deepEqual(await capture(), beforeDraftDelete);
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await list.locator('button[data-task-id]').count(), 0);
+  await list.getByRole('button', { name: 'Close task list' }).click();
+  await page.locator('#open-chat').click(); await page.locator('#new-chat').click();
+  assert.equal(await page.locator('#request-text').inputValue(), '');
+  assert.equal(await page.locator('#request-source-list').textContent(), '');
+  const parser = new SpatialTasks();
+  const submit = async (text: string) => {
+    await page.locator('.model-object-picker').selectOption(spatialFixtureManifest.doorId);
+    await page.locator('#request-text').fill(text);
+    const response = page.waitForResponse(r => r.url() === `${base}/api/change-requests` && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    const acknowledgement = await response; assert.equal(acknowledgement.status(), 202, await acknowledgement.text());
+    const data: unknown = await acknowledgement.json(); assert.ok(data && typeof data === 'object' && 'ticket' in data);
+    const ticket = parser.parseTicket(data.ticket);
+    await page.waitForFunction(async id => { const value = await (await fetch(`/api/change-requests/${id}`)).json(); return value.ticket.state === 'ready'; }, ticket.id);
+    return ticket;
+  };
+  const a = await submit('Widen this door to 1100 mm, keeping its centre.');
+  await page.locator('#new-chat').click();
+  const b = await submit('Keep another independent door proposal.');
+  const accepted = await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.route('**/api/change-requests/*/agent', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Deletion connection failed. Retry.' }) }));
+  await list.locator(`[data-delete-agent="${a.id}"]`).click(); await confirm();
+  await page.getByText('Deletion connection failed. Retry.', { exact: true }).waitFor();
+  assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 1, 'Failed deletion keeps the agent');
+  await page.unroute('**/api/change-requests/*/agent');
+  await list.locator(`[data-task-id="${a.id}"]`).click();
+  await page.locator('#spatial-delete-agent').waitFor();
+  const pose = await capture(); const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
+  await page.locator('#spatial-delete-agent').click(); await confirm();
+  await page.waitForFunction(id => !document.querySelector(`.spatial-task-label[data-task-id="${id}"]`), a.id);
+  assert.deepEqual(await capture(), pose, 'Agent deletion retains the eye and facing');
+  assert.equal(await canvas.evaluate(node => node.isConnected), true);
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 0);
+  assert.equal(await list.locator(`[data-task-id="${b.id}"]`).count(), 1, 'Another agent at the same place survives');
+  const saved: unknown = await (await page.request.get(`${base}/api/change-requests/${a.id}`)).json();
+  assert.ok(saved && typeof saved === 'object' && 'ticket' in saved); assert.equal(parser.parseTicket(saved.ticket).agentDeleted, true);
+  assert.deepEqual(await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json(), accepted);
+  await page.reload(); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.waitForFunction(id => !!document.querySelector(`#spatial-task-list [data-task-id="${id}"]`), b.id);
+  assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 0, 'Deleted saved agent stays absent after reload');
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const remove = list.locator(`[data-delete-agent="${b.id}"]`); await remove.scrollIntoViewIfNeeded();
+    assert.equal(await remove.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  }
+  assert.deepEqual(errors, []);
+});
 
 test('live native agent body opens the same saved task without moving the eye; exact 1100 mm review remains explicit', { timeout: 150_000 }, async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'spatial-257-'));

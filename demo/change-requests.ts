@@ -40,6 +40,7 @@ export type RequestState = 'queued' | 'working' | 'needs-input' | 'ready' | 'com
 type BoundRequest = ReturnType<typeof validateModelProposalRequest>;
 type RequestInput = Pick<BoundRequest, 'requestId' | 'proposalName' | 'baseRevisionId' | 'instruction' | 'visualIntent' | 'sources' | 'authoringScope' | 'conversationVisual' | 'target' | 'evidencePins' | 'taskPlacement'> & { selectedObjectIds: readonly string[]; scope?: ScopedRequest };
 interface RequestTicket<Project> {
+  agentDeleted?: true;
   taskPlacement?: TaskPlacement;
   placementRecoveries?: TaskPlacementRecovery[];
   evidence?: EvidenceReadSet;
@@ -147,7 +148,8 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
     throw new Error('The stored change request is invalid.');
   }
   // The payload is parsed by the model request boundary again before every run.
-  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation', 'evidence', 'taskPlacement', 'placementRecoveries']);
+  fields(value, ['id', 'projectId', 'state', 'request', 'project', 'fingerprint', 'createdAt', 'updatedAt', 'attempts', 'error', 'result', 'decisionId', 'decisionAction', 'history'], ['activity', 'scope', 'conversation', 'evidence', 'taskPlacement', 'placementRecoveries', 'agentDeleted']);
+  if (Object.hasOwn(value, 'agentDeleted') && value.agentDeleted !== true) throw new Error('Invalid agent deletion marker.');
   const r = value.request;
   fields(r, ['requestId', 'proposalName', 'baseRevisionId', 'selectedObjectIds', 'instruction', 'visualIntent'], ['sources', 'authoringScope', 'scope', 'conversationVisual', 'target', 'evidencePins', 'taskPlacement']);
   const target = Object.hasOwn(r, 'target') ? parseFrozenDesignTarget(r.target) : undefined;
@@ -197,7 +199,7 @@ function parseTicket<Project>(text: string, parseProject: (value: unknown) => Pr
       || (state === 'cancelled' && value.decisionAction !== 'cancel') || (state === 'rejected' && value.decisionAction !== 'reject')) throw new Error('Stored state and decision do not match.');
   const conversation = Object.hasOwn(value, 'conversation') ? parseRequestConversation(value.conversation) : undefined;
   if (conversation && conversation.ticketId !== value.id) throw new Error('Conversation belongs to another ticket.');
-  return { ...(conversation ? { conversation } : {}), id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
+  return { ...(value.agentDeleted === true ? { agentDeleted: true } : {}), ...(conversation ? { conversation } : {}), id: identifier(value.id), projectId: identifier(value.projectId), state, project: parseProject(value.project), fingerprint: value.fingerprint,
     ...(Object.hasOwn(value, 'taskPlacement') ? { taskPlacement: parseTaskPlacement(value.taskPlacement) } : {}),
     ...(Object.hasOwn(value, 'placementRecoveries') ? { placementRecoveries: parseTaskPlacementRecoveries(value.placementRecoveries) } : {}),
     ...(evidence ? { evidence } : {}),
@@ -972,6 +974,7 @@ export class ChangeRequests {
   async revise(id: string, project: unknown, input: unknown): Promise<TicketProjection> {
     this.#assertOpen();
     const ticket = this.#get(id);
+    if (ticket.agentDeleted) throw new BacklogConflict('This agent was deleted. Start a new chat to assign more work.');
     const repository = await RoomRepository.restore(project);
     this.#assertOpen();
     const bound = validateModelProposalRequest(repository, input);
@@ -1033,6 +1036,7 @@ export class ChangeRequests {
     if (replay) { if (replay.id !== id) throw new BacklogConflict('Message belongs to another ticket.'); return this.get(id); }
     const ticket = this.#get(id);
     const conversation = this.#conversation(id);
+    if (ticket.agentDeleted) throw new BacklogConflict('This agent was deleted. Start a new chat to assign more work.');
     if (conversation.sequence !== reply.expectedSequence) throw new BacklogConflict('The conversation changed. Refresh before sending.');
     if (conversation.messages.length > CONVERSATION_LIMITS.messages - ((ticket.state === 'working' || ticket.state === 'queued') ? 4 : 3) || conversation.messages.filter(message => message.kind === 'user').length >= CONVERSATION_LIMITS.userTurns) throw new Error('This conversation reached its preview limit. Export its history before starting another request.');
     if (ticket.history.length >= 20) throw new Error('This ticket reached its twenty-turn history limit.');
@@ -1232,6 +1236,27 @@ export class ChangeRequests {
       await prepared?.dispose();
     }
   }
+  deleteAgent(id: string, input: unknown): TicketProjection {
+    this.#assertOpen();
+    if (!object(input)) throw new Error('Agent deletion requires expectedRequestId.');
+    fields(input, ['expectedRequestId']);
+    const expectedRequestId = identifier(input.expectedRequestId);
+    const ticket = this.#get(id);
+    if (ticket.request.requestId !== expectedRequestId) throw new BacklogConflict('This agent has newer work. Reopen it before deleting.');
+    if (ticket.agentDeleted) return this.#projection(ticket);
+    const running = ticket.state === 'queued' || ticket.state === 'working';
+    const next: Ticket = recordActivity({ ...ticket, agentDeleted: true,
+      ...(running ? { state: 'cancelled', decisionId: `delete-agent:${createHash('sha256').update(id + ':' + expectedRequestId).digest('hex')}`, decisionAction: 'cancel' } : {}) },
+      { stage: running ? 'cancelled' : ticket.state, message: 'Agent deleted from the workspace. Active work is stopped; saved conversation and review history are retained.' });
+    this.#transaction(() => {
+      this.#put(next);
+      if (running && this.#conversation(id).sequence < CONVERSATION_LIMITS.messages) this.#decisionMessage(next);
+    });
+    this.#drafts.delete(id);
+    const active = this.#attempts.get(id);
+    if (active?.requestId === expectedRequestId && active.attempt === ticket.attempts) active.controller.abort();
+    return this.#projection(next);
+  }
   async decide(id: string, input: unknown): Promise<{ ticket: TicketProjection; project: string }> {
     this.#assertOpen();
     if (!object(input) || Object.keys(input).length !== 3 || typeof input.action !== 'string') throw new Error('A decision requires action, decisionId and expectedRequestId.');
@@ -1239,6 +1264,7 @@ export class ChangeRequests {
     const expectedRequestId = identifier(input.expectedRequestId);
     const action = input.action;
     const ticket = this.#get(id);
+    if (ticket.agentDeleted && action === 'retry') throw new BacklogConflict('This agent was deleted. Start a new chat to assign more work.');
     if (ticket.request.requestId !== expectedRequestId) throw new BacklogConflict('This ticket has a newer revision than the one you reviewed. Reopen it before deciding.');
     const expected = this.#requiredCurrent(ticket.projectId);
     const text = this.project(ticket.projectId);

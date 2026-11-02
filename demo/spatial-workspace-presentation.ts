@@ -15,6 +15,8 @@ export class SpatialWorkspacePresentation {
   readonly #notice = document.createElement('p');
   readonly #return: HTMLButtonElement;
   readonly #rebind: HTMLButtonElement;
+  readonly #delete: HTMLButtonElement;
+  readonly #remove: (identity: TaskAgentIdentity) => void;
   readonly #open: (identity: TaskAgentIdentity) => void;
   readonly #labelNodes = new Map<string, HTMLButtonElement>();
   readonly #candidates = new Map<string, readonly TaskAgentIdentity[]>();
@@ -25,8 +27,9 @@ export class SpatialWorkspacePresentation {
   #positioned = false;
   #chooser: readonly TaskAgentIdentity[] | undefined;
 
-  constructor(options: { stage: HTMLElement; panel: HTMLElement; open: (identity: TaskAgentIdentity) => void; returnToTask: () => void; rebind: () => void }) {
+  constructor(options: { stage: HTMLElement; panel: HTMLElement; open: (identity: TaskAgentIdentity) => void; returnToTask: () => void; rebind: () => void; remove: (identity: TaskAgentIdentity) => void }) {
     this.#stage = options.stage; this.#panel = options.panel; this.#open = options.open;
+    this.#remove = options.remove;
     this.#stage.classList.add('spatial-workspace-stage'); this.#stage.append(this.#panel);
     this.#panel.classList.add('spatial-conversation');
     this.#labels.className = 'spatial-task-labels'; this.#labels.setAttribute('aria-label', 'Spatial task agents');
@@ -38,7 +41,9 @@ export class SpatialWorkspacePresentation {
     this.#rebind = control('Refresh draft context', options.rebind); this.#rebind.id = 'spatial-refresh-context'; this.#rebind.hidden = true;
     const expand = control('Expand conversation', () => { const expanded = this.#panel.dataset.expanded !== 'true'; this.#panel.dataset.expanded = String(expanded); expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position(); });
     expand.id = 'spatial-expand-conversation';
-    tools.append(this.#return, expand, this.#rebind); this.#notice.className = 'spatial-placement-notice'; this.#notice.setAttribute('role', 'status'); this.#notice.hidden = true;
+    this.#delete = control('Delete agent', () => { const selected = this.#descriptors.find(item => item.selected); if (selected) this.#remove(selected.identity); });
+    this.#delete.id = 'spatial-delete-agent';
+    tools.append(this.#return, expand, this.#rebind, this.#delete); this.#notice.className = 'spatial-placement-notice'; this.#notice.setAttribute('role', 'status'); this.#notice.hidden = true;
     this.#panel.insertBefore(tools, this.#panel.children[1] ?? null); tools.after(this.#notice);
     this.#stage.append(this.#labels, this.#list);
     (this.#stage.querySelector('.model-card-heading') ?? this.#stage).append(launcher);
@@ -46,6 +51,7 @@ export class SpatialWorkspacePresentation {
   }
   update(descriptors: readonly TaskAgentDescriptor[], notice: string, canReturn: boolean, needsRebind: boolean): void {
     this.#notice.textContent = notice; this.#notice.hidden = !notice; this.#rebind.hidden = !needsRebind; this.#return.disabled = !canReturn;
+    this.#delete.hidden = !descriptors.some(item => item.selected);
     const signature = JSON.stringify(descriptors); if (signature === this.#signature) { this.#position(); return; }
     this.#signature = signature; this.#descriptors = descriptors; this.#labels.replaceChildren(); this.#labelNodes.clear();
     for (const descriptor of descriptors) {
@@ -65,7 +71,11 @@ export class SpatialWorkspacePresentation {
     const heading = document.createElement('h3'); heading.textContent = candidates ? 'Choose a task at this place' : 'Tasks in this project'; this.#list.append(heading);
     for (const descriptor of this.#descriptors.filter(item => !candidates || candidates.some(candidate => key(candidate) === key(item.identity)))) {
       const node = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${stateLabel[descriptor.state]}${descriptor.placement.kind === 'unplaced' ? ' · Unplaced' : ''}`, () => { this.#list.hidden = true; this.#open(descriptor.identity); });
-      node.dataset.taskId = key(descriptor.identity); this.#list.append(node);
+      node.dataset.taskId = key(descriptor.identity);
+      const row = document.createElement('div'); row.className = 'spatial-task-row';
+      const remove = control('Delete', () => this.#remove(descriptor.identity));
+      remove.setAttribute('aria-label', `Delete agent: ${descriptor.title}`); remove.dataset.deleteAgent = key(descriptor.identity);
+      row.append(node, remove); this.#list.append(row);
     }
     if (!this.#descriptors.length) { const empty = document.createElement('p'); empty.textContent = 'Start a conversation in the model.'; this.#list.append(empty); }
     this.#list.append(control('Close task list', () => { this.#list.hidden = true; }));

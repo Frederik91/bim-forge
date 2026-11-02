@@ -25,6 +25,25 @@ function submission(): TaskSubmission {
   return { project: 'original serialized project', request: { proposalName: 'door-change', baseRevisionId: revision,
     instruction: 'Improve this door', selectedObjectIds: [], sources: [attachment], visualIntent: { kind: 'selection' } } };
 }
+test('agent deletion uses the reviewed request identity and rejects older task projections', async () => {
+  let method: string | undefined; let body: unknown;
+  const tasks = new SpatialTasks({ fetch: async (_url, init) => {
+    method = init?.method; body = JSON.parse(String(init?.body));
+    return Response.json({ ticket: { ...ticket(), agentDeleted: true } });
+  } });
+  tasks.setProject('project-one'); tasks.receiveTask(ticket());
+  await tasks.deleteAgent({ ticketId: 'ticket-one', expectedRequestId: 'ticket-one' });
+  assert.equal(method, 'DELETE'); assert.deepEqual(body, { expectedRequestId: 'ticket-one' });
+  assert.equal(tasks.projection.tickets[0]?.agentDeleted, true);
+  assert.throws(() => tasks.updateTicket(tasks.parseTicket(ticket())), StaleTaskResponse);
+  assert.equal(tasks.projection.tickets[0]?.agentDeleted, true);
+});
+test('failed agent deletion leaves the saved task visible', async () => {
+  const tasks = new SpatialTasks({ fetch: async () => Response.json({ error: 'Connection unavailable' }, { status: 503 }) });
+  tasks.setProject('project-one'); tasks.receiveTask(ticket());
+  await assert.rejects(() => tasks.deleteAgent({ ticketId: 'ticket-one', expectedRequestId: 'ticket-one' }), /Connection unavailable/);
+  assert.equal(tasks.projection.tickets[0]?.agentDeleted, undefined);
+});
 function deferred<T>() {
   let resolve: (value: T) => void = () => { throw new Error('Deferred promise not initialized.'); };
   const promise = new Promise<T>(done => { resolve = done; });
