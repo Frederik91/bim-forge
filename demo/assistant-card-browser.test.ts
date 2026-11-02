@@ -106,5 +106,17 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   assert.equal(minimum.send.hit, true, 'Shrinking a task conversation keeps Send directly reachable');
   assert.ok(minimum.transcript.height >= 64, 'The minimum retains a readable, separately scrolling transcript');
   assert.ok(minimum.input.bottom <= minimum.content.bottom && minimum.send.bottom <= minimum.content.bottom, 'Composer controls stay inside their visible content region');
+  await page.setViewportSize({ width: 320, height: 600 });
+  if (!await panel.isVisible()) await page.locator('#open-chat').click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.scrollFallback === 'true');
+  await page.locator('#request-text').scrollIntoViewIfNeeded();
+  for (const selector of ['#request-text', '#save-proposal']) assert.equal(await page.locator(selector).evaluate(node => {
+    const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit);
+  }), true, 'Short viewport scrolling reaches each composer control');
+  await page.locator('#request-chat-mount').scrollIntoViewIfNeeded();
+  assert.equal(await page.locator('#request-chat-mount').evaluate(node => {
+    const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit);
+  }), true, 'Short viewport scrolling also reaches the transcript');
+  await page.screenshot({ path: path.join(artifacts, 'short-320.png'), fullPage: true });
   assert.deepEqual(errors, []);
 });
