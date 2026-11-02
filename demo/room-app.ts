@@ -2154,7 +2154,7 @@ function chatActivity(value: unknown) {
 }
 
 async function refreshChatModel(value: unknown): Promise<void> {
-  if (!repo || !tasks.projection.ticketId || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  if (!repo || !tasks.projection.ticketId || currentPage !== 'request' || generic('workspace-context').hidden || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
   const ticket = tasks.parseTicket(value); const projectId = repo.projectId;
   if (ticket.id !== tasks.projection.ticketId || ticket.projectId !== projectId) return;
   if (ticket.state === 'ready') {
@@ -2167,7 +2167,7 @@ async function refreshChatModel(value: unknown): Promise<void> {
     return;
   }
   const draft = await tasks.readDraft(ticket.id);
-  if (!repo || repo.projectId !== projectId || tasks.projection.ticketId !== ticket.id || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  if (!repo || repo.projectId !== projectId || tasks.projection.ticketId !== ticket.id || currentPage !== 'request' || generic('workspace-context').hidden || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
   const latest = tasks.projection.conversation?.messages.findLast(item => item.kind === 'user');
   if (latest?.requestId !== ticket.request.requestId) return;
 
@@ -2577,7 +2577,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   if (!reviewRepository && !liveChatPreview && !chatInspectionOrigins.has(currentChatKey())) chatInspectionOrigins.set(currentChatKey(), captureChatDraft());
   const generation = tasks.generation;
   const value = await tasks.readTask(id);
-  if (automatic && (tasks.projection.ticketId !== id || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey()))) return;
+  if (automatic && (tasks.projection.ticketId !== id || currentPage !== 'request' || generic('workspace-context').hidden || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey()))) return;
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = tasks.parseTicket(value.ticket);
   if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
@@ -2589,6 +2589,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   } });
   const proposed = await RoomRepository.restore(result.project);
   tasks.requireCurrent(generation);
+  if (automatic && (currentPage !== 'request' || generic('workspace-context').hidden)) return;
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
   if (result.review.target && (result.review.target.projectId !== repo.projectId || result.review.target.revisionId !== result.review.baseRevisionId)) throw new Error('Review target differs from its frozen project/base.');
   if (ticket.request.target && (!result.review.target || designKey(result.review.target.target) !== designKey(ticket.request.target.target))) throw new Error('Review target differs from the conversation design.');
@@ -2608,7 +2609,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   const proposalMessage = message ?? tasks.projection.conversation?.messages.find(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === activeReview?.requestId && item.content.proposalRevisionId === activeReview?.proposalRevisionId);
   activeChatProposalMessageId = proposalMessage?.id ?? null;
   if (automatic) { activeLevelId = cameraContext.level; focusedRoomId = cameraContext.room; modelView = cameraContext.view; }
-  resetEditor(); render(); showPage('request');
+  resetEditor(); render(); if (!automatic) showPage('request');
   ui['ticket-history'].replaceChildren();
   if (Array.isArray(value.ticket.history)) for (const [index, archived] of value.ticket.history.entries()) {
     if (typeof archived !== 'string') throw new Error('Invalid request history.');
