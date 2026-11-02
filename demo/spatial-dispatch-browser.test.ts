@@ -36,6 +36,10 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
     await fs.rm(directory, { recursive: true, force: true });
   });
   const parser = new SpatialTasks();
+  const mode = (expected: 'personal' | 'task') => page.waitForFunction(value => {
+    const field = document.getElementById('request-text'); return document.getElementById('workspace-context')?.dataset.assistantMode === value
+      && field instanceof HTMLTextAreaElement && !field.disabled;
+  }, expected);
   const capture = () => page.evaluate(async () => { const url = '/room-app.mjs'; return (await import(url)).captureWorkspaceInsidePose(); });
   const read = async (id: string) => {
     const value: unknown = await (await page.request.get(`${base}/api/change-requests/${id}`)).json();
@@ -47,7 +51,7 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     const acknowledgement = await response; assert.equal(acknowledgement.status(), 202, await acknowledgement.text());
     const value: unknown = await acknowledgement.json(); assert.ok(value && typeof value === 'object' && 'ticket' in value);
-    await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && document.getElementById('request-text') instanceof HTMLTextAreaElement && document.getElementById('request-text')?.getAttribute('disabled') === null);
+    await mode('personal');
     return parser.parseTicket(value.ticket);
   };
   await page.goto(base); await page.locator('#project-template').selectOption('house'); await page.locator('#project-name').fill('Personal assistant dispatch'); await page.locator('#create-project').click();
@@ -97,18 +101,19 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   await page.locator('.model-object-picker').selectOption('level-ground-wall-east');
   await page.locator('#request-text').fill('Keep this personal instruction unsent.');
   await page.getByRole('button', { name: 'Tasks', exact: true }).click(); await page.locator(`#spatial-task-list [data-task-id="${a.id}"]`).click();
-  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task');
+  await mode('task');
   await page.locator('#request-text').fill('Keep this follow-up on the first agent.');
   const beforeReturn = await capture();
   await page.locator('#personal-assistant').click();
-  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal');
+  await mode('personal');
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal instruction unsent.');
   assert.equal(await page.locator('.model-object-picker').inputValue(), 'level-ground-wall-east');
   const afterReturn = await capture(); assert.ok(beforeReturn && afterReturn);
   assert.deepEqual(afterReturn.eye, beforeReturn.eye); assert.deepEqual(afterReturn.forward, beforeReturn.forward);
   await page.getByRole('button', { name: 'Tasks', exact: true }).click(); await page.locator(`#spatial-task-list [data-task-id="${a.id}"]`).click();
+  await mode('task');
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this follow-up on the first agent.');
-  await page.locator('#personal-assistant').click(); gate.release(); await gate.finished;
+  await page.locator('#personal-assistant').click(); await mode('personal'); gate.release(); await gate.finished;
   assert.equal(await page.locator('#workspace-context').getAttribute('data-assistant-mode'), 'personal');
   assert.equal(await page.locator('.spatial-task-label').count(), 3, 'Only the three submitted tasks have figures');
   assert.deepEqual(await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json(), baseline);
