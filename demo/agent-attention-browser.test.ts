@@ -21,6 +21,7 @@ test('actual visible results become viewed; later unseen results remain unread; 
   const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  const taskWrites: string[] = []; page.on('request', request => { if (request.method() !== 'GET' && request.url().includes('/api/change-requests')) taskWrites.push(`${request.method()} ${new URL(request.url()).pathname}`); });
   const artifacts = process.env.QUAL_ARTIFACTS;
   t.after(async () => {
     gates.forEach(gate => gate.release());
@@ -89,5 +90,6 @@ test('actual visible results become viewed; later unseen results remain unread; 
   assert.match(await page.locator('#request-chat').textContent() ?? '', /Accepted|accept/);
   assert.equal(await page.locator('.request-chat-assistant').count(), 2, 'Finishing the agent retains both saved results');
   await noError('The completed saved chat opens without an action error');
+  assert.deepEqual(taskWrites, ['POST /api/change-requests', `POST /api/change-requests/${ticket.id}/messages`, `POST /api/change-requests/${ticket.id}/decision`], 'Viewing and reload never send a task mutation');
   assert.equal(await page.locator('canvas').count(), 1); assert.deepEqual(errors, []);
 });
