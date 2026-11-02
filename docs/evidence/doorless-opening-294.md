@@ -1,6 +1,6 @@
 # Native permanent opening — issue 294
 
-Status: implementation and deterministic qualification pass; shipped UI acceptance verification is incomplete. Draft for review, not ready to merge or deploy.
+Status: implementation, deterministic checks and the shipped UI acceptance/restart workflow pass on Linux. Draft for human geometry/schema review.
 
 ## Recorded case and model delta
 
@@ -47,12 +47,19 @@ At final implementation `f0bcbcfd334b4393fa4ef2ba656108e0453fe640` (after adding
 
 The typed ScriptBox cases prove successful scoped conversion, read-only capability denial, unchanged accepted repository and atomic rejection outside frozen authority. Queue/scene/plan regressions remain in the focused 50-check evidence.
 
-## Unresolved shipped UI check
+## Shipped UI acceptance and restart
 
-`demo/doorless-opening-browser.test.ts` creates a disposable house project and submits a controlled real ScriptBox worker through the shipped app. Proposal creation and the 2000 mm plan pass with zero page errors and unchanged Main. The test then waits for the explicit acceptance POST after switching to Plan; no response arrives. It fails at the `page.waitForResponse` for `/decision` (30 s timeout, overall case 58 s). Last status is `Plan opened. Selection and unsent task are retained.`
+At `bc483cc0731906ee9fff930655637ab77643d35d`, `demo/doorless-opening-browser.test.ts` passes in 38.21 seconds with zero page errors. It creates a disposable house project and submits a controlled real ScriptBox worker through the shipped app, then proves:
 
-Acceptance and server-restart portions have **not** been qualified. Read-only inspection of the final screenshot shows the floating Assistant covering the lower-right canvas review tray's acceptance action. A separate acceptance action is visible inside the chat, but this test targets the covered tray action. No alternative-action repair/rerun was attempted after the third verification failure; the parent requested further-attempt approval under AGENTS.md. Raw logs and the final screenshot remain in the isolated Linux evidence directory and client `BIMForge/opening-294-evidence` directory.
+- The ready proposal contains the Opening and the plan shows 2000 mm; Main remains the original accepted revision.
+- Closing the floating Assistant normally exposes the canvas review action. Its actual pointer hit target is checked before an ordinary explicit acceptance click; no forced clicks are used.
+- Acceptance returns HTTP 200 and the saved model matches the complete expected snapshot and exact two-record delta.
+- A full disposable server shutdown/restart and browser reload retain the accepted Opening, stable ID, width and host. The visible object label identifies Opening, the floor heading remains Ground floor, and there is one canvas.
+
+The persisted fixture changes Main from `a62b2bcad79c10766d3f9b53012875e809b90f067004d7d7e3cbe09665f8d37d` to `c7266932d5fa07058bd78c231e73e23b710ac7d25a4c3e36095dd3058d8c4665` only after that explicit decision. [The recorded delta](doorless-opening-294-delta.json) contains the inspected before/after records. Linux validation for 386 sources and demo build also pass with the final browser assertions.
+
+Earlier browser-oracle failures were a covered tray action and checking the floor heading for an object type. They were repaired after the user's explicit continuation approval; the model, Main, plan, acceptance and restart assertions were retained. Raw logs and screenshots remain in the isolated Linux artifacts directory and client `BIMForge/opening-294-evidence` directory.
 
 ## Review and compatibility
 
-Geometry and native schema changes require human review. There is no SQL migration, but old binaries cannot read snapshots containing the new Opening entity after human acceptance. Keep a compatible reader for such data; do not claim arbitrary binary rollback is safe. This branch has not been merged or deployed and the live accepted project is unchanged.
+Geometry and native schema changes require human review. There is no SQL migration, but old binaries cannot read snapshots containing the new Opening entity after human acceptance. Keep a compatible reader for such data; do not claim arbitrary binary rollback is safe. No live project was mutated by this qualification. Shared preview integration and native Walk qualification are tracked separately by the parent.
