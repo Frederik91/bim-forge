@@ -808,11 +808,16 @@ function ensureDraftOrigin(): void {
 }
 function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlacement {
   if (!repo || !preview || selectedDesignTarget.kind === 'baseline') throw new Error('Open a writable accepted design before assigning a task.');
+  const graph = preview;
   const pose = modelView === '3d' ? captureWorkspaceInsidePose() : null;
-  const point = taskDispatchPoint({ graph: preview, selectedObjectIds, markups: conversationMarkups(chatVisual), eye: pose?.eye ?? null });
+  const markups = conversationMarkups(chatVisual);
+  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: pose?.eye ?? null });
+  const objectLevels = new Set(selectedObjectIds.map(id => entityLevel(graph, id)?.id ?? null));
+  const levelId = markups.length ? chatVisual?.levelId ?? activeLevelId
+    : selectedObjectIds.length ? objectLevels.size === 1 ? [...objectLevels][0] ?? null : null : activeLevelId;
   ensureDraftOrigin();
   const origin: TaskOrigin | null = point ? { snapshot: { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision },
-    frame: 'project-engineering-metres', view: modelView === '3d' ? '3d' : '2d', levelId: activeLevelId, point: [...point] } : draftOrigin;
+    frame: 'project-engineering-metres', view: modelView === '3d' ? '3d' : '2d', levelId, point: [...point] } : draftOrigin;
   if (!origin) return { version: 1, kind: 'unplaced', reason: 'not-provided' };
   if (!repo || origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget)) {
     throw new Error('The draft source changed. Use Refresh draft context to retain its point and explicitly bind the new source before sending.');
@@ -1786,12 +1791,12 @@ async function openPersonalAssistant(fresh = false, acceptedProject: RoomReposit
   personalDraftKeys.set(repo.projectId, tasks.key);
   draftOrigin = null; draftCreationPose = null; draftOriginKey = tasks.key;
   sourcePicker.switchDraft(`${repo.projectId}:${tasks.projection.draftId}`);
-  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
+  if (!draft) clearRequestSources();
+  ui['request-text'].value = ''; ui['proposal-name'].value = '';
   displayAccepted(accepted);
   reviewRepository = null; activeTicketId = null; activeReview = null;
   selectedBranch = 'main'; selectedRevision = selectedDesignHead(repo);
-  clearRequestSources(); ui['request-text'].value = ''; ui['proposal-name'].value = '';
-  if (draft) { sourcePicker.restore(repo.projectId, draft.sources); restoreChatDraft(draft); }
+  if (draft) restoreChatDraft(draft);
   else { resetEditor(); render(); }
   showPage('request'); showRequestPane('details'); ui['request-text'].focus();
   return true;
