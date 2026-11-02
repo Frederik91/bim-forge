@@ -88,7 +88,7 @@ function footprint(graph: ModelGraph, entity: Entity): Point[] {
     case 'AssetInstance': return corners(assetFootprint(graph, entity));
     case 'Stair': return corners(stairFootprint(entity));
     case 'Space': case 'Slab': case 'Roof': return corners(entity.bounds);
-    case 'Door': case 'Window': case 'Level': case 'AssetFamily': return [];
+    case 'Door': case 'Opening': case 'Window': case 'Level': case 'AssetFamily': return [];
     default: { const unreachable: never = entity; return unreachable; }
   }
 }
@@ -199,7 +199,7 @@ export function createModelPlan(input: PlanInput): ModelPlan {
           const f = wallFrame(item);
           const openings = model.relationships.filter(link => link.target === item.id).map(link => {
             const opening = model.entities.find(entity => entity.id === link.source);
-            return opening && (opening.type === 'Door' || opening.type === 'Window') ? { start: link.offset, end: link.offset + opening.width } : null;
+            return opening && (opening.type === 'Door' || opening.type === 'Opening' || opening.type === 'Window') ? { start: link.offset, end: link.offset + opening.width } : null;
           }).filter(item => item !== null).sort((a, b) => a.start - b.start);
           let at = 0;
           for (const gap of [...openings, { start: f.length, end: f.length }]) {
@@ -209,7 +209,7 @@ export function createModelPlan(input: PlanInput): ModelPlan {
           }
           break;
         }
-        case 'Door': case 'Window': {
+        case 'Door': case 'Opening': case 'Window': {
           const link = model.relationships.find(link => link.source === item.id && link.type === 'hosted-by');
           const wall = model.entities.find(entity => entity.id === link?.target);
           if (!link || wall?.type !== 'Wall') break;
@@ -227,7 +227,7 @@ export function createModelPlan(input: PlanInput): ModelPlan {
                 hinge[1] + item.width * (unit[1] * Math.cos(angle) + normal[1] * Math.sin(angle))]);
             });
             path(arc, false, ink(item), 'none', d.detail, dash);
-          } else {
+          } else if (item.type === 'Window') {
             for (const distance of [-wall.thickness / 3, 0, wall.thickness / 3]) line(project(offset(hinge, normal, distance)),
               project(offset(jamb, normal, distance)), ink(item), d.detail, dash);
           }
@@ -235,7 +235,7 @@ export function createModelPlan(input: PlanInput): ModelPlan {
             const a = offset(project(hinge), [normal[0], -normal[1]], -23);
             const b = offset(project(jamb), [normal[0], -normal[1]], -23);
             const prior = oldItems.get(item.id);
-            const label = prior && (prior.type === 'Door' || prior.type === 'Window')
+            const label = prior && (prior.type === 'Door' || prior.type === 'Opening' || prior.type === 'Window')
               ? `${Math.round(prior.width * 1000)} → ${Math.round(item.width * 1000)} mm` : metric(item.width);
             dimension(a, b, item.width, ink(item), 'opening', refFor(pin, item), label);
           }

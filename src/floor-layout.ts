@@ -94,7 +94,7 @@ export function previewFloor(baseSnapshot: unknown, input: unknown): ModelSnapsh
     if (!level) throw new Error('Level reconstruction requires an existing stable level identity.');
     const shell = compileFloorLayout(layout, { kind: 'building', elevation: level.elevation });
     const removed = new Set(base.entities.filter((item) => entityLevel(base, item)?.id === level.id
-      && (item.type === 'Level' || item.type === 'Space' || item.type === 'Wall' || item.type === 'Door' || item.type === 'Window')).map((item) => item.id));
+      && (item.type === 'Level' || item.type === 'Space' || item.type === 'Wall' || item.type === 'Door' || item.type === 'Opening' || item.type === 'Window')).map((item) => item.id));
     return retain(validateSnapshot({ version: 2, units: 'm', entities: [...base.entities.filter((item) => !removed.has(item.id)), ...shell.entities],
       relationships: [...base.relationships.filter((link) => !removed.has(link.source) && !removed.has(link.target)), ...shell.relationships] }));
   }
@@ -141,8 +141,8 @@ export function compileFloorLayout(layout: FloorLayout, format: { kind: 'legacy'
     const wall = walls.find((candidate) => candidate.axis === edge.axis && candidate.at === edge.at
       && candidate.start <= edge.start && candidate.end >= edge.end);
     if (!wall) throw new Error('Opening requires a compiled wall host.');
-    entities.push(item.type === 'Door'
-      ? { id: item.id, type: 'Door', name: item.name, width: item.widthMm / 1000, height: item.heightMm / 1000 }
+    entities.push(item.type === 'Door' || item.type === 'Opening'
+      ? { id: item.id, type: item.type, name: item.name, width: item.widthMm / 1000, height: item.heightMm / 1000 }
       : { id: item.id, type: 'Window', name: item.name, width: item.widthMm / 1000, height: item.heightMm / 1000, sillHeight: item.sillHeightMm / 1000 });
     return { id: hostId(item.id), type: 'hosted-by', source: item.id, target: idFor(wall),
       offset: (edge.start - wall.start + item.offsetMm) / 1000 };

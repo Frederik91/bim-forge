@@ -71,7 +71,7 @@ function evaluateOpening(snapshot: ModelSnapshot, id: EntityId): EvaluatedOpenin
   const opening = snapshot.entities.find((item) => item.id === id);
   const host = snapshot.relationships.find((link) => link.source === id);
   const wall = snapshot.entities.find((item) => item.id === host?.target);
-  if ((opening?.type !== 'Door' && opening?.type !== 'Window') || !host || wall?.type !== 'Wall') {
+  if ((opening?.type !== 'Door' && opening?.type !== 'Opening' && opening?.type !== 'Window') || !host || wall?.type !== 'Wall') {
     throw new Error(`Dependency ${id} requires an opening and its wall host.`);
   }
   const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]);

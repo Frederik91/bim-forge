@@ -64,6 +64,15 @@ export interface Door extends ParameterizedEntity {
   height: number;
 }
 
+/** A permanent floor-level wall void with no door leaf or glazing. */
+export interface Opening extends ParameterizedEntity {
+  id: EntityId;
+  type: 'Opening';
+  name: string;
+  width: number;
+  height: number;
+}
+
 export interface Window extends ParameterizedEntity {
   id: EntityId;
   type: 'Window';
@@ -117,12 +126,12 @@ export interface Roof extends ParameterizedEntity {
   id: EntityId; type: 'Roof'; name: string; levelId: EntityId;
   bounds: Bounds; thickness: number; profile: RoofProfile;
 }
-export type LegacyEntity = Wall | Door | Window | Equipment | Furniture | Level | Space | AssetFamily | AssetInstance;
+export type LegacyEntity = Wall | Door | Opening | Window | Equipment | Furniture | Level | Space | AssetFamily | AssetInstance;
 export type BuildingWall = Wall & { levelId: EntityId };
 export type BuildingFurniture = Furniture & { levelId: EntityId };
 export type BuildingEquipment = Equipment & { levelId: EntityId };
 export type BuildingEntity = BuildingWall | BuildingFurniture | BuildingEquipment
-  | Door | Window | Level | Space | Slab | Stair | Roof | AssetFamily | AssetInstance;
+  | Door | Opening | Window | Level | Space | Slab | Stair | Roof | AssetFamily | AssetInstance;
 export type Entity = LegacyEntity | BuildingEntity;
 
 export interface HostingRelationship {
@@ -652,7 +661,7 @@ function parseEntity(input: JsonValue, building = false): Entity {
   if (input.type === 'Level') fields(input, ['id', 'type', 'name', 'elevation']);
   else if (input.type === 'Space') fields(input, ['id', 'type', 'name', 'levelId', 'bounds']);
   else if (input.type === 'Wall') fields(input, ['id', 'type', 'name', 'start', 'end', 'thickness', 'height']);
-  else if (input.type === 'Door') fields(input, ['id', 'type', 'name', 'width', 'height']);
+  else if (input.type === 'Door' || input.type === 'Opening') fields(input, ['id', 'type', 'name', 'width', 'height']);
   else if (input.type === 'Window') fields(input, ['id', 'type', 'name', 'width', 'height', 'sillHeight']);
   else if (input.type === 'Equipment') {
     fields(input, ['id', 'type', 'name', 'category', 'position', 'elevation', 'width', 'depth', 'height']);
@@ -682,8 +691,8 @@ function parseEntity(input: JsonValue, building = false): Entity {
       if (wallLength(entity) < 0.001 || length > 1000) fail('Wall length is outside the demo bounds.');
       return entity;
   }
-  if (input.type === 'Door') return {
-    id, type: 'Door', name, width: metres(input.width), height: metres(input.height),
+  if (input.type === 'Door' || input.type === 'Opening') return {
+    id, type: input.type, name, width: metres(input.width), height: metres(input.height),
   };
   if (input.type === 'Window') return {
     id, type: 'Window', name, width: metres(input.width), height: metres(input.height),
@@ -814,7 +823,7 @@ function validateFurnishings(entities: readonly Entity[], relationships: readonl
     for (const relation of relationships) {
       const opening = entities.find((entity) => entity.id === relation.source);
       const wall = walls.find((entity) => entity.id === relation.target);
-      if (opening?.type !== 'Door' || !wall) continue;
+      if ((opening?.type !== 'Door' && opening?.type !== 'Opening') || !wall) continue;
       const zone = doorClearanceBounds(graph ?? { units: 'm', entities, relationships }, opening);
       if (overlaps(footprint, zone)) fail(`${item.name} blocks the door clearance zone.`);
     }
@@ -940,7 +949,7 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
     const relation = parseRelationship(item);
     if (relationIds.has(relation.id) || hosted.has(relation.source)) fail('Invalid or duplicate hosting relationship.');
     const opening = byEntityId.get(relation.source); const wall = byEntityId.get(relation.target);
-    if (!opening || (opening.type !== 'Door' && opening.type !== 'Window')) {
+    if (!opening || (opening.type !== 'Door' && opening.type !== 'Opening' && opening.type !== 'Window')) {
       fail('Hosting references must identify an opening and wall.');
     }
     if (!wall || wall.type !== 'Wall') fail('Hosting references must identify an opening and wall.');
@@ -950,7 +959,7 @@ export function validateSnapshot(input: unknown): ModelSnapshot {
     }
     relationIds.add(relation.id); hosted.add(relation.source); relationships.push(relation);
   }
-  if (entities.some((entity) => (entity.type === 'Door' || entity.type === 'Window') && !hosted.has(entity.id))) {
+  if (entities.some((entity) => (entity.type === 'Door' || entity.type === 'Opening' || entity.type === 'Window') && !hosted.has(entity.id))) {
     fail('Every opening must have exactly one host.');
   }
   const graph: ModelGraph = { ...(building ? { version: 2 as const } : {}), units: 'm', entities, relationships };
@@ -999,15 +1008,15 @@ function fixture(): ModelSnapshot {
 interface RectangleModel {
   snapshot: ModelSnapshot;
   boundsMm: RoomLayout['boundsMm'];
-  door: Door;
+  door: Door | Opening;
 }
 
 function rectangle(input: unknown): RectangleModel {
   const snapshot = validateSnapshot(input);
   if (spaces(snapshot).length) fail('A multi-room floor cannot be resized as one room. Request room-aware furnishing changes instead.');
   const walls = snapshot.entities.filter((entity): entity is Wall => entity.type === 'Wall');
-  const door = snapshot.entities.find((entity): entity is Door => entity.type === 'Door' && entity.id === 'door-entry');
-  if (walls.length !== 4 || !door || snapshot.entities.filter((entity) => entity.type === 'Door').length !== 1) {
+  const door = snapshot.entities.find((entity): entity is Door | Opening => (entity.type === 'Door' || entity.type === 'Opening') && entity.id === 'door-entry');
+  if (walls.length !== 4 || !door || snapshot.entities.filter((entity) => entity.type === 'Door' || entity.type === 'Opening').length !== 1) {
     fail('Interactive editing requires four rectangular walls and one hosted entry door.');
   }
   const millimetres = ([x, y]: Point): Point => [Math.round(x * 1000), Math.round(y * 1000)];
@@ -1091,7 +1100,7 @@ export function previewRectangle(baseSnapshot: unknown, input: unknown): ModelSn
       ];
       entity.start = move(entity.start);
       entity.end = move(entity.end);
-    } else if (entity.id === base.door.id && entity.type === 'Door') entity.width = layout.door.widthMm / 1000;
+    } else if (entity.id === base.door.id && (entity.type === 'Door' || entity.type === 'Opening')) entity.width = layout.door.widthMm / 1000;
   }
   host.offset = layout.door.offsetMm / 1000;
   return validateSnapshot(snapshot);

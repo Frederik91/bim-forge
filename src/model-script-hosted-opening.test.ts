@@ -86,7 +86,41 @@ test('read-only ScriptBox capability rejects the registered draft-write method b
     onActivity: () => events.push('activity'), onPreview: () => events.push('preview') };
   const session = runtime.createSession({ context, capabilities: method => method.effect === 'read' });
   t.after(async () => { await session.dispose(); await runtime.dispose(); });
-  const outcome = await session.execute({ language: 'typescript', source: `await model.previewHostedDoorWidth(${JSON.stringify(input)}); return null;` });
-  assert.equal(outcome.status, 'failed'); assert.equal(outcome.evidence.calls[0]?.disposition, 'denied');
+  for (const method of ['previewHostedDoorWidth', 'previewDoorToOpening']) {
+    const outcome = await session.execute({ language: 'typescript', source: `await model.${method}(${JSON.stringify(input)}); return null;` });
+    assert.equal(outcome.status, 'failed'); assert.equal(outcome.evidence.calls[0]?.disposition, 'denied');
+  }
   assert.deepEqual(events, []); assert.equal(context.snapshot, data.base);
+});
+
+test('typed ScriptBox converts the selected door into a 2 m permanent Opening with frozen authority and no automatic acceptance', async () => {
+  const data = await fixture('door-entry'); const accepted = data.repo.serialize();
+  const result = await run(data, `
+    const guide = await docs.read('/guides/model.md');
+    if (!JSON.stringify(guide).includes('previewDoorToOpening')) throw new Error('Conversion guide missing');
+    const result = await model.previewDoorToOpening({doorId:'door-entry',widthMetres:2,anchor:'centre'});
+    const opening = result.model.entities.find(item => item.id === 'door-entry');
+    if (opening?.type !== 'Opening' || opening.width !== 2) throw new Error('Doorless conversion missing');
+    if (result.impact.beforeKind !== 'Door' || result.impact.afterKind !== 'Opening') throw new Error('Conversion impact missing');
+    return {kind:'propose',review:{summary:'Replace the entry door with a permanent 2 m opening.',
+      rationale:'Keep its host, physical centre and 2.1 m height while removing the leaf.',
+      constraints:'Only the opening entity and host offset change; no door-leaf sweep remains.',
+      uncertainty:'Concept clearance validation is not construction or code certification.',
+      intent:{interpretation:'Remove the selected door leaf and leave a fixed 2 m opening.',assumptions:['Retain existing height and physical centre.'],certainty:100,basis:'Explicit user dimensions.'}}};`);
+  assert.equal(result.kind, 'proposal', JSON.stringify(result));
+  if (result.kind !== 'proposal') return;
+  const opening = result.snapshot.entities.find(item => item.id === 'door-entry'); assert.ok(opening?.type === 'Opening');
+  assert.equal(opening.width, 2); assert.equal(data.repo.serialize(), accepted);
+  assert.equal(result.evidence.validation, 'passed');
+  assert.ok(result.evidence.calls.some(call => call.method === 'model.previewDoorToOpening' && call.disposition === 'completed'));
+  const outOfScope = await fixture('level-attic-door-inner');
+  const rejected = await run(outOfScope, `
+    const before = await model.inspect();
+    try { await model.previewDoorToOpening({doorId:'door-entry',widthMetres:2,anchor:'centre'}); throw new Error('Out-of-scope conversion accepted'); }
+    catch(error) { if (!(error instanceof Error) || error.name !== 'ModelValidationError') throw error; }
+    const after = await model.inspect();
+    if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('Scope or model changed');
+    return {kind:'observe',observation:'unchanged'};`);
+  assert.equal(rejected.kind, 'observation', JSON.stringify(rejected));
+  assert.ok(rejected.evidence.calls.some(call => call.method === 'model.previewDoorToOpening' && call.disposition === 'app-error'));
 });
