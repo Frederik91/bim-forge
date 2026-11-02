@@ -300,6 +300,14 @@ body.canvas-studio {
 .canvas-studio .spatial-conversation .chat-toolbar { flex: 0 0 auto; }
 .canvas-studio .spatial-conversation .chat-composer-form { flex: 0 0 auto; max-height: 55%; min-height: 76px; overflow: auto; overscroll-behavior: contain; }
 .canvas-studio .spatial-conversation-tools { flex: 0 0 auto; }
+.canvas-studio .spatial-conversation-resize { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; color: var(--muted); border-top: 1px solid var(--line); }
+.canvas-studio #spatial-resize-conversation { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px; color: var(--ink); background: transparent; border: 0; border-radius: var(--spatial-radius-control); font-size: 12px; cursor: nesw-resize; touch-action: none; user-select: none; }
+.canvas-studio #spatial-resize-conversation:hover { background: var(--studio-soft); }
+.canvas-studio #spatial-resize-conversation svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.canvas-studio .spatial-conversation-size { font-size: 11px; font-variant-numeric: tabular-nums; }
+.canvas-studio .request-options > details { margin-top: 12px; }
+.canvas-studio .request-options > details > summary { color: var(--ink); font-weight: 600; }
+.canvas-studio .request-options-intro { margin-top: 12px; }
 @media (max-width: 900px) {
   .canvas-studio .spatial-workspace-stage .model-card-heading > div:first-child { flex: 1 0 100%; }
   .canvas-studio .spatial-workspace-stage .model-card-heading .view-switch { flex: 1 1 auto; }
