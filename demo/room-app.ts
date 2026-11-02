@@ -1,5 +1,5 @@
 import { SpatialWorkspacePresentation } from './spatial-workspace-presentation.ts';
-import type { TaskAgentDescriptor } from './spatial-task-layer.ts';
+import type { TaskAgentDescriptor, TaskAgentIdentity } from './spatial-task-layer.ts';
 import { parseTaskPlacement } from '../src/task-placement.ts';
 import type { TaskOrigin, TaskPlacement } from '../src/task-placement.ts';
 import { createResidentialProject } from '../src/residential-floor.ts';
@@ -747,9 +747,11 @@ function recoverFloorDraft(): boolean {
 function taskIdentity(): { projectId: string | undefined; ticketId: string | null; draftId: string } {
   return { projectId: repo?.projectId, ticketId: tasks.projection.ticketId, draftId: tasks.projection.draftId };
 }
+const deletedDraftAgents = new Set<string>();
 const spatialWorkspace = new SpatialWorkspacePresentation({
   stage: generic('workspace-shell').querySelector<HTMLElement>('.workspace-stage') ?? generic('workspace-shell'),
   panel: generic('workspace-context'),
+  remove: identity => { void perform(() => deleteSpatialAgent(identity)); },
   open: identity => { void perform(async () => {
     if (!repo || identity.projectId !== repo.projectId) return;
     if (identity.kind === 'task') await openConversation(identity.ticketId);
@@ -780,7 +782,7 @@ tasks.observeWorkspace(() => {
   queueMicrotask(() => { spatialProjectionPending = false; updateSpatialWorkspace(); });
 });
 function ensureDraftOrigin(): void {
-  if (!repo || tasks.projection.ticketId || selectedDesignTarget.kind === 'baseline' || reviewRepository || liveChatPreview) return;
+  if (!repo || tasks.projection.ticketId || deletedDraftAgents.has(tasks.key) || selectedDesignTarget.kind === 'baseline' || reviewRepository || liveChatPreview) return;
   if (draftOriginKey !== tasks.key) { draftOriginKey = tasks.key; draftOrigin = null; draftCreationPose = null; }
   if (draftOrigin) return;
   const snapshot: TaskOrigin['snapshot'] = { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision };
@@ -820,7 +822,7 @@ function currentTaskObjectIds(placement: TaskPlacement): string[] {
 function spatialDescriptors(): TaskAgentDescriptor[] {
   if (!repo) return [];
   const projectId = repo.projectId;
-  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.map(ticket => ({
+  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.filter(ticket => !ticket.agentDeleted).map(ticket => ({
     identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state,
     placement: ticket.taskPlacement.kind === 'placed' ? { kind: 'placed', origin: ticket.taskPlacement.origin.point } : { kind: 'unplaced' },
     selected: ticket.id === tasks.projection.ticketId, visible: true,
@@ -830,7 +832,7 @@ function spatialDescriptors(): TaskAgentDescriptor[] {
     descriptors.push({ identity: { kind: 'draft', projectId, draftId: draft.draftId }, title: draft.text.trim().slice(0, 60) || 'New conversation', state: 'unsent',
       placement: draft.spatial.origin ? { kind: 'placed', origin: draft.spatial.origin.point } : { kind: 'unplaced' }, selected: false, visible: true });
   }
-  if (!tasks.projection.ticketId) descriptors.push({ identity: { kind: 'draft', projectId, draftId: tasks.projection.draftId }, title: 'New conversation', state: 'unsent',
+  if (!tasks.projection.ticketId && !deletedDraftAgents.has(tasks.key)) descriptors.push({ identity: { kind: 'draft', projectId, draftId: tasks.projection.draftId }, title: 'New conversation', state: 'unsent',
     placement: draftOrigin ? { kind: 'placed', origin: draftOrigin.point } : { kind: 'unplaced' }, selected: true, visible: true });
   return descriptors;
 }
@@ -842,7 +844,7 @@ function updateSpatialWorkspace(): void {
   const resolution = tasks.projection.placementResolution;
   const unresolved = resolution?.kind === 'placed' ? [resolution.origin, ...resolution.objects, ...resolution.regions].filter(pin => pin.status !== 'current') : [];
   const showingProposal = !!origin && serverAcceptedRepository?.designTargets().find(view => designKey(view.target) === designKey(parseDesignTarget(origin.snapshot.target)))?.revisionId === origin.snapshot.revisionId && selectedRevision !== origin.snapshot.revisionId;
-  const notice = tasks.projection.offline ? 'Connection unavailable. Showing the last server task state; decisions wait for reconnection.' : unresolved.length ? unresolved.map(pin => `${pin.status}: ${pin.detail}`).join(' ') : staleDraft ? 'Draft source changed. Refresh context explicitly before sending.' : showingProposal ? 'Task targets refer to the accepted model. Showing proposal geometry.' : stale ? 'Saved context is historical or needs source verification. Original targets are retained; inspect their evidence before refreshing context.'
+  const notice = ticket?.agentDeleted ? 'This agent was deleted. Saved conversation and review history remain available; start a new chat to assign more work.' : tasks.projection.offline ? 'Connection unavailable. Showing the last server task state; decisions wait for reconnection.' : unresolved.length ? unresolved.map(pin => `${pin.status}: ${pin.detail}`).join(' ') : staleDraft ? 'Draft source changed. Refresh context explicitly before sending.' : showingProposal ? 'Task targets refer to the accepted model. Showing proposal geometry.' : stale ? 'Saved context is historical or needs source verification. Original targets are retained; inspect their evidence before refreshing context.'
     : !origin ? 'Unplaced conversation. Open it from Tasks; no spatial point has been inferred.' : '';
   const descriptors = spatialDescriptors();
   spatialWorkspace.update(descriptors, notice, !!origin, staleDraft);
@@ -862,6 +864,7 @@ function captureChatDraft() {
 function saveChatDraft(): void {
   if (!repo) return;
   const key = currentChatKey();
+  if (deletedDraftAgents.has(key) || tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId)?.agentDeleted) return;
   if (requestDirty()) tasks.saveDraft(key, captureChatDraft()); else tasks.deleteDraft(key);
 }
 function restoreChatDraft(draft: ReturnType<typeof captureChatDraft>): void {
@@ -935,6 +938,40 @@ async function discardRequest(message: string): Promise<boolean> {
     target.addEventListener('close', () => { if (target.returnValue === 'discard') { forgetFloorDraft(currentChatKey()); tasks.deleteDraft(currentChatKey()); } resolve(target.returnValue === 'discard'); }, { once: true });
     openDialog(target);
   });
+}
+
+async function deleteSpatialAgent(identity: TaskAgentIdentity): Promise<void> {
+  if (!repo || repo.projectId !== identity.projectId) return;
+  const key = `${identity.projectId}:${identity.kind === 'task' ? identity.ticketId : identity.draftId}`;
+  const ticket = identity.kind === 'task' ? tasks.projection.tickets.find(item => item.id === identity.ticketId) : null;
+  if (identity.kind === 'task' && (!ticket || ticket.agentDeleted)) return;
+  const target = dialog('delete-agent-dialog');
+  generic('delete-agent-message').textContent = ticket
+    ? 'Remove this agent from the model and Tasks? Any active work will stop. Its saved conversation, proposals and review history will remain in Chats. The accepted model will stay unchanged.'
+    : 'Delete this agent and its unsent draft, including attached context and files? The accepted model will stay unchanged.';
+  const generation = tasks.generation;
+  target.returnValue = 'keep';
+  const confirmed = new Promise<boolean>(resolve => target.addEventListener('close', () => resolve(target.returnValue === 'delete'), { once: true }));
+  openDialog(target);
+  if (!await confirmed) return;
+  tasks.requireCurrent(generation);
+  const current = key === currentChatKey();
+  const accepted = current ? await projects.read(identity.projectId) : null;
+  tasks.requireCurrent(generation);
+  if (ticket) await tasks.deleteAgent({ ticketId: ticket.id, expectedRequestId: ticket.request.requestId });
+  tasks.requireCurrent(generation);
+  tasks.deleteDraft(key); sourcePicker.deleteDraft(key); forgetFloorDraft(key); chatInspectionOrigins.delete(key);
+  if (current) {
+    clearRequestSources(); visualDraft = null; invalidInput = false;
+    closeChat(); tasks.startTask(); deletedDraftAgents.add(tasks.key);
+    ui['request-text'].value = ''; ui['proposal-name'].value = ''; sourcePicker.switchDraft(tasks.key);
+    if (accepted) displayAccepted(accepted);
+    button('workspace-context-close').click(); closeChatSwitcher();
+  }
+  renderChatSwitcher(); updateSpatialWorkspace();
+  const list = generic('spatial-task-list');
+  if (!current && !list.hidden) list.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  status(ticket ? 'Agent deleted. Its saved conversation and review history remain in Chats.' : 'Agent and unsent draft deleted. Start a new chat when you need another agent.');
 }
 
 function evidenceById(id: EvidenceItem['id']): EvidenceItem | undefined {
@@ -1235,7 +1272,8 @@ function updateControls() {
   const dragging = Boolean(gesture || visualGesture);
   for (const id of ['activity-back', 'activity-open-proposal', 'activity-cancel', 'activity-retry']) button(id).disabled = busy || dragging || !repo;
   const writable = serverAvailable && !busy && !dragging;
-  const authoring = writable && selectedDesignTarget.kind !== 'baseline';
+  const authoring = writable && selectedDesignTarget.kind !== 'baseline' && !deletedDraftAgents.has(tasks.key)
+    && !tasks.projection.tickets.find(item => item.id === tasks.projection.ticketId)?.agentDeleted;
   generic('design-readonly-banner').hidden = selectedDesignTarget.kind !== 'baseline';
   button('fork-selected-baseline').disabled = !writable;
   button('show-linked-3d').disabled = !repo || !linkedDisplays.some(link => link.visible);

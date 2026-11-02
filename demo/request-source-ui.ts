@@ -227,6 +227,11 @@ export class RequestSourcePicker {
     for (const entry of this.#entries) this.#release(entry);
     this.#entries = []; this.#drafts.delete(this.#draftKey); this.#error = ''; this.#ui.input.value = ''; this.#render();
   }
+  deleteDraft(key: string): void {
+    if (key === this.#draftKey) { this.clear(); return; }
+    for (const entry of this.#drafts.get(key)?.entries ?? []) this.#release(entry);
+    this.#drafts.delete(key);
+  }
 
   releasePreviews(): void {
     for (const entry of new Set([...this.#entries, ...[...this.#drafts.values()].flatMap(draft => draft.entries)])) {
