@@ -1245,9 +1245,10 @@ export class ChangeRequests {
     if (ticket.request.requestId !== expectedRequestId) throw new BacklogConflict('This agent has newer work. Reopen it before deleting.');
     if (ticket.agentDeleted) return this.#projection(ticket);
     const running = ticket.state === 'queued' || ticket.state === 'working';
+    const stage = ticket.state === 'queued' || ticket.state === 'working' ? 'cancelled' : ticket.state;
     const next: Ticket = recordActivity({ ...ticket, agentDeleted: true,
       ...(running ? { state: 'cancelled', decisionId: `delete-agent:${createHash('sha256').update(id + ':' + expectedRequestId).digest('hex')}`, decisionAction: 'cancel' } : {}) },
-      { stage: running ? 'cancelled' : ticket.state, message: 'Agent deleted from the workspace. Active work is stopped; saved conversation and review history are retained.' });
+      { stage, message: 'Agent deleted from the workspace. Active work is stopped; saved conversation and review history are retained.' });
     this.#transaction(() => {
       this.#put(next);
       if (running && this.#conversation(id).sequence < CONVERSATION_LIMITS.messages) this.#decisionMessage(next);
