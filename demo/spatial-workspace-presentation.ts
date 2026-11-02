@@ -48,7 +48,7 @@ export class SpatialWorkspacePresentation {
     this.#rebind = control('Refresh draft context', options.rebind); this.#rebind.id = 'spatial-refresh-context'; this.#rebind.hidden = true;
     this.#expand = control('Expand conversation', () => {
       const expanded = this.#panel.dataset.expanded !== 'true';
-      if (this.#layout.kind === 'manual') this.#layout = { ...this.#currentLayout(), height: Math.min(720, this.#stage.clientHeight * (expanded ? .88 : this.#stage.clientWidth < 600 ? .44 : .66)) };
+      if (this.#layout.kind === 'manual') this.#layout = { ...this.#currentLayout(), height: this.#preferredHeight(expanded) };
       this.#panel.dataset.expanded = String(expanded); this.#expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position();
     });
     this.#expand.id = 'spatial-expand-conversation';
@@ -232,16 +232,20 @@ export class SpatialWorkspacePresentation {
       heading: this.#panel.querySelector('.workspace-panel-heading')?.getBoundingClientRect().height ?? 0,
       footer: this.#panel.querySelector('.spatial-conversation-resize')?.getBoundingClientRect().height ?? 0 };
   }
+  #preferredHeight(expanded = this.#panel.dataset.expanded === 'true'): number {
+    const personal = this.#panel.dataset.assistantMode !== 'task';
+    return Math.min(expanded ? 720 : personal ? 360 : 520, this.#stage.clientHeight * (expanded ? .88 : personal ? .5 : this.#stage.clientWidth < 600 ? .44 : .66));
+  }
   #position(): void {
     const width = this.#stage.clientWidth; const height = this.#stage.clientHeight;
     const maxWidth = Math.max(0, width - 16); const maxHeight = Math.max(0, Math.min(height - 16, height * .88));
     const panelWidth = Math.min(maxWidth, this.#layout.kind === 'manual' ? Math.max(280, this.#layout.width) : 358);
     this.#panel.style.width = `${panelWidth}px`;
     const minimum = this.#minimumHeight();
-    const positionKey = `${width}:${height}:${this.#panel.dataset.expanded}:${JSON.stringify(this.#layout)}:${minimum.panel}:${minimum.content}:${minimum.composer}:${minimum.heading}:${minimum.footer}`;
+    const positionKey = `${width}:${height}:${this.#panel.dataset.expanded}:${this.#panel.dataset.assistantMode}:${JSON.stringify(this.#layout)}:${minimum.panel}:${minimum.content}:${minimum.composer}:${minimum.heading}:${minimum.footer}`;
     if (this.#positioned && positionKey === this.#positionKey && this.#panel.contains(document.activeElement)) return;
     this.#positionKey = positionKey; this.#positioned = true;
-    const desiredHeight = this.#layout.kind === 'manual' ? this.#layout.height : Math.min(720, height * (this.#panel.dataset.expanded === 'true' ? .88 : width < 600 ? .44 : .66));
+    const desiredHeight = this.#layout.kind === 'manual' ? this.#layout.height : this.#preferredHeight();
     const panelHeight = Math.min(maxHeight, Math.max(minimum.panel, desiredHeight));
     const fallback = minimum.panel > maxHeight;
     if (!fallback && this.#panel.dataset.scrollFallback === 'true') this.#panel.scrollTop = 0;

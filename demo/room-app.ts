@@ -811,7 +811,7 @@ const resultVisibility = new IntersectionObserver(entries => {
   const candidate = visibleResultCandidate();
   if (!candidate || !entries.some(entry => entry.target === candidate && entry.isIntersecting && entry.intersectionRect.height >= 24 && entry.intersectionRect.width >= 48)) return;
   const ticketId = tasks.projection.ticketId; if (ticketId) tasks.markResultViewed(ticketId);
-});
+}, { threshold: [0, .01, .05, .1, .25, .5, .75, 1] });
 function observeVisibleResult(): void {
   const candidate = visibleResultCandidate(); if (candidate === observedResult) return;
   if (observedResult) resultVisibility.unobserve(observedResult);
@@ -823,6 +823,9 @@ new MutationObserver(observeVisibleResult).observe(generic('workspace-context'),
 document.addEventListener('visibilitychange', () => {
   if (observedResult) resultVisibility.unobserve(observedResult); observedResult = null; observeVisibleResult();
 });
+generic('request-chat-mount').addEventListener('scroll', () => {
+  if (observedResult) resultVisibility.unobserve(observedResult); observedResult = null; observeVisibleResult();
+}, { capture: true, passive: true });
 tasks.observeWorkspace(() => {
   if (spatialProjectionPending) return;
   spatialProjectionPending = true;
