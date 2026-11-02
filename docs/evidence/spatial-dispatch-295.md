@@ -31,7 +31,17 @@ spatial-dispatch-browser.test.ts: 1 passed, 0 failed (30.2 seconds)
 
 The actual browser workflow holds the first door worker open after its real model script, moves to another room and draws a rectangle, dispatches a second agent bound to that region, then dispatches a third unreferenced task at the current eye. It proves independent task identities, original point retention, no phantom unsent figures, personal/task draft restoration, eye/facing and selection continuity on return, no page errors, and identical accepted project bytes before/after.
 
-Follow-up source preserves SourcePicker's actual per-draft entries across return rather than rebuilding only ready references, with a held-upload assertion added to the same browser case. Its final qualification is recorded below before publishing.
+Final runtime source `5c3d5bc8f3203052374d196752a16c0091ac3d89` passes the same validation/build and four point tests, plus the expanded browser case (1/1, 37.2 seconds). It holds a real upload open while switching to a task, completes it there, then proves the file returns only with the personal draft. The final wall task asserts its selected object ID, faces its saved position, and opens that exact task by clicking the actual 3D body. The accepted project bytes remain unchanged.
+
+## Diagnosed transition failure
+
+The first expanded wall-visibility check failed because its supposed wall task was actually unreferenced: the test changed the 3D picker immediately after asynchronous New task activation. The picker appeared enabled while foreground work was busy, and the application ignored that selection. Dispatch correctly used the fallback eye.
+
+A temporary read-only scene probe confirmed the supposed wall figure at Babylon `[6,1.84,3]`, corresponding to the user's eye plus the normal display offset, with facing `-0.259`, projected Y `1959`, and no construction occluder. Camera position was `[6,1.6,3]`, facing east/down. This proved an ignored reference/transition, not a hidden figure at the wall.
+
+The 3D object picker now follows the existing inspector picker's disabled state during foreground transitions. Server agents working in the background do not disable selection, Walk, mouse-look or markup. The browser test waits for the editable personal mode, asserts the actual saved wall target, and retains its original visibility and physical ray-pick assertions. User approval authorized continued focused repairs after the repository's initial three-attempt stop.
+
+The diagnostic module and app injection were removed before final qualification. The only later test cleanup removes a null-only diagnostic accessor; application runtime source and all acceptance assertions are unchanged.
 
 The existing task-controller and markup replay browser tests now explicitly open the dispatched agent before asserting its transcript and reference overlays. Their assertions are retained; these adaptations reflect the intentional personal-assistant default.
 
