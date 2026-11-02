@@ -31,7 +31,7 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   t.after(async () => {
     gate.release();
     t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() }));
-    t.diagnostic(JSON.stringify({ scene: await page.evaluate('window.__agentSceneProbe?.() ?? null'), pose: await page.evaluate(async () => {
+    t.diagnostic(JSON.stringify({ pose: await page.evaluate(async () => {
       const url = '/room-app.mjs'; const pose = (await import(url)).captureWorkspaceInsidePose();
       return pose ? { eye: pose.eye, forward: pose.forward, up: pose.up, levelId: pose.levelId, motion: pose.motion } : null;
     }) }));
