@@ -222,7 +222,11 @@ test('live native agent body opens the same saved task without moving the eye; e
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.equal(await page.locator('#workspace-context-toggle').isVisible(), false, 'The old bottom Assistant toggle is redundant in the phone rail');
     assert.equal(await page.locator('#open-chat').isVisible(), true);
-    const panel = await page.locator('#workspace-context').boundingBox(); assert.ok(panel && panel.width <= width - 16 && panel.height < 900 * .6);
+    const panel = await page.locator('#workspace-context').boundingBox();
+    const stage = await page.locator('.spatial-workspace-stage').boundingBox(); assert.ok(panel && stage);
+    assert.ok(panel.width <= width - 16 && panel.x >= stage.x + 7 && panel.x + panel.width <= stage.x + stage.width - 7);
+    assert.ok(panel.y >= stage.y + 7 && panel.y + panel.height <= stage.y + stage.height - 7, 'The measured task card stays within the model workspace');
+    assert.ok(stage.height - panel.height >= 48, 'The model retains a visible band beside the readable task controls');
     await page.screenshot({ path: path.join(artifacts, `narrow-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
