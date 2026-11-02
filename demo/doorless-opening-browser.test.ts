@@ -87,10 +87,15 @@ test('shipped UI reviews and explicitly accepts a 2 m doorless opening, then res
   assert.deepEqual(diffSnapshots(before, after), expected.delta);
   await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click(); await faceDoor();
   await page.screenshot({ path: path.join(artifacts, 'accepted-opening-no-leaf.png'), fullPage: true });
-  await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers();
+  await page.goto('about:blank');
+  await new Promise<void>(resolve => {
+    server.close(() => resolve());
+    server.closeAllConnections();
+  });
+  await server.closeModelWorkers();
   server = await createDemoServer({ modelWorker: worker, backlogFile });
   await new Promise<void>(resolve => server.listen(address.port, '127.0.0.1', resolve));
-  await page.reload(); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.goto(base); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.locator('.model-object-picker').selectOption('door-entry');
   await page.locator('#selection-context-label').filter({ hasText: 'Opening' }).waitFor();
   assert.equal(await page.locator('#selected-title').textContent(), 'Ground floor', 'Object conversion retains its floor context');
