@@ -143,7 +143,7 @@ export class SpatialWorkspacePresentation {
       this.#position();
     });
   }
-  #minimumHeight(): { panel: number; content: number; composer: number; toolbar: number } {
+  #minimumHeight(): { panel: number; content: number; composer: number; toolbar: number; heading: number; footer: number } {
     const content = this.#panel.querySelector('#workspace-context-content');
     const workspace = this.#panel.querySelector('.chat-workspace');
     const composer = this.#panel.querySelector<HTMLElement>('.chat-composer-form');
@@ -156,7 +156,9 @@ export class SpatialWorkspacePresentation {
       + (Number.parseFloat(style?.paddingBottom ?? '') || 0) + (Number.parseFloat(style?.borderBottomWidth ?? '') || 0) : 0;
     const essential = Math.max(76, Math.ceil(inputHeight));
     const minimumContent = Math.ceil(toolbar + essential + 96);
-    return { panel: Math.ceil(fixed + minimumContent), content: minimumContent, composer: essential, toolbar };
+    return { panel: Math.ceil(fixed + minimumContent), content: minimumContent, composer: essential, toolbar,
+      heading: this.#panel.querySelector('.workspace-panel-heading')?.getBoundingClientRect().height ?? 0,
+      footer: this.#panel.querySelector('.spatial-conversation-resize')?.getBoundingClientRect().height ?? 0 };
   }
   #position(): void {
     const width = this.#stage.clientWidth; const height = this.#stage.clientHeight;
@@ -164,15 +166,19 @@ export class SpatialWorkspacePresentation {
     const panelWidth = Math.min(maxWidth, this.#layout.kind === 'manual' ? Math.max(280, this.#layout.width) : 358);
     this.#panel.style.width = `${panelWidth}px`;
     const minimum = this.#minimumHeight();
-    const positionKey = `${width}:${height}:${this.#panel.dataset.expanded}:${JSON.stringify(this.#layout)}:${minimum.panel}:${minimum.content}:${minimum.composer}`;
+    const positionKey = `${width}:${height}:${this.#panel.dataset.expanded}:${JSON.stringify(this.#layout)}:${minimum.panel}:${minimum.content}:${minimum.composer}:${minimum.heading}:${minimum.footer}`;
     if (this.#positioned && positionKey === this.#positionKey && this.#panel.contains(document.activeElement)) return;
     this.#positionKey = positionKey; this.#positioned = true;
     const desiredHeight = this.#layout.kind === 'manual' ? this.#layout.height : Math.min(720, height * (this.#panel.dataset.expanded === 'true' ? .88 : width < 600 ? .44 : .66));
     const panelHeight = Math.min(maxHeight, Math.max(minimum.panel, desiredHeight));
-    this.#panel.dataset.scrollFallback = String(minimum.panel > maxHeight);
+    const fallback = minimum.panel > maxHeight;
+    if (!fallback && this.#panel.dataset.scrollFallback === 'true') this.#panel.scrollTop = 0;
+    this.#panel.dataset.scrollFallback = String(fallback);
     this.#panel.style.setProperty('--spatial-composer-min-height', `${minimum.composer}px`);
     this.#panel.style.setProperty('--spatial-chat-fixed-height', `${minimum.toolbar}px`);
     this.#panel.style.setProperty('--spatial-chat-content-min-height', `${minimum.content}px`);
+    this.#panel.style.setProperty('--spatial-sticky-heading-height', `${minimum.heading}px`);
+    this.#panel.style.setProperty('--spatial-sticky-footer-height', `${minimum.footer}px`);
     this.#panel.style.width = `${panelWidth}px`; this.#panel.style.height = `${panelHeight}px`; this.#panel.style.maxHeight = `${maxHeight}px`;
     this.#size.textContent = `${Math.round(panelWidth)} × ${Math.round(panelHeight)} px`;
     const left = this.#layout.kind === 'manual' ? width - this.#layout.right - panelWidth : this.#anchor && width > 600 ? this.#anchor.x + 65 : width - panelWidth - 12;
