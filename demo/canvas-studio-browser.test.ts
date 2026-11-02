@@ -91,6 +91,18 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
     if (response.ticket.state === 'ready') break;
     await new Promise<void>(resolve => setTimeout(resolve, 100));
   }
+  await page.waitForFunction(() => {
+    const input = document.getElementById('request-text');
+    return document.getElementById('workspace-context')?.dataset.assistantMode === 'personal'
+      && input instanceof HTMLTextAreaElement && !input.disabled;
+  });
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.locator(`#spatial-task-list [data-task-id="${ticketId}"]`).click();
+  await page.waitForFunction(() => {
+    const input = document.getElementById('request-text');
+    return document.getElementById('workspace-context')?.dataset.assistantMode === 'task'
+      && input instanceof HTMLTextAreaElement && !input.disabled;
+  });
   const inspect = page.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
   const tray = page.getByRole('region', { name: 'Canvas proposal review' });
   await inspect.or(tray).first().waitFor({ timeout: 30_000 });
