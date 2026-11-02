@@ -39,3 +39,27 @@ Desktop and 320 px screenshots were visually inspected together. The resize foot
 The required Impeccable detector ran once over the changed UI targets. It reported existing page-wide legacy warnings from the full HTML surface, including contrast, small text and decorative surfaces outside this change. This is not a claim of a clean page-wide design audit; the scoped implementation reuses the approved tokens, 44 px controls and current panel identity.
 
 Raw logs, detector output and screenshots are retained in the client's Local AppData `BIMForge/assistant-card-293-evidence` directory. No merge or issue closure is authorized by this evidence.
+
+## Minimum-size completion
+
+A subsequent integration review identified that the original 260 px manual floor could hide the composer when task controls wrapped. The regression was reproduced on Linux at combined test-only commit `544be835584d1156409fba6ab743390cd50045a1`: at 320 × 900, wrapped controls occupied 92 px, the resize footer 45 px, and the content region only 16.8 px. The transcript height was zero; actual textarea and Send center hits were false. The captured screenshot shows the composer missing below the footer.
+
+The size owner now measures visible fixed chrome, task toolbar and the actual input row. It reserves a 96 px transcript region and enough composer height to show the input and Send, rather than allowing a fixed minimum that cannot contain them. A ResizeObserver keeps the calculation current when tools wrap, notices change, or the input grows. This includes additional task controls without hard-coding their count. If the viewport cannot physically fit that minimum, the content region deliberately scrolls while the header and resize handle remain reachable. Requested manual size remains separate from its viewport clamp.
+
+The unchanged failure assertions now pass:
+
+```text
+Combined source 05c18b94630e1d696e3c7bc272cff236b5f2985c:
+  validation: 390 sources; build passed
+  browser: 1 passed / 0 failed (28.3s)
+  320 px minimum: card 494 px, transcript 97 px, textarea hit true, Send hit true
+
+Standalone #293 source a1f6b9a2f0f2841c7cac5389a8ee19a2bed0cec3:
+  validation: 386 sources; build passed
+  browser: 1 passed / 0 failed (38.3s)
+  320 px minimum: card 446 px, transcript 97 px, textarea hit true, Send hit true
+```
+
+Both runs also prove actual textarea, Send and transcript hit targets through the deliberate scrolling fallback at 320 × 600. Zero page errors. The regression opens task mode when the always-available personal assistant integration exists; the standalone branch retains its original workflow. Existing camera, single-canvas, viewport, resizing and request-permission checks remain in the same test.
+
+Red, minimum-size green and short-viewport green screenshots were inspected together. The focused detector over the changed sizing/CSS targets returned `[]`. Logs and captures are retained under Local AppData `BIMForge/assistant-card-293-minimum-evidence`; the original full-page detector limitations above remain applicable. All fixtures ran on Linux; no shared preview service or project data was changed.
