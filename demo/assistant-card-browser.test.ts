@@ -145,7 +145,7 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     const hit = (selector: string) => { const node = required(selector); const box = node.getBoundingClientRect(); const at = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { top: box.top, bottom: box.bottom, height: box.height, hit: at === node || node.contains(at) }; };
     return { panel: hit('#workspace-context'), input: hit('#request-text'), send: hit('#save-proposal'),
       transcript: hit('#request-chat-mount'), content: hit('#workspace-context-content'),
-      heading: hit('.workspace-panel-heading'), footer: hit('.spatial-conversation-resize') };
+      heading: hit('#workspace-context > .workspace-panel-heading'), footer: hit('.spatial-conversation-resize') };
   });
   t.diagnostic(JSON.stringify({ minimum }));
   await page.screenshot({ path: path.join(artifacts, 'minimum-320.png'), fullPage: true });
