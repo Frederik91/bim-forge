@@ -246,6 +246,7 @@ export class ModelViewer {
   }
 
   startMarkup(tool: MarkupTool = 'rectangle'): void { this.navigation.stop(); this.markup?.start(tool); }
+  setSelectionDisabled(disabled: boolean): void { this.selection.disabled = disabled; }
 
   private hover(id: string | null): void {
     this.linked.hover(null);

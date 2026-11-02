@@ -31,6 +31,10 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   t.after(async () => {
     gate.release();
     t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() }));
+    t.diagnostic(JSON.stringify({ scene: await page.evaluate('window.__agentSceneProbe?.() ?? null'), pose: await page.evaluate(async () => {
+      const url = '/room-app.mjs'; const pose = (await import(url)).captureWorkspaceInsidePose();
+      return pose ? { eye: pose.eye, forward: pose.forward, up: pose.up, levelId: pose.levelId, motion: pose.motion } : null;
+    }) }));
     if (process.env.SPATIAL_DISPATCH_ARTIFACTS) { await fs.mkdir(process.env.SPATIAL_DISPATCH_ARTIFACTS, { recursive: true }); await page.screenshot({ path: path.join(process.env.SPATIAL_DISPATCH_ARTIFACTS, 'last.png'), fullPage: true }); }
     await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers();
     await fs.rm(directory, { recursive: true, force: true });
@@ -129,8 +133,10 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   assert.equal(await page.locator('#workspace-context').getAttribute('data-assistant-mode'), 'personal');
   assert.equal(await page.locator('.spatial-task-label').count(), 3, 'Only the three submitted tasks have figures');
   await page.locator('#new-chat').click();
+  await mode('personal');
   await page.locator('.model-object-picker').selectOption('level-ground-wall-east');
   const wallTask = await submit('Inspect this east wall as a separate task.');
+  assert.deepEqual(wallTask.request.selectedObjectIds, ['level-ground-wall-east']);
   await page.evaluate(async () => {
     const url = '/room-app.mjs'; const api = await import(url); const pose = api.captureWorkspaceInsidePose(); const n = Math.sqrt(1.25);
     if (!pose || !api.returnWorkspaceToPose({ ...pose, eye: [6, 3, 1.6], forward: [1 / n, 0, -.5 / n], up: [.5 / n, 0, 1 / n], motion: 'fly' })) throw new Error('Cannot face wall task');
