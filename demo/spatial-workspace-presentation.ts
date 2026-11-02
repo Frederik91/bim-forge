@@ -43,13 +43,17 @@ export class SpatialWorkspacePresentation {
     const tools = document.createElement('div'); tools.className = 'spatial-conversation-tools';
     this.#return = control('Return to task', options.returnToTask); this.#return.id = 'spatial-return-task';
     this.#rebind = control('Refresh draft context', options.rebind); this.#rebind.id = 'spatial-refresh-context'; this.#rebind.hidden = true;
-    this.#expand = control('Expand conversation', () => { const expanded = this.#panel.dataset.expanded !== 'true'; this.#layout = { kind: 'automatic' }; this.#panel.dataset.expanded = String(expanded); this.#expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position(); });
+    this.#expand = control('Expand conversation', () => {
+      const expanded = this.#panel.dataset.expanded !== 'true';
+      if (this.#layout.kind === 'manual') this.#layout = { ...this.#currentLayout(), height: Math.min(720, this.#stage.clientHeight * (expanded ? .88 : this.#stage.clientWidth < 600 ? .44 : .66)) };
+      this.#panel.dataset.expanded = String(expanded); this.#expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position();
+    });
     this.#expand.id = 'spatial-expand-conversation';
     this.#delete = control('Delete agent', () => { const selected = this.#descriptors.find(item => item.selected); if (selected) this.#remove(selected.identity); });
     this.#delete.id = 'spatial-delete-agent';
     tools.append(this.#return, this.#expand, this.#rebind, this.#delete); this.#notice.className = 'spatial-placement-notice'; this.#notice.setAttribute('role', 'status'); this.#notice.hidden = true;
     this.#panel.insertBefore(tools, this.#panel.children[1] ?? null); tools.after(this.#notice);
-    this.#installResize();
+    this.#installMove(); this.#installResize();
     this.#stage.append(this.#labels, this.#list);
     (this.#stage.querySelector('.model-card-heading') ?? this.#stage).append(launcher);
     new ResizeObserver(() => this.#position()).observe(this.#stage);
@@ -108,6 +112,48 @@ export class SpatialWorkspacePresentation {
     this.#position();
   }
   clearAnchors(): void { this.#anchor = null; for (const label of this.#labelNodes.values()) label.hidden = true; this.#position(); }
+  #currentLayout(): Extract<PanelLayout, { kind: 'manual' }> {
+    const stage = this.#stage.getBoundingClientRect(); const panel = this.#panel.getBoundingClientRect();
+    return { kind: 'manual', width: panel.width, height: panel.height, right: stage.right - panel.right, top: panel.top - stage.top };
+  }
+  #installMove(): void {
+    const heading = this.#panel.querySelector<HTMLElement>('.workspace-panel-heading'); if (!heading) return;
+    const handle = control('', () => {}); handle.id = 'spatial-move-conversation'; handle.className = 'icon-button'; handle.setAttribute('aria-label', 'Move assistant');
+    handle.title = 'Drag the header to move. Arrow keys move; Shift uses larger steps. Home returns to the lower right.';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); icon.setAttribute('viewBox', '0 0 16 16'); icon.setAttribute('aria-hidden', 'true');
+    const lines = document.createElementNS('http://www.w3.org/2000/svg', 'path'); lines.setAttribute('d', 'M3 8h10M8 3v10M3 8l2-2M3 8l2 2M13 8l-2-2M13 8l-2 2M8 3L6 5M8 3l2 2M8 13l-2-2M8 13l2-2'); icon.append(lines); handle.append(icon);
+    heading.insertBefore(handle, heading.querySelector('button'));
+    let gesture: { pointer: number; x: number; y: number; layout: Extract<PanelLayout, { kind: 'manual' }> } | null = null;
+    heading.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || !event.isPrimary || !(event.target instanceof Element)) return;
+      const button = event.target.closest('button'); if (button && button !== handle) return;
+      event.preventDefault(); event.stopPropagation(); handle.focus({ preventScroll: true });
+      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: this.#currentLayout() };
+      heading.setPointerCapture(event.pointerId); heading.dataset.dragging = 'true';
+    });
+    heading.addEventListener('pointermove', event => {
+      if (!gesture || gesture.pointer !== event.pointerId) return;
+      event.preventDefault(); event.stopPropagation();
+      this.#layout = { ...gesture.layout, right: gesture.layout.right + gesture.x - event.clientX, top: gesture.layout.top + event.clientY - gesture.y };
+      this.#position();
+    });
+    const stop = (): void => {
+      if (!gesture) return;
+      const pointer = gesture.pointer; gesture = null; delete heading.dataset.dragging;
+      if (heading.hasPointerCapture(pointer)) heading.releasePointerCapture(pointer);
+    };
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) heading.addEventListener(event, stop);
+    window.addEventListener('blur', stop);
+    handle.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && gesture) { event.preventDefault(); event.stopPropagation(); this.#layout = gesture.layout; stop(); this.#position(); return; }
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation();
+      const layout = this.#currentLayout(); const step = event.shiftKey ? 32 : 16;
+      this.#layout = event.key === 'Home' ? { ...layout, right: 12, top: this.#stage.clientHeight - layout.height - 12 }
+        : { ...layout, right: layout.right + (event.key === 'ArrowLeft' ? step : event.key === 'ArrowRight' ? -step : 0), top: layout.top + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0) };
+      this.#position();
+    });
+  }
   #installResize(): void {
     const footer = document.createElement('div'); footer.className = 'spatial-conversation-resize';
     const handle = control('Resize', () => {}); handle.id = 'spatial-resize-conversation'; handle.setAttribute('aria-label', 'Resize assistant');
@@ -122,14 +168,10 @@ export class SpatialWorkspacePresentation {
     const chrome = new ResizeObserver(() => this.#position());
     for (const node of this.#panel.querySelectorAll('.workspace-panel-heading, .spatial-conversation-tools, .spatial-placement-notice, .spatial-conversation-resize, .chat-toolbar, #chat-switcher, .composer-input-row')) chrome.observe(node);
     let gesture: { pointer: number; x: number; y: number; layout: Extract<PanelLayout, { kind: 'manual' }> } | null = null;
-    const current = (): Extract<PanelLayout, { kind: 'manual' }> => {
-      const stage = this.#stage.getBoundingClientRect(); const panel = this.#panel.getBoundingClientRect();
-      return { kind: 'manual', width: panel.width, height: panel.height, right: stage.right - panel.right, top: panel.top - stage.top };
-    };
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0 || !event.isPrimary) return;
       event.preventDefault(); event.stopPropagation(); handle.focus({ preventScroll: true });
-      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: current() };
+      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: this.#currentLayout() };
       handle.setPointerCapture(event.pointerId);
     });
     handle.addEventListener('pointermove', event => {
@@ -147,7 +189,7 @@ export class SpatialWorkspacePresentation {
       if (event.key === 'Home') { event.preventDefault(); this.#layout = { kind: 'automatic' }; this.#panel.dataset.expanded = 'false'; this.#expand.textContent = 'Expand conversation'; this.#position(); return; }
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault(); event.stopPropagation();
-      const step = event.shiftKey ? 32 : 16; const layout = current();
+      const step = event.shiftKey ? 32 : 16; const layout = this.#currentLayout();
       this.#layout = { ...layout, width: layout.width + (event.key === 'ArrowLeft' ? step : event.key === 'ArrowRight' ? -step : 0),
         height: layout.height + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) };
       this.#position();
