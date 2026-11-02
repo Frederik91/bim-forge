@@ -132,7 +132,7 @@ export class ModelViewer {
     this.root.className = 'babylon-viewer'; this.root.dataset.renderer = 'babylon';
     this.canvas.className = 'model-canvas'; this.canvas.tabIndex = 0;
     this.canvas.style.cursor = 'grab';
-    this.canvas.setAttribute('aria-label', '3D model. Click an item to select and inspect it. Drag to orbit, right-drag to pan, scroll or pinch to zoom.');
+    this.canvas.setAttribute('aria-label', '3D model. Click an item to select and inspect it. Inside: hold the left mouse button and drag to look around. Overview: drag to orbit, right-drag to pan, scroll or pinch to zoom.');
     this.canvas.setAttribute('role', 'img');
     this.handle.type = 'button'; this.handle.className = 'model-reference-handle'; this.handle.textContent = '+';
     this.caption.className = 'model-selection-caption'; this.caption.setAttribute('aria-live', 'polite');
