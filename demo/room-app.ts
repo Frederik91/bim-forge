@@ -801,6 +801,7 @@ let observedResult: Element | null = null;
 function visibleResultCandidate(): Element | null {
   const projection = tasks.projection; const panel = generic('workspace-context');
   if (panel.hidden || document.visibilityState !== 'visible' || projection.offline) return null;
+  if (panel.querySelector(':popover-open') || document.querySelector('dialog[open]')) return null;
   const ticket = projection.tickets.find(item => item.id === projection.ticketId);
   if (!ticket || tasks.resultAttention(ticket) !== 'unread') return null;
   if (ticket.state === 'failed') return panel.querySelector(`#request-chat[data-current-request-id="${CSS.escape(ticket.request.requestId)}"][data-request-state="failed"] .request-chat-status`);
@@ -820,6 +821,8 @@ function observeVisibleResult(): void {
 new MutationObserver(observeVisibleResult).observe(generic('workspace-context'), {
   childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'data-current-request-id', 'data-request-state'],
 });
+generic('workspace-context').addEventListener('toggle', observeVisibleResult, { capture: true });
+document.addEventListener('close', observeVisibleResult, { capture: true });
 document.addEventListener('visibilitychange', () => {
   if (observedResult) resultVisibility.unobserve(observedResult); observedResult = null; observeVisibleResult();
 });
