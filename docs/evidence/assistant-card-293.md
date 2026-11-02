@@ -63,3 +63,16 @@ Standalone #293 source a1f6b9a2f0f2841c7cac5389a8ee19a2bed0cec3:
 Both runs also prove actual textarea, Send and transcript hit targets through the deliberate scrolling fallback at 320 × 600. Zero page errors. The regression opens task mode when the always-available personal assistant integration exists; the standalone branch retains its original workflow. Existing camera, single-canvas, viewport, resizing and request-permission checks remain in the same test.
 
 Red, minimum-size green and short-viewport green screenshots were inspected together. The focused detector over the changed sizing/CSS targets returned `[]`. Logs and captures are retained under Local AppData `BIMForge/assistant-card-293-minimum-evidence`; the original full-page detector limitations above remain applicable. All fixtures ran on Linux; no shared preview service or project data was changed.
+
+## Short viewport with task-mode help
+
+The later combined `eb53186` run passed the 900 px minimum assertions but failed the 600 px composer hit check. Its task-mode help and proposal-context notice were both visible by then. Keeping all tool/help chrome fixed left too little space even for the input inside the old content-only scrolling fallback. The retained last screenshot showed Send behind the resize footer.
+
+The short-height fallback now scrolls the card body, including tool/help chrome, with the heading and Resize footer sticky. Measured sticky heights feed scroll padding, and targets have scroll margins, so scrolling a control into view cannot place it beneath those surfaces. Returning to a normal-height viewport resets the outer scroll offset. The normal measured-minimum path is unchanged.
+
+The regression explicitly waits for proposal geometry and task-mode help before measuring, retaining all actual input, Send and transcript hit assertions. Linux validation/build and focused browser results:
+
+- Combined source `a8bea3ad11463b10c0e5c306673d4c362a9e2d85`: 394 sources; 1/1 browser pass in 30.4 s. At 320 × 900, both notices produce a 547 px safe minimum and 97 px transcript. At 320 × 600, card height is 323.8 px and whole-card scroll offset 242 px; actual textarea/Send/transcript hits pass. Reset and Resize access pass on returning to 900 px.
+- Main-based standalone source `cfbebc2bd996890d4eeaecf03586cf21cb9018c9`: 386 sources; 1/1 browser pass in 29.3 s. Its single-notice minimum remains 446 px with a 97 px transcript. Short-height actual hits pass at scroll offset 141 px, followed by a successful reset.
+
+Both runs report zero page errors. The original main merge-base and scoped file set remain intact. New normal/short screenshots were visually inspected; the focused detector returned `[]`. Receipts are under Local AppData `BIMForge/assistant-card-293-short-evidence`. No shared preview service, model data or deployment configuration was changed by this qualification.
