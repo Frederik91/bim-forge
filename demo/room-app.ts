@@ -810,14 +810,16 @@ function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlaceme
   if (!repo || !preview || selectedDesignTarget.kind === 'baseline') throw new Error('Open a writable accepted design before assigning a task.');
   const graph = preview;
   const pose = modelView === '3d' ? captureWorkspaceInsidePose() : null;
+  const planSvg = modelView === 'plan' ? ui['proposal-drawing'].querySelector<SVGSVGElement>('svg') : null;
+  const plan = planSvg ? getWorkspacePlanContext(planSvg) : null;
+  const location = pose?.eye ?? plan?.projection.inverse([plan.width / 2, plan.height / 2]).point ?? null;
   const markups = conversationMarkups(chatVisual);
-  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: pose?.eye ?? null });
+  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: location });
   const objectLevels = new Set(selectedObjectIds.map(id => entityLevel(graph, id)?.id ?? null));
   const levelId = markups.length ? chatVisual?.levelId ?? activeLevelId
     : selectedObjectIds.length ? objectLevels.size === 1 ? [...objectLevels][0] ?? null : null : activeLevelId;
-  ensureDraftOrigin();
   const origin: TaskOrigin | null = point ? { snapshot: { projectId: repo.projectId, target: selectedDesignTarget, revisionId: selectedRevision },
-    frame: 'project-engineering-metres', view: modelView === '3d' ? '3d' : '2d', levelId, point: [...point] } : draftOrigin;
+    frame: 'project-engineering-metres', view: modelView === '3d' ? '3d' : '2d', levelId, point: [...point] } : null;
   if (!origin) return { version: 1, kind: 'unplaced', reason: 'not-provided' };
   if (!repo || origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget)) {
     throw new Error('The draft source changed. Use Refresh draft context to retain its point and explicitly bind the new source before sending.');
