@@ -807,7 +807,7 @@ function ensureDraftOrigin(): void {
   }
 }
 function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlacement {
-  if (!repo || !preview) throw new Error('Open the accepted model before assigning a task.');
+  if (!repo || !preview || selectedDesignTarget.kind === 'baseline') throw new Error('Open a writable accepted design before assigning a task.');
   const pose = modelView === '3d' ? captureWorkspaceInsidePose() : null;
   const point = taskDispatchPoint({ graph: preview, selectedObjectIds, markups: conversationMarkups(chatVisual), eye: pose?.eye ?? null });
   ensureDraftOrigin();
