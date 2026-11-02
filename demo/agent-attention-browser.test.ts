@@ -61,7 +61,7 @@ test('actual visible results become viewed; later unseen results remain unread; 
   await openTasks(); await taskRow(ticket.id).filter({ hasText: 'Viewed' }).waitFor(); await taskRow(ticket.id).click(); await mode('task');
   await page.locator('#request-text').fill('Recheck the same 1100 mm door width and keep the centre.');
   const replied = page.waitForResponse(response => response.url().endsWith(`/api/change-requests/${ticket.id}/messages`) && response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Send message', exact: true }).click(); assert.equal((await replied).status(), 200); await nextGate.reached;
+  await page.getByRole('button', { name: 'Send message', exact: true }).click(); assert.equal((await replied).status(), 202); await nextGate.reached;
   await closeCard(); nextGate.release();
   await page.waitForFunction(async id => (await (await fetch(`/api/change-requests/${id}`)).json()).ticket.state === 'ready', ticket.id);
   await openTasks(); await taskRow(ticket.id).filter({ hasText: 'Unread result' }).waitFor(); await taskRow(ticket.id).click(); await mode('task');
