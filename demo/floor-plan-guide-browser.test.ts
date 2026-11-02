@@ -72,7 +72,8 @@ async function inspectAndAccept(page: Page, label: string): Promise<void> {
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
   await accept.click();
   const response = await decision; assert.equal(response.status(), 200, await response.text());
-  await page.locator('#request-chat .request-chat-status strong').filter({ hasText: /^Accepted$/ }).waitFor({ state: 'attached', timeout: 20_000 });
+  await page.locator('#request-chat[data-request-state="completed"]').waitFor({ timeout: 20_000 });
+  await page.locator('#request-chat .request-chat-decision > p').filter({ hasText: /^Accepted$/ }).waitFor({ timeout: 20_000 });
   await page.locator('#open-chat').click();
 }
 
