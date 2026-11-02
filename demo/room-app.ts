@@ -49,7 +49,7 @@ import type { RenderingMode } from './model-scene.ts';
 import { parseVisualRequest } from '../src/visual-request.ts';
 import type { SpatialReference } from '../src/visual-request.ts';
 import type {
-  Door, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, ModelGraph, Point, ProposalReview, RoomLayout, Wall, Window,
+  Door, Opening, Entity, Equipment, HostingRelationship, ModelDelta, ModelSnapshot, ModelGraph, Point, ProposalReview, RoomLayout, Wall, Window,
 } from '../src/room-model.ts';
 import { createHousePilotFixture, inspectEntityKnowledge } from '../src/house-pilot.ts';
 import type { EvidenceItem, HousePilotFixture, PropertyAssertion } from '../src/house-pilot.ts';
@@ -2698,7 +2698,7 @@ function isEquipment(entity: Entity): entity is Equipment { return entity.type =
 function entry(snapshot: ModelGraph): Door | undefined {
   return snapshot.entities.find((entity): entity is Door => entity.type === 'Door' && entity.id === 'door-entry');
 }
-function hostFor(snapshot: ModelGraph, opening: Door | Window | undefined): { link: HostingRelationship; wall: Wall } | null {
+function hostFor(snapshot: ModelGraph, opening: Door | Opening | Window | undefined): { link: HostingRelationship; wall: Wall } | null {
   if (!opening) return null;
   const link = snapshot.relationships.find((relation): relation is HostingRelationship => relation.type === 'hosted-by' && relation.source === opening.id);
   const wall = link && snapshot.entities.find((entity): entity is Wall => entity.id === link.target && entity.type === 'Wall');
