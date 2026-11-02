@@ -2251,7 +2251,10 @@ function setConversationOffline(offline: boolean): void {
 
 function showChatTicket(value: unknown): void {
   const previousMarkups = JSON.stringify(referenceMarkups());
-  const ticket = tasks.parseTicket(value); const conversation = conversationFromTicket(value);
+  const received = tasks.parseTicket(value);
+  const projection = tasks.projection;
+  const ticket = projection.tickets.find(item => item.id === projection.ticketId); const conversation = projection.conversation;
+  if (!ticket || !conversation || ticket.id !== received.id || ticket.projectId !== received.projectId) throw new StaleTaskResponse();
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
   conversationTarget = ticket.request.target ?? null;
   selectedDesignTarget = conversationTarget?.target ?? { kind: 'main' };
@@ -2259,10 +2262,12 @@ function showChatTicket(value: unknown): void {
     liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null;
     renderComparison(); syncInspector();
   }
-  tasks.receiveTask(value); setConversationOffline(false);
+  requestChat.setOffline(projection.offline); if (projection.offline) proposalTray.show(null);
+  const currentActivity = received.request.requestId === ticket.request.requestId && received.attempts === ticket.attempts && received.updatedAt === ticket.updatedAt;
+  const activity = chatActivity(value).filter(event => event.requestId !== ticket.request.requestId || currentActivity && event.attempt === ticket.attempts);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
-    title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
+    title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity });
   if (JSON.stringify(referenceMarkups()) !== previousMarkups) renderComparison();
 }
 

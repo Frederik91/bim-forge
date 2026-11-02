@@ -14,6 +14,7 @@ import { spatialExpectedDoorSnapshot, spatialFixtureManifest } from '../tests/fi
 test('actual visible results become viewed; later unseen results remain unread; accepted agents finish without losing history', { timeout: 180_000 }, async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-attention-304-'));
   const gates = [spatialWorkerGate(), spatialWorkerGate()]; let run = 0;
+  const placementRead = Promise.withResolvers<void>(); const releasePlacement = Promise.withResolvers<void>();
   const worker = spatialFixtureWorker({ afterScript: session => { const gate = gates[run++]; if (!gate) throw new Error('Unexpected worker turn'); return gate.afterScript(session); } });
   const server = await createDemoServer({ modelWorker: worker, backlogFile: path.join(directory, 'queue.sqlite') });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -25,6 +26,7 @@ test('actual visible results become viewed; later unseen results remain unread; 
   const artifacts = process.env.AGENT_ATTENTION_ARTIFACTS ?? process.env.QUAL_ARTIFACTS;
   t.after(async () => {
     gates.forEach(gate => gate.release());
+    releasePlacement.resolve();
     if (artifacts) { await fs.mkdir(artifacts, { recursive: true }); await page.screenshot({ path: path.join(artifacts, 'attention-last.png'), fullPage: true }); }
     t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() }));
     await browser.close(); await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections(); }); await server.closeModelWorkers();
@@ -67,7 +69,14 @@ test('actual visible results become viewed; later unseen results remain unread; 
   await page.locator(`.spatial-task-label[data-task-id="${ticket.id}"]`).filter({ hasText: 'Viewed' }).waitFor({ state: 'attached' });
   await noError('The first result is exposed without an action error');
   await page.reload(); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click(); await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor();
-  await openTasks(); await taskRow(ticket.id).filter({ hasText: 'Viewed' }).waitFor(); await taskRow(ticket.id).click(); await mode('task');
+  await page.route(`${base}/api/change-requests/${ticket.id}/placement`, async route => { placementRead.resolve(); await releasePlacement.promise; await route.continue(); }, { times: 1 });
+  await openTasks(); await taskRow(ticket.id).filter({ hasText: 'Viewed' }).waitFor(); await taskRow(ticket.id).click();
+  await placementRead.promise;
+  // The foreground read is now retained across a real newer conversation poll.
+  await page.locator(`.request-chat-assistant[data-message-id="${firstResult.id}"]`).waitFor({ state: 'attached' });
+  releasePlacement.resolve();
+  await mode('task'); await page.locator('#request-text').waitFor({ state: 'visible' });
+  await noError('Opening after a newer background detail renders the authoritative projection');
   await page.locator('#request-text').fill('Recheck the same 1100 mm door width and keep the centre.');
   const replied = page.waitForResponse(response => response.url().endsWith(`/api/change-requests/${ticket.id}/messages`) && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Send message', exact: true }).click(); assert.equal((await replied).status(), 202); await nextGate.reached;
