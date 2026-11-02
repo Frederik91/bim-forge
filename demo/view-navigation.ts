@@ -56,8 +56,9 @@ export class ViewNavigation {
       if (event.key === 'Escape') { this.stop(); return; }
       if (!this.acceptsInput()) return;
       const key = event.key.toLowerCase();
+      if (event.ctrlKey || event.metaKey || event.altKey) { this.keys.clear(); return; }
       if (event.repeat && !this.keys.has(key)) return;
-      if (['w', 'a', 's', 'd', 'shift', 'control'].includes(key)) { event.preventDefault(); this.keys.add(key); }
+      if (['w', 'a', 's', 'd', 'shift', 'q'].includes(key)) { event.preventDefault(); this.keys.add(key); }
     }, options);
     document.addEventListener('keyup', event => { this.keys.delete(event.key.toLowerCase()); }, options);
     window.addEventListener('blur', () => this.stop(), { signal: controller.signal });
@@ -203,7 +204,7 @@ export class ViewNavigation {
     forward.normalize(); const right = camera.getDirection(Vector3.Right()); right.y = 0; right.normalize();
     const move = forward.scale(Number(this.keys.has('w')) - Number(this.keys.has('s')))
       .add(right.scale(Number(this.keys.has('d')) - Number(this.keys.has('a'))));
-    if (this.session.motion === 'fly') move.y += Number(this.keys.has('shift')) - Number(this.keys.has('control'));
+    if (this.session.motion === 'fly') move.y += Number(this.keys.has('shift')) - Number(this.keys.has('q'));
     const elapsed = Number.isFinite(seconds) ? Math.max(0, Math.min(.05, seconds)) : 0;
     if (move.lengthSquared() > 0) move.normalize().scaleInPlace(2 * elapsed);
     if (this.session.motion === 'walk' && this.walk && this.walkPlacement) {
