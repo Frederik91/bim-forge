@@ -861,7 +861,8 @@ function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlaceme
   const plan = planSvg ? getWorkspacePlanContext(planSvg) : null;
   const location = pose?.eye ?? plan?.projection.inverse([plan.width / 2, plan.height / 2]).point ?? null;
   const markups = conversationMarkups(chatVisual);
-  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: location });
+  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: location,
+    viewpoint: modelView === '3d' ? modelViewer?.captureViewpoint() ?? null : location });
   const objectLevels = new Set(selectedObjectIds.map(id => entityLevel(graph, id)?.id ?? null));
   const levelId = markups.length ? chatVisual?.levelId ?? activeLevelId
     : selectedObjectIds.length ? objectLevels.size === 1 ? [...objectLevels][0] ?? null : null : activeLevelId;
