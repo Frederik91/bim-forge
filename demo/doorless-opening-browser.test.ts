@@ -89,7 +89,8 @@ test('shipped UI reviews and explicitly accepts a 2 m doorless opening, then res
   await new Promise<void>(resolve => server.listen(address.port, '127.0.0.1', resolve));
   await page.reload(); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.locator('.model-object-picker').selectOption('door-entry');
-  await page.locator('#selected-title').filter({ hasText: 'Opening' }).waitFor();
+  await page.locator('#selection-context-label').filter({ hasText: 'Opening' }).waitFor();
+  assert.equal(await page.locator('#selected-title').textContent(), 'Ground floor', 'Object conversion retains its floor context');
   assert.deepEqual((await project()).view(acceptedAfter.head('main')).snapshot, expected.snapshot);
   assert.equal(await page.locator('canvas').count(), 1); assert.deepEqual(errors, []);
   await fs.writeFile(path.join(artifacts, 'delta.json'), JSON.stringify({ beforeRevision: baseline, afterRevision: acceptedAfter.head('main'), impact: expected.impact, delta: expected.delta, errors }, null, 2));
