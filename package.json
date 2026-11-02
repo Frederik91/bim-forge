@@ -24,6 +24,7 @@
     "test:markup-browser": "node --test --test-concurrency=1 demo/spatial-markup-browser.test.ts",
     "test:chat-browser": "node --test --test-concurrency=1 demo/request-chat.test.ts demo/workspace-shell.test.ts demo/floor-plan-guide-browser.test.ts",
     "test:canvas-studio": "npm run build:demo && node --test --test-concurrency=1 demo/canvas-studio-browser.test.ts",
+    "test:spatial-shell-layout": "node --test demo/spatial-shell-layout-browser.test.ts",
     "test:ifc-workspace": "node --test --test-concurrency=1 demo/linked-workspace-browser.test.ts",
     "test:geometry-workflow": "node --test --test-concurrency=1 demo/geometry-workflow-browser.test.ts",
     "test:geometry": "node --test src/geometry-query.test.ts src/geometry-session.test.ts",
