@@ -59,6 +59,7 @@ export class SpatialWorkspacePresentation {
       tools.style.top = `${Math.min(box.bottom + 4, Math.max(8, innerHeight - 360))}px`;
     });
     tools.addEventListener('click', event => { if (event.target instanceof Element && event.target.closest('button') && tools.matches(':popover-open')) tools.hidePopover(); });
+    tools.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); tools.hidePopover(); more.focus(); } });
     const close = this.#panel.querySelector('#workspace-context-close');
     heading?.insertBefore(more, close); heading?.append(tools);
     const chats = this.#panel.querySelector<HTMLButtonElement>('#chat-switcher-button');
