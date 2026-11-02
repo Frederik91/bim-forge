@@ -103,10 +103,7 @@ test('Canvas Studio ships one viewer, side panels and backend-authoritative cust
     return document.getElementById('workspace-context')?.dataset.assistantMode === 'task'
       && input instanceof HTMLTextAreaElement && !input.disabled;
   });
-  const inspect = page.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
   const tray = page.getByRole('region', { name: 'Canvas proposal review' });
-  await inspect.or(tray).first().waitFor({ timeout: 30_000 });
-  if (await inspect.isVisible()) await inspect.click();
   await tray.waitFor({ state: 'visible' });
   assert.equal((await project()).head('main'), baseline, 'A displayed proposal leaves accepted Main unchanged.');
   assert.equal(await page.locator('[data-chat-framework="assistant-ui"]').count(), 1);
