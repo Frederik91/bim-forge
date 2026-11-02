@@ -1,7 +1,7 @@
 import type { TaskAgentAnchor, TaskAgentDescriptor, TaskAgentHit, TaskAgentIdentity } from './spatial-task-layer.ts';
+import { taskAgentStatusLabel } from './spatial-task-layer.ts';
 
 const key = (identity: TaskAgentIdentity): string => identity.kind === 'task' ? identity.ticketId : identity.draftId;
-const stateLabel: Readonly<Record<TaskAgentDescriptor['state'], string>> = { unsent: 'Unsent draft', queued: 'Queued', working: 'Working', 'needs-input': 'Needs input', ready: 'Ready for review', completed: 'Accepted', failed: 'Failed', cancelled: 'Cancelled', rejected: 'Rejected' };
 type PanelLayout = { kind: 'automatic' } | { kind: 'manual'; width: number; height: number; right: number; top: number };
 function control(text: string, action: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', action); return node;
@@ -61,7 +61,7 @@ export class SpatialWorkspacePresentation {
     this.#signature = signature; this.#descriptors = descriptors; this.#labels.replaceChildren(); this.#labelNodes.clear();
     for (const descriptor of descriptors) {
       if (descriptor.placement.kind === 'unplaced') continue;
-      const label = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${stateLabel[descriptor.state]}`, () => { const candidates = this.#candidates.get(key(descriptor.identity)); if (candidates && candidates.length > 1) this.pick({ kind: 'chooser', candidates }); else this.#open(descriptor.identity); });
+      const label = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${taskAgentStatusLabel(descriptor)}`, () => { const candidates = this.#candidates.get(key(descriptor.identity)); if (candidates && candidates.length > 1) this.pick({ kind: 'chooser', candidates }); else this.#open(descriptor.identity); });
       label.className = 'spatial-task-label'; label.dataset.taskId = key(descriptor.identity); label.hidden = true;
       this.#labels.append(label); this.#labelNodes.set(key(descriptor.identity), label);
     }
@@ -75,7 +75,7 @@ export class SpatialWorkspacePresentation {
     this.#list.replaceChildren();
     const heading = document.createElement('h3'); heading.textContent = candidates ? 'Choose a task at this place' : 'Tasks in this project'; this.#list.append(heading);
     for (const descriptor of this.#descriptors.filter(item => !candidates || candidates.some(candidate => key(candidate) === key(item.identity)))) {
-      const node = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${stateLabel[descriptor.state]}${descriptor.placement.kind === 'unplaced' ? ' · Unplaced' : ''}`, () => { this.#list.hidden = true; this.#open(descriptor.identity); });
+      const node = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${taskAgentStatusLabel(descriptor)}${descriptor.placement.kind === 'unplaced' ? ' · Unplaced' : ''}`, () => { this.#list.hidden = true; this.#open(descriptor.identity); });
       node.dataset.taskId = key(descriptor.identity);
       const row = document.createElement('div'); row.className = 'spatial-task-row';
       const remove = control('Delete', () => this.#remove(descriptor.identity));

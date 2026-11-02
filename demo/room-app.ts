@@ -785,6 +785,32 @@ generic('workspace-context').querySelector('.spatial-conversation-tools')?.prepe
 const dispatchContext = element('p', '', 'spatial-placement-notice'); dispatchContext.id = 'assistant-dispatch-context';
 generic('workspace-context').querySelector('.spatial-conversation-tools')?.after(dispatchContext);
 let spatialProjectionPending = false;
+let observedResult: Element | null = null;
+function visibleResultCandidate(): Element | null {
+  const projection = tasks.projection; const panel = generic('workspace-context');
+  if (panel.hidden || document.visibilityState !== 'visible' || projection.offline) return null;
+  const ticket = projection.tickets.find(item => item.id === projection.ticketId);
+  if (!ticket || tasks.resultAttention(ticket) !== 'unread') return null;
+  if (ticket.state === 'failed') return panel.querySelector(`#request-chat[data-current-request-id="${CSS.escape(ticket.request.requestId)}"][data-request-state="failed"] .request-chat-status`);
+  const message = projection.conversation?.messages.findLast(item => item.kind === 'assistant' && item.requestId === ticket.request.requestId);
+  return message ? panel.querySelector(`.request-chat-assistant[data-message-id="${CSS.escape(message.id)}"]`) : null;
+}
+const resultVisibility = new IntersectionObserver(entries => {
+  const candidate = visibleResultCandidate();
+  if (!candidate || !entries.some(entry => entry.target === candidate && entry.isIntersecting && entry.intersectionRect.height >= 24 && entry.intersectionRect.width >= 48)) return;
+  const ticketId = tasks.projection.ticketId; if (ticketId) tasks.markResultViewed(ticketId);
+});
+function observeVisibleResult(): void {
+  const candidate = visibleResultCandidate(); if (candidate === observedResult) return;
+  if (observedResult) resultVisibility.unobserve(observedResult);
+  observedResult = candidate; if (candidate) resultVisibility.observe(candidate);
+}
+new MutationObserver(observeVisibleResult).observe(generic('workspace-context'), {
+  childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'data-current-request-id', 'data-request-state'],
+});
+document.addEventListener('visibilitychange', () => {
+  if (observedResult) resultVisibility.unobserve(observedResult); observedResult = null; observeVisibleResult();
+});
 tasks.observeWorkspace(() => {
   if (spatialProjectionPending) return;
   spatialProjectionPending = true;
@@ -843,8 +869,8 @@ function currentTaskObjectIds(placement: TaskPlacement): string[] {
 function spatialDescriptors(): TaskAgentDescriptor[] {
   if (!repo) return [];
   const projectId = repo.projectId;
-  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.filter(ticket => !ticket.agentDeleted).map(ticket => ({
-    identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state,
+  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.filter(ticket => !ticket.agentDeleted && ticket.state !== 'completed').map(ticket => ({
+    identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state, attention: tasks.resultAttention(ticket),
     placement: ticket.taskPlacement.kind === 'placed' ? { kind: 'placed', origin: ticket.taskPlacement.origin.point } : { kind: 'unplaced' },
     selected: ticket.id === tasks.projection.ticketId, visible: true,
   }));
@@ -871,6 +897,7 @@ function updateSpatialWorkspace(): void {
   const descriptors = spatialDescriptors();
   spatialWorkspace.update(descriptors, notice, !!ticket && !!origin, staleDraft);
   modelViewer?.setTasks(repo?.projectId ?? null, descriptors);
+  observeVisibleResult();
 }
 
 function captureChatDraft() {
