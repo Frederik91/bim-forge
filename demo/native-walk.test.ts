@@ -5,6 +5,7 @@ import { validateSnapshot } from '../src/room-model.ts';
 import type { ModelSnapshot, Point } from '../src/room-model.ts';
 import { viewerBuilding } from './building-viewer-fixture.ts';
 import { compileNativeWalk } from './native-walk.ts';
+import { previewDoorToOpening } from '../src/hosted-opening.ts';
 import type { NativeWalk, WalkPlacement, WalkResult, XY } from './native-walk.ts';
 
 function enter(world: NativeWalk, levelId: string, point: XY): WalkPlacement {
@@ -54,6 +55,28 @@ test('valid .8 and .9 hosted Door voids pass in both host directions with body m
     const back = last(travel(world, result, [-.1, 0], 10)); assert.equal(back.kind, 'moved'); assert.ok(back.pose.eye[0] < 3.51);
     const jamb = last(travel(world, enter(world, 'level-ground', [3.5, 3.1]), [.1, 0], 10));
     assert.equal(jamb.kind, 'blocked'); assert.ok(jamb.pose.eye[0] < 3.79);
+  }
+});
+
+test('a converted two metre permanent opening is walkable in both host directions with jamb and headroom limits', () => {
+  const base = multiStoreySnapshot();
+  for (const reverse of [false, true]) {
+    const before = checked({ ...base,
+      entities: base.entities.map(entity => entity.id === 'level-ground-wall-inner' && entity.type === 'Wall' && reverse ? { ...entity, start: entity.end, end: entity.start } : entity),
+      relationships: base.relationships.map(link => link.source === 'level-ground-door-inner' && reverse ? { ...link, offset: 6 - 3 - .9 } : link),
+    });
+    const { snapshot } = previewDoorToOpening(before, { doorId: 'level-ground-door-inner', widthMetres: 2, anchor: 'centre' });
+    const opening = snapshot.entities.find(entity => entity.id === 'level-ground-door-inner'); assert.equal(opening?.type, 'Opening');
+    const world = compileNativeWalk(snapshot, `opening-${reverse}`);
+    const across = last(travel(world, enter(world, 'level-ground', [3.5, 3.45]), [.1, 0], 10));
+    assert.equal(across.kind, 'moved'); assert.ok(across.pose.eye[0] > 4.49);
+    assert.ok(last(travel(world, across, [-.1, 0], 10)).pose.eye[0] < 3.51);
+    const jamb = last(travel(world, enter(world, 'level-ground', [3.5, 2.55]), [.1, 0], 10));
+    assert.equal(jamb.kind, 'blocked'); assert.ok(jamb.pose.eye[0] < 3.79);
+    const low = checked({ ...snapshot, entities: snapshot.entities.map(entity => entity.id === opening?.id ? { ...entity, height: 1.7 } : entity) });
+    const lowWorld = compileNativeWalk(low, 'low-opening');
+    assert.equal(last(travel(lowWorld, enter(lowWorld, 'level-ground', [3.5, 3.45]), [.1, 0], 10)).kind, 'blocked');
+    assert.equal(before.entities.find(entity => entity.id === opening?.id)?.type, 'Door', 'Traversal never edits the source geometry');
   }
 });
 
