@@ -137,7 +137,8 @@ export class ModelViewer {
     this.caption.className = 'model-selection-caption'; this.caption.setAttribute('aria-live', 'polite');
     this.selection.className = 'model-object-picker'; this.selection.setAttribute('aria-label', 'Select 3D object');
     this.selection.addEventListener('change', () => this.select(this.selection.value));
-    this.root.append(this.canvas, this.handle, this.caption, this.selection);
+    const controls = document.createElement('div'); controls.className = 'model-viewer-controls'; controls.append(this.selection);
+    this.root.append(this.canvas, this.handle, this.caption, controls);
     // ModelScene owns FXAA; the default framebuffer does not need MSAA.
     this.engine = new Engine(this.canvas, false, { preserveDrawingBuffer: false, stencil: true, powerPreference: 'high-performance' });
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 1.5));
@@ -154,7 +155,7 @@ export class ModelViewer {
       surface: (x, y) => this.markupSurface(x, y), changed: (annotations, binding) => actions.markup?.(annotations, binding) ?? false,
       begin: () => { this.navigation.stop(); this.endDrag(false); this.pointer.reset(); this.hover(null); }, render: () => { this.frames = 3; },
       attach: () => actions.markupChat?.() }) : null;
-    if (this.markup) this.root.append(this.markup.root);
+    if (this.markup) controls.append(this.markup.root);
     this.model.scene.skipPointerMovePicking = true;
     this.model.camera.attachControl(this.canvas, false);
     this.model.scene.executeWhenReady(() => { this.frames = 3; });
