@@ -87,5 +87,24 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
   await page.waitForFunction(width => Math.abs((document.getElementById('workspace-context')?.getBoundingClientRect().width ?? 0) - width) < 1, desktop.width);
   assert.ok(Math.abs((await bounds()).height - desktop.height) < 1, 'Desktop dimensions return after a narrow viewport');
+  await page.locator('#request-text').fill('Keep this follow-up reachable while the task is open.');
+  await page.setViewportSize({ width: 320, height: 900 });
+  if (!await panel.isVisible()) await page.locator('#open-chat').click();
+  await page.locator('#spatial-delete-agent').waitFor();
+  await handle.focus();
+  for (let step = 0; step < 40; step++) await page.keyboard.press('ArrowUp');
+  const minimum = await page.evaluate(() => {
+    const required = (selector: string) => { const node = document.querySelector<HTMLElement>(selector); if (!node) throw new Error(`Missing ${selector}`); return node; };
+    const hit = (selector: string) => { const node = required(selector); const box = node.getBoundingClientRect(); const at = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { top: box.top, bottom: box.bottom, height: box.height, hit: at === node || node.contains(at) }; };
+    return { panel: hit('#workspace-context'), input: hit('#request-text'), send: hit('#save-proposal'),
+      transcript: hit('#request-chat-mount'), content: hit('#workspace-context-content'),
+      tools: hit('.spatial-conversation-tools'), footer: hit('.spatial-conversation-resize') };
+  });
+  t.diagnostic(JSON.stringify({ minimum }));
+  await page.screenshot({ path: path.join(artifacts, 'minimum-320.png'), fullPage: true });
+  assert.equal(minimum.input.hit, true, 'Shrinking a task conversation keeps the textarea directly reachable');
+  assert.equal(minimum.send.hit, true, 'Shrinking a task conversation keeps Send directly reachable');
+  assert.ok(minimum.transcript.height >= 64, 'The minimum retains a readable, separately scrolling transcript');
+  assert.ok(minimum.input.bottom <= minimum.content.bottom && minimum.send.bottom <= minimum.content.bottom, 'Composer controls stay inside their visible content region');
   assert.deepEqual(errors, []);
 });
