@@ -19,7 +19,7 @@ import { spatialExpectedDoorSnapshot, spatialFixtureManifest } from '../tests/fi
 import { parseTaskPlacement } from '../src/task-placement.ts';
 import { SpatialTasks } from './spatial-tasks.ts';
 
-test('created draft and saved agents can be deleted from controls and Tasks without replacing them or changing the model', { timeout: 120_000 }, async t => {
+test('created task agents can be deleted while the personal assistant and saved history stay available', { timeout: 120_000 }, async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'delete-agent-292-'));
   const server = await createDemoServer({ modelWorker: spatialFixtureWorker(), backlogFile: path.join(directory, 'queue.sqlite') });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -34,33 +34,13 @@ test('created draft and saved agents can be deleted from controls and Tasks with
   const capture = () => page.evaluate(async () => { const url = '/room-app.mjs'; return (await import(url)).captureWorkspaceInsidePose(); });
   const confirm = () => page.locator('#delete-agent-dialog').getByRole('button', { name: 'Delete agent', exact: true }).click();
   const list = page.locator('#spatial-task-list');
+  const personal = () => page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && document.getElementById('request-text')?.getAttribute('disabled') === null);
   await page.goto(base); await page.locator('#project-template').selectOption('house');
   await page.locator('#project-name').fill('Delete agents fixture'); await page.locator('#create-project').click();
   await page.locator('#open-chat').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
-  await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor();
-  await page.locator('#new-chat').click(); await page.locator('#request-text').fill('First unsent agent');
-  await page.locator('#request-source-files').setInputFiles({ name: 'first-agent.txt', mimeType: 'text/plain', buffer: Buffer.from('Only for the first draft.') });
-  await page.locator('#new-chat').click(); await page.locator('#request-text').fill('Keep this second draft');
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  assert.equal(await list.locator('button[data-task-id]').count(), 2);
-  const first = list.getByRole('button', { name: 'Delete agent: First unsent agent', exact: true });
-  await first.click(); await page.locator('#delete-agent-dialog').getByRole('button', { name: 'Keep agent' }).click();
-  assert.equal(await list.locator('button[data-task-id]').count(), 2);
-  await first.click(); await confirm();
-  await page.waitForFunction(() => document.querySelectorAll('#spatial-task-list button[data-task-id]').length === 1);
-  assert.equal(await list.evaluate(node => node.contains(document.activeElement)), true, 'Deleting a row keeps keyboard focus in Tasks');
-  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this second draft');
-  const beforeDraftDelete = await capture();
-  await list.getByRole('button', { name: 'Close task list' }).click();
-  await page.locator('#spatial-delete-agent').click(); await confirm();
-  await page.waitForFunction(() => document.querySelectorAll('.spatial-task-label').length === 0);
-  assert.deepEqual(await capture(), beforeDraftDelete);
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  assert.equal(await list.locator('button[data-task-id]').count(), 0);
-  await list.getByRole('button', { name: 'Close task list' }).click();
-  await page.locator('#open-chat').click(); await page.locator('#new-chat').click();
-  assert.equal(await page.locator('#request-text').inputValue(), '');
-  assert.equal(await page.locator('#request-source-list').textContent(), '');
+  await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor(); await personal();
+  assert.equal(await page.locator('.spatial-task-label').count(), 0, 'The always available assistant is not a disposable task figure');
+  assert.equal(await page.locator('#spatial-delete-agent').isVisible(), false);
   const parser = new SpatialTasks();
   const submit = async (text: string) => {
     await page.locator('.model-object-picker').selectOption(spatialFixtureManifest.doorId);
@@ -71,50 +51,66 @@ test('created draft and saved agents can be deleted from controls and Tasks with
     const data: unknown = await acknowledgement.json(); assert.ok(data && typeof data === 'object' && 'ticket' in data);
     const ticket = parser.parseTicket(data.ticket);
     await page.waitForFunction(async id => { const value = await (await fetch(`/api/change-requests/${id}`)).json(); return value.ticket.state === 'ready'; }, ticket.id);
-    return ticket;
+    await personal(); return ticket;
   };
   const a = await submit('Widen this door to 1100 mm, keeping its centre.');
-  await page.locator('#new-chat').click();
   const b = await submit('Keep another independent door proposal.');
   const accepted = await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json();
   assert.ok(accepted && typeof accepted === 'object' && typeof accepted.project === 'string');
   const acceptedModel = await RoomRepository.restore(accepted.project);
+  await page.locator('#request-text').fill('Keep this personal draft and its file.');
+  await page.locator('#request-source-files').setInputFiles({ name: 'personal-only.txt', mimeType: 'text/plain', buffer: Buffer.from('This belongs to the private personal draft.') });
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await list.locator('button[data-task-id]').count(), 2, 'Only assigned tasks appear in Tasks');
+  await list.locator(`[data-delete-agent="${a.id}"]`).click();
+  await page.locator('#delete-agent-dialog').getByRole('button', { name: 'Keep agent' }).click();
+  assert.equal(await list.locator('button[data-task-id]').count(), 2);
   await page.route('**/api/change-requests/*/agent', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Deletion connection failed. Retry.' }) }));
   await list.locator(`[data-delete-agent="${a.id}"]`).click(); await confirm();
   await page.getByText('Deletion connection failed. Retry.', { exact: true }).waitFor();
   assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 1, 'Failed deletion keeps the agent');
   await page.unroute('**/api/change-requests/*/agent');
-  await list.locator(`[data-task-id="${a.id}"]`).click();
-  await page.locator('#spatial-delete-agent').waitFor();
-  await page.waitForFunction(() => document.getElementById('request-text')?.getAttribute('disabled') === null);
-  const pose = await capture(); const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
-  await page.locator('#spatial-delete-agent').click(); await confirm();
-  await page.waitForFunction(id => !document.querySelector(`.spatial-task-label[data-task-id="${id}"]`), a.id);
-  const afterDeletion = await capture(); assert.ok(pose && afterDeletion);
-  assert.deepEqual({ eye: afterDeletion.eye, forward: afterDeletion.forward, up: afterDeletion.up, level: afterDeletion.levelId, motion: afterDeletion.motion },
-    { eye: pose.eye, forward: pose.forward, up: pose.up, level: pose.levelId, motion: pose.motion }, 'Agent deletion retains the actual viewpoint');
-  assert.ok(afterDeletion.sourcePin.startsWith(`main:${acceptedModel.head('main')}:`), 'Deleting the active agent returns the displayed model to the accepted source, never an orphaned proposal');
-  assert.equal(await canvas.evaluate(node => node.isConnected), true);
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 0);
-  assert.equal(await list.locator(`[data-task-id="${b.id}"]`).count(), 1, 'Another agent at the same place survives');
-  const saved: unknown = await (await page.request.get(`${base}/api/change-requests/${a.id}`)).json();
-  assert.ok(saved && typeof saved === 'object' && 'ticket' in saved); assert.equal(parser.parseTicket(saved.ticket).agentDeleted, true);
-  assert.deepEqual(await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json(), accepted);
-  await page.reload(); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await page.waitForFunction(id => !!document.querySelector(`#spatial-task-list [data-task-id="${id}"]`), b.id);
-  assert.equal(await list.locator(`[data-task-id="${a.id}"]`).count(), 0, 'Deleted saved agent stays absent after reload');
+  await list.locator(`[data-delete-agent="${a.id}"]`).click(); await confirm();
+  await page.waitForFunction(id => !document.querySelector(`#spatial-task-list [data-task-id="${id}"]`), a.id);
+  assert.equal(await list.evaluate(node => node.contains(document.activeElement)), true, 'Deleting a row keeps keyboard focus in Tasks');
+  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal draft and its file.');
+  assert.match(await page.locator('#request-source-list').textContent() ?? '', /personal-only.txt/);
+  assert.equal(await list.locator(`[data-task-id="${b.id}"]`).count(), 1);
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     const remove = list.locator(`[data-delete-agent="${b.id}"]`); await remove.scrollIntoViewIfNeeded();
     assert.equal(await remove.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await list.locator(`[data-task-id="${b.id}"]`).click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
+  const pose = await capture(); const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
+  await page.locator('#spatial-delete-agent').click(); await confirm(); await personal();
+  await page.waitForFunction(() => document.querySelectorAll('.spatial-task-label').length === 0);
+  const afterDeletion = await capture(); assert.ok(pose && afterDeletion);
+  assert.deepEqual({ eye: afterDeletion.eye, forward: afterDeletion.forward, up: afterDeletion.up, level: afterDeletion.levelId, motion: afterDeletion.motion },
+    { eye: pose.eye, forward: pose.forward, up: pose.up, level: pose.levelId, motion: pose.motion }, 'Agent deletion retains the actual viewpoint');
+  assert.ok(afterDeletion.sourcePin.startsWith(`main:${acceptedModel.head('main')}:`), 'The personal assistant displays the accepted source after deleting a task');
+  assert.equal(await canvas.evaluate(node => node.isConnected), true);
+  assert.equal(await page.locator('#request-text').isEnabled(), true, 'Deletion never disables the personal assistant');
+  assert.equal(await page.locator('#spatial-delete-agent').isVisible(), false);
+  await page.locator('#chat-switcher-button').click();
+  await page.locator('#chat-list').getByRole('button', { name: /Keep this personal draft and its file/ }).click();
+  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal draft and its file.');
+  assert.match(await page.locator('#request-source-list').textContent() ?? '', /personal-only.txt/);
+  for (const id of [a.id, b.id]) {
+    const saved: unknown = await (await page.request.get(`${base}/api/change-requests/${id}`)).json();
+    assert.ok(saved && typeof saved === 'object' && 'ticket' in saved && saved.ticket && typeof saved.ticket === 'object' && 'conversation' in saved.ticket);
+    assert.equal(parser.parseTicket(saved.ticket).agentDeleted, true);
+    assert.ok(saved.ticket.conversation, 'Saved transcript is still available');
+  }
+  assert.deepEqual(await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json(), accepted);
+  await page.reload(); await page.locator('#view-inside').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await list.locator('[data-task-id]').count(), 0, 'Deleted saved agents stay absent after reload');
   assert.deepEqual(errors, []);
 });
-
 test('live native agent body opens the same saved task without moving the eye; exact 1100 mm review remains explicit', { timeout: 150_000 }, async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'spatial-257-'));
   const artifacts = process.env.SPATIAL_WORKSPACE_ARTIFACTS ?? 'artifacts/spatial-workspace-257'; await fs.mkdir(artifacts, { recursive: true });
