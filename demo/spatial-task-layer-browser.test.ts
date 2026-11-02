@@ -89,6 +89,7 @@ test('real 3D agent bodies choose same-place conversations, keep target highligh
   assert.match(await page.locator('#conversation').innerText(), /T-04 · Legacy conversation/);
   await page.getByRole('button', { name: 'Report T-01 accepted' }).click();
   assert.equal(await page.locator('#tasks').getByRole('button', { name: /T-01 · Widen entry door/ }).count(), 0, 'Accepted work leaves the active task list');
+  await page.waitForFunction(() => !document.querySelector('[data-task="T-01"]'));
   assert.equal(await page.locator('[data-task="T-01"]').count(), 0, 'Accepted work leaves the model anchors');
   assert.match(await page.locator('#conversation').innerText(), /T-04 · Legacy conversation/, 'Completing another task does not discard the open saved conversation');
   await page.getByRole('button', { name: 'Dispose task layer' }).click();
