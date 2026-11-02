@@ -5,7 +5,7 @@ import { ModelParameterSchema, plainScopeData } from './model-scope-contract.ts'
 
 const id = Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' });
 const entityType = Type.Union([
-  Type.Literal('Wall'), Type.Literal('Door'), Type.Literal('Window'), Type.Literal('Equipment'),
+  Type.Literal('Wall'), Type.Literal('Door'), Type.Literal('Opening'), Type.Literal('Window'), Type.Literal('Equipment'),
   Type.Literal('Furniture'), Type.Literal('Level'), Type.Literal('Space'), Type.Literal('Slab'),
   Type.Literal('Stair'), Type.Literal('Roof'), Type.Literal('AssetFamily'), Type.Literal('AssetInstance'),
 ]);
@@ -76,7 +76,7 @@ export function parseModelScopeIndex(input: unknown): ModelScopeIndex {
       if (relationshipIds.has(edge.id) || edge.relation !== 'hosted-by') throw new Error('Invalid scope index relationship identity.');
       relationshipIds.add(edge.id);
     }
-    if ((edge.relation === 'hosted-by' && (edge.id === null || !['Door', 'Window'].includes(entities.get(edge.source)?.type ?? '') || entities.get(edge.target)?.type !== 'Wall'))
+    if ((edge.relation === 'hosted-by' && (edge.id === null || !['Door', 'Opening', 'Window'].includes(entities.get(edge.source)?.type ?? '') || entities.get(edge.target)?.type !== 'Wall'))
       || (edge.relation === 'supported-by' && (entities.get(edge.source)?.type !== 'Furniture' || entities.get(edge.target)?.type !== 'Furniture'))
       || (edge.relation === 'instance-of' && (entities.get(edge.source)?.type !== 'AssetInstance' || entities.get(edge.source)?.familyId !== edge.target))
       || (edge.relation === 'contained-in' && !['Space', 'Level'].includes(entities.get(edge.target)?.type ?? ''))) throw new Error('Invalid scope index relation endpoints.');
@@ -119,7 +119,7 @@ function observedBounds(graph: ModelGraph, entity: Entity): Bounds | null {
         minY: Math.min(entity.start[1], entity.end[1]) - (horizontal ? entity.width / 2 : 0),
         maxY: Math.max(entity.start[1], entity.end[1]) + (horizontal ? entity.width / 2 : 0) };
     }
-    case 'Door': case 'Window': {
+    case 'Door': case 'Opening': case 'Window': {
       const host = graph.relationships.find((edge) => edge.source === entity.id);
       const wall = graph.entities.find((item) => item.id === host?.target);
       if (!host || wall?.type !== 'Wall') throw new Error('Scope opening requires an existing wall host.');
@@ -143,7 +143,7 @@ export function createModelScopeIndex(graph: ModelGraph): ModelScopeIndex {
     if (entity.type === 'AssetFamily') return [];
     if (entity.type === 'Level') return [entity.id];
     if (entity.type === 'Stair') return ordered([entity.fromLevelId, entity.toLevelId]);
-    if (entity.type === 'Door' || entity.type === 'Window') {
+    if (entity.type === 'Door' || entity.type === 'Opening' || entity.type === 'Window') {
       const host = graph.relationships.find((edge) => edge.source === entity.id);
       const wall = graph.entities.find((item) => item.id === host?.target);
       return wall?.type === 'Wall' ? levelIds(wall) : [];

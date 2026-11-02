@@ -17,7 +17,7 @@ const SavedSchema = Type.Object({ scope: SavedModelScopeSchema });
 const SaveSchema = Type.Object({ id: identifier, name: Type.String({ minLength: 1, maxLength: 80 }),
   expectedVersion: Type.Union([Type.String({ pattern: '^[a-f0-9]{64}$' }), Type.Null()]) });
 const revision = Type.String({ pattern: '^[a-f0-9]{64}$' });
-const entityTypes = ['Wall', 'Door', 'Window', 'Equipment', 'Furniture', 'Level', 'Space', 'Slab', 'Stair', 'Roof', 'AssetFamily', 'AssetInstance'] satisfies Entity['type'][];
+const entityTypes = ['Wall', 'Door', 'Opening', 'Window', 'Equipment', 'Furniture', 'Level', 'Space', 'Slab', 'Stair', 'Roof', 'AssetFamily', 'AssetInstance'] satisfies Entity['type'][];
 
 export function parseScopeQuery(value: unknown): ModelScopeQuery {
   const query = parseModelScopeQuery(value);
