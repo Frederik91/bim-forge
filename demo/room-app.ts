@@ -851,6 +851,7 @@ function updateSpatialWorkspace(): void {
       : personalReferenceId || chatVisual?.selectedObjectIds.length ? 'Describe the change. I’ll assign an agent to the referenced item.'
         : 'Describe the change. With no reference selected, I’ll place its agent where you are.';
   generic('workspace-context').dataset.assistantMode = ticket ? 'task' : 'personal';
+  if (currentPage === 'request') generic('workspace-context-heading').textContent = ticket ? 'Task agent' : 'Personal assistant';
   button('new-chat').textContent = 'New task';
   const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
   const staleDraft = !ticket && !!origin && (origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget));
@@ -979,10 +980,9 @@ async function deleteSpatialAgent(identity: TaskAgentIdentity): Promise<void> {
   tasks.deleteDraft(key); sourcePicker.deleteDraft(key); forgetFloorDraft(key); chatInspectionOrigins.delete(key);
   if (current) {
     clearRequestSources(); visualDraft = null; invalidInput = false;
-    closeChat(); tasks.startTask(); deletedDraftAgents.add(tasks.key);
-    ui['request-text'].value = ''; ui['proposal-name'].value = ''; sourcePicker.switchDraft(tasks.key);
-    if (accepted) displayAccepted(accepted);
-    button('workspace-context-close').click(); closeChatSwitcher();
+    ui['request-text'].value = ''; ui['proposal-name'].value = '';
+    await openPersonalAssistant(true, accepted);
+    closeChatSwitcher();
   }
   renderChatSwitcher(); updateSpatialWorkspace();
   const list = generic('spatial-task-list');
@@ -1767,7 +1767,7 @@ ui['open-room'].addEventListener('click', () => {
   showPage('request');
   status(`Model opened at revision ${selectedRevision.slice(0, 10)}. Plan and 3D share the same selection.`);
 });
-async function openPersonalAssistant(fresh = false): Promise<boolean> {
+async function openPersonalAssistant(fresh = false, acceptedProject: RoomRepository | null = null): Promise<boolean> {
   if (!repo) return false;
   if (selectedDesignTarget.kind === 'baseline') throw new Error('Create an alternative from this baseline to request changes.');
   if (!fresh && !tasks.projection.ticketId && !reviewRepository && !liveChatPreview) {
@@ -1778,7 +1778,7 @@ async function openPersonalAssistant(fresh = false): Promise<boolean> {
   saveChatDraft();
   const key = !fresh ? personalDraftKeys.get(repo.projectId) : undefined;
   const draft = key ? tasks.getDraft(key) : undefined;
-  const accepted = await projects.read(repo.projectId);
+  const accepted = acceptedProject ?? await projects.read(repo.projectId);
   closeChat();
   if (draft) tasks.startTask(draft.draftId); else tasks.startTask();
   personalReferenceId = null;
