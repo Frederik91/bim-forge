@@ -56,6 +56,13 @@ async function send(page: Page): Promise<{ id: string; projectId: string }> {
   assert.ok('id' in body.ticket && typeof body.ticket.id === 'string' && 'projectId' in body.ticket && typeof body.ticket.projectId === 'string');
   return { id: body.ticket.id, projectId: body.ticket.projectId };
 }
+async function openAssignedTask(page: Page, id: string): Promise<void> {
+  await page.waitForFunction(() => document.getElementById('request-text')?.getAttribute('disabled') === null);
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.locator(`#spatial-task-list [data-task-id="${id}"]`).click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task'
+    && document.getElementById('request-text')?.getAttribute('disabled') === null);
+}
 async function inspectAndAccept(page: Page, label: string): Promise<void> {
   const chat = page.locator('#request-chat-mount');
   const inspect = chat.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
@@ -114,6 +121,7 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   const ticket = await send(page);
   const before = await savedProject(page, base, ticket.projectId);
   const root = before.head('main');
+  await openAssignedTask(page, ticket.id);
   await page.locator('#workspace-shell[data-chat-model="live"]').waitFor();
   assert.equal(await page.locator('#visual-panel').isVisible(), false, 'Accepted-model location tools cannot use a tentative replacement floor.');
   assert.equal((await savedProject(page, base, ticket.projectId)).head('main'), root);
@@ -141,7 +149,8 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   await page.getByRole('button', { name: '+ Alternative', exact: true }).click();
   await page.getByLabel('Active design', { exact: true }).selectOption({ label: 'Alternative 1' });
   await page.locator('#request-text').fill('Move shared partition 200 mm east.');
-  await send(page); await inspectAndAccept(page, 'Alternative 1');
+  const alternativeTicket = await send(page); await openAssignedTask(page, alternativeTicket.id);
+  await inspectAndAccept(page, 'Alternative 1');
   const accepted = await savedProject(page, base, ticket.projectId);
   await fs.writeFile(path.join(artifacts, 'accepted-project.json'), accepted.serialize());
   const baseline = accepted.designTargets().find(view => view.target.kind === 'baseline');
