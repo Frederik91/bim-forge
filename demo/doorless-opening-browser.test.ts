@@ -71,8 +71,14 @@ test('shipped UI reviews and explicitly accepts a 2 m doorless opening, then res
   await page.locator('#view-plan').click();
   assert.match(await page.locator('#proposal-drawing').textContent() ?? '', /2000/);
   await page.screenshot({ path: path.join(artifacts, 'review-plan-2000mm.png'), fullPage: true });
+  await page.locator('#workspace-context-close').click();
+  const accept = tray.getByRole('button', { name: /^Accept into/ }); await accept.waitFor({ state: 'visible' });
+  assert.equal(await accept.evaluate(node => {
+    const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return hit === node || node.contains(hit);
+  }), true, 'The explicit review action must be exposed before clicking');
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
-  await tray.getByRole('button', { name: /^Accept into/ }).click(); assert.equal((await decision).status(), 200);
+  await accept.click(); assert.equal((await decision).status(), 200);
   const acceptedAfter = await project(); const after = acceptedAfter.view(acceptedAfter.head('main')).snapshot;
   assert.deepEqual(after, expected.snapshot); assert.notEqual(acceptedAfter.head('main'), baseline);
   assert.deepEqual(diffSnapshots(before, after), expected.delta);
