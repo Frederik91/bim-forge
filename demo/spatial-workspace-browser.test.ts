@@ -216,7 +216,10 @@ test('live native agent body opens the same saved task without moving the eye; e
   assert.equal((await project()).head('main'), baseline); await page.locator('#request-text').fill('');
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+    await page.locator('#workspace-context-close').click();
+    const launcher = page.getByRole('button', { name: 'Tasks', exact: true });
+    assert.equal(await launcher.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true, 'Collapse the phone conversation to expose its spatial task launcher');
+    await launcher.click();
     await page.locator(`#spatial-task-list [data-task-id="${id}"]`).click();
     await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
