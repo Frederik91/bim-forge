@@ -126,9 +126,7 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
   }
   const proposalContext = page.locator('.spatial-placement-notice').filter({ hasText: 'Task targets refer to the accepted model. Showing proposal geometry.' });
-  await page.waitForFunction(() => [...document.querySelectorAll('.spatial-placement-notice')].some(node => node.textContent?.includes('Showing proposal geometry.') && node.getBoundingClientRect().height > 0)
-    || [...document.querySelectorAll<HTMLButtonElement>('#request-chat button')].some(node => node.getAttribute('aria-label') === 'Inspect proposal' && !node.disabled));
-  if (!await proposalContext.isVisible()) await page.getByRole('button', { name: 'Inspect proposal', exact: true }).click();
+  await page.getByRole('region', { name: 'Canvas proposal review' }).waitFor();
   await proposalContext.waitFor();
   await proposalContext.locator(':scope > summary').click();
   await proposalContext.locator('p').waitFor();
