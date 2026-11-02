@@ -100,13 +100,25 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   assert.deepEqual(thirdPlacement.targets, { objects: [], regions: [] }); assert.deepEqual(thirdPlacement.origin.point, fallbackEye.eye);
   await page.locator('.model-object-picker').selectOption('level-ground-wall-east');
   await page.locator('#request-text').fill('Keep this personal instruction unsent.');
+  const uploadHeld = Promise.withResolvers<void>(); const releaseUpload = Promise.withResolvers<void>(); const uploadFinished = Promise.withResolvers<void>();
+  t.after(() => releaseUpload.resolve());
+  await page.route(`${base}/api/projects/${a.projectId}/sources/*`, async route => {
+    if (route.request().method() !== 'POST') { await route.continue(); return; }
+    const saved = await route.fetch(); uploadHeld.resolve(); await releaseUpload.promise; await route.fulfill({ response: saved }); uploadFinished.resolve();
+  }, { times: 1 });
+  await page.locator('#request-source-files').setInputFiles({ name: 'personal-context.txt', mimeType: 'text/plain', buffer: Buffer.from('Keep this pending attachment with the personal instruction.') });
+  await uploadHeld.promise;
   await page.getByRole('button', { name: 'Tasks', exact: true }).click(); await page.locator(`#spatial-task-list [data-task-id="${a.id}"]`).click();
   await mode('task');
+  releaseUpload.resolve(); await uploadFinished.promise;
+  assert.doesNotMatch(await page.locator('#request-source-list').innerText(), /personal-context/);
   await page.locator('#request-text').fill('Keep this follow-up on the first agent.');
   const beforeReturn = await capture();
   await page.locator('#personal-assistant').click();
   await mode('personal');
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal instruction unsent.');
+  await page.getByText('1 of 4 files ready', { exact: true }).waitFor();
+  assert.match(await page.locator('#request-source-list').innerText(), /personal-context/);
   assert.equal(await page.locator('.model-object-picker').inputValue(), 'level-ground-wall-east');
   const afterReturn = await capture(); assert.ok(beforeReturn && afterReturn);
   assert.deepEqual(afterReturn.eye, beforeReturn.eye); assert.deepEqual(afterReturn.forward, beforeReturn.forward);
