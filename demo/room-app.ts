@@ -813,7 +813,14 @@ function visibleResultCandidate(): Element | null {
 }
 const resultVisibility = new IntersectionObserver(entries => {
   const candidate = visibleResultCandidate();
-  if (!candidate || !entries.some(entry => entry.target === candidate && entry.isIntersecting && entry.intersectionRect.height >= 24 && entry.intersectionRect.width >= 48)) return;
+  if (!candidate || !entries.some(entry => {
+    if (entry.target !== candidate || !entry.isIntersecting || entry.intersectionRect.height < 24 || entry.intersectionRect.width < 48) return false;
+    const box = entry.intersectionRect;
+    return [.2, .5, .8].some(x => [.2, .5, .8].some(y => {
+      const hit = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y);
+      return hit === candidate || candidate.contains(hit);
+    }));
+  })) return;
   const ticketId = tasks.projection.ticketId; if (ticketId) tasks.markResultViewed(ticketId);
 }, { threshold: [0, .01, .05, .1, .25, .5, .75, 1] });
 function observeVisibleResult(): void {
@@ -824,14 +831,19 @@ function observeVisibleResult(): void {
 new MutationObserver(observeVisibleResult).observe(generic('workspace-context'), {
   childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'data-current-request-id', 'data-request-state'],
 });
-generic('workspace-context').addEventListener('toggle', observeVisibleResult, { capture: true });
-document.addEventListener('close', observeVisibleResult, { capture: true });
-document.addEventListener('visibilitychange', () => {
+function refreshResultVisibility(): void {
   if (observedResult) resultVisibility.unobserve(observedResult); observedResult = null; observeVisibleResult();
-});
-generic('request-chat-mount').addEventListener('scroll', () => {
-  if (observedResult) resultVisibility.unobserve(observedResult); observedResult = null; observeVisibleResult();
-}, { capture: true, passive: true });
+}
+generic('workspace-context').addEventListener('toggle', refreshResultVisibility, { capture: true });
+document.addEventListener('close', refreshResultVisibility, { capture: true });
+document.addEventListener('visibilitychange', refreshResultVisibility);
+generic('request-chat-mount').addEventListener('scroll', refreshResultVisibility, { capture: true, passive: true });
+let resultVisibilityPending = false;
+for (const event of ['pointerup', 'click', 'keydown']) document.addEventListener(event, () => {
+  if (!observedResult || resultVisibilityPending) return;
+  resultVisibilityPending = true;
+  requestAnimationFrame(() => { resultVisibilityPending = false; refreshResultVisibility(); });
+}, { capture: true });
 tasks.observeWorkspace(() => {
   if (spatialProjectionPending) return;
   spatialProjectionPending = true;

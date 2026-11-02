@@ -48,7 +48,7 @@ export class SpatialWorkspacePresentation {
     this.#rebind = control('Refresh draft context', options.rebind); this.#rebind.id = 'spatial-refresh-context'; this.#rebind.hidden = true;
     this.#expand = control('Expand conversation', () => {
       const expanded = this.#panel.dataset.expanded !== 'true';
-      if (this.#layout.kind === 'manual') this.#layout = { ...this.#currentLayout(), height: this.#preferredHeight(expanded) };
+      if (this.#layout.kind === 'manual') this.#layout = { ...this.#movementLayout(), height: this.#preferredHeight(expanded) };
       this.#panel.dataset.expanded = String(expanded); this.#expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position();
     });
     this.#expand.id = 'spatial-expand-conversation';
@@ -153,7 +153,7 @@ export class SpatialWorkspacePresentation {
       if (event.button !== 0 || !event.isPrimary || !(event.target instanceof Element)) return;
       const button = event.target.closest('button'); if (button && button !== handle) return;
       event.preventDefault(); event.stopPropagation(); handle.focus({ preventScroll: true });
-      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: this.#currentLayout() };
+      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: this.#movementLayout() };
       heading.setPointerCapture(event.pointerId); heading.dataset.dragging = 'true';
     });
     heading.addEventListener('pointermove', event => {
@@ -173,11 +173,15 @@ export class SpatialWorkspacePresentation {
       if (event.key === 'Escape' && gesture) { event.preventDefault(); event.stopPropagation(); this.#layout = gesture.layout; stop(); this.#position(); return; }
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) return;
       event.preventDefault(); event.stopPropagation();
-      const layout = this.#currentLayout(); const step = event.shiftKey ? 32 : 16;
-      this.#layout = event.key === 'Home' ? { ...layout, right: 12, top: this.#stage.clientHeight - layout.height - 12 }
+      const layout = this.#movementLayout(); const step = event.shiftKey ? 32 : 16;
+      this.#layout = event.key === 'Home' ? { ...layout, right: 12, top: this.#stage.clientHeight - this.#panel.getBoundingClientRect().height - 12 }
         : { ...layout, right: layout.right + (event.key === 'ArrowLeft' ? step : event.key === 'ArrowRight' ? -step : 0), top: layout.top + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0) };
       this.#position();
     });
+  }
+  #movementLayout(): Extract<PanelLayout, { kind: 'manual' }> {
+    const visible = this.#currentLayout();
+    return this.#layout.kind === 'manual' ? { ...this.#layout, right: visible.right, top: visible.top } : visible;
   }
   #installResize(): void {
     const footer = document.createElement('div'); footer.className = 'spatial-conversation-resize';
