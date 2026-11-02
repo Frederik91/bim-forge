@@ -1310,6 +1310,7 @@ function updateControls() {
   for (const control of geometryControls) control.disabled = !authoring || !layout || Boolean(gesture) || Boolean(tasks.projection.ticketId);
   ui['project-template'].disabled = !writable;
   ui['selected-object'].disabled = busy || !preview || dragging;
+  modelViewer?.setSelectionDisabled(ui['selected-object'].disabled);
   ui['proposal-name'].disabled = !authoring || !preview || Boolean(gesture) || Boolean(tasks.projection.ticketId);
   ui['request-text'].disabled = !authoring || !preview || Boolean(gesture);
   sourcePicker.setDisabled(!authoring || !preview || Boolean(reviewRepository && !tasks.projection.ticketId));
@@ -3418,6 +3419,7 @@ function renderViewer(snapshot: ModelSnapshot, baseline: ModelSnapshot): void {
       },
       keyboardReference: () => { showRequestPane('details'); ui['visual-wall'].focus(); },
     });
+    modelViewer.setSelectionDisabled(busy || Boolean(gesture || visualGesture));
     modelViewer.setTasks(requireRepository().projectId, spatialDescriptors());
     modelViewer.setLinkedModels(linkedDisplays); modelViewer.selectLinkedReference(linkedSelection);
     modelViewer.show(host, { projectId: requireRepository().projectId, navigationTarget: designKey(selectedDesignTarget), navigationPin: `${designKey(selectedDesignTarget)}:${selectedRevision}:${JSON.stringify(snapshot)}`, snapshot, comparison, taskTargetIds: currentTaskHighlights(), selectedId: livePreviewSelection ?? selectedObject, focusId: comparison ? null : focusedRoomId, mode: renderingMode, cutaway, levelId: activeLevelId, roofVisible,
