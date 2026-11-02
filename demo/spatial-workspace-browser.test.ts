@@ -85,6 +85,7 @@ test('created draft and saved agents can be deleted from controls and Tasks with
   await page.unroute('**/api/change-requests/*/agent');
   await list.locator(`[data-task-id="${a.id}"]`).click();
   await page.locator('#spatial-delete-agent').waitFor();
+  await page.waitForFunction(() => document.getElementById('request-text')?.getAttribute('disabled') === null);
   const pose = await capture(); const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
   await page.locator('#spatial-delete-agent').click(); await confirm();
   await page.waitForFunction(id => !document.querySelector(`.spatial-task-label[data-task-id="${id}"]`), a.id);
