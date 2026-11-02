@@ -128,6 +128,20 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   await page.locator('#personal-assistant').click(); await mode('personal'); gate.release(); await gate.finished;
   assert.equal(await page.locator('#workspace-context').getAttribute('data-assistant-mode'), 'personal');
   assert.equal(await page.locator('.spatial-task-label').count(), 3, 'Only the three submitted tasks have figures');
+  await page.locator('#new-chat').click();
+  await page.locator('.model-object-picker').selectOption('level-ground-wall-east');
+  const wallTask = await submit('Inspect this east wall as a separate task.');
+  await page.evaluate(async () => {
+    const url = '/room-app.mjs'; const api = await import(url); const pose = api.captureWorkspaceInsidePose(); const n = Math.sqrt(1.25);
+    if (!pose || !api.returnWorkspaceToPose({ ...pose, eye: [6, 3, 1.6], forward: [1 / n, 0, -.5 / n], up: [.5 / n, 0, 1 / n], motion: 'fly' })) throw new Error('Cannot face wall task');
+  });
+  const wallLabel = page.locator(`.spatial-task-label[data-task-id="${wallTask.id}"]`); await wallLabel.waitFor({ state: 'visible' });
+  const body = await wallLabel.evaluate(node => ({ x: Number(node.dataset.bodyX), y: Number(node.dataset.bodyY) }));
+  const wallCanvas = await canvas.boundingBox(); assert.ok(wallCanvas);
+  await page.mouse.click(wallCanvas.x + body.x, wallCanvas.y + body.y); await mode('task');
+  const hit: unknown = JSON.parse(await page.locator('.babylon-viewer').getAttribute('data-task-hit') ?? '{}');
+  assert.ok(hit && typeof hit === 'object' && 'kind' in hit && hit.kind === 'task' && 'identity' in hit && hit.identity && typeof hit.identity === 'object' && 'ticketId' in hit.identity);
+  assert.equal(hit.identity.ticketId, wallTask.id, 'The actual wall agent body is visible and pickable in front of its host');
   assert.deepEqual(await (await page.request.get(`${base}/api/projects/${a.projectId}`)).json(), baseline);
   assert.deepEqual(errors, []);
 });
