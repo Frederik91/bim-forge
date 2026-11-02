@@ -154,6 +154,9 @@ test('working hands and orbit explain progress; unread and viewed have different
   assert.ok(!bead.position.equals(beadBefore));
   h.layer.setReducedMotion(true); h.layer.renderFrame(0); const reduced = hands.map(mesh => mesh.position.clone()); const reducedBead = bead.position.clone();
   h.layer.renderFrame(1500); assert.deepEqual(hands.map(mesh => mesh.position.asArray()), reduced.map(point => point.asArray())); assert.ok(bead.position.equals(reducedBead));
+  h.layer.setReducedMotion(false); h.camera.setTarget(new Vector3(2, 4.4, 9)); h.scene.render(); h.layer.anchors(h.camera, 800, 600);
+  h.layer.renderFrame(2500); assert.equal(bead.position.x, 0, 'Offscreen work does not keep animating');
+  assert.ok(hands.every(hand => hand.position.y === -.015));
   h.layer.replace('project-a', [{ ...descriptor(), state: 'ready', attention: 'unread' }]);
   const unread = h.scene.meshes.find(mesh => mesh.name === 'task-agent:unread'); const viewed = h.scene.meshes.find(mesh => mesh.name === 'task-agent:viewed'); assert.ok(unread && viewed);
   assert.equal(unread.isEnabled(), true); assert.equal(viewed.isEnabled(), false); assert.equal(bead.isEnabled(), false);
