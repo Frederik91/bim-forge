@@ -18,6 +18,8 @@ import type { RequestSource } from '../src/request-sources.ts';
 import type { validateModelProposalRequest } from '../src/model-proposal.ts';
 import { matchingProposalReview } from './request-chat-status.ts';
 import type { RequestChatProposalReview } from './request-chat-status.ts';
+import { TaskResultAttentionStore, browserAttentionStorage } from './task-result-attention.ts';
+import type { AttentionStorage, TaskResultAttention } from './task-result-attention.ts';
 
 type SubmissionRequest = Pick<ReturnType<typeof validateModelProposalRequest>, 'proposalName' | 'baseRevisionId' | 'instruction' | 'target'>
   & { selectedObjectIds: readonly string[]; visualIntent: unknown; scope?: ScopedRequest; authoringScope?: string; sources?: readonly RequestSource[]; evidencePins?: readonly EvidencePin[]; conversationVisual?: ConversationReply['visual']; taskPlacement?: TaskPlacement };
@@ -43,6 +45,7 @@ export class StaleTaskResponse extends Error {
 export class SpatialTasks<Draft> {
   readonly #fetch: typeof fetch;
   readonly #retain: (projectId: string, sources: readonly RequestSource[]) => Promise<void>;
+  readonly #attention: TaskResultAttentionStore;
   readonly #drafts = new Map<string, Draft>();
   readonly #scopes = new Map<string, { projectId: string; scope: FrozenModelScope }>();
   readonly #pending = new Map<string, { path: string; body: string; signature: string; sources: readonly RequestSource[] }>();
@@ -67,9 +70,10 @@ export class SpatialTasks<Draft> {
   #taskGeneration = 0;
   #timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(options: { fetch?: typeof fetch; retainSources?: (projectId: string, sources: readonly RequestSource[]) => Promise<void> } = {}) {
+  constructor(options: { fetch?: typeof fetch; retainSources?: (projectId: string, sources: readonly RequestSource[]) => Promise<void>; attentionStorage?: AttentionStorage } = {}) {
     this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.#retain = options.retainSources ?? (async () => {});
+    this.#attention = new TaskResultAttentionStore(options.attentionStorage ?? browserAttentionStorage());
   }
   get projection(): TaskProjection<Draft> {
     this.#projection ??= Object.freeze({ projectId: this.#projectId, ticketId: this.#ticketId, draftId: this.#draftId,
@@ -78,6 +82,18 @@ export class SpatialTasks<Draft> {
     return this.#projection;
   }
   get key(): string { return `${this.#projectId ?? 'none'}:${this.#ticketId ?? this.#draftId}`; }
+  resultAttention(ticket: Readonly<BacklogItem>): TaskResultAttention { return this.#attention.attention(ticket); }
+  /** Call only after this task's actual result is exposed in the visible conversation. */
+  markResultViewed(ticketId: string): boolean {
+    if (this.#ticketId !== ticketId || this.#offline) return false;
+    const ticket = this.#tickets.find(item => item.id === ticketId);
+    if (!ticket || !this.#conversation || this.#conversation.messages.findLast(message => message.kind === 'user')?.requestId !== ticket.request.requestId) return false;
+    const retry = this.#conversation.messages.findLast(message => message.kind === 'decision' && message.action === 'retry' && message.requestId === ticket.request.requestId)?.sequence ?? 0;
+    const result = this.#conversation.messages.some(message => message.kind === 'assistant' && message.requestId === ticket.request.requestId && message.sequence > retry);
+    if (!result && !(ticket.state === 'failed' && ticket.error)) return false;
+    if (!this.#attention.markViewed(ticket)) return false;
+    this.#emit(); return true;
+  }
   get generation(): TaskGeneration { return { project: this.#projectGeneration, task: this.#taskGeneration }; }
   isCurrent(generation: TaskGeneration, projectOnly = false): boolean {
     return generation.project === this.#projectGeneration && (projectOnly || generation.task === this.#taskGeneration);

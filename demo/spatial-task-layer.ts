@@ -10,6 +10,7 @@ import { Ray } from '@babylonjs/core/Culling/ray.js';
 import type { Scene } from '@babylonjs/core/scene.js';
 import type { RequestState } from './change-requests.ts';
 import type { SpatialTokens } from './ui/design-tokens.ts';
+import type { TaskResultAttention } from './task-result-attention.ts';
 
 export type TaskAgentTokens = Readonly<Pick<SpatialTokens['color'],
   'agentBody' | 'agentFace' | 'agentEyes' | 'ink' | 'focus' | 'selection' |
@@ -25,6 +26,7 @@ type FigureDetails = {
   readonly placement: TaskAgentPlacement;
   readonly selected: boolean;
   readonly visible: boolean;
+  readonly attention?: TaskResultAttention;
 };
 export type TaskAgentDescriptor = FigureDetails & (
   | { readonly identity: Extract<TaskAgentIdentity, { kind: 'task' }>; readonly state: RequestState }
@@ -54,6 +56,11 @@ const stateLabels: Readonly<Record<TaskAgentDescriptor['state'], string>> = {
   ready: 'Ready for review', completed: 'Accepted', rejected: 'Rejected', cancelled: 'Cancelled', failed: 'Failed',
 };
 
+export function taskAgentStatusLabel(descriptor: Pick<TaskAgentDescriptor, 'state' | 'attention'>): string {
+  const state = stateLabels[descriptor.state];
+  return descriptor.attention === 'unread' ? `${state} · Unread result` : descriptor.attention === 'viewed' ? `${state} · Viewed` : state;
+}
+
 function identityKey(identity: TaskAgentIdentity): string {
   return JSON.stringify([identity.projectId, identity.kind, identity.kind === 'task' ? identity.ticketId : identity.draftId]);
 }
@@ -69,6 +76,10 @@ type Figure = {
   readonly materials: readonly StandardMaterial[];
   readonly body: StandardMaterial;
   readonly ring: Mesh;
+  readonly hands: readonly Mesh[];
+  readonly workBead: Mesh;
+  readonly unread: Mesh;
+  readonly viewed: Mesh;
 };
 
 /** Presentation only. The caller retains construction picks, highlights, chat and camera intent. */
@@ -119,13 +130,16 @@ export class SpatialTaskLayer {
       let figure = this.#figures.get(key);
       if (!figure) { figure = this.#create(key, descriptor); this.#figures.set(key, figure); }
       figure.descriptor = descriptor;
-      figure.root.setEnabled(descriptor.visible && descriptor.placement.kind === 'placed');
+      figure.root.setEnabled(descriptor.visible && descriptor.placement.kind === 'placed' && descriptor.state !== 'completed');
       figure.body.diffuseColor = Color3.FromHexString(descriptor.state === 'unsent' ? this.#tokens.muted : this.#tokens.agentBody);
       const color = this.#stateColor(descriptor.state);
       if (figure.ring.material instanceof StandardMaterial) figure.ring.material.diffuseColor = Color3.FromHexString(color);
       figure.ring.scaling.setAll(descriptor.selected ? 1.25 : 1);
       // A wire torso distinguishes an unsent local draft even in a monochrome capture.
       figure.body.wireframe = descriptor.state === 'unsent';
+      figure.workBead.setEnabled(descriptor.state === 'working');
+      figure.unread.setEnabled(descriptor.attention === 'unread');
+      figure.viewed.setEnabled(descriptor.attention === 'viewed');
     }
     this.renderFrame(0);
   }
@@ -133,19 +147,26 @@ export class SpatialTaskLayer {
   ownsMesh(mesh: AbstractMesh): boolean { return this.#owned.has(mesh); }
 
   listEntries(): readonly TaskAgentListEntry[] {
-    return [...this.#figures.values()].map(({ descriptor }) => ({ identity: structuredClone(descriptor.identity),
-      title: descriptor.title, stateLabel: stateLabels[descriptor.state], selected: descriptor.selected, placement: descriptor.placement.kind }));
+    return [...this.#figures.values()].filter(({ descriptor }) => descriptor.state !== 'completed').map(({ descriptor }) => ({ identity: structuredClone(descriptor.identity),
+      title: descriptor.title, stateLabel: taskAgentStatusLabel(descriptor), selected: descriptor.selected, placement: descriptor.placement.kind }));
   }
 
   setReducedMotion(value: boolean): void { this.#reducedMotion = value; this.renderFrame(0); }
 
   /** Caller supplies time from its existing render loop. Only reported working state can bob. */
   renderFrame(timeMs: number): void {
-    for (const { root, descriptor } of this.#figures.values()) {
+    for (const { root, descriptor, hands, workBead } of this.#figures.values()) {
       if (descriptor.placement.kind !== 'placed') continue;
       const [x, y, z] = descriptor.placement.origin;
-      const bob = !this.#reducedMotion && descriptor.state === 'working' ? Math.sin(timeMs / 550) * .018 : 0;
+      const working = !this.#reducedMotion && root.isEnabled() && descriptor.state === 'working';
+      const bob = working ? Math.sin(timeMs / 550) * .018 : 0;
       root.position.set(x, z + .24 + bob, y);
+      for (const [index, hand] of hands.entries()) {
+        const phase = working ? Math.sin(timeMs / 350 + index * Math.PI) : 0;
+        hand.position.y = -.015 + phase * .045; hand.position.z = .015 + Math.abs(phase) * .045;
+      }
+      const angle = working ? timeMs / 700 : 0;
+      workBead.position.set(Math.sin(angle) * .16, -.22, Math.cos(angle) * .16);
       root.computeWorldMatrix(true);
     }
   }
@@ -170,7 +191,7 @@ export class SpatialTaskLayer {
     return [...this.#figures.values()].map(({ descriptor, root }) => {
       const base = { identity: structuredClone(descriptor.identity), candidates: this.#candidates(descriptor) };
       if (descriptor.placement.kind === 'unplaced') return { ...base, kind: 'hidden', reason: 'unplaced' };
-      if (!descriptor.visible) return { ...base, kind: 'hidden', reason: 'hidden' };
+      if (!descriptor.visible || descriptor.state === 'completed') return { ...base, kind: 'hidden', reason: 'hidden' };
       const point = root.position.add(new Vector3(0, .34, 0));
       const projected = Vector3.Project(point, Matrix.IdentityReadOnly, transform, viewport);
       const facing = Vector3.Dot(point.subtract(camera.globalPosition), camera.getForwardRay().direction);
@@ -193,7 +214,7 @@ export class SpatialTaskLayer {
 
   #candidates(descriptor: TaskAgentDescriptor): readonly TaskAgentIdentity[] {
     if (descriptor.placement.kind === 'unplaced') return [];
-    return [...this.#figures.values()].filter(({ descriptor: other }) => other.visible &&
+    return [...this.#figures.values()].filter(({ descriptor: other }) => other.visible && other.state !== 'completed' &&
       other.placement.kind === 'placed' && placeKey(other.placement) === placeKey(descriptor.placement))
       .map(({ descriptor: other }) => structuredClone(other.identity));
   }
@@ -241,9 +262,12 @@ export class SpatialTaskLayer {
     part(MeshBuilder.CreateCylinder('task-agent:torso', { height: .24, diameterTop: .19, diameterBottom: .12, tessellation: 24 }, this.#scene), Vector3.Zero(), body);
     part(MeshBuilder.CreateSphere('task-agent:head', { diameter: .17, segments: 20 }, this.#scene), new Vector3(0, .22, 0), face);
     for (const x of [-.04, .04]) part(MeshBuilder.CreateSphere('task-agent:eye', { diameter: .022, segments: 8 }, this.#scene), new Vector3(x, .235, .073), eyes);
-    for (const x of [-.145, .145]) part(MeshBuilder.CreateSphere('task-agent:hand', { diameter: .065, segments: 12 }, this.#scene), new Vector3(x, -.015, .015), body);
+    const hands = [-.145, .145].map(x => part(MeshBuilder.CreateSphere('task-agent:hand', { diameter: .065, segments: 12 }, this.#scene), new Vector3(x, -.015, .015), body));
     const ring = part(MeshBuilder.CreateTorus('task-agent:hover-ring', { diameter: .32, thickness: .014, tessellation: 32 }, this.#scene), new Vector3(0, -.22, 0), status, false);
-    return { descriptor, root, meshes, materials, body, ring };
+    const workBead = part(MeshBuilder.CreateSphere('task-agent:working', { diameter: .045, segments: 8 }, this.#scene), new Vector3(0, -.22, .16), status, false);
+    const unread = part(MeshBuilder.CreateSphere('task-agent:unread', { diameter: .065, segments: 12 }, this.#scene), new Vector3(0, .39, 0), material('unread', this.#tokens.proposed), false);
+    const viewed = part(MeshBuilder.CreateTube('task-agent:viewed', { path: [new Vector3(-.04, .39, 0), new Vector3(-.01, .36, 0), new Vector3(.045, .425, 0)], radius: .008, tessellation: 8 }, this.#scene), Vector3.Zero(), material('viewed', this.#tokens.muted), false);
+    return { descriptor, root, meshes, materials, body, ring, hands, workBead, unread, viewed };
   }
 
   #remove(figure: Figure): void {
