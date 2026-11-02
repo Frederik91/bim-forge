@@ -957,14 +957,17 @@ async function deleteSpatialAgent(identity: TaskAgentIdentity): Promise<void> {
   tasks.requireCurrent(generation);
   if (ticket) await tasks.deleteAgent({ ticketId: ticket.id, expectedRequestId: ticket.request.requestId });
   tasks.requireCurrent(generation);
+  const current = key === currentChatKey();
   tasks.deleteDraft(key); sourcePicker.deleteDraft(key); forgetFloorDraft(key); chatInspectionOrigins.delete(key);
-  if (key === currentChatKey()) {
+  if (current) {
     clearRequestSources(); visualDraft = null; invalidInput = false;
     closeChat(); tasks.startTask(); deletedDraftAgents.add(tasks.key);
     ui['request-text'].value = ''; ui['proposal-name'].value = ''; sourcePicker.switchDraft(tasks.key);
     button('workspace-context-close').click(); closeChatSwitcher();
   }
   renderChatSwitcher(); updateSpatialWorkspace();
+  const list = generic('spatial-task-list');
+  if (!current && !list.hidden) list.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   status(ticket ? 'Agent deleted. Its saved conversation and review history remain in Chats.' : 'Agent and unsent draft deleted. Start a new chat when you need another agent.');
 }
 

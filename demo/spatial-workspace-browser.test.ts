@@ -48,6 +48,7 @@ test('created draft and saved agents can be deleted from controls and Tasks with
   assert.equal(await list.locator('button[data-task-id]').count(), 2);
   await first.click(); await confirm();
   await page.waitForFunction(() => document.querySelectorAll('#spatial-task-list button[data-task-id]').length === 1);
+  assert.equal(await list.evaluate(node => node.contains(document.activeElement)), true, 'Deleting a row keeps keyboard focus in Tasks');
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this second draft');
   const beforeDraftDelete = await capture();
   await list.getByRole('button', { name: 'Close task list' }).click();
