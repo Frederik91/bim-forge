@@ -268,8 +268,8 @@ export class SpatialTaskLayer {
     const hands = [-.145, .145].map(x => part(MeshBuilder.CreateSphere('task-agent:hand', { diameter: .065, segments: 12 }, this.#scene), new Vector3(x, -.015, .015), body));
     const ring = part(MeshBuilder.CreateTorus('task-agent:hover-ring', { diameter: .32, thickness: .014, tessellation: 32 }, this.#scene), new Vector3(0, -.22, 0), status, false);
     const workBead = part(MeshBuilder.CreateSphere('task-agent:working', { diameter: .045, segments: 8 }, this.#scene), new Vector3(0, -.22, .16), status, false);
-    const unread = part(MeshBuilder.CreateSphere('task-agent:unread', { diameter: .065, segments: 12 }, this.#scene), new Vector3(0, .39, 0), material('unread', this.#tokens.proposed), false);
-    const viewed = part(MeshBuilder.CreateTube('task-agent:viewed', { path: [new Vector3(-.04, .39, 0), new Vector3(-.01, .36, 0), new Vector3(.045, .425, 0)], radius: .008, tessellation: 8 }, this.#scene), Vector3.Zero(), material('viewed', this.#tokens.muted), false);
+    const unread = part(MeshBuilder.CreateSphere('task-agent:unread', { diameter: .065, segments: 12 }, this.#scene), new Vector3(.15, .29, 0), material('unread', this.#tokens.proposed), false);
+    const viewed = part(MeshBuilder.CreateTube('task-agent:viewed', { path: [new Vector3(.095, .29, 0), new Vector3(.125, .26, 0), new Vector3(.18, .325, 0)], radius: .008, tessellation: 8 }, this.#scene), Vector3.Zero(), material('viewed', this.#tokens.muted), false);
     return { descriptor, inView: true, root, meshes, materials, body, ring, hands, workBead, unread, viewed };
   }
 
