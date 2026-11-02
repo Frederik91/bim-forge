@@ -113,9 +113,11 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: path.join(artifacts, `width-${width}.png`), fullPage: true });
   }
+  await move.focus(); await page.keyboard.press('ArrowUp');
   await page.setViewportSize({ width: 1440, height: 1000 });
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
   await page.waitForFunction(width => Math.abs((document.getElementById('workspace-context')?.getBoundingClientRect().width ?? 0) - width) < 1, desktop.width);
+  assert.equal((await bounds()).width, desktop.width, 'Moving while the phone clamps the card must retain the chosen desktop width');
   assert.ok(Math.abs((await bounds()).height - desktop.height) < 1, 'Desktop dimensions return after a narrow viewport');
   if (await panel.getAttribute('data-assistant-mode') === 'personal') {
     await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
@@ -188,8 +190,5 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   const touched = await bounds(); assert.ok(Math.abs(touched.y - taskMoved.y + 20) < 1, 'Touch dragging moves the header without scrolling the model');
   assert.deepEqual(await capture(), taskPose); await cdp.detach();
   await page.screenshot({ path: path.join(artifacts, 'moved-task-320.png'), fullPage: true });
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.waitForFunction(width => Math.abs((document.getElementById('workspace-context')?.getBoundingClientRect().width ?? 0) - width) < 1, desktop.width);
-  assert.equal((await bounds()).width, desktop.width, 'Moving while the phone clamps the card must retain the chosen desktop width');
   assert.deepEqual(errors, []);
 });
