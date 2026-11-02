@@ -39,7 +39,7 @@ test('Overview door, window and permanent opening agents are outside the host fa
   const before = structuredClone(graph);
   for (const type of ['Door', 'Window', 'Opening']) {
     const variant = validateSnapshot({ ...graph, entities: graph.entities.map(entity => entity.id === 'door-entry'
-      ? { ...entity, type, ...(type === 'Window' ? { sillHeight: .8 } : {}) } : entity) });
+      ? { ...entity, type, ...(type === 'Window' ? { sillHeight: .8, height: 1.5 } : {}) } : entity) });
     const item = variant.entities.find(entity => entity.id === 'door-entry'); assert.ok(item && 'width' in item);
     const host = variant.relationships.find(link => link.source === item.id); assert.ok(host);
     const wall = variant.entities.find(entity => entity.id === host.target); assert.ok(wall?.type === 'Wall');
