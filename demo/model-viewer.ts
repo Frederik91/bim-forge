@@ -246,6 +246,7 @@ export class ModelViewer {
   }
 
   startMarkup(tool: MarkupTool = 'rectangle'): void { this.navigation.stop(); this.markup?.start(tool); }
+  setSelectionDisabled(disabled: boolean): void { this.selection.disabled = disabled; }
 
   private hover(id: string | null): void {
     this.linked.hover(null);
@@ -349,7 +350,7 @@ export class ModelViewer {
     this.state = next;
     const objectSignature = JSON.stringify(objects.map((item) => [item.id, item.name, changes.get(item.id)]));
     if (objectSignature !== this.objectSignature) {
-      this.selection.replaceChildren(...objects.map((item) => new Option(`${item.name}${changes.has(item.id) ? ' · ' + (changes.get(item.id) === 'modified' ? 'changed' : changes.get(item.id)) : ''}`, item.id)));
+      this.selection.replaceChildren(new Option('No reference selected · use my location', ''), ...objects.map((item) => new Option(`${item.name}${changes.has(item.id) ? ' · ' + (changes.get(item.id) === 'modified' ? 'changed' : changes.get(item.id)) : ''}`, item.id)));
       this.objectSignature = objectSignature;
     }
     this.selection.value = next.selectedId;

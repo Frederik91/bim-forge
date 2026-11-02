@@ -80,6 +80,8 @@ test('shipped task controller keeps independent attachments and drafts, appends 
   const initial: unknown = await (await page.request.get(`${base}/api/projects/${projectId}`)).json();
   assert.ok(initial && typeof initial === 'object' && 'project' in initial && typeof initial.project === 'string');
   const initialRepository = await RoomRepository.restore(initial.project); const acceptedHead = initialRepository.head('main');
+  await page.locator('#chat-switcher-button').click();
+  await page.locator('#chat-list button').filter({ hasText: 'First independent door task' }).click();
   await page.locator('#request-chat-mount').getByText('What width should the selected desk have?', { exact: true }).waitFor();
   await page.locator('#chat-switcher-button').click();
   await page.locator('#chat-list button').filter({ hasText: 'Second independent door task' }).click();
