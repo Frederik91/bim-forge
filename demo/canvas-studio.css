@@ -318,6 +318,41 @@ body.canvas-studio {
 .canvas-studio #spatial-resize-conversation:hover { background: var(--studio-soft); }
 .canvas-studio #spatial-resize-conversation svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-studio .spatial-conversation-size { font-size: 11px; font-variant-numeric: tabular-nums; }
+.canvas-studio .spatial-conversation .workspace-panel-heading { gap: 0; padding-inline: 8px; }
+.canvas-studio .spatial-conversation .workspace-panel-heading > div:first-child { flex: 1 1 auto; min-width: 0; }
+.canvas-studio .spatial-conversation .workspace-panel-heading h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.canvas-studio .chat-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 10px; color: var(--ink); background: transparent; border: 0; border-radius: var(--spatial-radius-control); }
+.canvas-studio .chat-icon-button:hover { background: var(--studio-soft); }
+.canvas-studio .chat-icon-button.button.primary { color: var(--spatial-color-white); background: var(--primary); }
+.canvas-studio .chat-icon-button svg { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.canvas-studio #spatial-chat-options { position: fixed; inset: auto; width: 240px; max-width: calc(100vw - 16px); max-height: min(360px, calc(100vh - 16px)); overflow: auto; margin: 0; padding: 8px; flex-direction: column; gap: 2px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--spatial-radius-control); box-shadow: var(--spatial-elevation-panel); }
+.canvas-studio #spatial-chat-options:not(:popover-open) { display: none; }
+.canvas-studio #spatial-chat-options > button { width: 100%; border: 0; padding: 8px; }
+.canvas-studio #spatial-chat-options .editor-help { padding: 8px; margin: 0; }
+.canvas-studio .spatial-conversation .chat-toolbar { display: none; }
+.canvas-studio .spatial-conversation .chat-switcher { border-bottom: 1px solid var(--line); }
+.canvas-studio .spatial-conversation .composer-help, .canvas-studio .spatial-conversation .composer-binding { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.canvas-studio .spatial-conversation .composer-connection.connected { display: none; }
+.canvas-studio .spatial-conversation #request-options:not([open]) { display: none; }
+.canvas-studio .spatial-conversation .composer-permission-status { padding: 4px 8px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: var(--spatial-radius-control); color: var(--teal); background: var(--mint); font-size: 11px; }
+.canvas-studio .spatial-conversation .spatial-placement-notice { padding: 6px 12px; margin: 0; font-size: 12px; }
+.canvas-studio .spatial-conversation .spatial-placement-notice > summary { cursor: pointer; }
+.canvas-studio .spatial-conversation .spatial-placement-notice > p { margin: 8px 0 0; }
+.canvas-studio .spatial-conversation .chat-welcome { padding: 24px 12px; min-height: 0; }
+.canvas-studio .spatial-conversation .chat-welcome h3 { font-size: 14px; font-weight: 550; }
+.canvas-studio .spatial-conversation .chat-welcome > p { display: none; }
+.canvas-studio .spatial-conversation #request-chat > header, .canvas-studio .spatial-conversation .request-chat-message-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.canvas-studio .spatial-conversation .request-chat-decision { padding: 4px 0; border: 0; background: transparent; font-size: 12px; color: var(--muted); }
+.canvas-studio .spatial-conversation .request-chat-decision .request-chat-technical { display: inline-block; margin: 0; }
+.canvas-studio .spatial-conversation .request-chat-status { padding: 6px 8px; border: 0; background: transparent; }
+.canvas-studio .spatial-conversation .request-chat-proposal { border: 0; padding: 0; background: transparent; }
+.canvas-studio .spatial-conversation .request-chat-proposal-heading { display: none; }
+.canvas-studio .spatial-conversation .request-chat .ticket-actions { flex-wrap: wrap; gap: 4px; }
+.canvas-studio .spatial-conversation .request-chat .ticket-actions .chat-icon-button { flex: 0 0 44px; min-width: 44px; max-width: 44px; }
+.canvas-studio .spatial-conversation .request-chat .chat-turn-count { display: none; }
+.canvas-studio .spatial-conversation .spatial-conversation-resize { justify-content: flex-end; border: 0; padding: 0 4px; }
+.canvas-studio .spatial-conversation .spatial-conversation-size { display: none; }
+.canvas-studio .spatial-conversation #spatial-resize-conversation { font-size: 0; gap: 0; width: 44px; padding: 10px; }
 .canvas-studio .request-options > details { margin-top: 12px; }
 .canvas-studio .request-options > details > summary { color: var(--ink); font-weight: 600; }
 .canvas-studio .request-options-intro { margin-top: 12px; }

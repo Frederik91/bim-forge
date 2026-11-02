@@ -1,0 +1,83 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { chromium } from 'playwright';
+import { createDemoServer } from './server.ts';
+import { spatialFixtureWorker } from '../tests/fixtures/spatial-workspace/worker.ts';
+
+test('minimal spatial chat retains explicit settings, reconstruction, history and accessible task actions', { timeout: 120_000 }, async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'minimal-chat-303-'));
+  const artifacts = process.env.MINIMAL_CHAT_ARTIFACTS ?? path.join(directory, 'artifacts'); await fs.mkdir(artifacts, { recursive: true });
+  const server = await createDemoServer({ modelWorker: spatialFixtureWorker(), backlogFile: path.join(directory, 'queue.sqlite') });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); assert.ok(address && typeof address === 'object'); const base = `http://127.0.0.1:${address.port}`;
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  t.after(async () => {
+    await page.screenshot({ path: path.join(artifacts, 'last.png'), fullPage: true });
+    t.diagnostic(JSON.stringify({ errors, status: await page.locator('#status').textContent(), error: await page.locator('#error').textContent() }));
+    await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); await server.closeModelWorkers();
+    await fs.rm(directory, { recursive: true, force: true });
+  });
+  const panel = page.locator('#workspace-context');
+  const options = page.getByRole('button', { name: 'Conversation options', exact: true });
+  const menu = page.locator('#spatial-chat-options');
+  const openOptions = async () => { if (!await menu.evaluate(node => node.matches(':popover-open'))) await options.click(); };
+  const hit = (selector: string) => page.locator(selector).evaluate(node => {
+    const box = node.getBoundingClientRect(); const at = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return at === node || node.contains(at);
+  });
+  await page.goto(base); await page.locator('#project-template').selectOption('house');
+  await page.locator('#project-name').fill('Minimal assistant fixture'); await page.locator('#create-project').click();
+  await page.locator('#open-chat').click(); await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.locator('.babylon-viewer[data-scene-ready="true"]').waitFor();
+  await page.waitForFunction(() => !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
+  const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);
+  assert.equal(await panel.locator('.chat-toolbar').isVisible(), false);
+  assert.equal(await page.getByRole('button', { name: 'Reconstruct a floor plan', exact: true }).count(), 0, 'Ordinary chat has no always-present reconstruction prompt');
+  assert.equal(await page.locator('#request-options').isVisible(), false);
+  assert.equal(await page.locator('#assistant-dispatch-context').isVisible(), false);
+  assert.equal(await page.locator('#spatial-expand-conversation').isVisible(), false);
+  await page.locator('#request-text').fill('Keep this draft while exploring the simpler controls.');
+  await openOptions(); await page.getByRole('button', { name: 'Request settings', exact: true }).click();
+  assert.equal(await page.locator('#request-options').isVisible(), true); assert.equal(await page.locator('#request-reconstruct').isChecked(), false);
+  await page.locator('#request-options > summary').click();
+  await openOptions(); await page.locator('#chat-switcher-button').click();
+  await page.locator('#chat-search').waitFor(); await page.locator('#chat-search').press('Escape');
+  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this draft while exploring the simpler controls.');
+  await page.getByRole('button', { name: 'Add files or context', exact: true }).click();
+  await page.getByRole('option', { name: /^Reconstruct a floor plan/ }).click();
+  assert.equal(await page.locator('#request-reconstruct').isChecked(), true);
+  await page.locator('#chat-permission-status').waitFor();
+  await page.getByRole('button', { name: 'Cancel reconstruction', exact: true }).click();
+  assert.equal(await page.locator('#request-reconstruct').isChecked(), false);
+  assert.equal(await page.locator('#chat-permission-status').isVisible(), false);
+  await page.screenshot({ path: path.join(artifacts, 'personal-desktop.png'), fullPage: true });
+
+  await page.locator('.model-object-picker').selectOption('door-entry');
+  await page.locator('#request-text').fill('Widen this door to 1100 mm, keeping its centre.');
+  const submitted = page.waitForResponse(response => response.url() === `${base}/api/change-requests` && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click(); const response = await submitted; assert.equal(response.status(), 202);
+  const value: unknown = await response.json(); assert.ok(value && typeof value === 'object' && 'ticket' in value && value.ticket && typeof value.ticket === 'object' && 'id' in value.ticket && typeof value.ticket.id === 'string');
+  const id = value.ticket.id;
+  await page.waitForFunction(() => document.querySelector('#workspace-context')?.getAttribute('data-assistant-mode') === 'personal' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
+  await page.locator('#workspace-context-close').click();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click(); await page.locator(`#spatial-task-list [data-task-id="${id}"]`).click();
+  await page.waitForFunction(() => document.querySelector('#request-chat')?.getAttribute('data-request-state') === 'ready');
+  assert.ok(await page.locator('#request-chat').getAttribute('data-current-request-id'));
+  await openOptions(); assert.equal(await page.locator('#spatial-delete-agent').isEnabled(), true); assert.equal(await page.locator('#personal-assistant').isVisible(), true);
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: path.join(artifacts, 'task-desktop.png'), fullPage: true });
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 600 }); if (!await panel.isVisible()) await page.locator('#open-chat').click();
+    await page.locator('#request-text').scrollIntoViewIfNeeded();
+    assert.equal(await hit('#request-text'), true); assert.equal(await hit('#save-proposal'), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await openOptions(); assert.equal(await hit('#chat-request-settings'), true, 'Secondary controls remain reachable in the top-layer menu');
+    await page.keyboard.press('Escape');
+    await page.screenshot({ path: path.join(artifacts, `task-${width}.png`), fullPage: true });
+  }
+  assert.equal(await canvas.evaluate(node => node.isConnected), true); assert.equal(await page.locator('canvas').count(), 1); assert.deepEqual(errors, []);
+});

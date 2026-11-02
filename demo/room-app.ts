@@ -782,8 +782,20 @@ personalAssistantButton.type = 'button'; personalAssistantButton.id = 'personal-
 personalAssistantButton.title = 'Assign a separate task while this agent continues working';
 personalAssistantButton.addEventListener('click', () => { void perform(async () => { await openPersonalAssistant(); }); });
 generic('workspace-context').querySelector('.spatial-conversation-tools')?.prepend(personalAssistantButton);
-const dispatchContext = element('p', '', 'spatial-placement-notice'); dispatchContext.id = 'assistant-dispatch-context';
-generic('workspace-context').querySelector('.spatial-conversation-tools')?.after(dispatchContext);
+const dispatchContext = element('p', '', 'editor-help'); dispatchContext.id = 'assistant-dispatch-context';
+const chatOptions = generic('workspace-context').querySelector('.spatial-conversation-tools');
+chatOptions?.append(dispatchContext);
+const requestSettings = element('button', 'Request settings'); requestSettings.type = 'button'; requestSettings.id = 'chat-request-settings';
+requestSettings.addEventListener('click', () => {
+  const details = generic('request-options'); if (!(details instanceof HTMLDetailsElement)) return;
+  details.open = !details.open; if (details.open) { details.querySelector('summary')?.focus(); details.scrollIntoView({ block: 'nearest' }); }
+});
+const connectionSettings = element('button', 'Connection settings'); connectionSettings.type = 'button';
+connectionSettings.addEventListener('click', () => ui['proposal-auth-action'].click());
+chatOptions?.append(requestSettings, connectionSettings);
+const permissionStatus = element('button', '', 'composer-permission-status'); permissionStatus.id = 'chat-permission-status'; permissionStatus.type = 'button'; permissionStatus.hidden = true;
+permissionStatus.addEventListener('click', () => requestSettings.click());
+generic('request-composer').prepend(permissionStatus);
 let spatialProjectionPending = false;
 let observedResult: Element | null = null;
 function visibleResultCandidate(): Element | null {
@@ -885,7 +897,7 @@ function updateSpatialWorkspace(): void {
         : 'Describe the change. With no reference selected, I’ll place its agent where you are.';
   generic('workspace-context').dataset.assistantMode = ticket ? 'task' : 'personal';
   if (currentPage === 'request') generic('workspace-context-heading').textContent = ticket ? 'Task agent' : 'Personal assistant';
-  button('new-chat').textContent = 'New task';
+  button('new-chat').setAttribute('aria-label', 'New task');
   const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
   const staleDraft = !ticket && !!origin && (origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget));
   const stale = ticket?.taskPlacement.kind === 'placed' && (ticket.taskPlacement.origin.snapshot.revisionId !== selectedRevision || ticket.taskPlacement.targets.objects.some(ref => ref.kind === 'ifc'));
@@ -1355,6 +1367,7 @@ function updateControls() {
   button('new-chat').disabled = busy || !repo; button('chat-switcher-button').disabled = busy || !repo;
   renderChatSwitcher();
   generic('request-options-summary').textContent = [scopeBuilder.dirty ? 'Scope enabled' : '', ui['request-reconstruct'].checked ? 'Reconstruction enabled' : ''].filter(Boolean).join(' · ');
+  permissionStatus.textContent = generic('request-options-summary').textContent; permissionStatus.hidden = !permissionStatus.textContent;
   requestChat.setDisabled(!authoring || !preview);
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
