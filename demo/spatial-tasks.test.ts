@@ -25,6 +25,36 @@ function submission(): TaskSubmission {
   return { project: 'original serialized project', request: { proposalName: 'door-change', baseRevisionId: revision,
     instruction: 'Improve this door', selectedObjectIds: [], sources: [attachment], visualIntent: { kind: 'selection' } } };
 }
+
+test('viewed attention requires this selected current result and survives a browser-store reload', () => {
+  const saved = new Map<string, string>(); const attentionStorage = { getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => { saved.set(key, value); } };
+  const tasks = new SpatialTasks({ attentionStorage }); tasks.setProject('project-one');
+  tasks.receiveTask({ ...ticket(), state: 'working', attempts: 1 });
+  assert.equal(tasks.markResultViewed('ticket-one'), false);
+  const ready = { ...ticket(), state: 'ready', attempts: 1 };
+  tasks.receiveTask(ready); const item = tasks.projection.tickets[0]; assert.ok(item);
+  assert.equal(tasks.resultAttention(item), 'unread'); assert.equal(tasks.markResultViewed('ticket-one'), false, 'Summary readiness cannot prove an actually exposed result');
+  const result = { ...ready, conversation: { ...ready.conversation, sequence: 2, messages: [...ready.conversation.messages,
+    { kind: 'assistant', id: 'assistant-one', requestId: 'ticket-one', sequence: 2, at: 2, baseRevisionId: revision, replyTo: 'user-one', content: { kind: 'explanation', text: 'Door result ready.' } },
+  ] } };
+  tasks.receiveTask(result); tasks.setOffline(true); assert.equal(tasks.markResultViewed('ticket-one'), false);
+  tasks.setOffline(false); tasks.startTask('personal'); assert.equal(tasks.markResultViewed('ticket-one'), false, 'A result arriving while another task is selected stays unread');
+  tasks.receiveTask(result); assert.equal(tasks.markResultViewed('ticket-one'), true); assert.equal(tasks.markResultViewed('ticket-one'), false);
+  assert.equal(tasks.resultAttention(item), 'viewed');
+  const reloaded = new SpatialTasks({ attentionStorage }); reloaded.setProject('project-one'); reloaded.receiveTask(result);
+  const restored = reloaded.projection.tickets[0]; assert.ok(restored); assert.equal(reloaded.resultAttention(restored), 'viewed');
+  reloaded.receiveTask({ ...result, attempts: 2, conversation: { ...result.conversation, sequence: 3, messages: [...result.conversation.messages,
+    { kind: 'decision', id: 'decision-retry', requestId: 'ticket-one', sequence: 3, at: 3, baseRevisionId: revision, action: 'retry', decisionId: 'retry-one' },
+  ] } });
+  const retried = reloaded.projection.tickets[0]; assert.ok(retried); assert.equal(reloaded.resultAttention(retried), 'unread');
+  assert.equal(reloaded.markResultViewed('ticket-one'), false, 'An earlier attempt assistant message cannot mark the new result viewed');
+});
+
+test('a visible current failed outcome can be viewed without fabricating an assistant message', () => {
+  const tasks = new SpatialTasks(); tasks.setProject('project-one'); tasks.receiveTask({ ...ticket(), state: 'failed', attempts: 1, error: 'Worker unavailable.' });
+  const failed = tasks.projection.tickets[0]; assert.ok(failed); assert.equal(tasks.resultAttention(failed), 'unread');
+  assert.equal(tasks.markResultViewed('ticket-one'), true); assert.equal(tasks.resultAttention(failed), 'viewed');
+});
 test('agent deletion uses the reviewed request identity and rejects older task projections', async () => {
   let method: string | undefined; let body: unknown;
   const tasks = new SpatialTasks({ fetch: async (_url, init) => {

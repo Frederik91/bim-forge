@@ -97,7 +97,11 @@ test('only server-reported working animates; all states have text and drafts hav
     h.layer.renderFrame(550 * Math.PI / 2); h.scene.render();
     const root = h.scene.transformNodes.find(node => node.name.startsWith('task-agent:')); assert.ok(root);
     assert.ok(Math.abs(root.position.y - (4.24 + (state === 'working' ? .018 : 0))) < .00001);
-    assert.equal(h.layer.listEntries()[0]?.stateLabel, state === 'completed' ? 'Accepted' : state === 'needs-input' ? 'Needs input' : state === 'ready' ? 'Ready for review' : state[0]?.toUpperCase() + state.slice(1));
+    if (state === 'completed') {
+      assert.deepEqual(h.layer.listEntries(), [], 'Accepted tasks leave the active list');
+      assert.equal(h.layer.pick(h.ray, 'idle').kind, 'none', 'Accepted figures cannot still be picked');
+      assert.ok(h.layer.anchors(h.camera, 800, 600).every(anchor => anchor.kind === 'hidden' && anchor.reason === 'hidden'));
+    } else assert.equal(h.layer.listEntries()[0]?.stateLabel, state === 'needs-input' ? 'Needs input' : state === 'ready' ? 'Ready for review' : state[0]?.toUpperCase() + state.slice(1));
   }
   h.layer.replace('project-a', [{ ...descriptor(), state: 'working' }]); h.layer.setReducedMotion(true); h.layer.renderFrame(800);
   assert.equal(h.scene.transformNodes[0]?.position.y, 4.24);
@@ -123,7 +127,7 @@ test('replacement, reconciliation, project switch and repeated disposal release 
     assert.deepEqual({ meshes: h.scene.meshes.length, materials: h.scene.materials.length, nodes: h.scene.transformNodes.length,
       textures: h.scene.textures.length, observers: h.scene.onBeforeRenderObservable.observers.length }, baseline);
   }
-  assert.equal(meshDisposals, 70); assert.equal(materialDisposals, 40);
+  assert.equal(meshDisposals, 100); assert.equal(materialDisposals, 60);
   h.layer.dispose(); h.layer.dispose();
   assert.equal(h.building.isDisposed(), false); assert.ok(h.scene.materials.includes(h.material)); assert.equal(h.scene.isDisposed, false);
   assert.equal(h.scene.activeCamera, h.camera); assert.equal(h.layer.pick(h.ray, 'idle').kind, 'none');
@@ -137,4 +141,28 @@ test('invalid/project-conflicting input is atomic and descriptor mutation cannot
   assert.throws(() => h.layer.replace('project-a', [item, item]), /conflict/);
   assert.throws(() => h.layer.replace('project-a', [descriptor('bad', { placement: { kind: 'placed', origin: [NaN, 0, 0] } })]), /envelope/);
   assert.equal(h.layer.listEntries().length, 1);
+});
+
+test('working hands and orbit explain progress; unread and viewed have different static geometry', t => {
+  const h = setup(); t.after(() => h.dispose());
+  h.layer.replace('project-a', [{ ...descriptor(), state: 'working' }]);
+  const hands = h.scene.meshes.filter(mesh => mesh.name === 'task-agent:hand'); assert.equal(hands.length, 2);
+  const bead = h.scene.meshes.find(mesh => mesh.name === 'task-agent:working'); assert.ok(bead);
+  h.layer.renderFrame(0); const before = hands.map(mesh => mesh.position.clone()); const beadBefore = bead.position.clone();
+  h.layer.renderFrame(550);
+  assert.ok(hands.every((hand, index) => { const prior = before[index]; assert.ok(prior); return !hand.position.equals(prior); }));
+  assert.ok(!bead.position.equals(beadBefore));
+  h.layer.setReducedMotion(true); h.layer.renderFrame(0); const reduced = hands.map(mesh => mesh.position.clone()); const reducedBead = bead.position.clone();
+  h.layer.renderFrame(1500); assert.deepEqual(hands.map(mesh => mesh.position.asArray()), reduced.map(point => point.asArray())); assert.ok(bead.position.equals(reducedBead));
+  h.layer.replace('project-a', [{ ...descriptor(), state: 'ready', attention: 'unread' }]);
+  const unread = h.scene.meshes.find(mesh => mesh.name === 'task-agent:unread'); const viewed = h.scene.meshes.find(mesh => mesh.name === 'task-agent:viewed'); assert.ok(unread && viewed);
+  assert.equal(unread.isEnabled(), true); assert.equal(viewed.isEnabled(), false); assert.equal(bead.isEnabled(), false);
+  assert.match(h.layer.listEntries()[0]?.stateLabel ?? '', /Unread result/);
+  h.layer.replace('project-a', [{ ...descriptor(), state: 'ready', attention: 'viewed' }]);
+  assert.equal(unread.isEnabled(), false); assert.equal(viewed.isEnabled(), true); assert.match(h.layer.listEntries()[0]?.stateLabel ?? '', /Viewed/);
+  h.layer.replace('project-a', [{ ...descriptor(), state: 'completed', attention: 'viewed' }]); h.scene.render();
+  assert.ok(h.scene.meshes.filter(mesh => h.layer.ownsMesh(mesh)).every(mesh => !mesh.isEnabled()));
+  assert.deepEqual(h.layer.listEntries(), []); assert.equal(h.layer.pick(h.ray, 'idle').kind, 'none');
+  h.layer.replace('project-a', [{ ...descriptor(), state: 'completed', attention: 'viewed' }]);
+  assert.ok(h.scene.meshes.filter(mesh => h.layer.ownsMesh(mesh)).every(mesh => !mesh.isEnabled()), 'A repeated accepted projection cannot resurrect its figure');
 });
