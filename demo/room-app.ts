@@ -959,6 +959,7 @@ async function deleteSpatialAgent(identity: TaskAgentIdentity): Promise<void> {
   tasks.requireCurrent(generation);
   tasks.deleteDraft(key); sourcePicker.deleteDraft(key); forgetFloorDraft(key); chatInspectionOrigins.delete(key);
   if (key === currentChatKey()) {
+    clearRequestSources(); visualDraft = null; invalidInput = false;
     closeChat(); tasks.startTask(); deletedDraftAgents.add(tasks.key);
     ui['request-text'].value = ''; ui['proposal-name'].value = ''; sourcePicker.switchDraft(tasks.key);
     button('workspace-context-close').click(); closeChatSwitcher();
