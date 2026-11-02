@@ -125,6 +125,7 @@ export class SpatialTasks<Draft> {
     if (!source || source.project !== this.#projectGeneration) throw new StaleTaskResponse();
     const known = this.#conversationBindings.get(ticket.id);
     const current = this.#tickets.find(item => item.id === ticket.id);
+    if (current?.agentDeleted && !ticket.agentDeleted) throw new StaleTaskResponse();
     if (!known && source && source.order < (this.#summaryOrders.get(ticket.id) ?? 0) && current?.request.requestId !== ticket.request.requestId) throw new StaleTaskResponse();
     if (known && ticket.request.requestId !== known.requestId) throw new StaleTaskResponse();
     this.#requireOrder(ticket.id, source.order); this.#appliedOrders.set(ticket.id, source.order);
@@ -227,7 +228,7 @@ export class SpatialTasks<Draft> {
     const merged: BacklogItem[] = [];
     for (const ticket of tickets) {
       const current = remaining.get(ticket.id); remaining.delete(ticket.id);
-      if (Math.max(this.#appliedOrders.get(ticket.id) ?? 0, this.#summaryOrders.get(ticket.id) ?? 0) > order || current && this.#conversationBindings.has(ticket.id) && lifecycleChanged(current, ticket)) { if (current) merged.push(current); }
+      if (current?.agentDeleted && !ticket.agentDeleted || Math.max(this.#appliedOrders.get(ticket.id) ?? 0, this.#summaryOrders.get(ticket.id) ?? 0) > order || current && this.#conversationBindings.has(ticket.id) && lifecycleChanged(current, ticket)) { if (current) merged.push(current); }
       else { merged.push(ticket); this.#summaryOrders.set(ticket.id, order); }
     }
     for (const ticket of remaining.values()) {
@@ -295,6 +296,16 @@ export class SpatialTasks<Draft> {
     this.#emit();
     return value;
   }
+  async deleteAgent(input: { ticketId: string; expectedRequestId: string }): Promise<void> {
+    const generation = this.generation;
+    const value = this.#record(await this.#json(`/api/change-requests/${encodeURIComponent(input.ticketId)}/agent`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRequestId: input.expectedRequestId }),
+    }));
+    this.requireCurrent(generation, true);
+    const ticket = this.parseTicket(value.ticket);
+    if (ticket.id !== input.ticketId || !ticket.agentDeleted) throw new Error('The server did not confirm agent deletion. Refresh and try again.');
+    this.updateTicket(ticket);
+  }
   async poll(kind: 'backlog' | 'conversation' | 'activity', update: () => Promise<void>): Promise<void> {
     const key = `${this.#projectGeneration}:${this.#taskGeneration}:${kind}`;
     if (this.#reading.has(key)) return;
@@ -333,6 +344,7 @@ function conversationFromTicket(value: unknown): RequestConversation {
   return parseRequestConversation(value.conversation);
 }
 export interface BacklogItem {
+  agentDeleted?: true;
   id: string; projectId: string; title: string; state: RequestState; createdAt: number; updatedAt: number; attempts: number; error: string | null;
   request: { requestId: string; proposalName: string; instruction: string; baseRevisionId: string; target?: FrozenDesignTarget; evidencePins?: readonly EvidencePin[]; selectedObjectIds: readonly string[]; scope?: ScopedRequest } & RequestSourceContext;
   scope?: FrozenModelScope;
@@ -340,7 +352,7 @@ export interface BacklogItem {
   placementRecoveries: readonly TaskPlacementRecovery[];
 }
 function lifecycleChanged(previous: BacklogItem, next: BacklogItem): boolean {
-  return previous.request.requestId !== next.request.requestId || previous.state !== next.state
+  return previous.agentDeleted !== next.agentDeleted || previous.request.requestId !== next.request.requestId || previous.state !== next.state
     || previous.attempts !== next.attempts || previous.error !== next.error;
 }
 function parseBacklogItem(value: unknown, ticketScopes: Map<string, { projectId: string; scope: FrozenModelScope }>): BacklogItem {
@@ -372,7 +384,8 @@ function parseBacklogItem(value: unknown, ticketScopes: Map<string, { projectId:
     && requestScope.scope && JSON.stringify(cached.scope.query) === JSON.stringify(requestScope.scope.query) ? cached.scope : undefined;
   const first = typeof value.title === 'string' ? value.title : Object.hasOwn(value, 'conversation') ? conversationFromTicket(value).messages.find(message => message.kind === 'user')?.text ?? '' : requiredText(value.request, 'instruction');
   if (!first.trim() || first.length > 1000) throw new Error('Invalid chat title.');
-  return { id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
+  if (Object.hasOwn(value, 'agentDeleted') && value.agentDeleted !== true) throw new Error('Invalid agent deletion marker.');
+  return { ...(value.agentDeleted === true ? { agentDeleted: true } : {}), id: value.id, projectId: value.projectId, title: first.replace(/\s+/g, ' ').trim().slice(0, 80), state, createdAt: value.createdAt, updatedAt: value.updatedAt, attempts: value.attempts, error: value.error,
     ...(scope ? { scope } : {}),
     taskPlacement: parseTaskPlacement(value.taskPlacement ?? { version: 1, kind: 'unplaced', reason: 'legacy' }),
     placementRecoveries: parseTaskPlacementRecoveries(value.placementRecoveries ?? []),
