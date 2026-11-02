@@ -25,6 +25,8 @@ const finite = (p: NavigationPoint): boolean => p.length === 3 && p.every(n => N
 const contains = (b: Bounds, x: number, y: number, margin = 0): boolean => x >= b.minX + margin && x <= b.maxX - margin && y >= b.minY + margin && y <= b.maxY - margin;
 const eyeHeight = 1.6;
 const radius = .22;
+type LookDrag = { kind: 'pending'; id: number; origin: readonly [number, number] }
+  | { kind: 'active'; id: number; previous: readonly [number, number] };
 
 /** Grounded Walk is limited to native slab solids. Stairs, gaps and obstructions block movement. */
 export function walkElevation(context: NavigationContext, x: number, y: number): number | null {
@@ -59,7 +61,7 @@ export class ViewNavigation {
   private readonly saved = new Map<ProjectId | null, InsidePose>();
   private readonly keys = new Set<string>();
   private looking: 'off' | 'locked' | 'drag' = 'off';
-  private pointer: number | null = null;
+  private pointer: LookDrag | null = null;
   private readonly cleanup: (() => void)[] = [];
   private readonly model: ModelScene;
   private readonly canvas: HTMLCanvasElement | undefined;
@@ -80,26 +82,41 @@ export class ViewNavigation {
     window.addEventListener('blur', () => this.stop(), { signal: controller.signal });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.stop(); }, options);
     document.addEventListener('focusin', () => {
-      if (document.activeElement !== canvas && (this.keys.size > 0 || this.looking !== 'off')) this.stop();
+      if (document.activeElement !== canvas && (this.keys.size > 0 || this.looking !== 'off' || this.pointer !== null)) this.stop();
     }, options);
     canvas.addEventListener('pointercancel', () => this.stop(), options);
-    canvas.addEventListener('lostpointercapture', () => { if (this.pointer !== null) this.stop(); }, options);
+    canvas.addEventListener('lostpointercapture', event => { if (this.pointer?.id === event.pointerId) this.stop(); }, options);
     document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas && this.looking === 'locked') this.stop(); }, options);
     canvas.addEventListener('pointerdown', event => {
-      if (this.looking !== 'drag' || event.button !== 0) return;
-      this.pointer = event.pointerId; canvas.setPointerCapture(event.pointerId); event.preventDefault();
+      if (this.session.kind !== 'inside' || this.looking === 'locked' || this.pointer !== null
+        || event.button !== 0 || !event.isPrimary || (this.looking === 'off' && event.pointerType !== 'mouse')
+        || canvas.classList.contains('is-markup-drawing')) return;
+      canvas.focus({ preventScroll: true });
+      if (!this.acceptsInput()) return;
+      this.pointer = { kind: 'pending', id: event.pointerId, origin: [event.clientX, event.clientY] };
+      canvas.setPointerCapture(event.pointerId); event.preventDefault();
     }, options);
     canvas.addEventListener('pointerup', event => {
-      if (event.pointerId !== this.pointer) return;
+      if (event.pointerId !== this.pointer?.id) return;
       this.pointer = null; if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     }, options);
     canvas.addEventListener('pointermove', event => {
-      if (this.looking === 'off') return;
+      if (this.looking === 'off' && this.pointer === null) return;
       if (!this.acceptsInput()) { this.stop(); return; }
-      if (this.looking !== 'locked' && !(this.looking === 'drag' && this.pointer === event.pointerId && event.buttons === 1)) return;
+      let dx = event.movementX; let dy = event.movementY;
+      if (this.looking !== 'locked') {
+        const pointer = this.pointer;
+        if (pointer?.id !== event.pointerId) return;
+        if (event.buttons !== 1) { this.stop(); return; }
+        const previous = pointer.kind === 'pending' ? pointer.origin : pointer.previous;
+        dx = event.clientX - previous[0]; dy = event.clientY - previous[1];
+        // Match the viewer's click tolerance so small hand movement still selects.
+        if (pointer.kind === 'pending' && Math.hypot(dx, dy) <= 5) return;
+        this.pointer = { kind: 'active', id: pointer.id, previous: [event.clientX, event.clientY] };
+      }
       const camera = model.insideCamera;
-      camera.rotation.y += event.movementX * .0025;
-      camera.rotation.x = Math.max(-1.48, Math.min(1.48, camera.rotation.x + event.movementY * .0025));
+      camera.rotation.y += dx * .0025;
+      camera.rotation.x = Math.max(-1.48, Math.min(1.48, camera.rotation.x + dy * .0025));
     }, options);
   }
   get state(): ViewSession { return { ...this.session }; }
@@ -196,7 +213,7 @@ export class ViewNavigation {
   stop(): void {
     this.keys.clear(); this.looking = 'off';
     const pointer = this.pointer; this.pointer = null;
-    if (this.canvas && pointer !== null && this.canvas.hasPointerCapture(pointer)) this.canvas.releasePointerCapture(pointer);
+    if (this.canvas && pointer !== null && this.canvas.hasPointerCapture(pointer.id)) this.canvas.releasePointerCapture(pointer.id);
     if (this.canvas && document.pointerLockElement === this.canvas) document.exitPointerLock();
     const orbit = this.model.camera;
     orbit.inertialAlphaOffset = 0; orbit.inertialBetaOffset = 0; orbit.inertialRadiusOffset = 0;

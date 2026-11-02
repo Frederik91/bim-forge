@@ -11,6 +11,7 @@ interface BrowserNavigationHarness {
   resume(): NavigationResult;
   view(kind: 'plan' | 'overview' | 'section'): NavigationResult;
   state(): ViewSession;
+  selections(): number;
 }
 declare global { interface Window { navHarness: BrowserNavigationHarness } }
 
@@ -19,7 +20,8 @@ import { ModelViewer } from './demo/model-viewer.ts';
 import { multiStoreySnapshot } from './src/multi-storey-house.ts';
 const snapshot = multiStoreySnapshot();
 let annotations = [];
-const viewer = new ModelViewer({ select() {}, inspect() {}, reference() {}, keyboardReference() {},
+let selections = 0;
+const viewer = new ModelViewer({ select() { selections += 1; }, inspect() {}, reference() {}, keyboardReference() {},
   markup(values) { annotations = values; show(); return true; } });
 const host = document.querySelector('#host');
 const base = { snapshot, navigationPin: 'native-r1', comparison: null, selectedId: 'level-ground-wall-north',
@@ -36,6 +38,7 @@ Object.assign(window, { navHarness: {
   markup: (tool = 'rectangle') => viewer.startMarkup(tool), hide: () => viewer.hide(), show,
   context: pin => { base.navigationPin = pin; show(); },
   dispose: () => viewer.dispose(), annotationCount: () => annotations.length,
+  selections: () => selections,
 } });
 document.querySelector('#look').onclick = () => void viewer.activateMouseLook();
 `;
@@ -65,6 +68,34 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   };
   await enter();
   const start = await pose();
+  const dragRect = await page.locator('canvas').boundingBox(); assert.ok(dragRect);
+  const dragX = dragRect.x + dragRect.width / 2; const dragY = dragRect.y + dragRect.height / 2;
+  const clickCount = await page.evaluate(() => window.navHarness.selections());
+  await page.mouse.move(dragX, dragY); await page.mouse.down();
+  await page.mouse.move(dragX + 3, dragY + 2); await page.mouse.up();
+  assert.deepEqual((await pose()).forward, start.forward, 'Sub-threshold movement keeps click-to-select');
+  assert.ok(await page.evaluate(() => window.navHarness.selections()) > clickCount, 'A simple primary click still selects construction');
+  const dragCount = await page.evaluate(() => window.navHarness.selections());
+  await page.mouse.move(dragX, dragY); await page.mouse.down();
+  await page.mouse.move(dragX + 80, dragY + 30, { steps: 8 }); await page.mouse.up();
+  const turned = await pose();
+  assert.notDeepEqual(turned.forward, start.forward, 'Holding the left button turns the Inside camera without mouse-look activation');
+  assert.deepEqual(turned.eye, start.eye, 'Looking does not translate the eye');
+  assert.equal(await page.evaluate(() => window.navHarness.selections()), dragCount, 'A look drag never selects its release target');
+  assert.equal(await page.evaluate(() => document.pointerLockElement), null, 'Automatic drag does not lock the pointer');
+  await page.mouse.move(dragX + 120, dragY + 50);
+  assert.deepEqual((await pose()).forward, turned.forward, 'Releasing the button stops head movement');
+  for (const cancel of ['Escape', 'blur', 'pointercancel', 'lostpointercapture']) {
+    await page.locator('canvas').focus(); await page.mouse.move(dragX, dragY); await page.mouse.down();
+    await page.mouse.move(dragX + 30, dragY + 10, { steps: 3 });
+    if (cancel === 'Escape') await page.keyboard.press('Escape');
+    else if (cancel === 'blur') await page.locator('#composer').focus();
+    else await page.locator('canvas').dispatchEvent(cancel, { pointerId: 1, isPrimary: true });
+    const stopped = await pose(); await page.mouse.move(dragX + 70, dragY + 35, { steps: 3 }); await page.mouse.up();
+    assert.deepEqual((await pose()).forward, stopped.forward, `${cancel} cancels a held look gesture`);
+  }
+  assert.equal((await page.evaluate(p => window.navHarness.returnTo(p), start)).kind, 'changed');
+  await page.locator('canvas').focus();
   await hold('w'); const north = await pose();
   assert.ok(north.eye[1] > start.eye[1] + .1); assert.ok(Math.abs(north.eye[0] - start.eye[0]) < .01);
   await hold('d'); assert.ok((await pose()).eye[0] > north.eye[0] + .1);
@@ -148,6 +179,13 @@ test('browser WASD gaze, Fly vertical keys, mouse-look, Escape, input isolation 
   assert.equal(await page.locator('.model-markup-controls').getAttribute('data-tool'), 'polyline', 'toolbar focus is not window blur');
   await finish.click();
   assert.equal(await page.evaluate<number>('window.navHarness.annotationCount()'), 1, 'toolbar commits the collected polyline');
+  await enter();
+  const beforeDrawing = await pose();
+  await page.evaluate('window.navHarness.markup("rectangle")');
+  await page.mouse.move(rect.x + rect.width * .42, rect.y + rect.height * .75); await page.mouse.down();
+  await page.mouse.move(rect.x + rect.width * .55, rect.y + rect.height * .82, { steps: 6 }); await page.mouse.up();
+  assert.deepEqual((await pose()).forward, beforeDrawing.forward, 'Markup drag has priority over head turning');
+  assert.equal(await page.evaluate<number>('window.navHarness.annotationCount()'), 2, 'The same drag still creates the rectangle');
   await page.evaluate('window.navHarness.markup("polyline")');
   await page.mouse.click(rect.x + rect.width * .42, rect.y + rect.height * .75);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
