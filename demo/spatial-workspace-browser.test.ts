@@ -125,7 +125,7 @@ test('live native agent body opens the same saved task without moving the eye; e
   await page.goto(base); await page.locator('#project-template').selectOption('house'); await page.locator('#project-name').fill('Live spatial fixture'); await page.locator('#create-project').click();
   await page.locator('#open-chat').click();
   await page.waitForFunction(() => document.getElementById('workspace-shell')?.dataset.spatialView === 'inside');
-  await page.evaluate(async () => { const url = '/room-app.mjs'; const api = await import(url); const pose = api.captureWorkspaceInsidePose(); if (!pose || !api.returnWorkspaceToPose({ ...pose, eye: [2, 3.45, 1.6], forward: [1, 0, 0], up: [0, 0, 1], motion: 'fly' })) throw new Error('Explicit fixture eye could not open'); });
+  await page.evaluate(async () => { const url = '/room-app.mjs'; const api = await import(url); const pose = api.captureWorkspaceInsidePose(); const n = Math.sqrt(1.25); if (!pose || !api.returnWorkspaceToPose({ ...pose, eye: [2, 3.45, 1.6], forward: [1 / n, 0, -.5 / n], up: [.5 / n, 0, 1 / n], motion: 'fly' })) throw new Error('Explicit fixture eye could not open'); });
   await page.locator('#new-chat').click(); await page.locator('.model-object-picker').selectOption(spatialFixtureManifest.doorId);
   await page.locator('#request-text').fill('Widen this door to 1100 mm, keeping its centre.');
   const canvas = await page.locator('canvas.model-canvas').elementHandle(); assert.ok(canvas);

@@ -63,6 +63,9 @@ test('shipped UI reviews and explicitly accepts a 2 m doorless opening, then res
   const expected = previewDoorToOpening(before, { doorId: 'door-entry', widthMetres: 2, anchor: 'centre' });
   await page.waitForFunction(async id => { const value = await (await fetch(`/api/change-requests/${id}`)).json();
     if (value.ticket.state === 'failed') throw new Error(value.ticket.error); return value.ticket.state === 'ready'; }, ticketId, { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.locator(`#spatial-task-list [data-task-id="${ticketId}"]`).click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && document.getElementById('request-text')?.getAttribute('disabled') === null);
   const inspect = page.getByRole('button', { name: 'Inspect proposal', exact: true }).last();
   const tray = page.getByRole('region', { name: 'Canvas proposal review' });
   await inspect.or(tray).first().waitFor({ timeout: 30_000 });
