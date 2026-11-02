@@ -46,6 +46,7 @@ test('minimal spatial chat retains explicit settings, reconstruction, history an
   await page.locator('#request-options > summary').click();
   await openOptions(); await page.locator('#chat-switcher-button').click();
   await page.locator('#chat-search').waitFor(); await page.locator('#chat-search').press('Escape');
+  assert.equal(await options.evaluate(node => document.activeElement === node), true, 'Escaping history returns to a visible header control');
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this draft while exploring the simpler controls.');
   await page.getByRole('button', { name: 'Add files or context', exact: true }).click();
   await page.getByRole('option', { name: /^Reconstruct a floor plan/ }).click();
@@ -69,6 +70,8 @@ test('minimal spatial chat retains explicit settings, reconstruction, history an
   assert.ok(await page.locator('#request-chat').getAttribute('data-current-request-id'));
   await openOptions(); assert.equal(await page.locator('#spatial-delete-agent').isEnabled(), true); assert.equal(await page.locator('#personal-assistant').isVisible(), true);
   await page.keyboard.press('Escape');
+  assert.equal(await menu.evaluate(node => node.matches(':popover-open')), false); assert.equal(await panel.isVisible(), true, 'Escape dismisses options without dismissing the conversation');
+  assert.equal(await options.evaluate(node => document.activeElement === node), true);
   await page.screenshot({ path: path.join(artifacts, 'task-desktop.png'), fullPage: true });
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 600 }); if (!await panel.isVisible()) await page.locator('#open-chat').click();
@@ -77,6 +80,7 @@ test('minimal spatial chat retains explicit settings, reconstruction, history an
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await openOptions(); assert.equal(await hit('#chat-request-settings'), true, 'Secondary controls remain reachable in the top-layer menu');
     await page.keyboard.press('Escape');
+    assert.equal(await menu.evaluate(node => node.matches(':popover-open')), false); assert.equal(await panel.isVisible(), true);
     await page.screenshot({ path: path.join(artifacts, `task-${width}.png`), fullPage: true });
   }
   assert.equal(await canvas.evaluate(node => node.isConnected), true); assert.equal(await page.locator('canvas').count(), 1); assert.deepEqual(errors, []);

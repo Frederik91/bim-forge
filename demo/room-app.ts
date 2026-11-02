@@ -793,6 +793,9 @@ requestSettings.addEventListener('click', () => {
 const connectionSettings = element('button', 'Connection settings'); connectionSettings.type = 'button';
 connectionSettings.addEventListener('click', () => ui['proposal-auth-action'].click());
 chatOptions?.append(requestSettings, connectionSettings);
+generic('request-options').addEventListener('toggle', event => {
+  if (event.target instanceof HTMLDetailsElement && !event.target.open && event.target.contains(document.activeElement)) button('spatial-chat-options-toggle').focus();
+});
 const permissionStatus = element('button', '', 'composer-permission-status'); permissionStatus.id = 'chat-permission-status'; permissionStatus.type = 'button'; permissionStatus.hidden = true;
 permissionStatus.addEventListener('click', () => requestSettings.click());
 generic('request-composer').prepend(permissionStatus);
@@ -961,7 +964,7 @@ button('chat-switcher-button').addEventListener('click', () => {
 });
 input('chat-search').addEventListener('input', renderChatSwitcher);
 generic('chat-switcher').addEventListener('keydown', event => {
-  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeChatSwitcher(); button('chat-switcher-button').focus(); }
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeChatSwitcher(); button('spatial-chat-options-toggle').focus(); }
 });
 button('new-chat').addEventListener('click', () => { void perform(async () => { await beginRequest(); closeChatSwitcher(); showRequestPane('details'); }).then(() => ui['request-text'].focus()); });
 
