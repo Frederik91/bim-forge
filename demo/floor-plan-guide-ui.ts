@@ -27,7 +27,6 @@ interface Context { binding: string; projectId: string; sources: readonly Reques
 export class FloorPlanGuide {
   readonly #host: HTMLElement;
   readonly #actions: { changed(): void; enable(): void; cancel(): void; attach(): void };
-  readonly #start = node('button', 'Reconstruct a floor plan');
   readonly #details = node('details');
   readonly #summary = node('summary', 'Floor plan · confirm a known dimension');
   readonly #source = select('Plan image or PDF', []);
@@ -50,8 +49,7 @@ export class FloorPlanGuide {
   constructor(host: HTMLElement, actions: { changed(): void; enable(): void; cancel(): void; attach(): void }) {
     this.#host = host; this.#actions = actions;
     host.className = 'floor-plan-guide';
-    for (const button of [this.#start, this.#confirm, this.#cancel, this.#attach]) { button.type = 'button'; button.className = 'button quiet'; }
-    this.#start.addEventListener('click', () => this.start());
+    for (const button of [this.#confirm, this.#cancel, this.#attach]) { button.type = 'button'; button.className = 'button quiet'; }
     this.#attach.addEventListener('click', () => actions.attach());
     this.#cancel.addEventListener('click', () => { this.clear(); actions.cancel(); actions.changed(); });
     this.#confirm.addEventListener('click', () => { void this.#confirmMeasurement(); });
@@ -69,7 +67,7 @@ export class FloorPlanGuide {
     const next = node('p', 'Send to get an AI proposal. Inspect measured values, inferred assumptions and changes before accepting. Then use + Alternative to keep an As-is baseline and edit separately.');
     this.#status.setAttribute('role', 'status'); this.#error.setAttribute('role', 'alert');
     this.#details.append(this.#summary, help, this.#attach, grid, this.#confirm, this.#status, this.#error, limits, next, this.#cancel);
-    host.append(this.#start, this.#details); this.#render();
+    host.append(this.#details); this.#render();
   }
 
   get enabled(): boolean { return this.#enabled; }
@@ -136,8 +134,7 @@ export class FloorPlanGuide {
   }
   #render(): void {
     const disabled = !this.#context || this.#context.disabled;
-    this.#host.hidden = disabled && !this.#enabled;
-    this.#start.hidden = this.#enabled; this.#start.disabled = disabled;
+    this.#host.hidden = !this.#enabled;
     this.#details.hidden = !this.#enabled;
     for (const control of [...this.#controls(), this.#confirm, this.#attach, this.#cancel]) control.disabled = disabled || Boolean(this.#upload);
     this.#confirm.disabled ||= !this.#source.input.value;

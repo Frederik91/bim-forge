@@ -8,7 +8,7 @@ The maintainer accepted the Inside-first study direction on 2026-10-31 and reque
 
 This plan originally proposed implementation work. The maintainer subsequently authorized orchestrated implementation with subagents through a verified local deployment on 2026-10-31. The single-engineer milestone is confirmed. Each issue retains its isolated worktree, acceptance evidence, validation and draft change review. Geometry, coordination, persistence and permission changes retain human merge review; no main-branch merge or production-data mutation is authorized by the local deployment goal. Current execution evidence is recorded in [epic #251](https://github.com/Frederik91/bim-forge/issues/251).
 
-The accepted experience keeps the model present, supports Inside, Plan, Section and Overview, and uses WASD and explicit mouse-look with Escape release. Fly uses Shift to ascend and Ctrl to descend. Conversations retain a fixed starting location, represented by a hovering 3D task agent, separately from their associated model objects or region. Selecting that agent opens the conversation and highlights its targets. Plan follows the approved drawing language using actual model geometry. A secondary task list provides retrieval.
+The accepted experience keeps the model present, supports Inside, Plan, Section and Overview, and uses WASD and explicit mouse-look with Escape release. Fly uses Shift to ascend and Q to descend. Conversations retain a fixed starting location, represented by a hovering 3D task agent, separately from their associated model objects or region. Selecting that agent opens the conversation and highlights its targets. Plan follows the approved drawing language using actual model geometry. A secondary task list provides retrieval.
 
 ## Proposed first real milestone
 
@@ -210,7 +210,7 @@ Evidence: two independent tickets at one door; objects plus regions; region-only
 
 Files: proposed navigation module; `model-viewer.ts`, `model-scene.ts`, markup camera consumers and focused viewer tests. Introduce an active-camera seam before adding Inside and Fly. Preserve picking, antialiasing, comparison, linked meshes and one engine while reusing the current project/level context. Expose view-session/navigation intent; #256/#257 own live shell wiring after #253 finishes extraction.
 
-Evidence: WASD relative to facing, mouse capture/fallback and Escape, Shift-up/Ctrl-down, input isolation while typing, drag cancellation on focus loss, safe framing/return, project/level changes, saved Inside pose across Plan/Overview and source transforms. Test repeated shell/task/view switches without camera or canvas recreation. Initially qualify grounded Walk only on known native floor/level cases; unsupported entry uses an explicit alternative rather than an invented walkable surface. Collision and stair behavior need separate evidence.
+Evidence: WASD relative to facing, mouse capture/fallback and Escape, Shift-up/Q-down, input isolation while typing, drag cancellation on focus loss, safe framing/return, project/level changes, saved Inside pose across Plan/Overview and source transforms. Test repeated shell/task/view switches without camera or canvas recreation. Initially qualify grounded Walk only on known native floor/level cases; unsupported entry uses an explicit alternative rather than an invented walkable surface. Collision and stair behavior need separate evidence.
 
 ### Step 5: native Plan integration
 

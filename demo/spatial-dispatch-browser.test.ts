@@ -1,3 +1,4 @@
+import { clickConversationControl } from '../tests/fixtures/spatial-workspace/browser.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs/promises';
@@ -118,7 +119,7 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   assert.doesNotMatch(await page.locator('#request-source-list').innerText(), /personal-context/);
   await page.locator('#request-text').fill('Keep this follow-up on the first agent.');
   const beforeReturn = await capture();
-  await page.locator('#personal-assistant').click();
+  await clickConversationControl(page, '#personal-assistant');
   await mode('personal');
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this personal instruction unsent.');
   await page.getByText('1 of 4 files ready', { exact: true }).waitFor();
@@ -129,7 +130,7 @@ test('personal assistant dispatches a marked-area agent while the door agent wor
   await page.getByRole('button', { name: 'Tasks', exact: true }).click(); await page.locator(`#spatial-task-list [data-task-id="${a.id}"]`).click();
   await mode('task');
   assert.equal(await page.locator('#request-text').inputValue(), 'Keep this follow-up on the first agent.');
-  await page.locator('#personal-assistant').click(); await mode('personal'); gate.release(); await gate.finished;
+  await clickConversationControl(page, '#personal-assistant'); await mode('personal'); gate.release(); await gate.finished;
   assert.equal(await page.locator('#workspace-context').getAttribute('data-assistant-mode'), 'personal');
   assert.equal(await page.locator('.spatial-task-label').count(), 3, 'Only the three submitted tasks have figures');
   await page.locator('#new-chat').click();

@@ -782,9 +782,68 @@ personalAssistantButton.type = 'button'; personalAssistantButton.id = 'personal-
 personalAssistantButton.title = 'Assign a separate task while this agent continues working';
 personalAssistantButton.addEventListener('click', () => { void perform(async () => { await openPersonalAssistant(); }); });
 generic('workspace-context').querySelector('.spatial-conversation-tools')?.prepend(personalAssistantButton);
-const dispatchContext = element('p', '', 'spatial-placement-notice'); dispatchContext.id = 'assistant-dispatch-context';
-generic('workspace-context').querySelector('.spatial-conversation-tools')?.after(dispatchContext);
+const dispatchContext = element('p', '', 'editor-help'); dispatchContext.id = 'assistant-dispatch-context';
+const chatOptions = generic('workspace-context').querySelector('.spatial-conversation-tools');
+chatOptions?.append(dispatchContext);
+const requestSettings = element('button', 'Request settings'); requestSettings.type = 'button'; requestSettings.id = 'chat-request-settings';
+requestSettings.addEventListener('click', () => {
+  const details = generic('request-options'); if (!(details instanceof HTMLDetailsElement)) return;
+  details.open = !details.open; if (details.open) { details.querySelector('summary')?.focus(); details.scrollIntoView({ block: 'nearest' }); }
+});
+const connectionSettings = element('button', 'Connection settings'); connectionSettings.type = 'button';
+connectionSettings.addEventListener('click', () => ui['proposal-auth-action'].click());
+chatOptions?.append(requestSettings, connectionSettings);
+generic('request-options').addEventListener('toggle', event => {
+  if (event.target instanceof HTMLDetailsElement && !event.target.open && event.target.contains(document.activeElement)) button('spatial-chat-options-toggle').focus();
+});
+const permissionStatus = element('button', '', 'composer-permission-status'); permissionStatus.id = 'chat-permission-status'; permissionStatus.type = 'button'; permissionStatus.hidden = true;
+permissionStatus.addEventListener('click', () => requestSettings.click());
+generic('request-composer').prepend(permissionStatus);
 let spatialProjectionPending = false;
+let observedResult: Element | null = null;
+function visibleResultCandidate(): Element | null {
+  const projection = tasks.projection; const panel = generic('workspace-context');
+  if (panel.hidden || document.visibilityState !== 'visible' || projection.offline) return null;
+  if (panel.querySelector(':popover-open') || document.querySelector('dialog[open]')) return null;
+  const ticket = projection.tickets.find(item => item.id === projection.ticketId);
+  if (!ticket || tasks.resultAttention(ticket) !== 'unread') return null;
+  if (ticket.state === 'failed') return panel.querySelector(`#request-chat[data-current-request-id="${CSS.escape(ticket.request.requestId)}"][data-request-state="failed"] .request-chat-status`);
+  const message = projection.conversation?.messages.findLast(item => item.kind === 'assistant' && item.requestId === ticket.request.requestId);
+  return message ? panel.querySelector(`.request-chat-assistant[data-message-id="${CSS.escape(message.id)}"]`) : null;
+}
+const resultVisibility = new IntersectionObserver(entries => {
+  const candidate = visibleResultCandidate();
+  if (!candidate || !entries.some(entry => {
+    if (entry.target !== candidate || !entry.isIntersecting || entry.intersectionRect.height < 24 || entry.intersectionRect.width < 48) return false;
+    const box = entry.intersectionRect;
+    return [.2, .5, .8].some(x => [.2, .5, .8].some(y => {
+      const hit = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y);
+      return hit === candidate || candidate.contains(hit);
+    }));
+  })) return;
+  const ticketId = tasks.projection.ticketId; if (ticketId) tasks.markResultViewed(ticketId);
+}, { threshold: [0, .01, .05, .1, .25, .5, .75, 1] });
+function observeVisibleResult(): void {
+  const candidate = visibleResultCandidate(); if (candidate === observedResult) return;
+  if (observedResult) resultVisibility.unobserve(observedResult);
+  observedResult = candidate; if (candidate) resultVisibility.observe(candidate);
+}
+new MutationObserver(observeVisibleResult).observe(generic('workspace-context'), {
+  childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'data-current-request-id', 'data-request-state'],
+});
+function refreshResultVisibility(): void {
+  if (observedResult) resultVisibility.unobserve(observedResult); observedResult = null; observeVisibleResult();
+}
+generic('workspace-context').addEventListener('toggle', refreshResultVisibility, { capture: true });
+document.addEventListener('close', refreshResultVisibility, { capture: true });
+document.addEventListener('visibilitychange', refreshResultVisibility);
+generic('request-chat-mount').addEventListener('scroll', refreshResultVisibility, { capture: true, passive: true });
+let resultVisibilityPending = false;
+for (const event of ['pointerup', 'click', 'keydown']) document.addEventListener(event, () => {
+  if (!observedResult || resultVisibilityPending) return;
+  resultVisibilityPending = true;
+  requestAnimationFrame(() => { resultVisibilityPending = false; refreshResultVisibility(); });
+}, { capture: true });
 tasks.observeWorkspace(() => {
   if (spatialProjectionPending) return;
   spatialProjectionPending = true;
@@ -814,7 +873,8 @@ function captureTaskPlacement(selectedObjectIds: readonly string[]): TaskPlaceme
   const plan = planSvg ? getWorkspacePlanContext(planSvg) : null;
   const location = pose?.eye ?? plan?.projection.inverse([plan.width / 2, plan.height / 2]).point ?? null;
   const markups = conversationMarkups(chatVisual);
-  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: location });
+  const point = taskDispatchPoint({ graph, selectedObjectIds, markups, eye: location,
+    viewpoint: modelView === '3d' ? modelViewer?.captureViewpoint() ?? null : location });
   const objectLevels = new Set(selectedObjectIds.map(id => entityLevel(graph, id)?.id ?? null));
   const levelId = markups.length ? chatVisual?.levelId ?? activeLevelId
     : selectedObjectIds.length ? objectLevels.size === 1 ? [...objectLevels][0] ?? null : null : activeLevelId;
@@ -843,8 +903,8 @@ function currentTaskObjectIds(placement: TaskPlacement): string[] {
 function spatialDescriptors(): TaskAgentDescriptor[] {
   if (!repo) return [];
   const projectId = repo.projectId;
-  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.filter(ticket => !ticket.agentDeleted).map(ticket => ({
-    identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state,
+  const descriptors: TaskAgentDescriptor[] = tasks.projection.tickets.filter(ticket => !ticket.agentDeleted && ticket.state !== 'completed').map(ticket => ({
+    identity: { kind: 'task', projectId, ticketId: ticket.id }, title: ticket.title, state: ticket.state, attention: tasks.resultAttention(ticket),
     placement: ticket.taskPlacement.kind === 'placed' ? { kind: 'placed', origin: ticket.taskPlacement.origin.point } : { kind: 'unplaced' },
     selected: ticket.id === tasks.projection.ticketId, visible: true,
   }));
@@ -859,7 +919,7 @@ function updateSpatialWorkspace(): void {
         : 'Describe the change. With no reference selected, I’ll place its agent where you are.';
   generic('workspace-context').dataset.assistantMode = ticket ? 'task' : 'personal';
   if (currentPage === 'request') generic('workspace-context-heading').textContent = ticket ? 'Task agent' : 'Personal assistant';
-  button('new-chat').textContent = 'New task';
+  button('new-chat').setAttribute('aria-label', 'New task');
   const origin = ticket?.taskPlacement.kind === 'placed' ? ticket.taskPlacement.origin : !ticket ? draftOrigin : null;
   const staleDraft = !ticket && !!origin && (origin.snapshot.revisionId !== selectedRevision || JSON.stringify(origin.snapshot.target) !== JSON.stringify(selectedDesignTarget));
   const stale = ticket?.taskPlacement.kind === 'placed' && (ticket.taskPlacement.origin.snapshot.revisionId !== selectedRevision || ticket.taskPlacement.targets.objects.some(ref => ref.kind === 'ifc'));
@@ -871,6 +931,7 @@ function updateSpatialWorkspace(): void {
   const descriptors = spatialDescriptors();
   spatialWorkspace.update(descriptors, notice, !!ticket && !!origin, staleDraft);
   modelViewer?.setTasks(repo?.projectId ?? null, descriptors);
+  observeVisibleResult();
 }
 
 function captureChatDraft() {
@@ -949,7 +1010,7 @@ button('chat-switcher-button').addEventListener('click', () => {
 });
 input('chat-search').addEventListener('input', renderChatSwitcher);
 generic('chat-switcher').addEventListener('keydown', event => {
-  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeChatSwitcher(); button('chat-switcher-button').focus(); }
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeChatSwitcher(); button('spatial-chat-options-toggle').focus(); }
 });
 button('new-chat').addEventListener('click', () => { void perform(async () => { await beginRequest(); closeChatSwitcher(); showRequestPane('details'); }).then(() => ui['request-text'].focus()); });
 
@@ -1328,6 +1389,7 @@ function updateControls() {
   button('new-chat').disabled = busy || !repo; button('chat-switcher-button').disabled = busy || !repo;
   renderChatSwitcher();
   generic('request-options-summary').textContent = [scopeBuilder.dirty ? 'Scope enabled' : '', ui['request-reconstruct'].checked ? 'Reconstruction enabled' : ''].filter(Boolean).join(' · ');
+  permissionStatus.textContent = generic('request-options-summary').textContent; permissionStatus.hidden = !permissionStatus.textContent;
   requestChat.setDisabled(!authoring || !preview);
   ui['auth-menu'].disabled = authBusy;
   ui['proposal-auth-action'].disabled = authBusy;
@@ -2092,7 +2154,7 @@ function chatActivity(value: unknown) {
 }
 
 async function refreshChatModel(value: unknown): Promise<void> {
-  if (!repo || !tasks.projection.ticketId || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  if (!repo || !tasks.projection.ticketId || currentPage !== 'request' || generic('workspace-context').hidden || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
   const ticket = tasks.parseTicket(value); const projectId = repo.projectId;
   if (ticket.id !== tasks.projection.ticketId || ticket.projectId !== projectId) return;
   if (ticket.state === 'ready') {
@@ -2105,7 +2167,7 @@ async function refreshChatModel(value: unknown): Promise<void> {
     return;
   }
   const draft = await tasks.readDraft(ticket.id);
-  if (!repo || repo.projectId !== projectId || tasks.projection.ticketId !== ticket.id || currentPage !== 'request' || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
+  if (!repo || repo.projectId !== projectId || tasks.projection.ticketId !== ticket.id || currentPage !== 'request' || generic('workspace-context').hidden || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey())) return;
   const latest = tasks.projection.conversation?.messages.findLast(item => item.kind === 'user');
   if (latest?.requestId !== ticket.request.requestId) return;
 
@@ -2189,7 +2251,10 @@ function setConversationOffline(offline: boolean): void {
 
 function showChatTicket(value: unknown): void {
   const previousMarkups = JSON.stringify(referenceMarkups());
-  const ticket = tasks.parseTicket(value); const conversation = conversationFromTicket(value);
+  const received = tasks.parseTicket(value);
+  const projection = tasks.projection;
+  const ticket = projection.tickets.find(item => item.id === projection.ticketId); const conversation = projection.conversation;
+  if (!ticket || !conversation || ticket.id !== received.id || ticket.projectId !== received.projectId) throw new StaleTaskResponse();
   if (ticket.projectId !== repo?.projectId || conversation.ticketId !== ticket.id) throw new Error('Conversation project or ticket mismatch.');
   conversationTarget = ticket.request.target ?? null;
   selectedDesignTarget = conversationTarget?.target ?? { kind: 'main' };
@@ -2197,10 +2262,12 @@ function showChatTicket(value: unknown): void {
     liveChatPreview = null; livePreviewSelection = null; inspectedComparison = null;
     renderComparison(); syncInspector();
   }
-  tasks.receiveTask(value); setConversationOffline(false);
+  requestChat.setOffline(projection.offline); if (projection.offline) proposalTray.show(null);
+  const currentActivity = received.request.requestId === ticket.request.requestId && received.attempts === ticket.attempts && received.updatedAt === ticket.updatedAt;
+  const activity = chatActivity(value).filter(event => event.requestId !== ticket.request.requestId || currentActivity && event.attempt === ticket.attempts);
   const firstMessage = conversation.messages.find(message => message.kind === 'user');
   requestChat.show({ conversation, projectId: ticket.projectId,
-    title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity: chatActivity(value) });
+    title: `${designLabel()} · ${firstMessage?.kind === 'user' ? firstMessage.text.slice(0, 80) : requestLabel(ticket.request.proposalName)}`, state: stateLabels[ticket.state], requestState: ticket.state, activity });
   if (JSON.stringify(referenceMarkups()) !== previousMarkups) renderComparison();
 }
 
@@ -2515,7 +2582,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   if (!reviewRepository && !liveChatPreview && !chatInspectionOrigins.has(currentChatKey())) chatInspectionOrigins.set(currentChatKey(), captureChatDraft());
   const generation = tasks.generation;
   const value = await tasks.readTask(id);
-  if (automatic && (tasks.projection.ticketId !== id || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey()))) return;
+  if (automatic && (tasks.projection.ticketId !== id || currentPage !== 'request' || generic('workspace-context').hidden || busy || gesture || visualGesture || pausedChatPreviews.has(currentChatKey()))) return;
   if (!isRecord(value) || !isRecord(value.ticket)) throw new Error('Missing change request.');
   const ticket = tasks.parseTicket(value.ticket);
   if (ticket.projectId !== repo?.projectId) throw new Error('This request belongs to another project.');
@@ -2527,6 +2594,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   } });
   const proposed = await RoomRepository.restore(result.project);
   tasks.requireCurrent(generation);
+  if (automatic && (currentPage !== 'request' || generic('workspace-context').hidden)) return;
   if (proposed.projectId !== repo.projectId || proposed.root() !== repo.root()) throw new Error('Proposal project mismatch.');
   if (result.review.target && (result.review.target.projectId !== repo.projectId || result.review.target.revisionId !== result.review.baseRevisionId)) throw new Error('Review target differs from its frozen project/base.');
   if (ticket.request.target && (!result.review.target || designKey(result.review.target.target) !== designKey(ticket.request.target.target))) throw new Error('Review target differs from the conversation design.');
@@ -2546,7 +2614,7 @@ async function openTicket(id: string, message?: ConversationMessage, automatic =
   const proposalMessage = message ?? tasks.projection.conversation?.messages.find(item => item.kind === 'assistant' && item.content.kind === 'proposal' && item.requestId === activeReview?.requestId && item.content.proposalRevisionId === activeReview?.proposalRevisionId);
   activeChatProposalMessageId = proposalMessage?.id ?? null;
   if (automatic) { activeLevelId = cameraContext.level; focusedRoomId = cameraContext.room; modelView = cameraContext.view; }
-  resetEditor(); render(); showPage('request');
+  resetEditor(); render(); if (!automatic) showPage('request');
   ui['ticket-history'].replaceChildren();
   if (Array.isArray(value.ticket.history)) for (const [index, archived] of value.ticket.history.entries()) {
     if (typeof archived !== 'string') throw new Error('Invalid request history.');
@@ -3500,7 +3568,7 @@ function renderComparison(): void {
   ui['view-plan'].setAttribute('aria-pressed', String(modelView === 'plan'));
   ui['view-3d'].setAttribute('aria-pressed', String(modelView === '3d' && modelViewer?.navigationState.kind === 'overview'));
   ui['model-3d-controls'].hidden = modelView !== '3d';
-  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES · Native footprints · Linked IFC cuts unsupported' : modelViewer?.navigationState.kind === 'inside' ? 'INSIDE · WASD · Shift up / Ctrl down in Fly · Escape releases' : 'OVERVIEW · Orbit / pan / zoom';
+  ui['view-caption'].textContent = modelView === 'plan' ? 'PLAN · METRES · Native footprints · Linked IFC cuts unsupported' : modelViewer?.navigationState.kind === 'inside' ? 'INSIDE · WASD · Shift up / Q down in Fly · Escape releases' : 'OVERVIEW · Orbit / pan / zoom';
   updateViewChrome();
   ui['model-revision'].textContent = liveChatPreview ? `Live draft · update ${liveChatPreview.sequence} · base ${liveChatPreview.baseRevisionId.slice(0, 10)} · ${selected.entities.length} objects` : `Revision ${selectedRevision.slice(0, 10)} · ${selected.entities.length} objects`;
   ui['review-drawing'].dataset.modelView = modelView;

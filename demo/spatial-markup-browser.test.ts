@@ -1,3 +1,4 @@
+import { clickConversationControl } from '../tests/fixtures/spatial-workspace/browser.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs/promises';
@@ -97,8 +98,8 @@ test('draw spatial context through the real app, queue it and replay the saved c
   assert.equal(shapes[0]?.kind, 'rectangle'); assert.equal(shapes[1]?.kind, 'circle');
   assert.equal(saved.levelId, 'level-attic');
   if (shapes[0]?.kind === 'rectangle') assert.ok(shapes[0].corners.every(point => Math.abs(point[2] - 3) < .00001));
-  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal');
-  await page.locator('#chat-switcher-button').click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
+  await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('.chat-switcher-item').filter({ hasText: 'Add a kitchen here' }).click();
   await page.waitForFunction(() => document.querySelector('.model-markup-controls')?.getAttribute('data-reference-markup-count') === '2');
   const visualDetails = page.locator('#request-chat .request-chat-visual');
@@ -108,9 +109,13 @@ test('draw spatial context through the real app, queue it and replay the saved c
   await page.screenshot({ path: path.join(output, 'saved-chat.png') });
   const stored = await page.request.get(base + '/api/projects/' + repo.projectId); const after: unknown = await stored.json();
   assert.ok(after && typeof after === 'object' && 'project' in after); assert.equal(after.project, before);
-  await page.locator('#new-chat').click(); await count(0);
+  await page.locator('#new-chat').click();
+  await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal'
+    && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled
+    && document.querySelector('.model-markup-controls')?.getAttribute('data-reference-markup-count') === '0');
+  await count(0);
   assert.equal(await controls.getAttribute('data-reference-markup-count'), '0');
-  await page.locator('#chat-switcher-button').click();
+  await clickConversationControl(page, '#chat-switcher-button');
   await page.locator('.chat-switcher-item').filter({ hasText: 'Add a kitchen here' }).click();
   await page.waitForFunction(() => document.querySelector('.model-markup-controls')?.getAttribute('data-reference-markup-count') === '2');
   await fs.writeFile(path.join(output, 'context.json'), JSON.stringify({ saved, acceptedProjectUnchanged: true, errors }, null, 2));

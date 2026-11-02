@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { clickConversationControl } from '../tests/fixtures/spatial-workspace/browser.ts';
 import test from 'node:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -44,11 +45,40 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   const keyboard = await bounds(); assert.ok(keyboard.width > dragged.width + 30); assert.ok(keyboard.height < dragged.height - 14);
   await page.keyboard.press('Home'); const restored = await bounds(); assert.ok(Math.abs(restored.width - initial.width) < 1);
   assert.ok(Math.abs(restored.height - initial.height) < 1);
+  const heading = panel.locator(':scope > .workspace-panel-heading');
+  const move = page.getByRole('button', { name: 'Move assistant', exact: true });
+  const dragHeader = async (dx: number, dy: number): Promise<void> => {
+    const box = await heading.boundingBox(); assert.ok(box);
+    const start = { x: box.x + 40, y: box.y + box.height / 2 };
+    await page.mouse.move(start.x, start.y); await page.mouse.down();
+    await page.mouse.move(start.x + dx, start.y + dy, { steps: 8 }); await page.mouse.up();
+  };
+  await dragHeader(-240, -100); const moved = await bounds();
+  assert.ok(Math.abs(moved.x - restored.x + 240) < 1 && Math.abs(moved.y - restored.y + 100) < 1, 'Dragging the actual title bar moves the card');
+  assert.equal(moved.width, restored.width); assert.equal(moved.height, restored.height);
+  assert.deepEqual(await capture(), pose, 'Dragging the card cannot turn or move the camera');
+  await move.focus(); await page.keyboard.press('Shift+ArrowLeft'); await page.keyboard.press('ArrowUp');
+  const nudged = await bounds(); assert.equal(nudged.x, moved.x - 32); assert.equal(nudged.y, moved.y - 16);
+  await page.locator('#workspace-context-close').click(); await page.locator('#open-chat').click();
+  assert.deepEqual(await bounds(), nudged, 'Closing and reopening the personal assistant retains its chosen position');
+  assert.equal(await page.locator('#request-text').inputValue(), 'Keep this unsent context while resizing.');
+  await page.locator('.model-object-picker').selectOption('level-ground-wall-inner');
+  assert.deepEqual(await bounds(), nudged, 'A new model reference does not re-anchor a manually moved card');
+  await dragHeader(-2000, -2000); const topLeft = await bounds();
+  const stage = await page.locator('.spatial-workspace-stage').boundingBox(); assert.ok(stage);
+  assert.ok(Math.abs(topLeft.x - stage.x - 8) < 1 && Math.abs(topLeft.y - stage.y - 8) < 1, 'The header stays reachable at the upper bounds');
+  await dragHeader(3000, 2000); const bottomRight = await bounds();
+  assert.ok(Math.abs(bottomRight.x + bottomRight.width - stage.x - stage.width + 8) < 1 && Math.abs(bottomRight.y + bottomRight.height - stage.y - stage.height + 8) < 1, 'The whole card stays within the lower bounds');
+  await move.focus(); await page.keyboard.press('Home');
+  assert.deepEqual(await capture(), pose, 'Keyboard movement and edge clamping cannot change the camera');
+  await page.screenshot({ path: path.join(artifacts, 'moved-personal.png'), fullPage: true });
+  await handle.focus();
   await page.keyboard.press('Shift+ArrowLeft'); await page.keyboard.press('Shift+ArrowDown'); const chosen = await bounds();
   await page.locator('#new-chat').click(); assert.deepEqual(await bounds(), chosen, 'An independent chat retains manual dimensions');
 
   const options = page.locator('#request-options'); assert.equal(await options.getAttribute('open'), null);
-  await options.locator(':scope > summary').click();
+  await clickConversationControl(page, '#chat-request-settings');
+  assert.equal(await options.getAttribute('open'), '');
   await page.getByText('For most tasks, select an object or draw markup and describe the change.', { exact: false }).waitFor();
   assert.equal(await page.locator('#composer-scope-options').getAttribute('open'), null);
   assert.equal(await page.locator('.request-reconstruction-options').getAttribute('open'), null);
@@ -83,9 +113,11 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: path.join(artifacts, `width-${width}.png`), fullPage: true });
   }
+  await move.focus(); await page.keyboard.press('ArrowUp');
   await page.setViewportSize({ width: 1440, height: 1000 });
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
   await page.waitForFunction(width => Math.abs((document.getElementById('workspace-context')?.getBoundingClientRect().width ?? 0) - width) < 1, desktop.width);
+  assert.equal((await bounds()).width, desktop.width, 'Moving while the phone clamps the card must retain the chosen desktop width');
   assert.ok(Math.abs((await bounds()).height - desktop.height) < 1, 'Desktop dimensions return after a narrow viewport');
   if (await panel.getAttribute('data-assistant-mode') === 'personal') {
     await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'personal' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
@@ -94,16 +126,18 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.assistantMode === 'task' && !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
   }
   const proposalContext = page.locator('.spatial-placement-notice').filter({ hasText: 'Task targets refer to the accepted model. Showing proposal geometry.' });
-  await page.waitForFunction(() => [...document.querySelectorAll('.spatial-placement-notice')].some(node => node.textContent?.includes('Showing proposal geometry.') && node.getBoundingClientRect().height > 0)
-    || [...document.querySelectorAll<HTMLButtonElement>('#request-chat button')].some(node => node.textContent === 'Inspect proposal' && !node.disabled));
-  if (!await proposalContext.isVisible()) await page.getByRole('button', { name: 'Inspect proposal', exact: true }).click();
+  await page.getByRole('region', { name: 'Canvas proposal review' }).waitFor();
   await proposalContext.waitFor();
-  if (await page.locator('#assistant-dispatch-context').count()) await page.locator('#assistant-dispatch-context').waitFor();
+  await proposalContext.locator(':scope > summary').click();
+  await proposalContext.locator('p').waitFor();
+  await page.locator('#spatial-chat-options-toggle').click();
+  await page.locator('#assistant-dispatch-context').waitFor();
+  await page.locator('#spatial-delete-agent').waitFor();
+  await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLTextAreaElement>('#request-text')?.disabled);
   await page.locator('#request-text').fill('Keep this follow-up reachable while the task is open.');
   await page.setViewportSize({ width: 320, height: 900 });
   if (!await panel.isVisible()) await page.locator('#open-chat').click();
-  if (await page.locator('#spatial-delete-agent').count()) await page.locator('#spatial-delete-agent').waitFor();
   await handle.focus();
   for (let step = 0; step < 40; step++) await page.keyboard.press('ArrowUp');
   const minimum = await page.evaluate(() => {
@@ -111,7 +145,7 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
     const hit = (selector: string) => { const node = required(selector); const box = node.getBoundingClientRect(); const at = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { top: box.top, bottom: box.bottom, height: box.height, hit: at === node || node.contains(at) }; };
     return { panel: hit('#workspace-context'), input: hit('#request-text'), send: hit('#save-proposal'),
       transcript: hit('#request-chat-mount'), content: hit('#workspace-context-content'),
-      tools: hit('.spatial-conversation-tools'), footer: hit('.spatial-conversation-resize') };
+      heading: hit('#workspace-context > .workspace-panel-heading'), footer: hit('.spatial-conversation-resize') };
   });
   t.diagnostic(JSON.stringify({ minimum }));
   await page.screenshot({ path: path.join(artifacts, 'minimum-320.png'), fullPage: true });
@@ -141,5 +175,18 @@ test('floating assistant resizes by pointer and keyboard, retains size and keeps
   await page.waitForFunction(() => document.getElementById('workspace-context')?.dataset.scrollFallback === 'false');
   assert.equal(await panel.evaluate(node => node.scrollTop), 0, 'Leaving short-viewport fallback resets its outer scroll offset');
   assert.equal(await handle.evaluate(node => { const box = node.getBoundingClientRect(); const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return hit === node || node.contains(hit); }), true);
+  const taskBefore = await bounds(); const taskPose = await capture();
+  await dragHeader(0, -24); const taskMoved = await bounds();
+  assert.ok(Math.abs(taskMoved.y - taskBefore.y + 24) < 1, 'The same header moves a saved task conversation');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  const touchHeading = await heading.boundingBox(); assert.ok(touchHeading);
+  const touch = { x: touchHeading.x + 40, y: touchHeading.y + touchHeading.height / 2 };
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: touch.x, y: touch.y - 20 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const touched = await bounds(); assert.ok(Math.abs(touched.y - taskMoved.y + 20) < 1, 'Touch dragging moves the header without scrolling the model');
+  assert.deepEqual(await capture(), taskPose); await cdp.detach();
+  await page.screenshot({ path: path.join(artifacts, 'moved-task-320.png'), fullPage: true });
   assert.deepEqual(errors, []);
 });

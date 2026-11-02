@@ -9,7 +9,7 @@ param(
     'demo/spatial-markup-browser.test.ts', 'demo/view-navigation-browser.test.ts', 'demo/spatial-shell-layout-browser.test.ts', 'demo/model-plan-browser.test.ts',
     'demo/spatial-task-layer-browser.test.ts', 'demo/design-system-browser.test.ts', 'demo/preview-build.test.ts',
     'demo/spatial-workspace-browser.test.ts', 'demo/native-walk-browser.test.ts', 'demo/assistant-card-browser.test.ts', 'demo/doorless-opening-browser.test.ts',
-    'demo/spatial-dispatch-browser.test.ts', 'demo/task-dispatch.test.ts', 'scripts/serve-spatial-preview.test.ts'
+    'demo/spatial-dispatch-browser.test.ts', 'demo/task-dispatch.test.ts', 'demo/agent-placement-browser.test.ts', 'demo/agent-attention-browser.test.ts', 'demo/minimal-chat-browser.test.ts', 'scripts/serve-spatial-preview.test.ts'
   )
 )
 $ErrorActionPreference = 'Stop'

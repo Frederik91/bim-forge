@@ -8,7 +8,7 @@ import { modelChanges } from '../src/model-delta-view.ts';
 import { entityLevel, levels } from '../src/building-levels.ts';
 import { assetGeometry } from '../src/asset-family.ts';
 import { ViewNavigation } from './view-navigation.ts';
-import type { InsidePose, ViewIntent, ViewSession, NavigationResult } from './view-navigation.ts';
+import type { InsidePose, ViewIntent, ViewSession, NavigationResult, NavigationPoint } from './view-navigation.ts';
 import { ModelScene } from './model-scene.ts';
 import { LinkedModelLayer } from './linked-model-render.ts';
 import type { LinkedDisplay } from './linked-model-render.ts';
@@ -409,6 +409,10 @@ export class ModelViewer {
 
   get navigationState(): ViewSession { return this.navigation.state; }
   captureInsidePose(): InsidePose | null { return this.navigation.capture(); }
+  captureViewpoint(): NavigationPoint {
+    const point = this.model.activeCamera.position;
+    return [point.x, point.z, point.y];
+  }
   stopNavigation(): void { this.navigation.stop(); }
   async activateMouseLook(): Promise<'locked' | 'drag' | 'unavailable'> { return this.navigation.activateMouseLook(); }
   changeView(intent: ViewIntent): NavigationResult {

@@ -1,7 +1,8 @@
 import type { TaskAgentAnchor, TaskAgentDescriptor, TaskAgentHit, TaskAgentIdentity } from './spatial-task-layer.ts';
+import { taskAgentStatusLabel } from './spatial-task-layer.ts';
+import { setChatIcon } from './chat-icons.ts';
 
 const key = (identity: TaskAgentIdentity): string => identity.kind === 'task' ? identity.ticketId : identity.draftId;
-const stateLabel: Readonly<Record<TaskAgentDescriptor['state'], string>> = { unsent: 'Unsent draft', queued: 'Queued', working: 'Working', 'needs-input': 'Needs input', ready: 'Ready for review', completed: 'Accepted', failed: 'Failed', cancelled: 'Cancelled', rejected: 'Rejected' };
 type PanelLayout = { kind: 'automatic' } | { kind: 'manual'; width: number; height: number; right: number; top: number };
 function control(text: string, action: () => void): HTMLButtonElement {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.addEventListener('click', action); return node;
@@ -13,7 +14,9 @@ export class SpatialWorkspacePresentation {
   readonly #panel: HTMLElement;
   readonly #labels = document.createElement('div');
   readonly #list = document.createElement('section');
-  readonly #notice = document.createElement('p');
+  readonly #notice = document.createElement('details');
+  readonly #noticeText = document.createElement('p');
+  readonly #noticeSummary = document.createElement('summary');
   readonly #return: HTMLButtonElement;
   readonly #rebind: HTMLButtonElement;
   readonly #delete: HTMLButtonElement;
@@ -40,28 +43,54 @@ export class SpatialWorkspacePresentation {
     this.#list.className = 'spatial-task-list'; this.#list.id = 'spatial-task-list'; this.#list.hidden = true; this.#list.setAttribute('aria-label', 'Tasks at this place');
     const launcher = control('Tasks', () => { this.#list.hidden = !this.#list.hidden; launcher.setAttribute('aria-expanded', String(!this.#list.hidden)); this.#chooser = undefined; this.#renderList(); });
     launcher.className = 'spatial-task-launcher'; launcher.setAttribute('aria-controls', this.#list.id); launcher.setAttribute('aria-expanded', 'false');
-    const tools = document.createElement('div'); tools.className = 'spatial-conversation-tools';
+    const tools = document.createElement('div'); tools.className = 'spatial-conversation-tools'; tools.id = 'spatial-chat-options'; tools.popover = 'auto'; tools.setAttribute('aria-label', 'Conversation options');
     this.#return = control('Return to task', options.returnToTask); this.#return.id = 'spatial-return-task';
     this.#rebind = control('Refresh draft context', options.rebind); this.#rebind.id = 'spatial-refresh-context'; this.#rebind.hidden = true;
-    this.#expand = control('Expand conversation', () => { const expanded = this.#panel.dataset.expanded !== 'true'; this.#layout = { kind: 'automatic' }; this.#panel.dataset.expanded = String(expanded); this.#expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position(); });
+    this.#expand = control('Expand conversation', () => {
+      const expanded = this.#panel.dataset.expanded !== 'true';
+      if (this.#layout.kind === 'manual') this.#layout = { ...this.#movementLayout(), height: this.#preferredHeight(expanded) };
+      this.#panel.dataset.expanded = String(expanded); this.#expand.textContent = expanded ? 'Short conversation' : 'Expand conversation'; this.#position();
+    });
     this.#expand.id = 'spatial-expand-conversation';
     this.#delete = control('Delete agent', () => { const selected = this.#descriptors.find(item => item.selected); if (selected) this.#remove(selected.identity); });
     this.#delete.id = 'spatial-delete-agent';
-    tools.append(this.#return, this.#expand, this.#rebind, this.#delete); this.#notice.className = 'spatial-placement-notice'; this.#notice.setAttribute('role', 'status'); this.#notice.hidden = true;
-    this.#panel.insertBefore(tools, this.#panel.children[1] ?? null); tools.after(this.#notice);
-    this.#installResize();
+    tools.append(this.#return, this.#expand, this.#rebind, this.#delete);
+    const heading = this.#panel.querySelector('.workspace-panel-heading');
+    const more = control('', () => {}); more.id = 'spatial-chat-options-toggle'; setChatIcon(more, 'Conversation options', 'more'); more.setAttribute('popovertarget', tools.id);
+    more.addEventListener('click', () => {
+      const box = more.getBoundingClientRect();
+      tools.style.left = `${Math.max(8, Math.min(innerWidth - 248, box.right - 240))}px`;
+      tools.style.top = `${Math.min(box.bottom + 4, Math.max(8, innerHeight - 360))}px`;
+    });
+    tools.addEventListener('click', event => { if (event.target instanceof Element && event.target.closest('button') && tools.matches(':popover-open')) tools.hidePopover(); });
+    const closeOptions = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !tools.matches(':popover-open')) return;
+      event.preventDefault(); event.stopPropagation(); tools.hidePopover(); more.focus();
+    };
+    tools.addEventListener('keydown', closeOptions); more.addEventListener('keydown', closeOptions);
+    const close = this.#panel.querySelector('#workspace-context-close');
+    heading?.insertBefore(more, close); heading?.append(tools);
+    const chats = this.#panel.querySelector<HTMLButtonElement>('#chat-switcher-button');
+    const create = this.#panel.querySelector<HTMLButtonElement>('#new-chat');
+    if (chats) { chats.textContent = 'Chats'; const count = document.createElement('span'); count.id = 'chat-count'; count.className = 'sr-only'; chats.append(count); tools.prepend(chats); }
+    if (create) { setChatIcon(create, 'New task', 'new'); heading?.insertBefore(create, more); }
+    this.#notice.className = 'spatial-placement-notice'; this.#notice.setAttribute('role', 'status'); this.#notice.hidden = true;
+    this.#notice.append(this.#noticeSummary, this.#noticeText);
+    this.#panel.insertBefore(this.#notice, this.#panel.children[1] ?? null);
+    this.#installMove(); this.#installResize();
     this.#stage.append(this.#labels, this.#list);
     (this.#stage.querySelector('.model-card-heading') ?? this.#stage).append(launcher);
     new ResizeObserver(() => this.#position()).observe(this.#stage);
   }
   update(descriptors: readonly TaskAgentDescriptor[], notice: string, canReturn: boolean, needsRebind: boolean): void {
-    this.#notice.textContent = notice; this.#notice.hidden = !notice; this.#rebind.hidden = !needsRebind; this.#return.disabled = !canReturn;
+    this.#noticeText.textContent = notice; this.#noticeSummary.textContent = notice.startsWith('Connection unavailable') ? 'Offline · check connection' : notice.includes('Showing proposal geometry') ? 'Proposal view' : 'Check context';
+    this.#noticeSummary.title = notice; this.#notice.hidden = !notice; this.#rebind.hidden = !needsRebind; this.#return.disabled = !canReturn;
     this.#delete.hidden = !descriptors.some(item => item.selected);
     const signature = JSON.stringify(descriptors); if (signature === this.#signature) { this.#position(); return; }
     this.#signature = signature; this.#descriptors = descriptors; this.#labels.replaceChildren(); this.#labelNodes.clear();
     for (const descriptor of descriptors) {
       if (descriptor.placement.kind === 'unplaced') continue;
-      const label = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${stateLabel[descriptor.state]}`, () => { const candidates = this.#candidates.get(key(descriptor.identity)); if (candidates && candidates.length > 1) this.pick({ kind: 'chooser', candidates }); else this.#open(descriptor.identity); });
+      const label = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${taskAgentStatusLabel(descriptor)}`, () => { const candidates = this.#candidates.get(key(descriptor.identity)); if (candidates && candidates.length > 1) this.pick({ kind: 'chooser', candidates }); else this.#open(descriptor.identity); });
       label.className = 'spatial-task-label'; label.dataset.taskId = key(descriptor.identity); label.hidden = true;
       this.#labels.append(label); this.#labelNodes.set(key(descriptor.identity), label);
     }
@@ -75,7 +104,7 @@ export class SpatialWorkspacePresentation {
     this.#list.replaceChildren();
     const heading = document.createElement('h3'); heading.textContent = candidates ? 'Choose a task at this place' : 'Tasks in this project'; this.#list.append(heading);
     for (const descriptor of this.#descriptors.filter(item => !candidates || candidates.some(candidate => key(candidate) === key(item.identity)))) {
-      const node = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${stateLabel[descriptor.state]}${descriptor.placement.kind === 'unplaced' ? ' · Unplaced' : ''}`, () => { this.#list.hidden = true; this.#open(descriptor.identity); });
+      const node = control(`${descriptor.selected ? 'Selected · ' : ''}${descriptor.title} · ${taskAgentStatusLabel(descriptor)}${descriptor.placement.kind === 'unplaced' ? ' · Unplaced' : ''}`, () => { this.#list.hidden = true; this.#open(descriptor.identity); });
       node.dataset.taskId = key(descriptor.identity);
       const row = document.createElement('div'); row.className = 'spatial-task-row';
       const remove = control('Delete', () => this.#remove(descriptor.identity));
@@ -108,6 +137,52 @@ export class SpatialWorkspacePresentation {
     this.#position();
   }
   clearAnchors(): void { this.#anchor = null; for (const label of this.#labelNodes.values()) label.hidden = true; this.#position(); }
+  #currentLayout(): Extract<PanelLayout, { kind: 'manual' }> {
+    const stage = this.#stage.getBoundingClientRect(); const panel = this.#panel.getBoundingClientRect();
+    return { kind: 'manual', width: panel.width, height: panel.height, right: stage.right - panel.right, top: panel.top - stage.top };
+  }
+  #installMove(): void {
+    const heading = this.#panel.querySelector<HTMLElement>('.workspace-panel-heading'); if (!heading) return;
+    const handle = control('', () => {}); handle.id = 'spatial-move-conversation'; handle.className = 'icon-button'; handle.setAttribute('aria-label', 'Move assistant');
+    handle.title = 'Drag the header to move. Arrow keys move; Shift uses larger steps. Home returns to the lower right.';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); icon.setAttribute('viewBox', '0 0 16 16'); icon.setAttribute('aria-hidden', 'true');
+    const lines = document.createElementNS('http://www.w3.org/2000/svg', 'path'); lines.setAttribute('d', 'M3 8h10M8 3v10M3 8l2-2M3 8l2 2M13 8l-2-2M13 8l-2 2M8 3L6 5M8 3l2 2M8 13l-2-2M8 13l2-2'); icon.append(lines); handle.append(icon);
+    heading.insertBefore(handle, heading.querySelector('button'));
+    let gesture: { pointer: number; x: number; y: number; layout: Extract<PanelLayout, { kind: 'manual' }> } | null = null;
+    heading.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || !event.isPrimary || !(event.target instanceof Element)) return;
+      const button = event.target.closest('button'); if (button && button !== handle) return;
+      event.preventDefault(); event.stopPropagation(); handle.focus({ preventScroll: true });
+      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: this.#movementLayout() };
+      heading.setPointerCapture(event.pointerId); heading.dataset.dragging = 'true';
+    });
+    heading.addEventListener('pointermove', event => {
+      if (!gesture || gesture.pointer !== event.pointerId) return;
+      event.preventDefault(); event.stopPropagation();
+      this.#layout = { ...gesture.layout, right: gesture.layout.right + gesture.x - event.clientX, top: gesture.layout.top + event.clientY - gesture.y };
+      this.#position();
+    });
+    const stop = (): void => {
+      if (!gesture) return;
+      const pointer = gesture.pointer; gesture = null; delete heading.dataset.dragging;
+      if (heading.hasPointerCapture(pointer)) heading.releasePointerCapture(pointer);
+    };
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) heading.addEventListener(event, stop);
+    window.addEventListener('blur', stop);
+    handle.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && gesture) { event.preventDefault(); event.stopPropagation(); this.#layout = gesture.layout; stop(); this.#position(); return; }
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation();
+      const layout = this.#movementLayout(); const step = event.shiftKey ? 32 : 16;
+      this.#layout = event.key === 'Home' ? { ...layout, right: 12, top: this.#stage.clientHeight - this.#panel.getBoundingClientRect().height - 12 }
+        : { ...layout, right: layout.right + (event.key === 'ArrowLeft' ? step : event.key === 'ArrowRight' ? -step : 0), top: layout.top + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0) };
+      this.#position();
+    });
+  }
+  #movementLayout(): Extract<PanelLayout, { kind: 'manual' }> {
+    const visible = this.#currentLayout();
+    return this.#layout.kind === 'manual' ? { ...this.#layout, right: visible.right, top: visible.top } : visible;
+  }
   #installResize(): void {
     const footer = document.createElement('div'); footer.className = 'spatial-conversation-resize';
     const handle = control('Resize', () => {}); handle.id = 'spatial-resize-conversation'; handle.setAttribute('aria-label', 'Resize assistant');
@@ -122,14 +197,10 @@ export class SpatialWorkspacePresentation {
     const chrome = new ResizeObserver(() => this.#position());
     for (const node of this.#panel.querySelectorAll('.workspace-panel-heading, .spatial-conversation-tools, .spatial-placement-notice, .spatial-conversation-resize, .chat-toolbar, #chat-switcher, .composer-input-row')) chrome.observe(node);
     let gesture: { pointer: number; x: number; y: number; layout: Extract<PanelLayout, { kind: 'manual' }> } | null = null;
-    const current = (): Extract<PanelLayout, { kind: 'manual' }> => {
-      const stage = this.#stage.getBoundingClientRect(); const panel = this.#panel.getBoundingClientRect();
-      return { kind: 'manual', width: panel.width, height: panel.height, right: stage.right - panel.right, top: panel.top - stage.top };
-    };
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0 || !event.isPrimary) return;
       event.preventDefault(); event.stopPropagation(); handle.focus({ preventScroll: true });
-      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: current() };
+      gesture = { pointer: event.pointerId, x: event.clientX, y: event.clientY, layout: this.#currentLayout() };
       handle.setPointerCapture(event.pointerId);
     });
     handle.addEventListener('pointermove', event => {
@@ -147,7 +218,7 @@ export class SpatialWorkspacePresentation {
       if (event.key === 'Home') { event.preventDefault(); this.#layout = { kind: 'automatic' }; this.#panel.dataset.expanded = 'false'; this.#expand.textContent = 'Expand conversation'; this.#position(); return; }
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault(); event.stopPropagation();
-      const step = event.shiftKey ? 32 : 16; const layout = current();
+      const step = event.shiftKey ? 32 : 16; const layout = this.#currentLayout();
       this.#layout = { ...layout, width: layout.width + (event.key === 'ArrowLeft' ? step : event.key === 'ArrowRight' ? -step : 0),
         height: layout.height + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) };
       this.#position();
@@ -170,16 +241,20 @@ export class SpatialWorkspacePresentation {
       heading: this.#panel.querySelector('.workspace-panel-heading')?.getBoundingClientRect().height ?? 0,
       footer: this.#panel.querySelector('.spatial-conversation-resize')?.getBoundingClientRect().height ?? 0 };
   }
+  #preferredHeight(expanded = this.#panel.dataset.expanded === 'true'): number {
+    const personal = this.#panel.dataset.assistantMode !== 'task';
+    return Math.min(expanded ? 720 : personal ? 360 : 520, this.#stage.clientHeight * (expanded ? .88 : personal ? .5 : this.#stage.clientWidth < 600 ? .44 : .66));
+  }
   #position(): void {
     const width = this.#stage.clientWidth; const height = this.#stage.clientHeight;
     const maxWidth = Math.max(0, width - 16); const maxHeight = Math.max(0, Math.min(height - 16, height * .88));
     const panelWidth = Math.min(maxWidth, this.#layout.kind === 'manual' ? Math.max(280, this.#layout.width) : 358);
     this.#panel.style.width = `${panelWidth}px`;
     const minimum = this.#minimumHeight();
-    const positionKey = `${width}:${height}:${this.#panel.dataset.expanded}:${JSON.stringify(this.#layout)}:${minimum.panel}:${minimum.content}:${minimum.composer}:${minimum.heading}:${minimum.footer}`;
+    const positionKey = `${width}:${height}:${this.#panel.dataset.expanded}:${this.#panel.dataset.assistantMode}:${JSON.stringify(this.#layout)}:${minimum.panel}:${minimum.content}:${minimum.composer}:${minimum.heading}:${minimum.footer}`;
     if (this.#positioned && positionKey === this.#positionKey && this.#panel.contains(document.activeElement)) return;
     this.#positionKey = positionKey; this.#positioned = true;
-    const desiredHeight = this.#layout.kind === 'manual' ? this.#layout.height : Math.min(720, height * (this.#panel.dataset.expanded === 'true' ? .88 : width < 600 ? .44 : .66));
+    const desiredHeight = this.#layout.kind === 'manual' ? this.#layout.height : this.#preferredHeight();
     const panelHeight = Math.min(maxHeight, Math.max(minimum.panel, desiredHeight));
     const fallback = minimum.panel > maxHeight;
     if (!fallback && this.#panel.dataset.scrollFallback === 'true') this.#panel.scrollTop = 0;

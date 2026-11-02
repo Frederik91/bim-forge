@@ -14,6 +14,7 @@ import { canDecideProposal, chatRequestStatus, groupTurnActivity, matchingPropos
 import type { RequestChatDecision, RequestChatProposalReview } from './request-chat-status.ts';
 import type { RequestChatActions, RequestChatInput } from './request-chat.ts';
 import { Button } from './ui/button.tsx';
+import { chatIconPaths } from './chat-icons.ts';
 
 interface ChatView extends Omit<RequestChatInput, 'conversation'> {
   conversation: RequestChatInput['conversation'] | null;
@@ -41,9 +42,13 @@ async function sendThroughExistingComposer(): Promise<void> {
 function Control({ message, view, actions, children, onClick, focusKey, primary = false, pressed }: MessageProps & {
   children: ReactNode; onClick: () => void; focusKey: string; primary?: boolean; pressed?: boolean;
 }) {
-  return <Button type="button" variant={primary ? 'default' : 'outline'} size="sm" className={primary ? 'button primary' : 'button outline'}
+  const icon = focusKey === 'inspect-proposal' || focusKey === 'inspect-visual' ? chatIconPaths.inspect
+    : focusKey === 'delta' ? 'M2 4h12M2 8h8M2 12h12' : focusKey === 'accept' ? 'M3 8l3 3l7-7'
+      : focusKey === 'reject' ? 'M4 4l8 8M12 4l-8 8' : focusKey === 'revise' ? 'M6 3L2 7l4 4M2 7h7a4 4 0 0 1 4 4' : null;
+  return <Button type="button" variant={primary ? 'default' : 'outline'} size="sm" className={`${primary ? 'button primary' : 'button outline'}${icon ? ' chat-icon-button' : ''}`}
+    aria-label={icon && typeof children === 'string' ? children : undefined} title={icon && typeof children === 'string' ? children : undefined}
     data-focus-key={focusKey} disabled={view.disabled || view.offline} aria-pressed={pressed}
-    onClick={() => actions.interact(message, onClick)}>{children}</Button>;
+    onClick={() => actions.interact(message, onClick)}>{icon ? <><svg viewBox="0 0 16 16" aria-hidden="true"><path d={icon} /></svg><span className="sr-only">{children}</span></> : children}</Button>;
 }
 
 function SourceContext({ projectId, message }: { projectId: string; message: Extract<ConversationMessage, { kind: 'user' }> }) {
@@ -57,8 +62,9 @@ function SourceContext({ projectId, message }: { projectId: string; message: Ext
 
 function Status({ view, activity }: { view: ChatView; activity: readonly RequestActivity[] }) {
   const status = chatRequestStatus({ requestState: view.requestState, offline: view.offline, activity });
+  if (!view.offline && view.requestState === 'completed' && view.conversation?.messages.at(-1)?.kind === 'decision') return null;
   return <div className="request-chat-status" data-status={status.kind} role="status" aria-live="polite">
-    <strong>{status.label}</strong>{status.detail && <span>{status.detail}</span>}
+    <strong title={status.detail}>{status.label}</strong>{status.detail && (view.offline || view.requestState === 'failed' || view.requestState === 'needs-input') && <span>{status.detail}</span>}
   </div>;
 }
 
@@ -137,7 +143,7 @@ function MessageContent(props: MessageProps) {
   </>;
   if (message.kind === 'assistant' && message.content.kind === 'proposal') return <ProposalCard {...props} message={message} />;
   return <>
-    {message.kind === 'decision' ? <p>Recorded: {message.action}.</p> : message.content.kind === 'clarification' ? <>
+    {message.kind === 'decision' ? <p>{message.action === 'accept' ? 'Accepted' : message.action === 'reject' ? 'Rejected' : 'Revision requested'}</p> : message.content.kind === 'clarification' ? <>
       <p>{message.content.question}</p><div className="ticket-actions">{message.content.options.map(option =>
         <Control {...props} key={option} focusKey={option} onClick={() => actions.answer(option)}>{option}</Control>)}</div>
     </> : <p>{message.content.text}</p>}
@@ -167,7 +173,8 @@ function RequestChatView({ view, actions }: { view: ChatView; actions: RequestCh
   const latestUser = messages.findLast(message => message.kind === 'user');
   const byId = new Map(messages.map(message => [message.id, message]));
   return <AssistantRuntimeProvider runtime={runtime}><ThreadPrimitive.Root asChild>
-    <section id="request-chat" className="request-chat" aria-label="Request conversation" data-chat-framework="assistant-ui">
+    <section id="request-chat" className="request-chat" aria-label="Request conversation" data-chat-framework="assistant-ui"
+      data-current-request-id={latestUser?.requestId} data-request-state={view.requestState}>
       {view.conversation ? <>
         <header><h3 title={view.title}>Chat</h3><span className="pill">{view.state}</span>
           <span className="chat-turn-count">{messages.filter(message => message.kind === 'user').length}/{CONVERSATION_LIMITS.userTurns} turns</span></header>
@@ -176,7 +183,7 @@ function RequestChatView({ view, actions }: { view: ChatView; actions: RequestCh
           return source ? <MessageCard key={source.id} message={source} view={view} actions={actions} activity={activity.get(source.requestId) ?? []} /> : null;
         }}</ThreadPrimitive.Messages></ol>
         <Status view={view} activity={latestUser ? activity.get(latestUser.requestId) ?? [] : []} />
-      </> : <><div className="chat-welcome"><span className="chat-welcome-mark">✦</span><h3>What would you like to change?</h3>
+      </> : <><div className="chat-welcome"><h3>What would you like to change?</h3>
         <p>Describe an idea, paste a plan, or reference an item in the model. Your AI will prepare a proposal to review.</p></div>
         {view.offline && <Status view={view} activity={[]} />}</>}
     </section>

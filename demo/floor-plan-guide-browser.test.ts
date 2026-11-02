@@ -72,7 +72,8 @@ async function inspectAndAccept(page: Page, label: string): Promise<void> {
   const decision = page.waitForResponse(response => response.url().endsWith('/decision') && response.request().method() === 'POST');
   await accept.click();
   const response = await decision; assert.equal(response.status(), 200, await response.text());
-  await page.locator('#request-chat .request-chat-status strong').filter({ hasText: /^Accepted$/ }).waitFor({ state: 'attached', timeout: 20_000 });
+  await page.locator('#request-chat[data-request-state="completed"]').waitFor({ timeout: 20_000 });
+  await page.locator('#request-chat .request-chat-decision > p').filter({ hasText: /^Accepted$/ }).waitFor({ timeout: 20_000 });
   await page.locator('#open-chat').click();
 }
 
@@ -102,7 +103,8 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   await page.goto(base); await page.locator('#project-template').selectOption('room');
   await page.locator('#project-name').fill('Guided synthetic floor'); await page.locator('#create-project').click();
   await page.locator('#open-chat').click();
-  await page.getByRole('button', { name: 'Reconstruct a floor plan', exact: true }).click();
+  await page.getByRole('button', { name: 'Add files or context', exact: true }).click();
+  await page.getByRole('option', { name: /^Reconstruct a floor plan/ }).click();
   assert.equal(await page.getByRole('button', { name: 'Send message', exact: true }).isDisabled(), true, 'Unknown scale blocks guided sending.');
   await page.locator('#request-source-files').setInputFiles({ name: 'synthetic-floor.png', mimeType: 'image/png', buffer: await sourceFloorImage() });
   await page.getByText('1 of 4 files ready', { exact: true }).waitFor();
@@ -174,7 +176,8 @@ test('guided floor reconstruction through shipped desktop/phone UI preserves sou
   assert.equal(recovered.head('main'), asIs.head('main')); assert.equal(recovered.designView(alternative.target).revisionId, alternative.revisionId);
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto(base); await page.locator('#open-chat').click();
   await page.getByLabel('Active design', { exact: true }).selectOption({ label: 'Main' });
-  await page.getByRole('button', { name: 'Reconstruct a floor plan', exact: true }).click();
+  await page.getByRole('button', { name: 'Add files or context', exact: true }).click();
+  await page.getByRole('option', { name: /^Reconstruct a floor plan/ }).click();
   await page.locator('#request-source-files').setInputFiles({ name: 'synthetic-floor.pdf', mimeType: 'application/pdf', buffer: sourceFloorPdf() });
   await page.getByText('1 of 4 files ready', { exact: true }).waitFor();
   await page.getByLabel('Known feature', { exact: true }).fill('North wall width'); await page.getByLabel('Length · mm', { exact: true }).fill('6000');
