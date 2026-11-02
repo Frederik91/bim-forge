@@ -69,9 +69,10 @@ test('Overview dispatch puts real door and wall task bodies beside geometry, vis
   assert.ok(Math.abs(placement.origin.point[1] - host.offset - .45) >= .74, 'Door figure is beside the jamb instead of centred on the leaf');
   await pick(door.id);
   await page.locator('#open-chat').click(); await ready('personal');
-  const wallTask = await submit('level-ground-wall-inner');
+  const wallTask = await submit('level-ground-wall-east');
   const wallPlacement = parseTaskPlacement(wallTask.taskPlacement); assert.equal(wallPlacement.kind, 'placed'); if (wallPlacement.kind !== 'placed') return;
-  assert.ok(Math.abs(wallPlacement.origin.point[0] - wall.start[0]) >= wall.thickness / 2 + .44);
+  const eastWall = graph.entities.find(entity => entity.id === 'level-ground-wall-east'); assert.ok(eastWall?.type === 'Wall');
+  assert.ok(Math.abs(wallPlacement.origin.point[0] - eastWall.start[0]) >= eastWall.thickness / 2 + .44);
   await pick(wallTask.id);
   assert.equal(await canvas.evaluate(node => node.isConnected), true); assert.equal(await page.locator('canvas').count(), 1);
   assert.deepEqual(await (await page.request.get(`${base}/api/projects/${door.projectId}`)).json(), baseline);
